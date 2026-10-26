@@ -341,15 +341,9 @@ class Game {
     this.pendingZoneMusicResume = null; // Delayed zone-music resume after boss defeat { readyAt, zone }
     this.activeFloor = null;       // Active interior floor (hut or dungeon floor). Null on surface.
     this.mazeInterior = null;   // Active maze interior (MazeSystem)
-    this.dungeonFloors = [];       // Persistent dungeon floor states for current visit
     this.dungeonCurrentFloor = -1; // -1 = not in dungeon
-    // Floor 3 Key Vault run-flags (DungeonPuzzleSystem) — mirrors InteriorManager.reset().
-    // Key possession itself is NOT a flag — see inventorySystem.keyItemInventory
-    // (hasKeyItem/consumeKeyItem), populated when the key-dropping skull is destroyed.
-    this.dungeonKeySkullFloor = -1;
-    this.dungeonKeyUsedThisRun = false;
-    this.dungeonRareItemObtainedThisRun = false;
-    this.dungeonTemplatesUsedThisRun = new Set(); // no floor-layout repeats within one dungeon visit
+    // The Dungeon's floors and Skull Key bookkeeping live on its D-room
+    // (room.dungeon.interiorState, read through DungeonSystem.interiorState).
 
     this.particleFireworks = false; // Debug toggle: cycles every particle factory at random screen positions
     this.dodgeBlockedFeedbackTimer = 0; // Cooldown for red X feedback

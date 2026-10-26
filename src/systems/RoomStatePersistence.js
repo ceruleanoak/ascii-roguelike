@@ -18,9 +18,13 @@ import { GAME_STATES } from '../game/GameConfig.js';
 export function saveExploreRoomState(inv, currentRoom, items, ingredients, placedTraps, enemies = [], backgroundObjects = [], captives = []) {
   inv.savedExploreRoom = currentRoom;
   // What the player put down here is gone by the time they come back.
-  inv.savedExploreItems = items.filter(item => !item.droppedByPlayer);
-  inv.savedExploreIngredients = [...ingredients];
-  inv.savedExplorePlacedTraps = [...placedTraps];
+  // Anything on an Interior floor (hutPlane loot, interior traps) belongs to
+  // that floor, not the surface: a death inside an Interior lands here with
+  // the floor's loot still in the live lists, and the floor keeps its own
+  // copy (DungeonSystem.stashActiveFloor / hut.interiorState).
+  inv.savedExploreItems = items.filter(item => !item.droppedByPlayer && !item.hutPlane);
+  inv.savedExploreIngredients = ingredients.filter(ing => !ing.hutPlane);
+  inv.savedExplorePlacedTraps = placedTraps.filter(trap => trap.interior !== true);
   inv.savedExploreEnemies = [...enemies];
   inv.savedExploreBackgroundObjects = [...backgroundObjects];
   inv.savedExploreCaptives = [...captives];

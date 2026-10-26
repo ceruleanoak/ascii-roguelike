@@ -56,7 +56,7 @@ export class DungeonPuzzleSystem {
 
   // Compass (⌖) — dungeon-only beep, narrowed (2026-08-25) to exactly the
   // two dungeon secrets it's meant to flag: the skull key (wherever
-  // game.dungeonKeySkullFloor rolled it — Entrance or Corridor) and Branch's
+  // interiorState.keySkullFloor rolled it — Entrance or Corridor) and Branch's
   // companion-panel puzzle. Generic floor loot (Pyramid slots, Puzzle Room
   // triggers, plain chests) no longer beeps. The full Explore-mode mechanic
   // (secret-reveal beep + directional arrow) lives in CompassSystem.js.
@@ -67,9 +67,10 @@ export class DungeonPuzzleSystem {
 
     // Skull key: pending only while unfound. hasKeyItem alone can't tell
     // "not yet found" apart from "already spent" (both read false once the
-    // key is consumed), so dungeonKeyUsedThisRun disambiguates.
-    const skullPending = floor.floorIndex === game.dungeonKeySkullFloor
-      && !game.dungeonKeyUsedThisRun
+    // key is consumed), so interiorState.keyUsed disambiguates.
+    const state = game.dungeonSystem.interiorState;
+    const skullPending = floor.floorIndex === state?.keySkullFloor
+      && !state.keyUsed
       && !hasKeyItem(game.inventorySystem, '⚿', game);
     const branchPending = floor.roomKind === 'numbered' && floor.floorIndex === 2
       && !floor.puzzleSolved;
@@ -353,7 +354,7 @@ export class DungeonPuzzleSystem {
     if (!overlapsCell(game.player, west.obj.position.x, west.obj.position.y)) return false;
 
     consumeKeyItem(game.inventorySystem, '⚿');
-    game.dungeonKeyUsedThisRun = true;
+    game.dungeonSystem.interiorState.keyUsed = true;
     west.locked = false;
     paintDescentVisual(west.obj, { active: west.active, locked: false });
     this._spawnUnlockEffect(west.obj);

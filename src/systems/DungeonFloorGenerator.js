@@ -64,7 +64,7 @@ import { hasKeyItem } from './keyItems.js';
  *                       layer; content owned by DungeonBossSystem — see
  *                       _generateVault and claudedocs/dungeon-boss-green.md).
  *
- * Side rooms (Puzzle Room / Trap Room) are stored on game.dungeonFloors by
+ * Side rooms (Puzzle Room / Trap Room) are stored on interiorState.floors by
  * string key, not numeric index — InteriorManager.reset() clears them for
  * free by replacing the whole array reference. A Puzzle Room's key is its
  * own template name (e.g. 'whip_trial') — the picked template's identity
@@ -155,10 +155,9 @@ export class DungeonFloorGenerator {
     if (useTemplate) {
       // Excludes templates already used elsewhere this dungeon visit, so no
       // layout repeats within a single dungeon until every named template
-      // has appeared once (game.dungeonTemplatesUsedThisRun, reset by
-      // InteriorManager.reset() alongside the other run-scoped dungeon flags).
-      const used = this.game.dungeonTemplatesUsedThisRun
-        ?? (this.game.dungeonTemplatesUsedThisRun = new Set());
+      // has appeared once (templatesUsed on the D-room's interiorState, so it
+      // lives and dies with the Dungeon itself).
+      const used = this.game.dungeonSystem.interiorState.templatesUsed;
       templateName = pickRandomTemplateName(used);
       used.add(templateName);
       applyTemplateToCollisionMap(collisionMap, templateName, reservedCells);
@@ -434,7 +433,7 @@ export class DungeonFloorGenerator {
   // One key-carrying bone pile ('8', the existing Bones background object —
   // NOT a bespoke glyph; 'Ω' was already claimed by the hut Cauldron, see
   // resolved-bugs.md) per dungeon visit — floor chosen at entry
-  // (game.dungeonKeySkullFloor, see DungeonSystem._enterDungeon). Only
+  // (interiorState.keySkullFloor, see DungeonSystem._enterDungeon). Only
   // placed while the key hasn't already been obtained or spent this run. It
   // renders identically to ordinary Bones decor — dropsDungeonKey (set on
   // the instance, mirrors obj.dropsKey's K-room pattern) is what makes THIS
@@ -444,8 +443,9 @@ export class DungeonFloorGenerator {
   // decor char so the held item itself reads as a key, not a bone.
   _placeSkullIfDue(floorIndex, { backgroundObjects, pickOpenCell, rows, cols }) {
     const game = this.game;
-    if (hasKeyItem(game.inventorySystem, '⚿') || game.dungeonKeyUsedThisRun) return;
-    if (game.dungeonKeySkullFloor !== floorIndex) return;
+    const state = game.dungeonSystem.interiorState;
+    if (hasKeyItem(game.inventorySystem, '⚿') || state.keyUsed) return;
+    if (state.keySkullFloor !== floorIndex) return;
     const cell = pickOpenCell(6, rows - 5, 3, cols - 4);
     if (!cell) return;
     const skull = new BackgroundObject('8', cell.col * GRID.CELL_SIZE, cell.row * GRID.CELL_SIZE);
@@ -559,7 +559,7 @@ export class DungeonFloorGenerator {
     this._addDecor(backgroundObjects, pickOpenCell, rows, cols);
     this._addTombs(backgroundObjects, pickOpenCell, rows, cols);
     // No _placeSkullIfDue here — the skull key now only rolls onto Entrance
-    // or Corridor (dungeonKeySkullFloor ∈ {0,1}), since it gates the door
+    // or Corridor (interiorState.keySkullFloor ∈ {0,1}), since it gates the door
     // *into* Branch and can't be found past its own lock.
 
     // Branch is entered via Corridor's West descent (the skull key), not the
@@ -741,7 +741,7 @@ export class DungeonFloorGenerator {
   }
 
   // ── Side rooms ──────────────────────────────────────────────────────────
-  // Stored on game.dungeonFloors by string key (not numeric index) — see
+  // Stored on interiorState.floors by string key (not numeric index) — see
   // file header. originFloorIndex varies by room: a Puzzle Room's origin is
   // Corridor (index1), Trap Room's is Branch (index2). (Branch's own
   // companion-switch puzzle isn't a side room — see _generateBranch above —
@@ -1017,7 +1017,7 @@ export class DungeonFloorGenerator {
       // Every puzzle-pool room shares roomKind 'puzzleRoom' (that's what
       // dispatches update() to _updatePuzzleRoom); templateName is what
       // distinguishes which one this is — it's also this floor's own
-      // game.dungeonFloors storage key (see DungeonSystem.ensureFloorGenerated/
+      // interiorState.floors storage key (see DungeonSystem.ensureFloorGenerated/
       // _destinationOf).
       templateName,
       floorIndex: null,

@@ -80,7 +80,10 @@ identity, not standard programming terms.
   through `InteriorManager.enterFloor` / `exitFloor` (freeze/thaw, collision map, floor loot);
   "is the player inside?" is `isInteriorActive(game)`, the live floor is
   `activeInteriorFloor(game)`, the NPCs in reach are `InteriorManager.activeNpcs()`. Overlays
-  dispatch through `InteriorOverlay` (shared frame in `interiorFrame.js`).
+  dispatch through `InteriorOverlay` (shared frame in `interiorFrame.js`). An Interior's own
+  state lives on its host Room (`hut.interiorState`, `room.dungeon.interiorState`) and lasts as
+  long as that Room — a REST round trip restores both; `InteriorManager.reset()` only detaches
+  the live one.
 - **Not:** "room" (an Interior contains its own space; a Room is the surface unit); a Plane
   (the other layer keeps simulating there); a hand-listed `inHut || inDungeon || inMaze` check
   (the layer-leak anti-pattern — bug #107); the Frozen status effect.
@@ -1185,8 +1188,8 @@ identity, not standard programming terms.
 - **Definition:** Throwing the armed consumable as a ground pickup: keys 4–8 arm a slot, SHIFT
   press begins the throw charge, release flings the item. The staging gesture — pre-laying
   coins beside a seam or bread along a lane before a fight. Tossed items persist on dungeon
-  floors while cached within a delve and wipe on delve reset (staging is per-delve effort; the
-  no-persistence law holds).
+  floors for as long as that Dungeon lasts — its D-room, REST round trips included — and wipe
+  when a new room replaces it (staging is per-Dungeon effort; the no-persistence law holds).
 - **In code:** `TossSystem.startToss()`; charge rides TrapSystem's drop-throw pipeline ('drop'
   mode extended with a source descriptor naming the armed slot). Lands via the standard
   pickup path with its cooldown. Weapon-held SHIFT behavior (drop) is unchanged — the Toss

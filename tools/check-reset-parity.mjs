@@ -287,11 +287,11 @@ const UNREGISTERED_ALLOWLIST = [
 
   // InteriorManager-owned fields were allowlisted here pending plan Step 6.
   // Step 6 landed: resetRegistry.js now has a room-scoped `interiorManager.reset`
-  // entry whose `covers` array lists activeFloor/mazeInterior/dungeonFloors/
-  // dungeonCurrentFloor/dungeonKeySkullFloor/dungeonKeyUsedThisRun/
-  // dungeonRareItemObtainedThisRun/dungeonTemplatesUsedThisRun (plus the
-  // player.* interior fields) — registeredPaths() now exempts them via that
-  // `covers` list, so these regexes are redundant and removed.
+  // entry whose `covers` array lists activeFloor/mazeInterior/
+  // dungeonCurrentFloor (plus the player.* interior fields; the Dungeon's
+  // floors and Skull Key flags moved onto the D-room itself) —
+  // registeredPaths() now exempts them via that `covers` list, so these
+  // regexes are redundant and removed.
 
   // Explicitly documented intentional persistence — main.js:1187: "Note:
   // exitPathHistory persists for future secret pattern tracking." This is

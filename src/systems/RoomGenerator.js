@@ -3578,6 +3578,18 @@ export class RoomGenerator {
       doorPosition: { col: doorCol, row: doorRow },
       hutKind: 'enemy_encounter',
       interiorGenerated: false,
+      // The Dungeon's own state lives on its host room and lasts as long as
+      // the room does — exit/re-entry, a trip to REST and back (the room is
+      // restored verbatim), and a neutral-room detour all find it intact. A
+      // new room brings a new Dungeon. Read through
+      // DungeonSystem.interiorState. Same shape as hut.interiorState, only a
+      // Dungeon holds a stack of Floors plus its Skull Key bookkeeping.
+      interiorState: {
+        floors: [],             // numbered spine [0..4] + side rooms by string key
+        keySkullFloor: -1,      // floor holding the Skull Key's bone pile; -1 = not rolled yet
+        keyUsed: false,         // Skull Key spent on the Key Vault descent
+        templatesUsed: new Set(), // floor layouts already used in this Dungeon (no repeats)
+      },
     };
 
     if (foundWall) protectRegion(room, { kind: 'rect', minCol: minWallCol, maxCol: maxWallCol, minRow: minWallRow, maxRow: maxWallRow });

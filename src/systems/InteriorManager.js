@@ -14,9 +14,12 @@ import { consumeKeyItem } from './keyItems.js';
  * owns that shared lifecycle so each interior is a registered controller and a
  * new interior plugs in without a fourth copy.
  *
- * Data holders (`game.activeFloor`, `game.mazeInterior`, `game.dungeonFloors`,
+ * The live-interior slots (`game.activeFloor`, `game.mazeInterior`,
  * `game.dungeonCurrentFloor`) stay on `game` — the manager owns lifecycle, game
- * holds the data (documented compromise, like trap/companion state).
+ * holds the data (documented compromise, like trap/companion state). An
+ * Interior's own persistent state lives on its host room instead
+ * (`hut.interiorState`, `room.dungeon.interiorState`) and lasts as long as
+ * that room does.
  *
  * Every Interior is a Freeze layer: the surface room freezes on entry and the
  * Interior owns the frame through its PiP overlay. Hut, dungeon and Aquifer
@@ -90,28 +93,28 @@ export class InteriorManager {
   }
 
   /**
-   * Clear all interior state. Called on REST entry, room transitions, and
-   * cheat-warp room swaps — replaces the duplicated reset blocks in main.js.
+   * Detach whatever interior is live. Called on REST entry, room transitions,
+   * and cheat-warp room swaps — replaces the duplicated reset blocks in main.js.
+   *
+   * Only the live slot is cleared: an Interior's own state lives on its host
+   * room (hut.interiorState, room.dungeon.interiorState) and lasts as long as
+   * the room does, so a trip to REST and back (the room is restored
+   * verbatim) finds the Dungeon as it was left, and a new room brings its own.
    */
   reset() {
     const g = this.game;
+    // A Dungeon floor left without its ∩ exit (REST from a death, a warp)
+    // takes its loot, traps and enemies back first, so the floor is intact
+    // when the Dungeon is entered again.
+    if (g.dungeonSystem?.ownsFloor(g.activeFloor)) g.dungeonSystem.stashActiveFloor();
     g.activeFloor = null;
     g.mazeInterior = null;
-    g.dungeonFloors = [];
     g.dungeonCurrentFloor = -1;
-    // Floor 3 Key Vault run-flags (DungeonPuzzleSystem). -1 = skull floor not
-    // yet rolled this visit; rolled lazily on dungeon entry.
-    g.dungeonKeySkullFloor = -1;
-    // An unspent Skull Key doesn't survive leaving the dungeon (matches the
-    // pre-Item flag this replaced) — drop it from keyItemInventory rather
-    // than let it carry into the next visit.
-    consumeKeyItem(g.inventorySystem, '⚿');
-    g.dungeonKeyUsedThisRun = false;
-    g.dungeonRareItemObtainedThisRun = false;
-    // Templates already used this visit (dungeonFloorTemplates.js's
-    // pickRandomTemplateName excludes these) — a fresh Set per visit so no
-    // floor layout repeats within one dungeon until every template has appeared.
-    g.dungeonTemplatesUsedThisRun = new Set();
+    // A held Skull Key opens only the Dungeon that dropped it, so it lasts as
+    // long as that Dungeon: kept while the room holding it is current, saved
+    // for REST, or waiting behind a neutral detour; dropped from
+    // keyItemInventory once a new room has replaced it.
+    if (!g.dungeonSystem?.skullKeyOutstanding()) consumeKeyItem(g.inventorySystem, '⚿');
     if (g.player) {
       g.player._activeInteriorKind = null;
       g.player.hutExitPosition = null;

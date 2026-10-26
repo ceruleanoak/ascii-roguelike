@@ -853,16 +853,14 @@ export const RESET_REGISTRY = [
     scope: 'room',
     call: (game) => game.interiorManager.reset(),
     covers: [
-      'activeFloor', 'mazeInterior', 'dungeonFloors', 'dungeonCurrentFloor',
-      'dungeonKeySkullFloor', 'dungeonKeyUsedThisRun',
-      'dungeonRareItemObtainedThisRun', 'dungeonTemplatesUsedThisRun',
+      'activeFloor', 'mazeInterior', 'dungeonCurrentFloor',
       'player._activeInteriorKind', 'player.hutExitPosition',
       'player.mazeExitPosition', 'player.dungeonExitPosition',
       'player.aquiferCurrent',
       'player.plane',
       'player.tombSapped', 'player._tombSapTimer', 'player._tombSappingGhost',
     ],
-    why: "InteriorManager.reset() is Non-Goals-exempt (PRD: system-owned reset methods keep their internal logic; the registry only guarantees the CALL happens at the right scope). InteriorManager.reset() already runs from its own three direct call sites (enterRestState, transitionToNeutralRoom, enterExploreState) — those are unchanged by this entry. Registering it here at 'room' scope means it ALSO now fires a 4th time via applyRoomSwap's applyReset('room') call (Step 6) — every existing call site to those three functions already runs applyRoomSwap downstream, so this is a same-tick duplicate call, not a new independent trigger. Verified idempotent: every field it writes is a plain null/-1/[]/new-Set() assignment, and its one side-effecting call (consumeKeyItem(inventorySystem, '⚿')) is a no-op splice-miss when nothing is held (keyItems.js) — so the duplicate call is inert, not merely 'probably harmless'. Registering it was primarily for FR5 traceability (plan §5.E) so the harness's registry-coverage check accounts for the game.*/player.* fields it reaches via `covers`, without duplicating InteriorManager's own internal reset logic as table entries — the extra call is an accepted side effect of that, not the goal.",
+    why: "InteriorManager.reset() is Non-Goals-exempt (PRD: system-owned reset methods keep their internal logic; the registry only guarantees the CALL happens at the right scope). InteriorManager.reset() already runs from its own three direct call sites (enterRestState, transitionToNeutralRoom, enterExploreState) — those are unchanged by this entry. Registering it here at 'room' scope means it ALSO now fires a 4th time via applyRoomSwap's applyReset('room') call (Step 6) — every existing call site to those three functions already runs applyRoomSwap downstream, so this is a same-tick duplicate call, not a new independent trigger. Verified idempotent: every field it writes is a plain null/-1 assignment; its Dungeon-floor stash (DungeonSystem.stashActiveFloor) only runs while a Dungeon floor is still live, so the second call skips it; and its Skull Key drop (consumeKeyItem(inventorySystem, '⚿'), only once no live room still owes that key) is a no-op splice-miss when nothing is held (keyItems.js) — so the duplicate call is inert, not merely 'probably harmless'. The Dungeon's floors and Skull Key flags are NOT reset here: they live on the D-room (room.dungeon.interiorState) and die with it, so REST and back resumes the same Dungeon. Registering it was primarily for FR5 traceability (plan §5.E) so the harness's registry-coverage check accounts for the game.*/player.* fields it reaches via `covers`, without duplicating InteriorManager's own internal reset logic as table entries — the extra call is an accepted side effect of that, not the goal.",
   },
   {
     path: 'dragonSpiritSystem.reset',

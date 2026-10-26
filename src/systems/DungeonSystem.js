@@ -18,12 +18,12 @@ import { SpawnVentSystem } from './SpawnVentSystem.js';
  *
  * Floor graph
  * ───────────
- * Floors are addressed either by numeric index (game.dungeonFloors[0..4],
+ * Floors are addressed either by numeric index (interiorState.floors[0..4],
  * the "spine" — Entrance → Corridor → Branch → Pyramid → Vault) or by string key
- * (game.dungeonFloors[templateName], a weighted-random Puzzle Room off
+ * (interiorState.floors[templateName], a weighted-random Puzzle Room off
  * Corridor's North descent — the picked template's own name doubles as its
  * storage key, e.g. 'whip_trial'; see DungeonFloorGenerator._generateCorridor
- * and dungeonPuzzleTemplates.js. game.dungeonFloors.trapRoom, off Branch's
+ * and dungeonPuzzleTemplates.js. interiorState.floors.trapRoom, off Branch's
  * North descent, is the one remaining bespoke side room). Branch's East descent leads straight back
  * onto the spine, to the Pyramid (numbered floorIndex 3) — gated by Branch's
  * own in-room switch puzzle rather than a separate side room (bug #209:
@@ -43,8 +43,11 @@ import { SpawnVentSystem } from './SpawnVentSystem.js';
  * MAX_FLOOR_INDEX constant: the chain ends wherever a floor's own
  * descents[] ends.
  *
- * Floor data persists in game.dungeonFloors for the duration of the visit.
- * Cleared by InteriorManager.reset() (room change / REST / death).
+ * Floor data lives on the host D-room (`room.dungeon.interiorState`, read
+ * through this.interiorState) and lasts as long as that room: exit and
+ * re-entry, a trip to REST and back, and a character-swap death all come
+ * back to the same floors. A new room brings a new Dungeon.
+ * InteriorManager.reset() only detaches the live floor (stashActiveFloor).
  */
 
 const INTERIOR_COLS = 24;
@@ -60,38 +63,99 @@ export class DungeonSystem {
     this.spawnVentSystem = new SpawnVentSystem(game);
   }
 
+  // ─── Dungeon state (lives on the host room) ──────────────────────────────
+
+  /**
+   * The current room's Dungeon state — its floor stack and Skull Key
+   * bookkeeping (RoomGenerator builds it with the D-room). Null in any room
+   * without a Dungeon.
+   */
+  get interiorState() {
+    return this.game.currentRoom?.dungeon?.interiorState ?? null;
+  }
+
+  /** Is `floor` one of the current room's Dungeon floors? */
+  ownsFloor(floor) {
+    const floors = this.interiorState?.floors;
+    return !!floor && !!floors && Object.values(floors).includes(floor);
+  }
+
+  /**
+   * Is a Skull Key still owed to a Dungeon that is still around — rolled but
+   * not yet spent, in the current room, the room REST will restore, or the
+   * room a neutral detour returns to? A held '⚿' lasts exactly as long as
+   * that; InteriorManager.reset() drops it once it isn't.
+   */
+  skullKeyOutstanding() {
+    const { game } = this;
+    const rooms = [game.currentRoom, game.inventorySystem?.savedExploreRoom, game.savedExploreState?.room];
+    return rooms.some(room => {
+      const state = room?.dungeon?.interiorState;
+      return !!state && state.keySkullFloor >= 0 && !state.keyUsed;
+    });
+  }
+
+  /**
+   * Hand the live floor's loot, traps and enemies back to the floor object
+   * so it is intact when activated again. Shared by every way off a floor
+   * (floor swap, the ∩ exit, and InteriorManager.reset() when REST or a
+   * death takes the player straight out of the Dungeon).
+   */
+  stashActiveFloor() {
+    const { game } = this;
+    const floor = game.activeFloor;
+    if (!floor) return;
+    floor.items       = game.items.filter(i => i.hutPlane);
+    floor.ingredients = game.ingredients.filter(i => i.hutPlane);
+    floor.placedTraps = game.trapSystem.takeInteriorTraps();
+    game.items       = game.items.filter(i => !i.hutPlane);
+    game.ingredients = game.ingredients.filter(i => !i.hutPlane);
+    // Floor enemies leave physics (they remain on floor.enemies). Also drop
+    // unconsumed tick caches so CombatSystem can't replay stale dot/sap
+    // events on re-entry (bug #92).
+    for (const e of floor.enemies ?? []) {
+      game.physicsSystem.removeEntity(e);
+      e._frameUpdateResult = null;
+    }
+  }
+
   // ─── Floor Generation (delegated) ─────────────────────────────────────────
 
   ensureFloorGenerated(destination) {
     const { game } = this;
+    const state = this.interiorState;
+    if (!state) return null;
+    const floors = state.floors;
     const depth = game.getCurrentZoneDepth ? game.getCurrentZoneDepth() : 1;
+    game.currentRoom.dungeon.interiorGenerated = true;
     if (destination.kind === 'numbered') {
-      if (!game.dungeonFloors[destination.floorIndex]) {
-        game.dungeonFloors[destination.floorIndex] = game.dungeonFloorGenerator.generateFloor(destination.floorIndex, depth);
+      if (!floors[destination.floorIndex]) {
+        floors[destination.floorIndex] = game.dungeonFloorGenerator.generateFloor(destination.floorIndex, depth);
       }
-      return game.dungeonFloors[destination.floorIndex];
+      return floors[destination.floorIndex];
     }
     // Side room — generated fresh only once per visit, keyed by string. A
     // key matching a named entry in PUZZLE_ROOM_TEMPLATES is a Puzzle Room
     // (checked first so adding a new template needs no change here — see
     // dungeonPuzzleTemplates.js's file header); 'trapRoom' is the one
     // remaining bespoke, non-template side room.
-    if (!game.dungeonFloors[destination.key]) {
+    if (!floors[destination.key]) {
       const gen = game.dungeonFloorGenerator;
       if (PUZZLE_ROOM_TEMPLATES[destination.key]) {
-        game.dungeonFloors[destination.key] = gen.generatePuzzleRoom(destination.key, depth, 1);
+        floors[destination.key] = gen.generatePuzzleRoom(destination.key, depth, 1);
       } else if (destination.key === 'trapRoom') {
-        game.dungeonFloors.trapRoom = gen.generateTrapRoom(depth, 2);
+        floors.trapRoom = gen.generateTrapRoom(depth, 2);
       }
     }
     return this.getFloorByDest(destination);
   }
 
   getFloorByDest(destination) {
-    const { game } = this;
+    const floors = this.interiorState?.floors;
+    if (!floors) return undefined;
     return destination.kind === 'numbered'
-      ? game.dungeonFloors[destination.floorIndex]
-      : game.dungeonFloors[destination.key];
+      ? floors[destination.floorIndex]
+      : floors[destination.key];
   }
 
   /**
@@ -177,8 +241,9 @@ export class DungeonSystem {
     // on exit/re-entry within the same D-room visit). Must be findable
     // before the lock it opens (Corridor's West descent into Branch), so
     // it only rolls onto Entrance or Corridor, never past the gate itself.
-    if (game.dungeonKeySkullFloor < 0) {
-      game.dungeonKeySkullFloor = Math.floor(Math.random() * 2); // floor 0 or 1
+    const state = this.interiorState;
+    if (state.keySkullFloor < 0) {
+      state.keySkullFloor = Math.floor(Math.random() * 2); // floor 0 or 1
     }
 
     const entrance = this.ensureFloorGenerated({ kind: 'numbered', floorIndex: 0 });
@@ -236,20 +301,11 @@ export class DungeonSystem {
     // on every floor descended/ascended to afterward.
     game._resetEnvironmentalEffects();
 
-    // Swap physics entities — enemies
-    if (game.activeFloor?.enemies) {
-      for (const e of game.activeFloor.enemies) game.physicsSystem.removeEntity(e);
-    }
+    // Swap floors: the floor being left keeps its enemies, loot and placed
+    // traps (stashActiveFloor), then the new floor's are loaded.
+    this.stashActiveFloor();
     for (const e of floor.enemies) game.physicsSystem.addEntity(e);
 
-    // Swap floor items + ingredients: save current floor's hutPlane entities, load new floor's
-    if (game.activeFloor) {
-      const prev = game.activeFloor;
-      prev.items       = game.items.filter(i => i.hutPlane);
-      prev.ingredients = game.ingredients.filter(i => i.hutPlane);
-      game.items       = game.items.filter(i => !i.hutPlane);
-      game.ingredients = game.ingredients.filter(i => !i.hutPlane);
-    }
     for (const item of floor.items) {
       if (!game.items.includes(item)) game.items.push(item);
     }
@@ -257,10 +313,8 @@ export class DungeonSystem {
       if (!game.ingredients.includes(ing)) game.ingredients.push(ing);
     }
 
-    // Placed traps stay on the floor they were set on, and every floor is a
-    // fresh room for the quick-slotted traps' charges.
-    const leftTraps = game.trapSystem.takeInteriorTraps();
-    if (game.activeFloor) game.activeFloor.placedTraps = leftTraps;
+    // Placed traps stay on the floor they were set on (stashed above), and
+    // every floor is a fresh room for the quick-slotted traps' charges.
     game.placedTraps.push(...(floor.placedTraps ?? []));
     game.trapSystem.resetTrapsForNewRoom();
 
@@ -411,23 +465,9 @@ export class DungeonSystem {
     // goo/debris must not persist into the surface pass on exit.
     game._resetEnvironmentalEffects();
 
-    // Snapshot the current floor's loot before clearing globals, so that
-    // re-entering the same D room restores picked-up state correctly.
-    if (game.activeFloor) {
-      game.activeFloor.items       = game.items.filter(i => i.hutPlane);
-      game.activeFloor.ingredients = game.ingredients.filter(i => i.hutPlane);
-      game.activeFloor.placedTraps = game.trapSystem.takeInteriorTraps();
-    }
-
-    // Remove current floor enemies from physics (they remain on floor.enemies).
-    // Also drop unconsumed tick caches so CombatSystem can't replay stale
-    // dot/sap events on re-entry (bug #92).
-    if (game.activeFloor?.enemies) {
-      for (const e of game.activeFloor.enemies) {
-        game.physicsSystem.removeEntity(e);
-        e._frameUpdateResult = null;
-      }
-    }
+    // Hand the floor its loot, traps and enemies back before clearing the
+    // globals, so re-entering the same D room finds it as it was left.
+    this.stashActiveFloor();
 
     // Restore exterior position
     if (game.player.dungeonExitPosition) {
@@ -470,12 +510,7 @@ export class DungeonSystem {
     // Dungeon boss layer: tear down any live encounter (no payout on retreat).
     game.dungeonBossSystem?.reset?.();
 
-    // Clear hutPlane loot from active globals (preserved on floor objects above)
-    game.ingredients = game.ingredients.filter(i => !i.hutPlane);
-    game.items = game.items.filter(i => !i.hutPlane);
-
-    // Floors persist across exit/re-entry within the same D-room visit.
-    // dungeonFloors and dungeonCurrentFloor are NOT cleared here; only activeFloor
+    // The floors persist on the D-room (interiorState); only the live floor
     // is detached so exterior physics paths don't see stale interior state.
     game.dungeonCurrentFloor = -1;
     game.activeFloor = null;
@@ -515,8 +550,9 @@ export class DungeonSystem {
     // behave normally after a debug jump.
     if (!game.player.inDungeon) {
       game.player.dungeonExitPosition = { x: game.player.position.x, y: game.player.position.y };
-      if (game.dungeonKeySkullFloor < 0) {
-        game.dungeonKeySkullFloor = Math.floor(Math.random() * 2);
+      const state = this.interiorState;
+      if (state.keySkullFloor < 0) {
+        state.keySkullFloor = Math.floor(Math.random() * 2);
       }
     }
 
@@ -530,7 +566,7 @@ export class DungeonSystem {
         floor = gen.generateTrapRoom(depth, 2);
       }
       if (!floor) return false;
-      game.dungeonFloors[destination.key] = floor;
+      this.interiorState.floors[destination.key] = floor;
     } else {
       floor = this.ensureFloorGenerated(destination);
     }
