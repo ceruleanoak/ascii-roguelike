@@ -674,6 +674,7 @@ export class Enemy {
 
     // Update status effects and capture DOT damage events
     const dotDamageEvents = this.updateStatusEffects(deltaTime);
+    SplitOnDamageMechanic.onStatusTicks(this, dotDamageEvents);
 
     const leapActive = LeapAttackMechanic.updateActive(this, { deltaTime, dotDamageEvents, onScreen });
     if (leapActive?.suspend) return leapActive.result;

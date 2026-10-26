@@ -13,8 +13,8 @@
  * as EquipmentEffectsSystem: the InventorySystem instance is passed in as
  * `inv` rather than duplicated state living here.
  *
- * Offensive effects (explode/curse/slow/poison/jolt/firecracker/
- * throwSteam) resolve in the switch below. Everything else — heals, buffs,
+ * Offensive effects (explode/curse/slow/poison/jolt/waterBalloon/
+ * firecracker/throwSteam) resolve in the switch below. Everything else — heals, buffs,
  * shields, anything that lands on the player — falls through to
  * ConsumableTriggerSystem.applyEffect, which owns those mutations.
  */
@@ -22,6 +22,7 @@
 import { createBurstParticles, createSparkBurst, createExplosionAftermath } from './WorldEffectsSystem.js';
 import { isInteriorActive } from './PlaneSystem.js';
 import { detonateBomb } from './ExplosionEffects.js';
+import { clearStatusEffect } from './StatusEffects.js';
 
 export class ConsumableWindupEffects {
   execute(inv, windup, player, enemies, combatSystem, steamClouds, particles) {
@@ -104,6 +105,24 @@ export class ConsumableWindupEffects {
         createSparkBurst(inv.game, particles, ix - ring, iy);
         createSparkBurst(inv.game, particles, ix, iy + ring);
         createSparkBurst(inv.game, particles, ix, iy - ring);
+        break;
+      }
+      case 'waterBalloon': {
+        // Water Balloon: the Bomb's burst, but water — every enemy in it is
+        // soaked (burn put out, as water does), and slimes take slimeDamage.
+        const radius = cd.radius * 2;
+        for (const enemy of enemies) {
+          const dx = (enemy.position.x + 20) - px, dy = (enemy.position.y + 20) - py;
+          if (Math.sqrt(dx * dx + dy * dy) > radius) continue;
+          if (enemy.shouldApplyStatusEffect('wet')) {
+            enemy.applyStatusEffect('wet', 6.0, 1); // wet pip 1; deep water fills the rest
+            if (enemy.statusEffects.burn?.active) clearStatusEffect(enemy, 'burn');
+          }
+          if (enemy.data?.wetDot && enemy.takeDamage(cd.slimeDamage) !== false) {
+            combatSystem.createDamageNumber(cd.slimeDamage, enemy.position.x, enemy.position.y, '#4488ff');
+          }
+        }
+        createBurstParticles(inv.game, particles, px, py, 25, windup.consumable.color);
         break;
       }
       case 'firecracker': {

@@ -120,6 +120,9 @@ export const RECIPES = [
   // third parallel path (alongside the Caldera fill and the fireplace stoke
   // in FireplaceSystem) reusing the held berry itself, not the fireplace.
   { left: '❋', right: '🜉', result: '🜊', name: 'Bottle of Hot Water' },
+  // Bottle of Water + Goo = Water Balloon — a thrown splash that soaks
+  // everything in a Bomb's burst; slimes dissolve in it.
+  { left: '🜉', right: 'g', result: '◒', name: 'Water Balloon' },
 
   // Purified Potion true-potion recipes — same results as Base Potion;
   // AlchemySystem stamps the buffed potionModifier onto the result instance.

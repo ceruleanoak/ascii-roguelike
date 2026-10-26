@@ -253,6 +253,9 @@ export class ConsumableTriggerSystem {
         // Steam Vial: creates a steam cloud — START WINDUP
         return { windup: 0.6, effectType: 'throwSteam' };
       }
+      case 'waterBalloon':
+        // Water Balloon: manual-only throw, lands where the Bomb's would
+        return manual ? { windup: THROW_DURATION, effectType: 'waterBalloon' } : false;
       case 'firecracker': {
         const px = player.position.x + 20, py = player.position.y + 20;
         if (manual) return { windup: 0.5, effectType: 'firecracker' };
@@ -425,6 +428,7 @@ export class ConsumableTriggerSystem {
     const cd = windup.consumable.data;
     switch (windup.effectType) {
       case 'explode':     return cd.radius * 2; // Bomb uses 2x radius
+      case 'waterBalloon': return cd.radius * 2; // same burst as the Bomb
       case 'curse':       return cd.radius;     // Cursed Skull
       case 'slow':        return 50;            // Slime Ball
       case 'poison':      return 55;            // Poison Flask

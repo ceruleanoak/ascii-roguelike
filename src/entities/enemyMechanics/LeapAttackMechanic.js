@@ -125,6 +125,8 @@ export const LeapAttackMechanic = {
     const cfg = enemy.data.leapAttack;
     if (!cfg?.enabled) return;
     if (enemy.spewWindupActive) return;
+    // Wet, it can't leap at all — not even the counter-leap a hit arms.
+    if (enemy.isWet()) { enemy.forcedLeapPending = false; return; }
     if (!inSamePlane(enemy, enemy.target)) return;
     if (!ctx.onScreen) return; // no ambushing from outside the zoomed frame
 

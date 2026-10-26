@@ -1832,8 +1832,9 @@ export class PhysicsSystem {
 
       // Check water immunity (Rubber Boots) — blocks elemental status effects but not movement slow
       const isImmune = entity === game.player && game.player.waterImmunityTimer > 0;
-      // An authored wet immunity (Giant Slime) blocks only the wet status —
-      // electrified water still shocks it (that shock is its electric Imbue).
+      // An authored wet immunity (elementalAffinity.immunity 'wet'; no enemy
+      // carries one today) blocks only the wet status — electrified water
+      // still shocks it.
       // Flippers (deepWaterImmune) keep the wearer from getting wet at all.
       const wetImmune = isImmune || !!entity.elementalAffinity?.immunity?.includes('wet')
         || (entity === game.player && entity.deepWaterImmune);

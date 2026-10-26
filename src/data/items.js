@@ -2397,6 +2397,21 @@ export const ITEMS = {
     manualOnly: true,
     color: '#ff0000'
   },
+  // Water Balloon — thrown like a Bomb, same burst (radius × 2). No blast:
+  // everything in the burst gets wet (burn put out), and slimes (wetDot)
+  // take `slimeDamage` on top (ConsumableWindupEffects 'waterBalloon').
+  '◒': {
+    char: '◒',
+    name: 'Water Balloon',
+    type: ITEM_TYPES.CONSUMABLE,
+    effect: 'waterBalloon',
+    radius: 40,
+    slimeDamage: 2,
+    oneShot: true,
+    manualOnly: true,
+    stackable: true,
+    color: '#66aaff'
+  },
   // Bomb Bag — earned in the dungeon's Bomb Trial. Throws Bombs (⊗): one free
   // per room, then the Bombs in the consumable list. Never spent itself; all
   // throw logic lives in BombBagSystem (no `effect` — it has none of its own).

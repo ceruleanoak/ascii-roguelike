@@ -38,6 +38,16 @@ export const SplitOnDamageMechanic = {
     enemy.game?.audioSystem?.playSFX('goo_split');
   },
 
+  // Dissolving: each wet damage-over-time tick (data.wetDot) is shed as a
+  // child slime of that HP, the same as a hit — so a wet boss melts into
+  // 1 HP slimes that re-merge unless they're killed.
+  onStatusTicks(enemy, dotDamageEvents) {
+    if (!enemy.data.splitOnDamage?.enabled || enemy.hp <= 0) return;
+    for (const tick of dotDamageEvents) {
+      if (tick.effect === 'wet') SplitOnDamageMechanic.onDamaged(enemy, tick.damage);
+    }
+  },
+
   registerSplitChild(parent, child, cfg) {
     if (!parent.splitChildren) parent.splitChildren = new Set();
     child.parentRef = parent;

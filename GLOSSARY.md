@@ -1318,6 +1318,8 @@ identity, not standard programming terms.
 - **In code:** `room.imbuePools = [{ element, tiles, center, brokenTimer }]` and
   `room.lightningRod`, seeded by `seedImbuePools` (`roomFeatures.js`); pool choice and landing in
   `ImbuePoolSystem` (`leapPoolTarget` → `LeapAttackMechanic`).
+  The electric pool is still water: landing in it also soaks the slime, which then can't leap
+  and dissolves (Water Balloon) until it dries.
 - **Not:** ordinary water, ice, or lava tiles elsewhere (they don't grant an Imbue by landing).
 
 ### Companion
@@ -1531,6 +1533,17 @@ identity, not standard programming terms.
   `Crow._closestPickable` exclusion, and `CampNPC.acceptsHeal`.
 - **Not:** "bread" as a category (Bread is one Feed item); "bait" or "lure" (Lure is the
   Charm Lure trap, and LureMechanic is an enemy behavior).
+
+### Water Balloon
+- **Definition:** A thrown consumable (◒, Bottle of Water + Goo) that bursts over the Bomb's
+  radius without a blast: every enemy in the burst gets wet (pip 1, burn put out) and slimes
+  take 2 damage. A wet Giant Slime can't leap, not even its counter-leap, and dissolves: each
+  wet damage tick is shed as a 1 HP slime that re-merges with it unless killed.
+- **In code:** `ITEMS['◒']` (`effect: 'waterBalloon'`, `radius`, `slimeDamage`); thrown through
+  `ConsumableTriggerSystem` → `ConsumableWindupEffects` `'waterBalloon'`. Slimes are enemies
+  with `data.wetDot`. The leap gate is `LeapAttackMechanic.tryTrigger` (`isWet()`); the
+  dissolve is `SplitOnDamageMechanic.onStatusTicks`.
+- **Not:** a Bomb (no damage to non-slimes, opens nothing); not a trap.
 
 ### Bomb Bag
 - **Definition:** A consumable-slot item (⊟) that throws Bombs (⊗) and is never spent itself.
