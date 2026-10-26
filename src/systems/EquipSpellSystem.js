@@ -1,15 +1,24 @@
 import { GAME_STATES } from '../game/GameConfig.js';
+import { CHARACTER_TYPES } from '../data/characters.js';
+import { ITEMS } from '../data/items.js';
 
 // How far chance can lift an item past a better one: a whole tier (or point
 // of defense) and a half. Tier 3 usually wins over tier 1; tier 2 and 3 trade
 // places often, which is what makes a repeated EQUIP worth casting.
 const JITTER = 1.5;
 
+// How far the character being played leans a weapon pick: half a tier,
+// well inside JITTER. It breaks near-ties toward the character's own kit and
+// never outweighs a clearly better weapon.
+const CHARACTER_LEAN = 0.5;
+
 /**
  * EQUIP Spell — in REST, the THREE dresses the player from everything they
  * own: three diverse weapons in the quick slots (the higher tiers preferred),
  * armor (the higher defense preferred) and consumables in every open slot.
- * Chance is part of every pick, so casting EQUIP again tries another loadout.
+ * Chance is part of every pick, so casting EQUIP again tries another loadout,
+ * and the weapon picks lean slightly toward the kit of the character being
+ * played (characterLean).
  *
  * Diverse means a different weapon type per slot (melee, bow, gun, wand)
  * while there are types to go round, then a different weapon subtype, then
@@ -79,7 +88,8 @@ export class EquipSpellSystem {
       : undefined;
     const utility = kept !== undefined || chestTrap !== undefined;
 
-    const picks = diverseWeapons(inv.itemChest.filter(isWeapon), open.length - (utility ? 1 : 0));
+    const picks = diverseWeapons(inv.itemChest.filter(isWeapon), open.length - (utility ? 1 : 0),
+      characterLean(player));
     // Empty slots fill first; any other trap gives its slot up only when a
     // pick is left over.
     const slots = [...open.filter(i => !player.quickSlots[i]),
@@ -155,11 +165,35 @@ function byScore(items, value) {
     .map(entry => entry.item);
 }
 
-// Up to `count` weapons, the higher tiers preferred, each as unlike the ones
-// already picked as the pool allows: a new type, else a new subtype, else a
-// new weapon.
-function diverseWeapons(pool, count) {
-  const remaining = byScore(pool, weapon => weapon.data.tier ?? 0);
+// A small score lift (or drop) per weapon for the character being played,
+// read from what CHARACTER_TYPES already says about them: a weapon type their
+// weaponAffinities favor (Green Ranger's bows, Red Warrior's melee, Yellow
+// Mage's guns) leans in, one it penalizes (Red Warrior's bows) leans out, and
+// a weapon of their Starter Weapon's kind (Cyan Rogue's daggers, Yellow Mage's
+// staves) leans in. A character with neither (Gold Hero, Gray Assassin, whose
+// trap affinity the utility slot already answers) leans nowhere.
+function characterLean(player) {
+  const character = CHARACTER_TYPES[player?.characterType];
+  if (!character) return () => 0;
+  const affinities = character.weaponAffinities ?? {};
+  const starter = ITEMS[character.starterWeapon];
+  return weapon => {
+    const affinity = affinities[weapon.data.weaponType?.toLowerCase()];
+    if (affinity && Object.keys(affinity).some(field => field.endsWith('Penalty'))) {
+      return -CHARACTER_LEAN;
+    }
+    const starterKind = starter
+      && weapon.data.weaponType === starter.weaponType
+      && weapon.data.weaponSubtype === starter.weaponSubtype;
+    return affinity || starterKind ? CHARACTER_LEAN : 0;
+  };
+}
+
+// Up to `count` weapons, the higher tiers preferred (leaned by `lean`), each
+// as unlike the ones already picked as the pool allows: a new type, else a
+// new subtype, else a new weapon.
+function diverseWeapons(pool, count, lean) {
+  const remaining = byScore(pool, weapon => (weapon.data.tier ?? 0) + lean(weapon));
   const picks = [];
   const differs = [
     w => !picks.some(p => p.data.weaponType === w.data.weaponType),
