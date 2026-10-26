@@ -1,4 +1,4 @@
-import { GRID, WATER_COLORS } from '../game/GameConfig.js';
+import { GRID, WATER_COLORS, BACKGROUND_OBJECT_VARIANTS } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { flagSunkenGlints } from './SunkenGlintSystem.js';
 
@@ -55,6 +55,26 @@ const SPAR_CELLS = [{ col: 22, row: 8 }, { col: 23, row: 7 }];
 // One porthole in each end wall.
 const PORTHOLES = new Set(['8,15', '26,12']);
 
+// The seabed around the wreck: seaweed strands rooted on the bottom (each
+// grows `height` cells up from its root, its glyph swinging } { } as it
+// rises) and planks the wreck shed. Fixed, like the hull, so the room looks
+// the same every visit. All open sea — none in the hold, where the glints
+// have to read on bare water, and none in the lane to the secret south.
+const SEAWEED_STRANDS = [
+  { col: 11, row: 5, height: 3 }, { col: 24, row: 4, height: 2 }, { col: 27, row: 3, height: 2 },
+  { col: 6, row: 9, height: 2 },
+  { col: 13, row: 21, height: 2 }, { col: 19, row: 23, height: 3 }, { col: 24, row: 22, height: 3 },
+  { col: 10, row: 25, height: 3 }, { col: 7, row: 27, height: 2 }, { col: 12, row: 28, height: 2 },
+  { col: 18, row: 28, height: 2 }, { col: 21, row: 27, height: 2 }, { col: 27, row: 25, height: 3 }
+];
+const SEAWEED_GLYPHS = ['}', '{'];
+// Two greens, alternating strand by strand, so the bed isn't one flat color.
+const SEAWEED_COLORS = ['#2e8b57', '#1f6b44'];
+const LOOSE_PLANKS = [
+  { col: 9, row: 10 }, { col: 16, row: 21 }, { col: 22, row: 19 },
+  { col: 6, row: 18 }, { col: 25, row: 28 }, { col: 23, row: 25 }
+];
+
 // Glints seeded in the hold; one of them is the Slow Glint, whose blink is
 // drawn on a cycle five times as long (SparkleEffects.SLOW_GLINT_CYCLE).
 const GLINT_COUNT = 7;
@@ -89,6 +109,7 @@ export class SunkenShipSystem {
 
     const hull = this._hullCells();
     const holdTiles = [];
+    const seaTiles = new Map(); // open-sea water by cell key, for the seabed
 
     for (let row = 1; row < GRID.ROWS - 1; row++) {
       for (let col = 1; col < GRID.COLS - 1; col++) {
@@ -110,12 +131,14 @@ export class SunkenShipSystem {
             holdTiles.push(water);
           } else if (deep) {
             water.color = WATER_COLORS.deep;
+            seaTiles.set(key, water);
           }
           room.backgroundObjects.push(water);
         }
       }
     }
 
+    this._placeSeabed(room, seaTiles);
     this._placeGlints(room, state, holdTiles);
     if (state.southOpen) this._southExit(room);
   }
@@ -193,6 +216,31 @@ export class SunkenShipSystem {
     for (const { col, row } of SPAR_CELLS) walls.set(cellKey(col, row), '/');
 
     return { walls, hold };
+  }
+
+  // Seaweed and loose planks over the open sea. Each stands on top of its
+  // water tile rather than replacing it: the tile still wets and drowns, and
+  // only gives up its glyph (`coveredBy`).
+  _placeSeabed(room, seaTiles) {
+    const cs = GRID.CELL_SIZE;
+    const cover = (col, row, typeId, glyph, color) => {
+      const water = seaTiles.get(cellKey(col, row));
+      if (!water) return;
+      const piece = new BackgroundObject(glyph, col * cs, row * cs, { typeId });
+      if (color) piece.color = color;
+      water.coveredBy = piece;
+      room.backgroundObjects.push(piece);
+    };
+
+    SEAWEED_STRANDS.forEach(({ col, row, height }, strand) => {
+      const color = SEAWEED_COLORS[strand % SEAWEED_COLORS.length];
+      for (let i = 0; i < height; i++) {
+        cover(col, row - i, 'seaweed', SEAWEED_GLYPHS[i % SEAWEED_GLYPHS.length], color);
+      }
+    });
+    for (const { col, row } of LOOSE_PLANKS) {
+      cover(col, row, 'loose_plank', BACKGROUND_OBJECT_VARIANTS.loose_plank.char, null);
+    }
   }
 
   // The hold's glints sit in the same cells for the whole run; spent ones

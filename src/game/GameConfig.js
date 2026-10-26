@@ -1166,6 +1166,35 @@ export const BACKGROUND_OBJECT_VARIANTS = {
       default: { animation: 'none', message: null }
     }
   },
+  // Sunken Ship seabed — seaweed strands and planks shaken loose from the
+  // wreck (SunkenShipSystem._placeSeabed). Scenery only: each stands over a
+  // sea tile that keeps its water (the tile is `coveredBy` it), so nothing
+  // here blocks a path, gives a breath, or takes a hit. `slowing` is absent
+  // and both are pass-through, so the swimmer and an arrow cross them alike.
+  'seaweed': {
+    char: '}',
+    name: 'Seaweed',
+    color: '#2e8b57',
+    bulletInteraction: 'pass-through',
+    flammability: 'none',
+    conductivity: 'none',
+    indestructible: true,
+    interactions: {
+      default: { animation: 'none', message: null }
+    }
+  },
+  'loose_plank': {
+    char: '-',
+    name: 'Loose Plank',
+    color: '#5e3a1a',
+    bulletInteraction: 'pass-through',
+    flammability: 'none',
+    conductivity: 'none',
+    indestructible: true,
+    interactions: {
+      default: { animation: 'none', message: null }
+    }
+  },
   // Petrified Trees — the Barricade material standing in the way of the third
   // north. Wood that has already turned to stone, the color the world is
   // bending toward, and nothing but an axe gets through them: the Three Room is

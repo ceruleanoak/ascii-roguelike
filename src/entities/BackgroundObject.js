@@ -107,6 +107,12 @@ export class BackgroundObject {
     // exempt from the post-generation stray cleanup pass (roomFeatures.js).
     this.structural = false;
 
+    // The object drawn in this tile's place (the Sunken Ship's seaweed over
+    // its sea): this tile keeps all its behavior (water still wets and
+    // drowns) and only its glyph gives way, so a cell never shows two glyphs.
+    // Honored by NeutralRenderer, the only renderer that draws such a room.
+    this.coveredBy = null;
+
     // Set at placement to skip the data dropChance roll for this one instance
     // (e.g. the Caldera's one guaranteed Fire Berry bush). See passesDropRoll().
     this.guaranteedDrop = false;

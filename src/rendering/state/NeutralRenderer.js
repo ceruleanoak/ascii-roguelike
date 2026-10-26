@@ -37,7 +37,7 @@ export class NeutralRenderer {
 
     // Draw static background objects (grass on background layer)
     for (const obj of game.currentRoom.backgroundObjects) {
-      if (!obj.destroyed && !obj.currentAnimation) {
+      if (!obj.destroyed && !obj.currentAnimation && !obj.coveredBy) {
         const x = obj.position.x + GRID.CELL_SIZE / 2 + (obj.renderOffsetX || 0);
         const y = obj.position.y + GRID.CELL_SIZE / 2 + (obj.renderOffsetY || 0);
         this.renderer.bgCtx.fillStyle = obj.color;
@@ -90,7 +90,7 @@ export class NeutralRenderer {
 
     // Draw animating background objects
     for (const obj of game.currentRoom.backgroundObjects) {
-      if (obj.currentAnimation) {
+      if (obj.currentAnimation && !obj.coveredBy) {
         const renderData = obj.getRenderPosition();
         this.renderer.drawEntity(
           renderData.x + GRID.CELL_SIZE / 2 + obj.animationOffset.x + (obj.renderOffsetX || 0),
