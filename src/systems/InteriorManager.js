@@ -72,6 +72,10 @@ export class InteriorManager {
   }
 
   handleSpacePress() {
+    // No door is taken mid-walk: the SPACE that casts ENTERMAZE / ENTERHUT
+    // also lands here, and entering beside the door under the Beeline's run
+    // left it tweening the player to the surface doorstep inside the maze.
+    if (this.game.animationSystem?.isAnimating(this.game.player)) return false;
     for (const c of this.controllers) {
       if (c.handleSpacePress?.()) return true;
     }

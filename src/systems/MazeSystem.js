@@ -226,6 +226,8 @@ export class MazeSystem {
     for (let lr = 0; lr < LOGICAL_SIZE; lr++) {
       for (let lc = 0; lc < LOGICAL_SIZE; lc++) {
         if (degrees[lr][lc] !== 1) continue; // only dead ends
+        // The entrance cell (logical [8][8]) stays clear: the player spawns on it
+        if (lr === LOGICAL_SIZE - 1 && lc === LOGICAL_SIZE - 1) continue;
         const hidden = this._weightedLootPick(depth);
         const char   = coverFor(hidden);
         mazeObjects.push(new MazeObject(char, physC(lc), physR(lr), hidden));
@@ -265,10 +267,13 @@ export class MazeSystem {
     const exitCol = physC(LOGICAL_SIZE - 1); // 17
     // Open the south-side border cell so the player can step out
     collisionMap[PHYS - 1][exitCol] = false; // row 18, the outer wall
-    // Also open the room cell itself (may have been re-sealed by an object)
+    // Also open the room cell itself
     collisionMap[exitRow][exitCol] = false;
 
-    const spawnPoint = { x: exitCol * CS, y: (exitRow - 1) * CS };
+    // Spawn on the entrance cell itself, the one cell guaranteed open: the cell
+    // north of it is a wall unless the generator carved that link. The exit
+    // fires only past it, on the outer wall row (checkInteriorExit).
+    const spawnPoint = { x: exitCol * CS, y: exitRow * CS };
 
     return {
       gridCols: PHYS,
