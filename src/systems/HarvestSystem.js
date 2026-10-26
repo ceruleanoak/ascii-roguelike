@@ -56,10 +56,22 @@ function inExitLane(spot) {
 // through too, but they are not tools for the job). A Glittering Rock is a
 // rock too, but only the pickaxe breaks it (CombatSystem's glitteringRock
 // gate): a hammer is not a tool for that one.
-// HARVEST works them in `stage` order: trees, rocks and Brush together, then grass
-// (any blade, densest cell first), then sand (any melee weapon a blunt one
-// excepted: CombatSystem lets a blunt swing rustle but never spend an object).
+// HARVEST works them in `stage` order: containers first, then trees, rocks and
+// Brush together, then grass (any blade, densest cell first), then sand (any
+// melee weapon a blunt one excepted: CombatSystem lets a blunt swing rustle
+// but never spend an object).
 const MATERIALS = {
+  // OPEN: the containers SPACE opens by hand (Barrels, Chests, Crates, Metal
+  // Boxes), opened through InteractionSystem.openContainer from the cell
+  // beside each, as SPACE opens one: no tool, no swing (`byHand`). A Tomb is
+  // left shut: it is SPACE-openable too, but what it lets out (a Tomb Ghost)
+  // is not a harvest.
+  container: {
+    is: obj => !!obj.data?.dropEffect?.startsWith('destroyObject:') && !!obj.acceptsInteraction?.('spacebar'),
+    tool: () => true,
+    byHand: true,
+    stage: -1,
+  },
   tree: {
     is: obj => obj.char === 'Y',
     tool: item => item?.data?.weaponSubtype === 'axe',
@@ -104,11 +116,14 @@ const MATERIALS = {
 };
 
 /**
- * HarvestSystem — the CHOP, MINE and HARVEST Spells: the player farms the
+ * HarvestSystem — the CHOP, MINE, HARVEST and OPEN Spells: the player farms the
  * room's Trees (CHOP, with an axe) or Rocks (MINE, with the pickaxe or a
  * hammer; a Glittering Rock with the pickaxe alone), or both and the room's
  * Shrubs and Brambles with any melee weapon (HARVEST), until none are left
- * or the player's next keypress. Once HARVEST has none of those left it cuts
+ * or the player's next letter, SPACE, Shift or Enter. OPEN walks to each of
+ * the room's Barrels, Chests, Crates and Metal Boxes in turn and opens it by
+ * hand, as SPACE does; HARVEST does that first. Once HARVEST has none of
+ * those left it cuts
  * the room's grass with any blade, densest cell first (the most grass
  * objects in one cell), until every blade is cut, then scoops its Sand.
  *
@@ -172,7 +187,7 @@ export class HarvestSystem {
     return null;
   }
 
-  /** Any keypress after the cast hands control back (main.js keydown). */
+  /** A letter, SPACE, Shift or Enter after the cast hands control back (main.js keydown, takesBackSpellDrive). */
   onPlayerInput() {
     this.reset();
   }
@@ -220,6 +235,14 @@ export class HarvestSystem {
     if (this._outOfPatience(target)) return;
 
     const material = this._materialOf(target);
+    if (MATERIALS[material].byHand) {
+      const stand = this._standCell(target);
+      if (!stand || !this._onStand(stand)) return;
+      player.facing.x = stand.faceX;
+      player.facing.y = stand.faceY;
+      game.interactionSystem.openContainer(target);
+      return;
+    }
     if (!MATERIALS[material].tool(held, target)) {
       const slot = this._toolSlot(material, target);
       if (slot === -1) { this.skipped.add(target); this.target = null; return; }
@@ -348,6 +371,8 @@ export class HarvestSystem {
   // or -1 when none does. With `obj`, a tool for that object in particular.
   _toolSlot(material, obj) {
     const player = this.game.player;
+    // Opened by hand: whatever is held (or nothing) will do.
+    if (MATERIALS[material].byHand) return player.activeSlotIndex;
     const slots = player.quickSlots;
     const order = [player.activeSlotIndex, ...slots.keys()];
     const tool = MATERIALS[material].tool;

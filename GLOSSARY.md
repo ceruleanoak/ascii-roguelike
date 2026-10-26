@@ -1445,10 +1445,12 @@ identity, not standard programming terms.
   Battle's Act 2); not a Companion command.
 
 ### Harvest (Spell)
-- **Definition:** The CHOP, MINE and HARVEST Spells: the player is driven, as in a Fight, to
+- **Definition:** The CHOP, MINE, OPEN and HARVEST Spells: the player is driven, as in a Fight, to
   the open cell beside each farmable object in turn and swings at it with the tool it takes,
   until none are left or the player next presses a letter, SPACE, Shift or Enter. CHOP fells Trees with an axe; MINE breaks
-  Rocks (anything with the rock harvest) with the pickaxe or a hammer; HARVEST does both,
+  Rocks (anything with the rock harvest) with the pickaxe or a hammer; OPEN opens each Barrel,
+  Chest, Crate and Metal Box by hand from the cell beside it, as SPACE does (no tool, no swing;
+  a Tomb is left shut); HARVEST opens the containers first, then does trees and rocks,
   working the material the held tool serves before swapping tools, then cuts the room's Tall
   Grass with any blade, densest cell first, until every blade is cut, then scoops its Sand with
   any melee weapon but a blunt one. Tools come from the quick
@@ -1456,9 +1458,9 @@ identity, not standard programming terms.
   planes are skipped; a target the player neither nears nor damages for 4 seconds is given up.
   Enemies are not fought; damage still lands. EXPLORE only; `...NOTHING.` with no tool or
   nothing to farm.
-- **In code:** `src/systems/HarvestSystem.js` — `cast(materials)` (`tree`/`rock`/`grass`/`sand`),
+- **In code:** `src/systems/HarvestSystem.js` — `cast(materials)` (`container`/`tree`/`rock`/`grass`/`sand`),
   `heldKeys()` (`HeldKeySteering`), `update()` (tool swap via `handleSelectSlot`, swing via
-  `CombatSystem.tryUseHeldWeapon`), `onPlayerInput()`, `reset()` (Reset Registry, room scope).
+  `CombatSystem.tryUseHeldWeapon`, a container opened via `InteractionSystem.openContainer`), `onPlayerInput()`, `reset()` (Reset Registry, room scope).
 - **Not:** the harvest drop itself (`destroyObject:rockHarvest`, the Tree's Stick roll), which is
   the ordinary result of each swing; not a Fight.
 
