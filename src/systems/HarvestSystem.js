@@ -1,4 +1,4 @@
-import { GRID, GAME_STATES } from '../game/GameConfig.js';
+import { GRID, GAME_STATES, PHYSICS } from '../game/GameConfig.js';
 import { buildTerrainGrid, cellCost, BLOCKED, HAZARD } from './steeringTerrain.js';
 import { HeldKeySteering } from './heldKeySteering.js';
 import { entityCenter } from '../game/Telegraph.js';
@@ -57,7 +57,7 @@ function inExitLane(spot) {
 // rock too, but only the pickaxe breaks it (CombatSystem's glitteringRock
 // gate): a hammer is not a tool for that one.
 // HARVEST works them in `stage` order: containers first, then trees, rocks and
-// Brush together, then grass (any blade, densest cell first), then sand (any
+// Brush together, then grass (any blade, richest cell first), then sand (any
 // melee weapon a blunt one excepted: CombatSystem lets a blunt swing rustle
 // but never spend an object).
 const MATERIALS = {
@@ -102,7 +102,7 @@ const MATERIALS = {
     is: obj => !!(obj.data?.cuttable && obj.data.cutState),
     tool: item => !!item?.data?.isBlade,
     stage: 1,
-    densestFirst: true,
+    byCell: true,
     // Any blade that reaches a blade of grass cuts it at once
     // (BackgroundObject.takeDamage), so one still standing after a swing was
     // missed, and swinging again from the same spot misses it again.
@@ -123,9 +123,9 @@ const MATERIALS = {
  * or the player's next letter, SPACE, Shift or Enter. OPEN walks to each of
  * the room's Barrels, Chests, Crates and Metal Boxes in turn and opens it by
  * hand, as SPACE does; HARVEST does that first. Once HARVEST has none of
- * those left it cuts
- * the room's grass with any blade, densest cell first (the most grass
- * objects in one cell), until every blade is cut, then scoops its Sand.
+ * those left it cuts the room's grass with any blade, a cell at a time, the
+ * cell that cuts the most blades per second of walking and swinging first,
+ * until every blade is cut, then scoops its Sand.
  *
  * Driven like FIGHT: HeldKeySteering walks the player to the open cell beside
  * the target nearest the player, then the player faces it and swings through
@@ -279,15 +279,15 @@ export class HarvestSystem {
 
   // A target from the earliest stage with anything left: the nearest,
   // preferring the material the held tool serves so HARVEST only swaps tools
-  // when that material runs out; grass goes densest cell first.
+  // when that material runs out; grass goes by the cell worth the walk.
   _pickTarget() {
     const held = this.game.player.heldItem;
     const all = this._candidates();
     const stage = Math.min(...all.map(o => MATERIALS[this._materialOf(o)].stage));
     const pool = all.filter(o => MATERIALS[this._materialOf(o)].stage === stage);
     let best = null;
-    if (pool.some(o => MATERIALS[this._materialOf(o)].densestFirst)) {
-      best = this._densest(pool);
+    if (pool.some(o => MATERIALS[this._materialOf(o)].byCell)) {
+      best = this._richest(pool);
     } else if (pool.length) {
       const served = pool.filter(o => MATERIALS[this._materialOf(o)].tool(held, o));
       best = this._nearest(served.length ? served : pool);
@@ -330,8 +330,13 @@ export class HarvestSystem {
     return best;
   }
 
-  // The nearest object in the cell holding the most of them.
-  _densest(objects) {
+  // The nearest object in the cell that cuts the most grass per second from
+  // where the player stands: its blades over the walk there plus one swing.
+  // Strictly densest-first sent the player back and forth across the room
+  // for a cell one blade richer than the patch at its feet; strictly nearest
+  // spends a swing on every lone blade. The swing's time in the sum is what
+  // lets a rich cell a few steps off beat a poor one in reach.
+  _richest(objects) {
     const cells = new Map();
     for (const obj of objects) {
       const c = objectCenter(obj);
@@ -339,8 +344,26 @@ export class HarvestSystem {
       if (!cells.has(key)) cells.set(key, []);
       cells.get(key).push(obj);
     }
-    const most = Math.max(0, ...[...cells.values()].map(cell => cell.length));
-    return this._nearest([...cells.values()].filter(cell => cell.length === most).flat());
+    const p = entityCenter(this.game.player);
+    const swing = this._swingSeconds(objects[0]);
+    let best = null;
+    let bestRate = -Infinity;
+    for (const [key, cell] of cells) {
+      const [col, row] = key.split(',').map(Number);
+      const walk = Math.hypot((col + 0.5) * CELL - p.x, (row + 0.5) * CELL - p.y) / PHYSICS.PLAYER_SPEED;
+      const rate = cell.length / (walk + swing);
+      if (rate > bestRate) { bestRate = rate; best = cell; }
+    }
+    return best && this._nearest(best);
+  }
+
+  // Real seconds one swing of the tool for this object takes, windup and
+  // recovery (item data is in double-seconds, PHYSICS.WEAPON_TIMER_RATE).
+  _swingSeconds(obj) {
+    const player = this.game.player;
+    const data = player.quickSlots[this._toolSlot(this._materialOf(obj), obj)]?.data;
+    const ticks = (data?.windup || 0) + (data?.recovery || data?.cooldown || 0.5);
+    return ticks / PHYSICS.WEAPON_TIMER_RATE;
   }
 
   _candidates() {
