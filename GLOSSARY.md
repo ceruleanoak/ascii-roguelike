@@ -871,11 +871,11 @@ identity, not standard programming terms.
 
 ### Satchel
 - **Definition:** The bundle of starter ingredients (`ට`) lying in REST at the start of a run.
-  SPACE beside it bursts it and scatters what was inside; TAKE bursts it from anywhere in REST
-  and takes what was inside. LOOKHERE lists it (YOU SEE A SATCHEL) until it is opened.
+  SPACE beside it bursts it and scatters what was inside; TAKE and TAKEALL burst it from anywhere in REST
+  and take what was inside. LOOKHERE lists it (YOU SEE A SATCHEL) until it is opened.
 - **In code:** `game.restBundle` (`{char, position, chars}`); burst by
   `LootSystem.scatterRestBundle()` (SPACE, range-checked) or `LootSystem.burstRestBundle()`
-  (any range; TAKE via `TakeAllSystem`).
+  (any range; TAKE and TAKEALL via `TakeAllSystem`).
 - **Not:** "rest bundle", "starter pack". Not the Monkey's stolen satchel (ThiefMechanic loot).
 
 ### Double-seconds
@@ -1478,7 +1478,7 @@ identity, not standard programming terms.
 ### Take All (Spell)
 - **Definition:** The TAKEALL Spell: once the room is safe (no counted enemy, exits open; REST
   always is), every ingredient and item on the player's layer flies to the player and is taken
-  on arrival. Where a pickup would ask for a slot choice it stows instead: armor and
+  on arrival; in REST the Satchel bursts and what was inside flies too. Where a pickup would ask for a slot choice it stows instead: armor and
   consumables into the carried inventory, a weapon or trap into the Item Chest (deferred in
   the field). Unreachable loot stays put: another plane or layer, vault coins (`noGravitate`),
   a full pile, a Cursed scroll. `NOT YET.` while enemies remain or the exits are shut;

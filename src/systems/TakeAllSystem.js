@@ -56,6 +56,7 @@ export class TakeAllSystem {
     this.refused.clear();
     this.only = null;
     if (nearestOnly) this.only = this._nearest();
+    else this._burstSatchel();
     if (this._pulled().length === 0) { this.only = null; return '...NOTHING.'; }
     this.active = true;
     return null;
@@ -102,13 +103,27 @@ export class TakeAllSystem {
     for (const loot of this._pulled()) {
       if (!nearest || distance(loot) < distance(nearest)) nearest = loot;
     }
-    const satchel = game.stateMachine.getCurrentState() === GAME_STATES.REST ? game.restBundle : null;
+    const satchel = this._satchel();
     if (satchel && (!nearest || distance(satchel) < distance(nearest))) {
-      const contents = game.lootSystem.burstRestBundle();
-      for (const ing of contents) ing.pickupCooldown = 0;
-      return new Set(contents);
+      return new Set(this._burstSatchel());
     }
     return nearest ? new Set([nearest]) : null;
+  }
+
+  // The Satchel, when it still lies in REST (it is only ever there).
+  _satchel() {
+    const game = this.game;
+    return game.stateMachine.getCurrentState() === GAME_STATES.REST ? game.restBundle : null;
+  }
+
+  // Burst the Satchel where it lies so what was inside can be pulled at once.
+  // TAKEALL always does; TAKE only when the Satchel is the nearest thing.
+  // Returns the ingredients it held (none when there is no Satchel).
+  _burstSatchel() {
+    if (!this._satchel()) return [];
+    const contents = this.game.lootSystem.burstRestBundle();
+    for (const ing of contents) ing.pickupCooldown = 0;
+    return contents;
   }
 
   // Everything TAKEALL (or TAKE, limited to `only`) can pull right now.
