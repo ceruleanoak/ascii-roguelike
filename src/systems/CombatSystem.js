@@ -750,8 +750,9 @@ export class CombatSystem {
           if (!proj.pierce) {
             hit = true;
 
-            // Create stuck arrow if this is an arrow (boomerangs return — no stuck arrow)
-            if (proj.type === 'arrow' && !proj.boomerang) {
+            // Create stuck arrow if this is an arrow (boomerangs return — no stuck arrow).
+            // Only a hit that landed: a dodged or i-framed arrow never sticks.
+            if (proj.type === 'arrow' && !proj.boomerang && damaged !== false && !damaged?.dodged) {
               this.stuckArrows.push({
                 char: proj.char,
                 weaponChar: proj.weaponChar,
@@ -1405,8 +1406,9 @@ export class CombatSystem {
             return { playerDead: true };
           }
 
-          // Create stuck arrow if this is an arrow (not a bullet/magic)
-          if (proj.type === 'arrow') {
+          // Create stuck arrow if this is an arrow (not a bullet/magic) that
+          // landed: a dodged, blocked or immune hit leaves nothing stuck.
+          if (proj.type === 'arrow' && !result.dodged && !result.blocked && !result.immune) {
             this.stuckArrows.push({
               char: proj.char,
               stuckType: 'player',
