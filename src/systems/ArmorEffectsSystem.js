@@ -122,13 +122,19 @@ export class ArmorEffectsSystem {
 
   // Moss Cloak 𐤒 stealth state machine. Armed by the active→inactive dodge
   // transition; becomes active when the player stops issuing WASD input.
-  // Any WASD held cancels.
+  // Any WASD held cancels: the keyboard's, or the keys a Spell holds for the
+  // player (FIGHT, CHOP/MINE/HARVEST), which reach the movement path as this
+  // frame's player.inputState (set before this runs). Reading the keyboard
+  // alone, a FIGHT roll armed the cloak and the walk that followed never
+  // cancelled it, so the player crossed the room as a shrub.
   updateMossCloak() {
     const game = this.game;
     const player = game.player;
     const cloakEquipped = game.inventorySystem.equippedArmor?.data?.mossCloak === true;
     if (cloakEquipped) {
-      const wasdHeld = game.keys.w || game.keys.a || game.keys.s || game.keys.d;
+      const moving = player.inputState;
+      const wasdHeld = game.keys.w || game.keys.a || game.keys.s || game.keys.d
+        || moving.up || moving.down || moving.left || moving.right;
       if (player._lastDodgeActive && !player.dodgeRoll.active) {
         player.mossCloakArmed = true;
       }
