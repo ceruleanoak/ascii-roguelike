@@ -108,13 +108,12 @@ export default {
     // leaves it off on purpose — RipenMechanic already owns Bomb's own
     // proximity reaction, ahead of the spine, at `Enemy.js`'s
     // `tryDetonateTrigger` call). What "fighting back" means is per-enemy:
-    // Rat/Plague Rat/Monkey (ThiefMechanic's coward flip) resolve `cornerTo`'s
-    // default of `anticipate` through to `strike` — a bite, the same
-    // fallback chain a normal un-flipped attack already uses when neither is
-    // authored. Trap Goblin instead names `cornerTo: 'useTrap'` — its bite is
-    // a trap dropped at its own feet — with an explicit `cornerRange` since
-    // it has no `attackRange` of its own (`attackType: 'none'`) for the
-    // default to fall back on. Same commit condition as approach.js's own —
+    // Rat/Plague Rat/Monkey (ThiefMechanic's coward flip) and Trap Goblin
+    // resolve `cornerTo`'s default of `anticipate` through to `strike` — a
+    // bite, the same fallback chain a normal un-flipped attack already uses
+    // when neither is authored. `cornerTo` can name any other State instead
+    // (e.g. `useTrap`, for a coward whose answer is a trap at its own feet).
+    // Same commit condition as approach.js's own —
     // `canStrike` rather than `canSee` because being cornered doesn't
     // require the enemy to be facing its pursuer.
     if (cfg.cornered) {

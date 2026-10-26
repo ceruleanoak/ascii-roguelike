@@ -2109,10 +2109,15 @@ export const ENEMIES = {
     trueName: 'NIDHOGG',
     mass: 0.6,
     hp: 4,
-    speed: 72,            // Fast enough to keep distance — has no attack of its own
+    speed: 72,            // Fast enough to keep distance
     acceleration: 420,
-    attackType: 'none',   // No direct attack — traps are the entire threat
-    attackRange: 0,
+    // A basic bite, reached only when cornered (flee.cornered below) — it
+    // never hunts with it; traps stay the threat at any other range.
+    damage: 1,
+    attackType: 'melee',
+    attackRange: GRID.CELL_SIZE * 1.5,
+    attackCooldown: 1.2,
+    attackWindup: 0.8,    // 0.4 real seconds — a short tell, it's already panicking
     aggroRange: GRID.CELL_SIZE * 12,
     decisionInterval: 0.55,
     color: '#ccaa00',
@@ -2137,15 +2142,20 @@ export const ENEMIES = {
       // trap once the goblin has actually broken line of sight, so a player
       // fast or cornering enough to close to point-blank range while still
       // plainly visible got no reaction at all — free hits on a "runs at the
-      // sight of you" enemy. `cornerTo: 'useTrap'` forces the same trap-lay
-      // Lookback already grants on a confirmed barrier; TrapLayerMechanic
-      // only watches for `stateMachine.current === 'useTrap'`; it doesn't
-      // care how that State was reached. `cornerRange` is explicit (unlike
-      // Rat/Plague Rat, which default to their own `attackRange`) since this
-      // goblin's `attackRange` is 0 — first-pass value, needs playtest (see
-      // pinboard).
-      flee: { cornered: true, cornerTo: 'useTrap', cornerRange: GRID.CELL_SIZE * 1.5 },
+      // sight of you" enemy. Cornered, it bites: `cornerTo` defaults to
+      // `anticipate`, which (undeclared) falls through to `strike`, and
+      // `cornerRange` defaults to `attackRange` — the flipped Rat's exact
+      // path (ThiefMechanic). Traps come only from Lookback's confirmed
+      // barrier now; before the bite, a cornered goblin dropped a trap at its
+      // own feet here (`cornerTo: 'useTrap'`).
+      flee: { cornered: true },
       lookback: {},
+      // Reached only from the cornered branch above. 'close' turns it to face
+      // the player during the windup — it arrives straight from Flee, still
+      // facing away, and 'still' would hold that (same reason as the flipped
+      // Rat's ThiefMechanic). Strike's `recover` → `approach` both fall back
+      // to `flee`, so after the bite it runs again.
+      strike: { movement: 'close' },
       // useTrap hands off to withdraw, not straight to alert, so there is a
       // real non-frozen gap (movement: 'back', never moveStill regardless of
       // range — withdraw.js) before anything re-checks for the player at
