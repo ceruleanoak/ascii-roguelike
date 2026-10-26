@@ -1672,6 +1672,8 @@ class Game {
     // to the boss tracks.
     if (shouldRestoreExploreRoom) this.zoneSystem.reapplyGatesOnRestore(this);
 
+    if (shouldRestoreExploreRoom) this.bossSystem.resumeOnRestore(this.currentRoom);
+
     // Switch music based on zone (covers all entry paths: new room, restore, and leavingRest)
     this.audioSystem.switchZoneMusic(this.currentRoom?.zone || 'green', import.meta.env.BASE_URL);
 

@@ -185,6 +185,18 @@ export class BossSystem {
   }
 
   /**
+   * A restored boss room whose boss still stands (the boss killed the last
+   * character, and the next one returns from REST): the death switched this
+   * system off, and a restore skips activate(), so wake the fight back up
+   * along with its music (main.js enterExploreState, before switchZoneMusic).
+   */
+  resumeOnRestore(room) {
+    if (!room?.isBossRoom) return;
+    this.reactivate(room);
+    if (this.active) this.game.audioSystem.scheduleBossSequence();
+  }
+
+  /**
    * Re-link existing boss entities after a mid-boss revive.
    * Reuses whatever is already in room.enemies rather than spawning new ones.
    */
