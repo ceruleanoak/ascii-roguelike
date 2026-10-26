@@ -780,8 +780,11 @@ export class TrapSystem {
       }
 
       // All other spears root the hit enemy in place on impact — no carry, just pin.
+      // Never shorten a longer pin: a snared beast (Infinity, Enemy.isSnared)
+      // stays snared, so it isn't freed 2s later and a spear kill still
+      // drops the snare's Meat (LootSystem.spawnLoot).
       if (t.weaponItem?.data?.weaponSubtype === 'spear') {
-        enemy.pinnedDuration = 2.0;
+        enemy.pinnedDuration = Math.max(enemy.pinnedDuration || 0, 2.0);
       }
 
       t.landed = true; // spear/non-spear alike stop on first enemy hit
