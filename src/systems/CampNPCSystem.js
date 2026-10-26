@@ -1,5 +1,6 @@
 import { GRID } from '../game/GameConfig.js';
 import { steerToward } from './npcSteering.js';
+import { buildTerrainGrid, lineWithin, DRY_GROUND } from './steeringTerrain.js';
 import { ZONES } from '../data/zones.js';
 import { CampNPC, CAMP_NPC_STATE } from '../entities/CampNPC.js';
 import { isInteriorActive, activeInteriorFloor } from './PlaneSystem.js';
@@ -260,7 +261,10 @@ export class CampNPCSystem {
     // companion can reach distant interactables (e.g., the second floor switch),
     // and while steering is routing it around something: the leash pulls in a
     // straight line, so applied mid-route it drags the companion back into the
-    // wall it is walking around and pins it there.
+    // wall it is walking around and pins it there. It also only pulls over
+    // dry, open ground: a position write skips collision and terrain, so a
+    // companion holding in a fight was dragged straight into the deep water
+    // (or lava, or a wall) between it and a player across a lake.
     const routing = steer && steer.mode !== 'direct';
     if (!npc.commandTarget && !routing) {
       const px = player.position.x - npc.position.x;
@@ -268,10 +272,24 @@ export class CampNPCSystem {
       const playerDist = Math.sqrt(px * px + py * py);
       if (playerDist > COMPANION_MAX_LEASH) {
         const len = Math.max(playerDist, 0.001);
-        npc.position.x += (px / len) * (playerDist - COMPANION_MAX_LEASH);
-        npc.position.y += (py / len) * (playerDist - COMPANION_MAX_LEASH);
+        const pullX = (px / len) * (playerDist - COMPANION_MAX_LEASH);
+        const pullY = (py / len) * (playerDist - COMPANION_MAX_LEASH);
+        if (this._leashClear(npc, pullX, pullY)) {
+          npc.position.x += pullX;
+          npc.position.y += pullY;
+        }
       }
     }
+  }
+
+  // Whether the leash's straight pull of (dx, dy) keeps the companion's box
+  // on ground it could walk (no walls, hazards or deep water on the way).
+  _leashClear(npc, dx, dy) {
+    const game = this.game;
+    const map = npc.collisionMap || game.activeRoom?.collisionMap || game.currentRoom?.collisionMap || null;
+    const grid = buildTerrainGrid(game, npc, map);
+    const cx = npc.position.x + npc.width / 2, cy = npc.position.y + npc.height / 2;
+    return lineWithin(grid, cx, cy, cx + dx, cy + dy, DRY_GROUND, npc.width, npc.height);
   }
 
   _moveToTarget(dt, npc, target) {

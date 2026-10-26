@@ -18,16 +18,36 @@ import { wetPipSpeed } from './StatusEffectSystem.js';
 //
 // Hazards are what the Lava-Shy Mechanic gives enemies, extended to every
 // steered body: lava (unless the body is lava-immune or floats) and deep water
-// (unless it can't drown). A route treats a hazard as a wall. When the target
-// can only be reached through one (the player standing in lava), the route
+// (unless it can't drown). A route treats lava as a wall. When the target
+// can only be reached through it (the player standing in lava), the route
 // stops at the nearest safe cell, so a companion waits on the shore the way a
 // Lava-Shy enemy does. The start cell is never a hazard, so a body already in
 // lava can still route out.
+//
+// Deep water is a hazard a route may swim, at DEEP_WATER_COST a cell. Lava
+// burns on the first overlap; deep water only fills the wet pips over several
+// seconds before it drowns, so a short swim is survivable, and waiting on the
+// shore is the wrong answer when the water is the only way to the target (an
+// enemy on an island). The cost outweighs any dry way round in a room, so a
+// route swims only when nothing dry reaches. Straight-line checks (lineWithin)
+// keep out of it unless the caller's route already swims. To everything else
+// reading the grid through cellCost (where the player may stand, GET's
+// reach), deep water stays a HAZARD.
 
 const CELL = GRID.CELL_SIZE;
 
 export const BLOCKED = Infinity;
 export const HAZARD = -1;
+// What a route pays to swim one cell of deep water. A room is 30 cells
+// across, so 100 a cell outweighs any dry detour in it.
+export const DEEP_WATER_COST = 100;
+// The heaviest ground a straight move off any route may cross: every slow
+// ground, never deep water (detours, sidesteps, rolls, the leash).
+export const DRY_GROUND = DEEP_WATER_COST - 1;
+
+// objectCost's mark for deep water a body can drown in: a HAZARD in the grid,
+// remembered as swimmable unless lava or a wall shares the cell.
+const DEEP = Symbol('deep water');
 
 // PhysicsSystem's terrain multipliers, as the cost of crossing one cell
 // (1 = open ground, 4 = a quarter of the speed).
@@ -51,7 +71,7 @@ function bodyProfile(entity) {
 }
 
 // Cost of standing in a cell that holds `obj`: a number ≥ 1, BLOCKED, HAZARD,
-// or 1 when the object doesn't touch movement.
+// DEEP, or 1 when the object doesn't touch movement.
 function objectCost(obj, body, room) {
   const data = obj.data || {};
   if (data.tunnelWall) return BLOCKED;
@@ -70,7 +90,7 @@ function objectCost(obj, body, room) {
     }
     if (obj.typeId === 'hot_water') return 1;
     if (obj.getWaterState?.() === 'frozen') return 1;
-    if (obj.deepWater && !body.drownSafe) return HAZARD;
+    if (obj.deepWater && !body.drownSafe) return DEEP;
     return body.swimsFast ? 1 : 1 / wetPipSpeed(1);
   }
 
@@ -99,8 +119,9 @@ function heavier(a, b) {
 }
 
 /**
- * The cost grid `entity` steers over: `{ cols, rows, cost }`, where
- * `cost[row * cols + col]` is ≥ 1, BLOCKED or HAZARD. Walls come from the
+ * The cost grid `entity` steers over: `{ cols, rows, cost, swim }`, where
+ * `cost[row * cols + col]` is ≥ 1, BLOCKED or HAZARD, and `swim` marks the
+ * HAZARD cells that are only deep water (see routeCost). Walls come from the
  * collision map; everything else from the Background Objects on the body's
  * plane.
  */
@@ -108,6 +129,8 @@ export function buildTerrainGrid(game, entity, collisionMap) {
   const rows = collisionMap?.length ?? GRID.ROWS;
   const cols = collisionMap?.[0]?.length ?? GRID.COLS;
   const cost = new Float32Array(cols * rows).fill(1);
+  const deep = new Uint8Array(cols * rows);      // deep water lies here
+  const otherHazard = new Uint8Array(cols * rows); // and lava too: no swimming
   if (collisionMap) {
     for (let r = 0; r < rows; r++) {
       const row = collisionMap[r];
@@ -120,8 +143,9 @@ export function buildTerrainGrid(game, entity, collisionMap) {
   const body = bodyProfile(entity);
   for (const obj of objects) {
     if (obj.destroyed || !obj.position || !objectOnPlane(obj, body.plane)) continue;
-    const c = objectCost(obj, body, room);
-    if (c === 1) continue;
+    const mark = objectCost(obj, body, room);
+    if (mark === 1) continue;
+    const c = mark === DEEP ? HAZARD : mark;
     const box = obj.getHitbox ? obj.getHitbox() : { x: obj.position.x, y: obj.position.y, width: CELL, height: CELL };
     const c0 = Math.max(0, Math.floor(box.x / CELL));
     const r0 = Math.max(0, Math.floor(box.y / CELL));
@@ -131,16 +155,30 @@ export function buildTerrainGrid(game, entity, collisionMap) {
       for (let col = c0; col <= c1; col++) {
         const i = r * cols + col;
         cost[i] = heavier(cost[i], c);
+        if (mark === DEEP) deep[i] = 1;
+        else if (c === HAZARD) otherHazard[i] = 1;
       }
     }
   }
-  return { cols, rows, cost };
+  const swim = new Uint8Array(cols * rows);
+  for (let i = 0; i < swim.length; i++) swim[i] = deep[i] && !otherHazard[i] && cost[i] === HAZARD ? 1 : 0;
+  return { cols, rows, cost, swim };
 }
 
-/** Cost of cell (col, row); out of bounds is BLOCKED. */
+/** Cost of cell (col, row); out of bounds is BLOCKED. Deep water is a HAZARD. */
 export function cellCost(grid, col, row) {
   if (col < 0 || row < 0 || col >= grid.cols || row >= grid.rows) return BLOCKED;
   return grid.cost[row * grid.cols + col];
+}
+
+/**
+ * Cost of moving through cell (col, row): cellCost, except deep water (and
+ * nothing worse) costs DEEP_WATER_COST instead of being a HAZARD.
+ */
+export function routeCost(grid, col, row) {
+  if (col < 0 || row < 0 || col >= grid.cols || row >= grid.rows) return BLOCKED;
+  const i = row * grid.cols + col;
+  return grid.swim?.[i] ? DEEP_WATER_COST : grid.cost[i];
 }
 
 // Every cell a segment passes through, in order (grid traversal, so no cell
@@ -178,7 +216,10 @@ function traverse(x0, y0, x1, y1, visit) {
  * hazard with any part of its box (PhysicsSystem burns on any overlap, not
  * just the center's). Cells the box already stands in are exempt: the body is
  * there. So is the cost (not the walls or hazards) of the cells the box ends
- * in: every way to a target standing in grass ends in grass.
+ * in: every way to a target standing in grass ends in grass. Deep water
+ * counts at DEEP_WATER_COST (routeCost) and is never exempt as an end cell:
+ * a line ending in it is a swim, which only a `maxCost` admitting deep water
+ * allows.
  */
 export function lineWithin(grid, x0, y0, x1, y1, maxCost = 1, w = 1, h = 1) {
   // The box's corners as PhysicsSystem reads any overlap: [x, x + w) around a
@@ -195,9 +236,9 @@ export function lineWithin(grid, x0, y0, x1, y1, maxCost = 1, w = 1, h = 1) {
     const endCol = Math.floor((x1 + ox) / CELL), endRow = Math.floor((y1 + oy) / CELL);
     const ok = traverse(x0 + ox, y0 + oy, x1 + ox, y1 + oy, (col, row) => {
       if (col === startCol && row === startRow) return true;
-      const c = cellCost(grid, col, row);
+      const c = routeCost(grid, col, row);
       if (c === BLOCKED || c === HAZARD) return false;
-      return c <= maxCost || (col === endCol && row === endRow);
+      return c <= maxCost || (col === endCol && row === endRow && c < DEEP_WATER_COST);
     });
     if (!ok) return false;
     if (point) break; // a point: the center ray is the whole test
@@ -249,8 +290,12 @@ const NEIGHBORS = [
 /**
  * Cheapest route (A*, 8-connected, no cutting a wall or hazard corner) from
  * one cell to another, as world-space cell centers excluding the start cell.
+ * Swims deep water at DEEP_WATER_COST a cell (routeCost), so only where
+ * nothing dry reaches, and only on the way to dry ground: a goal in deep
+ * water (the player swimming, a point off a bank) is a hazard like lava.
  * When the goal can't be reached, routes to the reached cell nearest it
- * instead (the shore). Returns null only when the body can't move at all.
+ * instead (the shore). Returns null only when the body can't
+ * move at all.
  */
 export function planRoute(grid, startCol, startRow, goalCol, goalRow) {
   const { cols, rows } = grid;
@@ -260,9 +305,11 @@ export function planRoute(grid, startCol, startRow, goalCol, goalRow) {
   goalRow = Math.min(rows - 1, Math.max(0, goalRow));
   const start = startRow * cols + startCol;
   const goal = goalRow * cols + goalCol;
-  const passable = (i) => i === start || (grid.cost[i] !== BLOCKED && grid.cost[i] !== HAZARD);
+  const swim = grid.swim?.[goal] ? null : grid.swim;
+  const terrain = (i) => (swim?.[i] ? DEEP_WATER_COST : grid.cost[i]);
+  const passable = (i) => i === start || (terrain(i) !== BLOCKED && terrain(i) !== HAZARD);
   // The start cell counts as open ground, whatever it holds (it may be lava or a wall edge).
-  const costOf = (i) => (i === start ? 1 : grid.cost[i]);
+  const costOf = (i) => (i === start ? 1 : terrain(i));
   // Octile distance at open-ground cost — never overestimates, since no cell costs below 1.
   const h = (c, r) => {
     const dx = Math.abs(c - goalCol), dy = Math.abs(r - goalRow);
@@ -289,7 +336,11 @@ export function planRoute(grid, startCol, startRow, goalCol, goalRow) {
       if (nc < 0 || nr < 0 || nc >= cols || nr >= rows) continue;
       const j = nr * cols + nc;
       if (!passable(j)) continue;
-      if (dc && dr && (!passable(r * cols + nc) || !passable(nr * cols + c))) continue;
+      // No cutting a corner it can't stand in: a wall, a hazard, or deep water
+      // beside a step that neither starts nor ends in the water.
+      const dry = !(swim?.[i] || swim?.[j]);
+      const cornerOk = (k) => passable(k) && !(dry && swim?.[k]);
+      if (dc && dr && (!cornerOk(r * cols + nc) || !cornerOk(nr * cols + c))) continue;
       const ng = g[i] + step * (costOf(i) + costOf(j)) / 2;
       if (ng < g[j]) {
         g[j] = ng;

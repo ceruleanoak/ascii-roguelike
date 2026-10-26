@@ -21,6 +21,11 @@ const STUCK_PX = 1;
 const FINE_TUNE_PX = CELL * 0.45;
 const FRAME = 1 / 60;
 
+// How far an axis the keys let go of still coasts: friction keeps
+// PHYSICS.FRICTION of the velocity each frame, so the drift totals
+// v * FRAME / (1 - FRICTION) (see _brakeDrift).
+const COAST_TIME = FRAME / (1 - PHYSICS.FRICTION);
+
 const NO_KEYS = Object.freeze({ w: false, a: false, s: false, d: false });
 
 /**
@@ -64,7 +69,54 @@ export class HeldKeySteering {
       if (Math.abs(dx) >= Math.abs(dy)) { keys.a = dx < 0; keys.d = dx > 0; }
       else { keys.w = dy < 0; keys.s = dy > 0; }
     }
+    this._brakeDrift(keys);
     return keys;
+  }
+
+  // Momentum the keys no longer ask for still carries the player: the tail of
+  // a re-center, the old axis after a turn at a corner. Steering plans the
+  // heading, not the coast, so along a one-cell causeway the coast alone put
+  // an edge of the box over the deep water beside it. On an axis whose key is
+  // let go, when the coast would carry the box onto a hazard cell (deep water,
+  // lava) it isn't already touching, hold the opposite key to brake. Walls
+  // are left to PhysicsSystem, which stops the body at them.
+  _brakeDrift(keys) {
+    const game = this.game;
+    const player = game.player;
+    const { vx, vy } = player.velocity;
+    const driftY = (vy < 0 && !keys.w) || (vy > 0 && !keys.s);
+    const driftX = (vx < 0 && !keys.a) || (vx > 0 && !keys.d);
+    if (!driftX && !driftY) return;
+    const map = player.collisionMap || game.activeRoom?.collisionMap || game.currentRoom?.collisionMap || null;
+    const grid = buildTerrainGrid(game, player, map);
+    if (driftY && this._coastsIntoHazard(grid, 0, vy * COAST_TIME)) {
+      keys.w = vy > 0;
+      keys.s = vy < 0;
+    }
+    if (driftX && this._coastsIntoHazard(grid, vx * COAST_TIME, 0)) {
+      keys.a = vx > 0;
+      keys.d = vx < 0;
+    }
+  }
+
+  // Whether the player's box, moved by (dx, dy), touches a hazard cell it
+  // doesn't touch now (the box read as PhysicsSystem reads terrain overlap).
+  _coastsIntoHazard(grid, dx, dy) {
+    const { position: pos, width: w, height: h } = this.game.player;
+    const EDGE = 0.01;
+    const cells = (x, y) => ({
+      c0: Math.floor(x / CELL), c1: Math.floor((x + w - EDGE) / CELL),
+      r0: Math.floor(y / CELL), r1: Math.floor((y + h - EDGE) / CELL),
+    });
+    const now = cells(pos.x, pos.y);
+    const next = cells(pos.x + dx, pos.y + dy);
+    for (let r = next.r0; r <= next.r1; r++) {
+      for (let c = next.c0; c <= next.c1; c++) {
+        if (r >= now.r0 && r <= now.r1 && c >= now.c0 && c <= now.c1) continue;
+        if (cellCost(grid, c, r) === HAZARD) return true;
+      }
+    }
+    return false;
   }
 
   // Whether the driven player has stopped moving (see STUCK_TIME).

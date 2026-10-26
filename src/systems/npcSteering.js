@@ -1,5 +1,5 @@
 import { GRID } from '../game/GameConfig.js';
-import { buildTerrainGrid, cellCost, lineWithin, planRoute } from './steeringTerrain.js';
+import { buildTerrainGrid, routeCost, lineWithin, planRoute, DEEP_WATER_COST, DRY_GROUND } from './steeringTerrain.js';
 
 // Shared NPC steering: straight-line movement where the ground is open, a
 // terrain-weighted route (steeringTerrain.js) where it isn't, and stuck
@@ -28,18 +28,23 @@ const LOOKAHEAD = 6;               // route waypoints considered for a straight 
 
 const steerStates = new WeakMap();
 
-// Is a heading clear of walls and hazards for `dist`? Slow ground is fine —
-// a detour is an escape from a wedge, not a route.
+// Is a heading clear of walls, hazards and deep water for `dist`? Slow
+// ground is fine — a detour is an escape from a wedge, not a route, and never
+// a swim.
 function headingClear(grid, x, y, w, h, dirX, dirY, dist) {
-  return lineWithin(grid, x, y, x + dirX * dist, y + dirY * dist, Infinity, w, h);
+  return lineWithin(grid, x, y, x + dirX * dist, y + dirY * dist, DRY_GROUND, w, h);
 }
 
-function chooseDetourHeading(grid, x, y, w, h, baseAngle) {
+// The detour heading is held blind for DETOUR_DURATION, so it is checked for
+// as far as the body travels in that time (at least 2.5 cells): a shorter
+// check let a fast body run off its end into lava or deep water.
+function chooseDetourHeading(grid, x, y, w, h, baseAngle, speed) {
   const OFFSETS = [0.5, -0.5, 1.0, -1.0, 1.5, -1.5, 2.1, -2.1];
+  const reach = Math.max(CELL * 2.5, speed * DETOUR_DURATION + Math.max(w, h) / 2);
   for (const offset of OFFSETS) {
     const angle = baseAngle + offset;
     const dirX = Math.cos(angle), dirY = Math.sin(angle);
-    if (headingClear(grid, x, y, w, h, dirX, dirY, CELL * 2.5)) return { x: dirX, y: dirY };
+    if (headingClear(grid, x, y, w, h, dirX, dirY, reach)) return { x: dirX, y: dirY };
   }
   return null;
 }
@@ -65,9 +70,13 @@ function landing(dx, dy, speed) {
 // there, so a route through open ground is walked as a line rather than cell
 // to cell. When even the next waypoint isn't clear for the whole box (the body
 // is off-center beside a lava bank or a wall corner), it re-centers in its own
-// cell first, which the planner's corner rule guarantees is clear.
+// cell first, which the planner's corner rule guarantees is clear. Deep water
+// is crossed only where the route itself swims: on the step into or out of
+// it, not by a box clipping a shore it walks beside.
 function shortcutWaypoint(grid, route, x, y, w, h) {
-  if (!lineWithin(grid, x, y, route[0].x, route[0].y, Infinity, w, h)) {
+  const at = (px, py) => routeCost(grid, Math.floor(px / CELL), Math.floor(py / CELL));
+  const swimming = at(x, y) >= DEEP_WATER_COST || at(route[0].x, route[0].y) >= DEEP_WATER_COST;
+  if (!lineWithin(grid, x, y, route[0].x, route[0].y, swimming ? Infinity : DRY_GROUND, w, h)) {
     return { x: Math.floor(x / CELL) * CELL + CELL / 2, y: Math.floor(y / CELL) * CELL + CELL / 2, recenter: true };
   }
   let best = route[0];
@@ -75,7 +84,7 @@ function shortcutWaypoint(grid, route, x, y, w, h) {
   const n = Math.min(route.length, LOOKAHEAD);
   for (let k = 1; k < n; k++) {
     const before = route[k - 1];
-    worst = Math.max(worst, cellCost(grid, Math.floor(before.x / CELL), Math.floor(before.y / CELL)));
+    worst = Math.max(worst, at(before.x, before.y));
     if (!lineWithin(grid, x, y, route[k].x, route[k].y, worst, w, h)) break;
     best = route[k];
   }
@@ -88,7 +97,7 @@ function shortcutWaypoint(grid, route, x, y, w, h) {
  * Walks straight while the line to the target crosses only open ground, and
  * otherwise follows the cheapest route over the terrain grid
  * (steeringTerrain.js): around walls, solid objects, trees and grass, never
- * into a hazard. Stuck detection still commits to a short detour when
+ * into lava, and through deep water only when nothing dry reaches. Stuck detection still commits to a short detour when
  * something the grid can't see (a body, a closing door) holds it in place.
  *
  * For bodies whose velocity is computed elsewhere from a heading (the player,
@@ -145,7 +154,7 @@ function chooseHeading(game, entity, targetX, targetY, speed) {
     if (state.windowTime >= STUCK_WINDOW) {
       const moved = Math.hypot(x - state.lastX, y - state.lastY);
       if (dist > CELL && moved < speed * state.windowTime * 0.25) {
-        const detour = chooseDetourHeading(grid, x, y, w, h, Math.atan2(ty - y, tx - x));
+        const detour = chooseDetourHeading(grid, x, y, w, h, Math.atan2(ty - y, tx - x), speed);
         if (detour) {
           state.detour = detour;
           state.detourTimer = DETOUR_DURATION;
