@@ -2129,10 +2129,11 @@ export function spawnMinibossOrFallback(gen, room) {
 
 // ── Imbue Pools (yellow miniboss room) ─────────────────────────────────────
 // Three 3×3 pools in a triangle inside the B template's 10×10 clearing
-// (cols/rows 10–19, boss at the centre): electric water with a Lightning Spire
-// at the top, ice at bottom-left, lava at bottom-right. The room is always a
-// thunderstorm (room.forceLightning) and every strike lands on the spire, so
-// the electric pool is live on a cadence. ImbuePoolSystem drives the fight.
+// (cols/rows 10–19, boss at the centre): a Lightning Spire on bare ground at
+// the top, ice at bottom-left, lava at bottom-right. The electric "pool" holds
+// no water — only the strike matters, and water would soak the slime (Water
+// Balloon). The room is always a thunderstorm (room.forceLightning) and every
+// strike lands on the spire. ImbuePoolSystem drives the fight.
 const IMBUE_POOL_LAYOUT = [
   { element: 'electric', col: 15, row: 11 },
   { element: 'ice',      col: 11, row: 18 },
@@ -2153,9 +2154,8 @@ export function seedImbuePools(room) {
       if (room.collisionMap?.[c.row]) room.collisionMap[c.row][c.col] = false;
     }
 
-    const tiles = cells.map(c => {
+    const tiles = element === 'electric' ? [] : cells.map(c => {
       const tile = BackgroundObject.createVariant(element === 'fire' ? 'lava' : 'water', c.col * C, c.row * C);
-      if (element === 'electric') tile.conductive = true;
       if (element === 'ice') tile.setWaterState('frozen', Infinity);
       room.backgroundObjects.push(tile);
       return tile;

@@ -1314,16 +1314,16 @@ identity, not standard programming terms.
   the enemy's data).
 
 ### Imbue Pool
-- **Definition:** One of the three pools in yellow's Giant Slime B room — electric water with a
-  lightning rod (the room is always a thunderstorm), ice, and lava. A hit on an un-imbued Giant
+- **Definition:** One of the three pools in yellow's Giant Slime B room — electric (a lightning
+  rod on bare ground, no water; the room is always a thunderstorm), ice, and lava. A hit on an un-imbued Giant
   Slime sends its counter-leap into a random intact pool, and landing there grants the pool's
   Imbue. The ice pool breaks under the landing and freezes over again shortly after; it can't be
   picked while broken.
 - **In code:** `room.imbuePools = [{ element, tiles, center, brokenTimer }]` and
   `room.lightningRod`, seeded by `seedImbuePools` (`roomFeatures.js`); pool choice and landing in
   `ImbuePoolSystem` (`leapPoolTarget` → `LeapAttackMechanic`).
-  The electric pool is still water: landing in it also soaks the slime, which then can't leap
-  and dissolves (Water Balloon) until it dries.
+  The electric pool has no tiles (`tiles: []`): only the strike imbues, and there's no water to
+  soak the slime.
 - **Not:** ordinary water, ice, or lava tiles elsewhere (they don't grant an Imbue by landing).
 
 ### Companion

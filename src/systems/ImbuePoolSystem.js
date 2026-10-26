@@ -134,9 +134,9 @@ export class ImbuePoolSystem {
     // Imbued mid-flight (a storm bolt during the windup): the pool is spent.
     if (!enemy || !pool || enemy.imbue) return;
     if (pool.element === 'electric') {
-      // The rod guarantees it: call a strike down on the spire. The bolt
-      // electrifies the pool, and the zap on the slime becomes the Imbue
-      // (LightningStrikeSystem / ElectricitySystem.shockEntity). onResolve
+      // The rod guarantees it: call a strike down on the spire. The zap on
+      // the slime becomes the Imbue (LightningStrikeSystem /
+      // ElectricitySystem.shockEntity). onResolve
       // covers a slime that already hopped clear of the bolt's radius.
       const rod = this.game.currentRoom?.lightningRod;
       const C = GRID.CELL_SIZE;
