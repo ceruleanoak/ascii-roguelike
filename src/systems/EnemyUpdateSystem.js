@@ -710,8 +710,9 @@ export class EnemyUpdateSystem {
         }
 
         // A split child the boss reabsorbed wasn't killed — its HP went back
-        // into the boss (ReformMechanic), so it drops no loot and no mana.
-        // Anything it was carrying (dropInventory above) still falls.
+        // into the boss (ReformMechanic), so it drops no loot and no mana
+        // (the mana roll lives in LootSystem.spawnLoot). Anything it was
+        // carrying (dropInventory above) still falls.
         if (!enemy.absorbedByParent) game.spawnLoot(enemy);
 
         // Alchemist dropLastThrown: guaranteed drop of the last potion type thrown
@@ -720,20 +721,6 @@ export class EnemyUpdateSystem {
           const ingredientChar = effectToIngredient[enemy.lastPotionThrown.effect];
           if (ingredientChar) {
             game.lootSystem.spawnIngredientDrop(ingredientChar, enemy.position.x, enemy.position.y, null, enemy);
-          }
-        }
-
-        // Mana drop — only once the magic meter is active. 75% chance per
-        // kill (100% on bosses) to drop a Mana ingredient (𝑚) that auto-refills
-        // the meter on pickup. Skipped when the meter is already full so the
-        // player isn't tempted to dawdle for waste drops.
-        if (!enemy.absorbedByParent && game.player?.magicMeter?.active &&
-            game.player.magicMeter.current < game.player.magicMeter.max) {
-          // Instance flag first (roomFeatures boss spawns), shared data
-          // second (Centipede head's own data object) — #215.
-          const manaDropChance = (enemy.isBoss || enemy.data?.isBoss) ? 1.0 : 0.75;
-          if (Math.random() < manaDropChance) {
-            game.lootSystem.spawnIngredientDrop('𝑚', enemy.position.x, enemy.position.y, null, enemy);
           }
         }
 

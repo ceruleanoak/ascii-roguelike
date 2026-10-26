@@ -229,6 +229,21 @@ export class LootSystem {
       drops.push('m');
     }
 
+    // Mana drop — only once the magic meter is active. 75% chance per kill
+    // (100% on bosses) to drop a Mana ingredient (𝑚) that auto-refills the
+    // meter on pickup. Skipped when the meter is already full so the player
+    // isn't tempted to dawdle for waste drops. Rolled here, not in a death
+    // sweep, so every sweep that calls spawnLoot (surface, hut, dungeon)
+    // drops it — it used to live only in the surface sweep, so kills inside
+    // an interior never dropped mana.
+    const meter = player?.magicMeter;
+    if (meter?.active && meter.current < meter.max) {
+      // Instance flag first (roomFeatures boss spawns), shared data second
+      // (Centipede head's own data object) — #215.
+      const manaDropChance = (enemy.isBoss || enemy.data?.isBoss) ? 1.0 : 0.75;
+      if (Math.random() < manaDropChance) drops.push('𝑚');
+    }
+
     // Frog form: each Coin a kill would drop has a 25% chance to come up a
     // Frog Coin (⊚) instead. Stolen coins returned above stay plain Coins —
     // they were the player's own.
