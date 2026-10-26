@@ -7,10 +7,19 @@ import { getThrowProfile } from './TrapSystem.js';
 
 const CELL = GRID.CELL_SIZE;
 
-// How close the player closes before swinging, center to center. Melee (and the
-// Punch) has to stand on the enemy's doorstep; guns and bows hold off and shoot.
+// How close the player closes before swinging, center to center. The Punch,
+// and a swing whose reach isn't read off its pattern (_meleeReach), stands on
+// the enemy's doorstep; guns and bows hold off and shoot.
 const MELEE_RANGE = CELL * 1.4;
 const RANGED_RANGE = CELL * 6;
+
+// A lash or thrust (whipcrack / morningStar / thrust: one hit cell per cell of
+// reach) stands back at least LONG_REACH_HOLD and swings from up to its reach
+// less REACH_MARGIN, the step an enemy can close in the windup. A single blow
+// (arc, sweep, slam, multistab, the default hit) lands where `range` puts it,
+// give or take half a cell.
+const LONG_REACH_HOLD = CELL * 2;
+const REACH_MARGIN = CELL * 0.5;
 
 // After a ranged shot the player moves before shooting again: a dodge roll
 // across the line of fire when the target stands this close, a sidestep
@@ -150,16 +159,17 @@ export class FightSystem {
       if (dist >= RANGED_RANGE || dist === 0) return none;
       return this._keysAway(p, t, dist);
     }
-    if (dist <= this._range()) return none;
+    const reach = this._reach();
+    if (dist < reach.hold) return this._keysAway(p, t, dist, (reach.hold + reach.strike) / 2 - dist);
+    if (dist <= reach.strike) return none;
     return this.steering.keysToward(target.position.x, target.position.y);
   }
 
-  // Held keys backing the player three cells straight away from the target
-  // (centers p and t, `dist` apart).
-  _keysAway(p, t, dist) {
+  // Held keys backing the player `back` px (three cells unless told) straight
+  // away from the target (centers p and t, `dist` apart).
+  _keysAway(p, t, dist, back = CELL * 3) {
     const player = this.game.player;
     if (dist === 0) return { w: false, a: false, s: false, d: false };
-    const back = CELL * 3;
     const ax = (p.x - t.x) / dist, ay = (p.y - t.y) / dist;
     return this.steering.keysToward(
       p.x + ax * back - player.width / 2,
@@ -217,7 +227,7 @@ export class FightSystem {
     // A trap this cast is done with, and nothing to swap it for: it isn't a
     // weapon, so there's nothing left to swing.
     if (held?.data?.type === 'TRAP') return;
-    if (dist > this._range() || dist === 0) return;
+    if (dist > this._reach().strike || dist === 0) return;
 
     // Aim only at the moment an attack can start, the way a player aims and
     // presses SPACE. Re-aimed every frame, a windup tracked the target to the
@@ -460,8 +470,45 @@ export class FightSystem {
     return !!(held?._reloading && held.data.reloadTime);
   }
 
-  _range() {
-    return this._ranged() ? RANGED_RANGE : MELEE_RANGE;
+  // Where FIGHT stands to swing the held weapon, center to center: `strike`,
+  // the farthest it swings from (it closes in past that), and `hold`, the
+  // nearest it lets a target stand (it backs off inside that; 0 = never).
+  _reach() {
+    if (this._ranged()) return { hold: 0, strike: RANGED_RANGE };
+    const held = this.game.player.heldItem;
+    return held ? this._meleeReach(held.data) : { hold: 0, strike: MELEE_RANGE };
+  }
+
+  // A melee weapon's reach, read off the attack pattern it swings
+  // (Item.createMeleeAttack; subtype defaults already resolved into data).
+  _meleeReach(data) {
+    switch (data.attackPattern) {
+      case 'whipcrack':
+      case 'morningStar': {
+        const far = (data.whipReach || 5) * CELL; // one crack segment per cell
+        return { hold: LONG_REACH_HOLD, strike: Math.max(LONG_REACH_HOLD + CELL, far - REACH_MARGIN) };
+      }
+      case 'thrust': // three cells out (createMeleeThrust); the spear's distanceCrit is the third
+        return { hold: LONG_REACH_HOLD, strike: CELL * 3 - REACH_MARGIN };
+      case 'shockwave': { // a square centered on the carrier
+        const side = (data.impactSize ?? 3) * CELL;
+        return { hold: 0, strike: Math.max(MELEE_RANGE, side / 2) };
+      }
+      case 'arc':
+      case 'sweep':
+      case 'axe':
+      case 'slam':
+      case 'multistab':
+      case 'default':
+      case undefined: {
+        const d = data.range ?? (data.attackPattern === 'multistab' ? CELL * 0.5 : data.attackPattern === 'slam' ? 24 : 20);
+        // A blow that falls clear of the doorstep holds off to where it lands.
+        const hold = d - CELL * 0.5 > CELL ? d - CELL * 0.5 : 0;
+        return { hold, strike: Math.max(MELEE_RANGE, d + CELL * 0.5) };
+      }
+      default: // hammerRing (one cell flat), a flail's spin, anything else
+        return { hold: 0, strike: MELEE_RANGE };
+    }
   }
 
   // Nearest enemy the player could fight on their own plane: alive, revealed,
