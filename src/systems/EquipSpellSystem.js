@@ -13,11 +13,13 @@ const JITTER = 1.5;
  *
  * Diverse means a different weapon type per slot (melee, bow, gun, wand)
  * while there are types to go round, then a different weapon subtype, then
- * at least a different weapon. Everything not picked goes where the REST
- * menus put it: weapons into the Item Chest, armor and consumables into the
- * carried bag. A trap in a quick slot gives its slot up to a weapon only when
- * there is a weapon to fill it. Destroyed quick slots and consumable slots the
- * magic meter holds are left alone.
+ * at least a different weapon. One quick slot always holds a utility (a trap
+ * or bomb) when the player owns one: a trap already slotted stays, else one
+ * comes out of the chest. Everything not picked goes where the REST menus
+ * put it: weapons into the Item Chest, armor and consumables into the
+ * carried bag. Any other trap in a quick slot gives its slot up to a weapon
+ * only when there is a weapon to fill it. Destroyed quick slots and
+ * consumable slots the magic meter holds are left alone.
  *
  * Every move goes through InventorySystem's own equip calls, as the REST
  * chest, armor and consumable menus do (MenuSystem.handleMenuSelection).
@@ -48,7 +50,7 @@ export class EquipSpellSystem {
     const game = this.game;
     if (!game.player || game.stateMachine?.getCurrentState() !== GAME_STATES.REST) return false;
     const inv = game.inventorySystem;
-    return inv.itemChest.some(isWeapon)
+    return inv.itemChest.some(item => isWeapon(item) || isTrap(item))
       || inv.armorInventory.length > 0
       || (inv.consumableInventory.length > 0 && this._openConsumableSlots().length > 0);
   }
@@ -67,9 +69,21 @@ export class EquipSpellSystem {
       }
     }
 
-    const picks = diverseWeapons(inv.itemChest.filter(isWeapon), open.length);
-    // Empty slots fill first; a trap gives its slot up only when a pick is left over.
-    const slots = [...open.filter(i => !player.quickSlots[i]), ...open.filter(i => player.quickSlots[i])];
+    // One slot always holds a utility (a trap or bomb) when the player owns
+    // one: a trap already in hand keeps its slot (its charges stay as they
+    // are), else one comes out of the chest, the higher tiers preferred.
+    const trapSlots = open.filter(i => isTrap(player.quickSlots[i]));
+    const kept = trapSlots[0];
+    const chestTrap = kept === undefined
+      ? byScore(inv.itemChest.filter(isTrap), trap => trap.data.tier ?? 0)[0]
+      : undefined;
+    const utility = kept !== undefined || chestTrap !== undefined;
+
+    const picks = diverseWeapons(inv.itemChest.filter(isWeapon), open.length - (utility ? 1 : 0));
+    // Empty slots fill first; any other trap gives its slot up only when a
+    // pick is left over.
+    const slots = [...open.filter(i => !player.quickSlots[i]),
+      ...trapSlots.filter(i => i !== kept)];
     picks.forEach((pick, n) => {
       const i = slots[n];
       const item = inv.retrieveFromChest(pick);
@@ -77,6 +91,11 @@ export class EquipSpellSystem {
       if (player.quickSlots[i]) inv.addToChest(player.quickSlots[i]);
       player.quickSlots[i] = item;
     });
+    if (chestTrap) {
+      const i = open.find(j => !player.quickSlots[j]);
+      const item = i === undefined ? null : inv.retrieveFromChest(chestTrap);
+      if (item) player.quickSlots[i] = item;
+    }
     if (!player.quickSlots[player.activeSlotIndex]) {
       const first = player.quickSlots.findIndex(Boolean);
       if (first !== -1) player.activeSlotIndex = first;
@@ -122,6 +141,10 @@ export class EquipSpellSystem {
 
 function isWeapon(item) {
   return item?.data?.type === 'WEAPON';
+}
+
+function isTrap(item) {
+  return item?.data?.type === 'TRAP';
 }
 
 // `items` best first, each scored by `value` plus chance.
