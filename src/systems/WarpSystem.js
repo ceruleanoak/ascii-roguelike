@@ -45,43 +45,31 @@ export class WarpSystem {
     return false;
   }
 
-  // Yellow mage blink: find the furthest valid position along the blink direction, emit trail particles, then move
+  // Yellow mage blink: find the furthest valid position along the blink direction, emit trail particles, then move.
+  // The path may cross walls (that's the ability), but the landing spot must be
+  // clear of collisionMap walls and solid objects: landing inside one left the
+  // physics eject pass to shove the mage out over the next frames, drawn in the
+  // wall the whole time. A blocked far end falls back to the furthest clear
+  // spot before it; no clear spot at all means the blink stays put.
   resolveBlinkTeleport({ direction, distance }, player = this.game.player) {
     const C = GRID.CELL_SIZE;
     const step = C / 4; // 4px steps for fine collision resolution
 
     const originX = player.position.x;
     const originY = player.position.y;
+    const backgroundObjects = this.game._activeBackgroundObjects?.() ?? [];
+    const room = this.game.activeRoom ?? this.game.currentRoom ?? null;
 
-    // Walk forward until collision, keep last valid spot
+    // Walk forward until the room edge / a sealed structure, keep the last clear spot
     let bestX = originX;
     let bestY = originY;
     for (let d = step; d <= distance; d += step) {
       const testX = originX + direction.x * d;
       const testY = originY + direction.y * d;
-      if (this.isValidBlinkPosition(testX, testY, player)) {
-        bestX = testX;
-        bestY = testY;
-      } else {
-        break;
-      }
-    }
-
-    // If blocked at origin, retry with shorter distances (25px decrements)
-    if (bestX === originX && bestY === originY && distance > 25) {
-      for (let retryDist = distance - 25; retryDist >= 25; retryDist -= 25) {
-        for (let d = step; d <= retryDist; d += step) {
-          const testX = originX + direction.x * d;
-          const testY = originY + direction.y * d;
-          if (this.isValidBlinkPosition(testX, testY, player)) {
-            bestX = testX;
-            bestY = testY;
-          } else {
-            break;
-          }
-        }
-        if (bestX !== originX || bestY !== originY) break;
-      }
+      if (!this.isValidBlinkPosition(testX, testY, player)) break;
+      if (this.game.physicsSystem.overlapsSolid(player, testX, testY, backgroundObjects, room)) continue;
+      bestX = testX;
+      bestY = testY;
     }
 
     // Center points for trail calculations

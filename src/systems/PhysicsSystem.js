@@ -1607,6 +1607,66 @@ export class PhysicsSystem {
     }
   }
 
+  // True when `obj` is one resolveSolidObjectOverlap would push `entity` out
+  // of. Shared with overlapsSolid so a placement check and the eject pass can
+  // never disagree about what counts as solid.
+  _ejectsEntity(obj, entity, entityPlane) {
+    if (obj.destroyed) return false;
+    if (!obj.data) return false;
+
+    // See the matching skip in checkBackgroundObjectCollision — a
+    // deflectable charger passes through deflector triangles entirely.
+    if (obj.data.boulderDeflector && this._isDeflectableCharge(entity)) return false;
+
+    // Plane affinity gate.
+    if (!objectOnPlane(obj, entityPlane)) return false;
+
+    // tunnelWall is unconditionally solid on its plane; others must clear solidity rules.
+    if (!obj.data.tunnelWall) {
+      if (typeof obj.data.slowing === 'number') return false;
+      const isSolid = obj.data.solid ||
+        obj.data.bulletInteraction === 'block' ||
+        obj.data.bulletInteraction === 'interact-preserve';
+      if (!isSolid) return false;
+    }
+
+    // Small door: passable by small entities (frog form, tamed rat)
+    if (obj.data.smallDoor && entity.isSmall) return false;
+    return true;
+  }
+
+  /**
+   * True when `entity`, placed at (x, y), would overlap a collisionMap wall
+   * cell or a solid background object — i.e. exactly what
+   * resolveCollisionMapOverlap / resolveSolidObjectOverlap would eject it
+   * from. For instant placements (the yellow mage's blink) that must land on
+   * a clear spot instead of being corrected out of a wall over later frames.
+   */
+  overlapsSolid(entity, x, y, backgroundObjects = [], room = null) {
+    const width = entity.width || GRID.CELL_SIZE;
+    const height = entity.height || GRID.CELL_SIZE;
+
+    if (entity.collisionMap &&
+        this.checkAxisCollision(entity.collisionMap, x, y, width, height, 'y', entity, room)) {
+      return true;
+    }
+
+    if (entity.ignoreBackgroundCollision || !backgroundObjects?.length) return false;
+    const entityPlane = planeOf(entity);
+    const rect = { x, y, w: width, h: height };
+    for (const obj of backgroundObjects) {
+      if (!this._ejectsEntity(obj, entity, entityPlane)) continue;
+      if (obj.collisionShape === 'triangle') {
+        if (this._rectVsRightTriangle(rect, this._deflectorTriBox(obj), obj.data.deflectorElbow)) return true;
+        continue;
+      }
+      const box = obj.getHitbox();
+      if (x < box.x + box.width && x + width > box.x &&
+          y < box.y + box.height && y + height > box.y) return true;
+    }
+    return false;
+  }
+
   /**
    * Eject an entity out of any solid background objects it is currently overlapping.
    * Uses the minimum-penetration-depth axis to push the entity cleanly free.
@@ -1624,27 +1684,7 @@ export class PhysicsSystem {
       let pushed = false;
 
       for (const obj of backgroundObjects) {
-        if (obj.destroyed) continue;
-        if (!obj.data) continue;
-
-        // See the matching skip in checkBackgroundObjectCollision — a
-        // deflectable charger passes through deflector triangles entirely.
-        if (obj.data.boulderDeflector && this._isDeflectableCharge(entity)) continue;
-
-        // Plane affinity gate.
-        if (!objectOnPlane(obj, entityPlane)) continue;
-
-        // tunnelWall is unconditionally solid on its plane; others must clear solidity rules.
-        if (!obj.data.tunnelWall) {
-          if (typeof obj.data.slowing === 'number') continue;
-          const isSolid = obj.data.solid ||
-            obj.data.bulletInteraction === 'block' ||
-            obj.data.bulletInteraction === 'interact-preserve';
-          if (!isSolid) continue;
-        }
-
-        // Small door: passable by small entities (frog form, tamed rat)
-        if (obj.data.smallDoor && entity.isSmall) continue;
+        if (!this._ejectsEntity(obj, entity, entityPlane)) continue;
 
         const ex = entity.position.x;
         const ey = entity.position.y;
