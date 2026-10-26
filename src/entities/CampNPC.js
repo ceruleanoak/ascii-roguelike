@@ -101,6 +101,16 @@ export class CampNPC extends NeutralCharacter {
 
     // Pickup grace timer — prevents instant re-pickup of the weapon if dropped
     this._pickupCooldown = 0;
+
+    // Dodge roll (CampNPCSystem._updateDodgeRoll): the companion's answer to a
+    // bat sapping it. `rollTimer` > 0 while a roll carries it along
+    // `rollDirection`; `rollCooldown` > 0 until it may roll again;
+    // `sappedTimer` counts how long a sap has held it, for the beat it takes
+    // to react.
+    this.rollTimer = 0;
+    this.rollCooldown = 0;
+    this.rollDirection = { x: 0, y: 0 };
+    this.sappedTimer = 0;
   }
 
   // ─── Carrier interface support (Player-shaped takeDamage) ────────────────

@@ -189,6 +189,9 @@ export class FightSystem {
       return;
     }
 
+    // Sapped: roll the latched bats off before anything else.
+    if (this._rollFromSap()) return;
+
     // A spent trap or an empty gun/bow hands over to the next slot.
     this._noteTrapSpent();
     if (this._swapFromSpent()) return;
@@ -438,6 +441,47 @@ export class FightSystem {
         : { kind: 'step', x: player.position.x + dir.x * reach, y: player.position.y + dir.y * reach, timer: SIDESTEP_TIME };
       return;
     }
+  }
+
+  // A bat sapping the player (Enemy.createSapAttack, player.activeSappingBats)
+  // is shaken off the way a player shakes it: a dodge roll, through the same
+  // path the arrow keys drive, which breaks every sap on this player
+  // (PlayerDodgeRollSystem.start / the Green Ranger's slide). Rolls away from
+  // the target, else to either side of it, onto dry ground. True when a roll
+  // was started. Tomb Ghost sap (player.tombSapped) isn't a latch a roll
+  // breaks, so it doesn't count.
+  _rollFromSap() {
+    const game = this.game;
+    const player = game.player;
+    if (!(player.activeSappingBats?.length > 0) || this.reposition?.kind === 'roll' || !this._canRoll()) return false;
+    const target = this._nearestEnemy();
+    const p = entityCenter(player);
+    const t = target ? entityCenter(target) : { x: p.x, y: p.y + 1 };
+    const dist = Math.hypot(p.x - t.x, p.y - t.y) || 1;
+    const away = { x: (p.x - t.x) / dist, y: (p.y - t.y) / dist };
+    const side = Math.random() < 0.5 ? 1 : -1;
+    const dirs = [away, { x: -away.y * side, y: away.x * side }, { x: away.y * side, y: -away.x * side }];
+    const reach = this._rollReach();
+    const map = player.collisionMap || game.activeRoom?.collisionMap || game.currentRoom?.collisionMap || null;
+    const grid = buildTerrainGrid(game, player, map);
+    const dir = dirs.find(d => lineWithin(grid, p.x, p.y, p.x + d.x * reach, p.y + d.y * reach, DRY_GROUND, player.width, player.height));
+    if (!dir) return false;
+    this.reposition = { kind: 'roll', x: dir.x, y: dir.y, timer: ROLL_HOLD };
+    return true;
+  }
+
+  // Whether a roll FIGHT holds would start this frame: the gates
+  // CharacterSystem.updateDodge and PlayerDodgeRollSystem.start apply, read
+  // up front so a sapped player that can't roll keeps fighting instead of
+  // holding a roll that never comes.
+  _canRoll() {
+    const game = this.game;
+    const player = game.player;
+    if (player.isLocked() || player.isGooey() || player.polymorphed || player.inDeepWater) return false;
+    if (player.hookedByMimic || player.hookedByWhip || player.batTransform) return false;
+    if (game.fishingSystem?.rusalka?.alive === true) return false;
+    if (game.activeCharacterType === 'green') return player.actionCooldown <= 0 && player.rollCharge > 0 && !player.continuousRollActive;
+    return !player.dodgeRoll.active && player.dodgeRoll.cooldownTimer <= 0;
   }
 
   // How far a roll can carry the player: its roll speed over the roll, plus

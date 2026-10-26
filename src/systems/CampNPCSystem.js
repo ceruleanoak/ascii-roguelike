@@ -45,6 +45,18 @@ const KEEPER_BACK_OFF_REACH  = GRID.CELL_SIZE * 3;   // how far ahead a back-off
 // no current target.
 const AGGRO_ACQUIRE_DELAY = 0.5;
 
+// Dodge roll against a sap (_updateDodgeRoll). A bat latched on (Enemy
+// createSapAttack: it picks the companion as its target the way it picks the
+// player) is rolled off the way the player rolls it off: the roll breaks the
+// latch with the same knockback (PlayerDodgeRollSystem.start). The companion
+// reacts a beat late and rolls less often than the player, so a sap can still
+// cost it a tick. Roll speed mirrors the player's: 1.1x its own top speed.
+const COMPANION_ROLL_REACT    = 0.3;  // seconds latched before it rolls
+const COMPANION_ROLL_DURATION = 0.2;  // seconds the roll carries it (i-frames for as long)
+const COMPANION_ROLL_COOLDOWN = 1.0;  // seconds between rolls
+const COMPANION_ROLL_SPEED_MULT = 1.1;
+const SAP_BREAK_KNOCKBACK = 300;      // PlayerDodgeRollSystem.start's roll knockback
+
 export class CampNPCSystem {
   constructor(game) {
     this.game = game;
@@ -220,6 +232,10 @@ export class CampNPCSystem {
     // Coin offering is blocked while aggro'd — see handleSpacePress.
     npc.inCombat = hasEnemy;
 
+    // A roll owns the companion's movement while it runs (no steering, leash
+    // or swing this frame).
+    if (this._updateDodgeRoll(dt, npc, enemies, target)) return;
+
     // Aggro acquisition timer — counts up while a target is in range, resets
     // the moment the companion has no target. _tryAttack gates on this.
     if (hasEnemy) {
@@ -280,6 +296,76 @@ export class CampNPCSystem {
         }
       }
     }
+  }
+
+  // The companion's dodge roll: rolls off any bat sapping it once the sap has
+  // held it COMPANION_ROLL_REACT, away from `target` (else to either side, on
+  // dry ground), breaking every latch on it. True while a roll is moving it.
+  // The roll ends on its own timer, so it is a straight burst rather than a
+  // steerToward walk (the CLAUDE.md steering rule's self-terminating case);
+  // the direction is checked clear before it starts.
+  _updateDodgeRoll(dt, npc, enemies, target) {
+    if (npc.rollCooldown > 0) npc.rollCooldown -= dt;
+    if (npc.rollTimer > 0) {
+      npc.rollTimer -= dt;
+      const speed = npc.speed * COMPANION_ROLL_SPEED_MULT;
+      npc.velocity.vx = npc.rollDirection.x * speed;
+      npc.velocity.vy = npc.rollDirection.y * speed;
+      if (npc.rollTimer > 0) return true;
+      npc.velocity.vx = 0;
+      npc.velocity.vy = 0;
+      return false;
+    }
+
+    const sappers = enemies.filter(e => e?.sapping && e.sappingTarget === npc);
+    npc.sappedTimer = sappers.length ? npc.sappedTimer + dt : 0;
+    if (!sappers.length || npc.sappedTimer < COMPANION_ROLL_REACT || npc.rollCooldown > 0) return false;
+
+    // Away from the nearest foe not riding on it (a latched bat sits on its
+    // position, so it gives no direction).
+    const free = target && !sappers.includes(target) ? target : this._nearestFoe(npc, enemies, sappers);
+    const dir = this._rollDirection(npc, free);
+    if (!dir) return false;
+    for (const sapper of sappers) sapper.breakSapping(SAP_BREAK_KNOCKBACK);
+    npc.sappedTimer = 0;
+    npc.rollDirection = dir;
+    npc.rollTimer = COMPANION_ROLL_DURATION;
+    npc.rollCooldown = COMPANION_ROLL_COOLDOWN;
+    npc.invulnerabilityTimer = Math.max(npc.invulnerabilityTimer, COMPANION_ROLL_DURATION);
+    if (dir.x) npc.facing.x = Math.sign(dir.x);
+    if (dir.y) npc.facing.y = Math.sign(dir.y);
+    return true;
+  }
+
+  _nearestFoe(npc, enemies, skip) {
+    let best = null, bestDist = Infinity;
+    for (const e of enemies) {
+      if (!e || e.hp <= 0 || skip.includes(e) || (e.plane ?? 0) !== npc.plane) continue;
+      const d = Math.hypot(e.position.x - npc.position.x, e.position.y - npc.position.y);
+      if (d < bestDist) { bestDist = d; best = e; }
+    }
+    return best;
+  }
+
+  // A unit roll direction for the companion: away from `target`, else either
+  // side of it, whichever first has dry, open ground for the whole roll.
+  // Null when all three are blocked.
+  _rollDirection(npc, target) {
+    const game = this.game;
+    const cx = npc.position.x + npc.width / 2, cy = npc.position.y + npc.height / 2;
+    let ax = 0, ay = 1;
+    if (target) {
+      const dx = cx - (target.position.x + (target.width ?? GRID.CELL_SIZE) / 2);
+      const dy = cy - (target.position.y + (target.height ?? GRID.CELL_SIZE) / 2);
+      const len = Math.hypot(dx, dy);
+      if (len > 0.001) { ax = dx / len; ay = dy / len; }
+    }
+    const side = Math.random() < 0.5 ? 1 : -1;
+    const dirs = [{ x: ax, y: ay }, { x: -ay * side, y: ax * side }, { x: ay * side, y: -ax * side }];
+    const reach = Math.max(GRID.CELL_SIZE, npc.speed * COMPANION_ROLL_SPEED_MULT * COMPANION_ROLL_DURATION);
+    const map = npc.collisionMap || game.activeRoom?.collisionMap || game.currentRoom?.collisionMap || null;
+    const grid = buildTerrainGrid(game, npc, map);
+    return dirs.find(d => lineWithin(grid, cx, cy, cx + d.x * reach, cy + d.y * reach, DRY_GROUND, npc.width, npc.height)) ?? null;
   }
 
   // Whether the leash's straight pull of (dx, dy) keeps the companion's box
