@@ -57,6 +57,13 @@ function barsIn(duration) {
   return Math.max(1, Math.round(duration / BAR_DURATION));
 }
 
+// REST ↔ EXPLORE music swaps land on the music clock's next 2-bar line (see
+// switchMusicOnTwoBarLine): the outgoing music finishes its current 2-bar
+// segment and the incoming track starts on the downbeat after it. Every
+// bounce is a whole number of 2-bar segments (2, 4, 6 or 8 bars), so a
+// pass's end is always one of these lines.
+const SWAP_BARS = 2;
+
 // Enemy Motif timing (see startMotif). Lookahead is how far ahead of a
 // segment boundary the next segment gets scheduled; the cut fade is short
 // enough to read as an immediate stop without clicking; a voice whose
@@ -181,7 +188,7 @@ export class AudioSystem {
     // itself hasn't changed (e.g. green REST → green EXPLORE).
     this.inRestMode = false;
 
-    // Generation counter claimed by switchMusic/switchMusicAtLoopEnd before
+    // Generation counter claimed by switchMusic/_switchDualAtLine before
     // their async fetch+decode. Two of these can be issued back-to-back
     // (e.g. the death/restart path fires hardResetDualLayers, then
     // enterRestState synchronously fires a second switch before the first
@@ -192,6 +199,19 @@ export class AudioSystem {
     // its await; a mismatch means a newer call has taken over, so it bails
     // out before touching the audio graph.
     this._musicLoadId = 0;
+
+    // Scheduled music swaps (switchMusicOnTwoBarLine, switchMusicAtLoopEnd,
+    // switchToZoneSequence with onTwoBarLine). The load id of a scheduled
+    // swap still fetching/decoding (null when none) — setLayer2Enabled records
+    // the wanted state instead of scheduling against the outgoing track, and
+    // the swap applies it on landing. The AudioContext time the latest
+    // scheduled swap lands (null when none) — layer 2 changes requested
+    // before then land on it too. The outgoing sources still sounding until
+    // their scheduled stop, mapped to that stop time, so an immediate swap
+    // or a boss track can cut them instead of letting them overlap.
+    this._swapLoadId = null;
+    this._swapAt = null;
+    this._outgoingSources = new Map();
   }
 
   /**
@@ -807,6 +827,27 @@ export class AudioSystem {
    * Create and start dual audio source nodes simultaneously
    */
   startDualSources() {
+    // Always start layer 2 silenced — cancel any leftover scheduled ramps
+    this.layer2Muted = true;
+    this.layer2Gain.gain.cancelScheduledValues(this.audioContext.currentTime);
+    this.layer2Gain.gain.value = 0;
+
+    this._startDualSourcesAt(this.audioContext.currentTime);
+
+    if (this.pendingLayer2State !== null) {
+      const pendingState = this.pendingLayer2State;
+      this.pendingLayer2State = null;
+      this.setLayer2Enabled(pendingState);
+    }
+  }
+
+  /**
+   * Create the looping dual-layer source pair for the current buffers and
+   * start it at AudioContext time `t` (now, or a scheduled swap's line).
+   * Leaves layer 2's gain to the caller.
+   * @param {number} t - AudioContext time
+   */
+  _startDualSourcesAt(t) {
     this.layer1Source = this.audioContext.createBufferSource();
     this.layer2Source = this.audioContext.createBufferSource();
 
@@ -819,24 +860,68 @@ export class AudioSystem {
     this.layer1Source.connect(this.layer1Gain);
     this.layer2Source.connect(this.layer2Gain);
 
-    // Always start layer 2 silenced — cancel any leftover scheduled ramps
-    this.layer2Muted = true;
-    this.layer2Gain.gain.cancelScheduledValues(this.audioContext.currentTime);
-    this.layer2Gain.gain.value = 0;
+    this.layer1Source.start(t);
+    this.layer2Source.start(t);
 
-    const startTime = this.audioContext.currentTime;
-    this.layer1Source.start(startTime);
-    this.layer2Source.start(startTime);
-
-    this.playbackStartTime = startTime;
+    this.playbackStartTime = t;
     this.isPlaying = true;
     this.autoplayBlocked = false;
+  }
 
-    if (this.pendingLayer2State !== null) {
-      const pendingState = this.pendingLayer2State;
-      this.pendingLayer2State = null;
-      this.setLayer2Enabled(pendingState);
+  /**
+   * Hand every zone-music source now playing (the dual-layer pair or the
+   * sequence track) over to the outgoing set, scheduled to stop at `t`, so
+   * the incoming music can start on the same instant. A sequence track's
+   * onended is replaced, so stopping it never advances the sequence.
+   * Sources already outgoing with a later stop are pulled in to `t`.
+   * @param {number} t - AudioContext time the outgoing music ends
+   */
+  _releaseMusicSourcesAt(t) {
+    for (const [source, stopAt] of this._outgoingSources) {
+      if (stopAt > t) {
+        try { source.stop(t); } catch (_) {}
+        this._outgoingSources.set(source, t);
+      }
     }
+    for (const prop of ['layer1Source', 'layer2Source', 'zoneSequenceSource']) {
+      const source = this[prop];
+      if (!source) continue;
+      source.onended = () => {
+        source.disconnect();
+        this._outgoingSources.delete(source);
+      };
+      try { source.stop(t); } catch (_) {}
+      this._outgoingSources.set(source, t);
+      this[prop] = null;
+    }
+  }
+
+  /**
+   * Cut every outgoing source now and forget the scheduled swap. Called by
+   * every path that replaces the music immediately (stop, boss tracks), so
+   * a swap still waiting on its line can't sound under the replacement.
+   */
+  _cutOutgoingSources() {
+    for (const source of this._outgoingSources.keys()) {
+      source.onended = null;
+      try { source.stop(); } catch (_) {}
+      source.disconnect();
+    }
+    this._outgoingSources.clear();
+    this._swapAt = null;
+  }
+
+  /**
+   * Apply the recorded layer 2 state (layer2Muted) at a scheduled swap's
+   * time `t`: layer 2 keeps whatever it is doing on the outgoing track until
+   * the swap, then steps to on/off together with the incoming sources.
+   * @param {number} t - AudioContext time of the swap
+   */
+  _setLayer2At(t) {
+    if (!this.layer2Gain) return;
+    const gain = this.layer2Gain.gain;
+    gain.cancelScheduledValues(t);
+    gain.setValueAtTime(this.layer2Muted ? 0 : this.masterVolume, t);
   }
 
   /**
@@ -844,6 +929,7 @@ export class AudioSystem {
    */
   stop() {
     this.stopAllMotifs();
+    this._cutOutgoingSources();
     if (this.mode === 'single') {
       if (this.singleSource) {
         try { this.singleSource.stop(); } catch (_) {}
@@ -899,6 +985,7 @@ export class AudioSystem {
       this.pendingLayer2State = enabled;
       return;
     }
+    if (this._deferLayer2ToSwap(enabled)) return;
 
     this.layer2Muted = !enabled;
 
@@ -938,7 +1025,8 @@ export class AudioSystem {
       this.setZoneCombatActive(false);
       return;
     }
-    if (this.mode !== 'dual' || !this.layer2Gain || this.layer2Muted) return;
+    if (this.mode !== 'dual' || !this.layer2Gain) return;
+    if (this._deferLayer2ToSwap(false) || this.layer2Muted) return;
 
     this.layer2Muted = true;
     const currentTime = this.audioContext.currentTime;
@@ -953,6 +1041,29 @@ export class AudioSystem {
     this.layer2Gain.gain.setValueAtTime(this.layer2Gain.gain.value, currentTime);
     this.layer2Gain.gain.setValueAtTime(this.layer2Gain.gain.value, Math.max(currentTime, cutoffTime - fadeTime));
     this.layer2Gain.gain.linearRampToValueAtTime(0, cutoffTime);
+  }
+
+  /**
+   * A layer 2 change asked for while a scheduled swap is pending belongs to
+   * the incoming track, not the outgoing one: scheduling it against the
+   * outgoing loop would land it at a time unrelated to the swap. While the
+   * swap is still decoding, record the state (the swap applies it on
+   * landing); once it is scheduled but not yet sounding, apply it at the
+   * swap's time.
+   * @param {boolean} enabled
+   * @returns {boolean} True if the change was deferred to the swap
+   */
+  _deferLayer2ToSwap(enabled) {
+    if (this._swapLoadId !== null && this._swapLoadId === this._musicLoadId) {
+      this.layer2Muted = !enabled;
+      return true;
+    }
+    if (this._swapAt !== null && this._swapAt > this.audioContext.currentTime) {
+      this.layer2Muted = !enabled;
+      this._setLayer2At(this._swapAt);
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -1053,17 +1164,17 @@ export class AudioSystem {
     // Leaving a dedicated REST track always requires a reload, even when the
     // zone itself didn't change (green REST → green EXPLORE both report
     // currentMusicZone === 'green', so the equality checks below would
-    // otherwise skip the swap back to the EXPLORE track). That swap rides
-    // switchMusicAtLoopEnd so it lands on the REST track's loop boundary
-    // instead of cutting it off mid-loop.
+    // otherwise skip the swap back to the EXPLORE track). That swap — to a
+    // dual-layer track or a red/yellow sequence alike — lands on the REST
+    // track's next 2-bar line instead of cutting it off mid-bar.
     const cameFromRest = this.inRestMode;
     if (cameFromRest) {
       this.inRestMode = false;
       force = true;
     }
-    const swap = (l1, l2) => cameFromRest ? this.switchMusicAtLoopEnd(l1, l2) : this.switchMusic(l1, l2);
+    const swap = (l1, l2) => cameFromRest ? this.switchMusicOnTwoBarLine(l1, l2) : this.switchMusic(l1, l2);
     if (SEQUENCE_MUSIC[zone] && (force || this.currentMusicZone !== zone)) {
-      if (this.switchToZoneSequence(zone)) {
+      if (this.switchToZoneSequence(zone, cameFromRest)) {
         this.currentMusicZone = zone;
       }
     } else if (zone === 'cyan' && (force || this.currentMusicZone !== 'cyan')) {
@@ -1086,19 +1197,64 @@ export class AudioSystem {
    * @param {string} layer1Path
    * @param {string} layer2Path
    */
-  async switchMusicAtLoopEnd(layer1Path, layer2Path) {
-    if (this.mode !== 'dual' || !this.layer1Buffer || !this.isPlaying) {
+  switchMusicAtLoopEnd(layer1Path, layer2Path) {
+    const loopEndAfter = (t) => {
+      if (this.mode !== 'dual' || !this.layer1Buffer || !this.isPlaying) return null;
+      const loopDuration = this.layer1Buffer.duration;
+      const elapsed = t - this.playbackStartTime;
+      const posInLoop = ((elapsed % loopDuration) + loopDuration) % loopDuration;
+      return t + (loopDuration - posInLoop);
+    };
+    return this._switchDualAtLine(layer1Path, layer2Path, loopEndAfter);
+  }
+
+  /**
+   * Swap zone music for a dual-layer track on the music clock's next 2-bar
+   * line (SWAP_BARS): the outgoing music — a dual-layer loop or a red/yellow
+   * sequence track — finishes its current 2-bar segment and the new track
+   * starts on the downbeat after it. The REST ↔ EXPLORE swap, both ways.
+   * Falls back to an immediate switchMusic() when nothing is playing to
+   * synchronize against.
+   * @param {string} layer1Path
+   * @param {string} layer2Path
+   */
+  switchMusicOnTwoBarLine(layer1Path, layer2Path) {
+    return this._switchDualAtLine(layer1Path, layer2Path, (t) => this._swapLineAfter(t));
+  }
+
+  /**
+   * The line a scheduled swap requested at AudioContext time `t` lands on:
+   * a swap already scheduled but not yet sounding (so a second swap lands
+   * on the same instant instead of measuring against music that hasn't
+   * started), else the music clock's next 2-bar line. Null when no zone
+   * music is playing.
+   * @param {number} t - AudioContext time
+   * @returns {number|null}
+   */
+  _swapLineAfter(t) {
+    if (this._swapAt !== null && this._swapAt > t) return this._swapAt;
+    return this._nextBarLine(t, SWAP_BARS);
+  }
+
+  /**
+   * Shared body of the scheduled dual-layer swaps: fetch + decode the new
+   * pair, then hand the playing music over to it at `lineAfter(now)` —
+   * measured after decoding, so the swap lands on the grid even when the
+   * decode takes a while. The recorded layer 2 state (see
+   * _deferLayer2ToSwap) is applied on the same instant.
+   * @param {string} layer1Path
+   * @param {string} layer2Path
+   * @param {(t: number) => number|null} lineAfter - swap time for a request
+   *   at AudioContext time t, or null when there is nothing to sync against
+   */
+  async _switchDualAtLine(layer1Path, layer2Path, lineAfter) {
+    if (!this.audioContext || lineAfter(this.audioContext.currentTime) === null) {
       return this.switchMusic(layer1Path, layer2Path);
     }
 
-    const loopDuration = this.layer1Buffer.duration;
-    const currentTime = this.audioContext.currentTime;
-    const elapsed = currentTime - this.playbackStartTime;
-    const posInLoop = ((elapsed % loopDuration) + loopDuration) % loopDuration;
-    const swapTime = currentTime + (loopDuration - posInLoop);
-
     // Claim this load — see _musicLoadId in the constructor for why.
     const loadId = ++this._musicLoadId;
+    this._swapLoadId = loadId;
 
     try {
       const [layer1Data, layer2Data] = await Promise.all([
@@ -1113,40 +1269,31 @@ export class AudioSystem {
       // Superseded while fetching/decoding (see switchMusic) — bail out
       // before scheduling stops/starts against a graph a newer call now owns.
       if (loadId !== this._musicLoadId) return false;
+      this._swapLoadId = null;
 
-      // Land on the boundary computed above unless decoding overran it, in
-      // which case start immediately rather than scheduling into the past.
-      const startAt = Math.max(swapTime, this.audioContext.currentTime);
+      // The music can have stopped while decoding; then start now.
+      const now = this.audioContext.currentTime;
+      const line = lineAfter(now);
+      const startAt = line === null ? now : Math.max(line, now);
 
-      const oldLayer1Source = this.layer1Source;
-      const oldLayer2Source = this.layer2Source;
-      if (oldLayer1Source) {
-        oldLayer1Source.onended = () => oldLayer1Source.disconnect();
-        try { oldLayer1Source.stop(startAt); } catch (_) {}
+      this._releaseMusicSourcesAt(startAt);
+      if (this.mode === 'zoneSequence') {
+        // A sequence carries no layer 2 state worth keeping (see switchMusic).
+        this.sequenceZone = null;
+        this.zoneCombatActive = false;
+        this.layer2Muted = true;
       }
-      if (oldLayer2Source) {
-        oldLayer2Source.onended = () => oldLayer2Source.disconnect();
-        try { oldLayer2Source.stop(startAt); } catch (_) {}
-      }
+      this.mode = 'dual';
 
       this.layer1Buffer = newLayer1Buffer;
       this.layer2Buffer = newLayer2Buffer;
-
-      this.layer1Source = this.audioContext.createBufferSource();
-      this.layer2Source = this.audioContext.createBufferSource();
-      this.layer1Source.buffer = newLayer1Buffer;
-      this.layer2Source.buffer = newLayer2Buffer;
-      this.layer1Source.loop = true;
-      this.layer2Source.loop = true;
-      this.layer1Source.connect(this.layer1Gain);
-      this.layer2Source.connect(this.layer2Gain);
-      this.layer1Source.start(startAt);
-      this.layer2Source.start(startAt);
-
-      this.playbackStartTime = startAt;
+      this._startDualSourcesAt(startAt);
+      this._setLayer2At(startAt);
+      this._swapAt = startAt;
       return true;
     } catch (error) {
-      console.error('[Audio] Failed to switch music at loop end:', error);
+      if (this._swapLoadId === loadId) this._swapLoadId = null;
+      console.error('[Audio] Failed to schedule music swap:', error);
       return false;
     }
   }
@@ -1156,9 +1303,8 @@ export class AudioSystem {
    * track (used for both layers — layer 2 stays muted) if one exists,
    * otherwise the zone's EXPLORE track as the "peaceful" fallback. Sets
    * inRestMode accordingly and switches to it immediately (used for the
-   * boss-retreat path and sequential-zone REST entry, where the prior
-   * 'sequence'/'zoneSequence' mode has no dual loop position to synchronize
-   * against).
+   * boss-retreat path, where the boss 'sequence' that held the output has
+   * already been stopped, so there is no music left to synchronize against).
    * @param {string} zone
    * @param {string} base - BASE_URL prefix
    */
@@ -1211,14 +1357,14 @@ export class AudioSystem {
   }
 
   /**
-   * Switch to a zone's dedicated REST track, if one exists, waiting for the
-   * currently playing EXPLORE track to finish its loop before cutting over
-   * (via switchMusicAtLoopEnd). No-ops (leaving the current EXPLORE buffers
-   * with layer 2 muted as the fallback) when the zone has no REST track —
-   * see REST_MUSIC_PATHS. Layer 2 muting is left to the caller's existing
-   * setLayer2Enabled(false) (enterRestState), which — called synchronously
-   * right after this, before the swap's fetch/decode resolves — schedules
-   * against the still-current EXPLORE buffer and lands on the same boundary.
+   * Switch to a zone's dedicated REST track, if one exists, letting the
+   * currently playing EXPLORE track finish its 2-bar segment before cutting
+   * over (via switchMusicOnTwoBarLine). No-ops (leaving the current EXPLORE
+   * buffers with layer 2 muted as the fallback) when the zone has no REST
+   * track — see REST_MUSIC_PATHS. Layer 2 muting is left to the caller's
+   * existing setLayer2Enabled(false) (enterRestState), which — called
+   * synchronously right after this, while the swap is still decoding — is
+   * recorded and lands on the swap itself (see _deferLayer2ToSwap).
    * @param {string} zone - 'green' | 'cyan' | 'red'
    * @param {string} base - BASE_URL prefix
    */
@@ -1228,16 +1374,18 @@ export class AudioSystem {
     if (!restPath || (this.inRestMode && this.currentMusicZone === zone)) return;
     this.inRestMode = true;
     this.currentMusicZone = zone;
-    this.switchMusicAtLoopEnd(`${base}${restPath}`, `${base}${restPath}`);
+    this.switchMusicOnTwoBarLine(`${base}${restPath}`, `${base}${restPath}`);
   }
 
   /**
    * REST entry while a sequential zone (red/yellow) owns the output — the
    * 'zoneSequence' counterpart of switchRestMusic. A zone with a dedicated
    * REST track swaps to it (bug #257: yellow's sequence used to keep playing
-   * in the hub). A zone without one keeps its sequence, the same EXPLORE
-   * carryover dual zones get — but a death arrives here after stop() killed
-   * the sequence source, so it restarts. Left dead, REST stays silent, and so
+   * in the hub) on the sequence's next 2-bar line, the same hand-over the
+   * dual-layer zones get (a stopped sequence has no line to wait for, so the
+   * swap then starts at once). A zone without one keeps its sequence, the
+   * same EXPLORE carryover dual zones get — but a death arrives here after
+   * stop() killed the sequence source, so it restarts. Left dead, REST stays silent, and so
    * does the walk back into the zone: switchZoneMusic skips a zone that
    * currentMusicZone says is already playing.
    * @param {string} base - BASE_URL prefix
@@ -1245,9 +1393,12 @@ export class AudioSystem {
   restFromZoneSequence(base) {
     if (this.mode !== 'zoneSequence') return;
     const zone = this.currentMusicZone;
-    if (this.getRestMusicPath(zone)) {
-      this.stopZoneSequence(); // mode → 'dual'
-      this.loadRestBuffers(zone, base).then(() => this.setLayer2Enabled(false));
+    const restPath = this.getRestMusicPath(zone);
+    if (restPath) {
+      this.inRestMode = true;
+      const url = `${base}${restPath}`;
+      // mode → 'dual' when the swap lands
+      this.switchMusicOnTwoBarLine(url, url).then(() => this.setLayer2Enabled(false));
     } else if (!this.zoneSequenceSource) {
       this.switchToZoneSequence(zone);
     }
@@ -1469,6 +1620,8 @@ export class AudioSystem {
     // retreat, when the player turns straight back into the gate room) — it
     // would otherwise start its dual sources on top of the boss track.
     ++this._musicLoadId;
+    // …and music a scheduled swap left sounding until its line.
+    this._cutOutgoingSources();
     // Stop current dual-layer sources
     for (const prop of ['layer1Source', 'layer2Source']) {
       if (this[prop]) {
@@ -1526,6 +1679,7 @@ export class AudioSystem {
       // zone/REST track load — same reasoning as startBossAnticipation() above.
       this._stopZoneSequenceSource();
       ++this._musicLoadId;
+      this._cutOutgoingSources();
       // Stop dual-layer playback and enter sequence mode
       for (const prop of ['layer1Source', 'layer2Source']) {
         if (this[prop]) {
@@ -1670,9 +1824,12 @@ export class AudioSystem {
    * zone's sequence — and enters mode='zoneSequence'.
    * Requires loadZoneTracks() to have completed and a layer1Gain to exist.
    * @param {string} zone - a key of SEQUENCE_MUSIC
+   * @param {boolean} onTwoBarLine - hand over on the playing music's next
+   *   2-bar line (the REST → EXPLORE swap, see switchMusicOnTwoBarLine)
+   *   instead of cutting it now
    * @returns {boolean} True if the sequence started
    */
-  switchToZoneSequence(zone) {
+  switchToZoneSequence(zone, onTwoBarLine = false) {
     const buffers = this.zoneSequenceBuffers[zone];
     if (!buffers?.length) {
       console.warn(`[Audio] ${zone} tracks not loaded yet`);
@@ -1680,22 +1837,24 @@ export class AudioSystem {
     }
     if (!this.layer1Gain) return false;
 
-    // Stop dual sources (mirrors boss-sequence pattern)
-    for (const prop of ['layer1Source', 'layer2Source']) {
-      if (this[prop]) {
-        try { this[prop].stop(); } catch (_) {}
-        this[prop].disconnect();
-        this[prop] = null;
-      }
-    }
-    // …and any sequence already running, when crossing between two
-    // sequential zones (red ↔ yellow) without passing through dual mode.
-    this._stopZoneSequenceSource();
+    // Cancel any track still fetching (a REST swap the player walked straight
+    // back out of) — it would otherwise land its dual sources over the
+    // sequence.
+    ++this._musicLoadId;
+
+    // Stop whatever plays now — dual sources, or a sequence already running
+    // when crossing between two sequential zones (red ↔ yellow) — on the
+    // swap's line, or at once.
+    const now = this.audioContext.currentTime;
+    const line = onTwoBarLine ? this._swapLineAfter(now) : null;
+    const startAt = line === null ? now : Math.max(line, now);
+    this._releaseMusicSourcesAt(startAt);
 
     this.mode = 'zoneSequence';
     this.sequenceZone = zone;
     this.zoneCombatActive = false;
-    this._startZoneTrack(0);
+    this._startZoneTrack(0, false, startAt);
+    this._swapAt = startAt;
     return true;
   }
 
@@ -1746,8 +1905,9 @@ export class AudioSystem {
    * @param {number} index - Track index into the zone's SEQUENCE_MUSIC tracks
    * @param {boolean} continues - True when chained from the previous track's
    *   end (keeps the music clock's bar count running; see _startChainedTrack)
+   * @param {?number} at - AudioContext start time; null starts now
    */
-  _startZoneTrack(index, continues = false) {
+  _startZoneTrack(index, continues = false, at = null) {
     this._stopZoneSequenceSource();
     this.zoneSequenceIndex = index;
     const source = this.audioContext.createBufferSource();
@@ -1755,7 +1915,7 @@ export class AudioSystem {
     source.loop = false;
     source.connect(this.layer1Gain);
     source.onended = () => this._onZoneTrackEnded();
-    this._startChainedTrack(source, continues);
+    this._startChainedTrack(source, continues, at);
     this.zoneSequenceSource = source;
     this.isPlaying = true;
   }
@@ -1784,9 +1944,11 @@ export class AudioSystem {
    * start resets it.
    * @param {AudioBufferSourceNode} source - Source with its buffer assigned
    * @param {boolean} continues - True when chained from the previous track
+   * @param {?number} at - AudioContext start time (a scheduled swap's line);
+   *   null starts now
    */
-  _startChainedTrack(source, continues) {
-    const startTime = this.audioContext.currentTime;
+  _startChainedTrack(source, continues, at = null) {
+    const startTime = at ?? this.audioContext.currentTime;
     this.trackBarBase = continues ? this.trackBarBase + barsIn(this.trackDuration) : 0;
     this.trackStartTime = startTime;
     this.trackDuration = source.buffer.duration;
@@ -1838,12 +2000,18 @@ export class AudioSystem {
   /**
    * The first bar line at or after `t` on the music's grid, or null when no
    * music is playing. A time inside the padding after a pass's last bar line
-   * rolls to the next pass's start.
+   * rolls to the next pass's start. `every` > 1 takes only every n-th line
+   * of the continuous bar count (2 → the next 2-bar line, see SWAP_BARS);
+   * a pass's end always counts, since every bounce is whole 2-bar segments.
+   * @param {number} t - AudioContext time
+   * @param {number} [every=1] - bars per line
    */
-  _nextBarLine(t) {
+  _nextBarLine(t, every = 1) {
     const pass = this._musicPass(t);
     if (!pass) return null;
-    const bar = Math.ceil((t - pass.start) / BAR_DURATION - 1e-3);
+    let bar = Math.ceil((t - pass.start) / BAR_DURATION - 1e-3);
+    const offBeat = (pass.barBase + bar) % every;
+    if (offBeat) bar += every - offBeat;
     return bar >= barsIn(pass.length) ? pass.start + pass.length : pass.start + bar * BAR_DURATION;
   }
 
