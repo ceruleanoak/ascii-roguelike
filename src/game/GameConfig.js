@@ -1413,6 +1413,26 @@ export const BACKGROUND_OBJECT_VARIANTS = {
       default: { animation: 'bounce', message: null }
     }
   },
+  // Watcher Eye — the red roll gate's trigger (barricades.js EYE_LOCK; the
+  // rules live in src/systems/WatcherEye.js). It shuts when it sees the player
+  // come near and only a melee hit on it open counts, so its data is a wall's:
+  // indestructible, solid, and turning every shot away. The glyph and colour
+  // change with what it is doing (open / shut / struck) and are painted per
+  // instance; the typeId keeps this data whichever glyph it is wearing.
+  'watcher_eye': {
+    char: 'o',
+    name: 'Watcher Eye',
+    color: '#ff4444',
+    bulletInteraction: 'block',
+    flammability: 'none',
+    conductivity: 'none',
+    indestructible: true,
+    hp: null,
+    solid: true,
+    interactions: {
+      default: { animation: 'shake', message: null }
+    }
+  },
   // Electric Pole — an anchor, not an obstacle. Two flank a circuit Barricade's
   // plug, one of them already live; a tripline strung between them carries the
   // current across and the plug gives way.

@@ -6,6 +6,7 @@ import { isExitLetterTile } from './ExitSystem.js';
 import { createBurstParticles } from './WorldEffectsSystem.js';
 import { isCellProtected } from './roomFeatures.js';
 import { createPushRock } from './PushRock.js';
+import { createWatcherEye } from './WatcherEye.js';
 
 // Barricades stay out of the first two depths of a zone: the shape has to be
 // met somewhere it can be answered, and a run two rooms deep is still finding
@@ -269,6 +270,12 @@ export class BarricadeSystem {
         const rock = createPushRock(col, row);
         room.backgroundObjects.push(rock);
         room.barricade.triggers.push(rock);
+        continue;
+      }
+      if (spec.kind === 'eye') {
+        const eye = createWatcherEye(col, row);
+        room.backgroundObjects.push(eye);
+        room.barricade.triggers.push(eye);
         continue;
       }
       this._buildTrigger(room, spec, col, row);

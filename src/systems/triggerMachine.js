@@ -1,6 +1,7 @@
 import { GRID } from '../game/GameConfig.js';
 import { TORCH_INTERACT_RADIUS } from './MazeSystem.js';
 import { readPushRock } from './PushRock.js';
+import { readWatcherEye } from './WatcherEye.js';
 
 /**
  * triggerMachine — the generic Switch/Panel/Torch activation state machine,
@@ -15,7 +16,7 @@ import { readPushRock } from './PushRock.js';
  *
  * A trigger is a plain object (usually a BackgroundObject, but the torch kind
  * is not) carrying:
- *   kind              'switch' | 'panel' | 'torch' | 'push'
+ *   kind              'switch' | 'panel' | 'torch' | 'push' | 'eye'
  *   activation        'permanent' | 'timed'
  *   neutralizeSeconds  how long a timed trigger holds after release
  *   active, _timer     mutable state, initialized by whoever builds it
@@ -37,8 +38,12 @@ import { readPushRock } from './PushRock.js';
 // 'push'    a Push Rock leaned on until it slides a cell (PushRock.js). It
 //           needs to know what the destination cell holds, which only the
 //           caller's `world` can say; always 'permanent'.
+// 'eye'     a Watcher Eye (WatcherEye.js) struck by a melee blow while open.
+//           It watches the player to decide when it is open; always
+//           'permanent'.
 export function readTrigger(trigger, dt, player, companion = null, world = null) {
   if (trigger.kind === 'push') return readPushRock(trigger, dt, player, world);
+  if (trigger.kind === 'eye') return readWatcherEye(trigger, dt, player);
 
   if (trigger.kind === 'switch') {
     const hit = !!trigger.glitterHit;
@@ -100,7 +105,8 @@ export function setTriggerVisual(trigger, active) {
  * mutating char/color on a BackgroundObject, so setTriggerVisual — which only
  * knows the switch and panel glyph pairs — is skipped for them. So is the
  * Push Rock: its having moved IS its active state, and it must keep looking
- * like the rocks around it.
+ * like the rocks around it. And the Watcher Eye paints itself, because it has
+ * three looks (open, shut, struck) where a switch has two.
  *
  * `world` is passed through to the 'push' read only (see readPushRock).
  */
@@ -108,7 +114,8 @@ export function tickTriggers(triggers, dt, player, companion = null, world = nul
   for (const trigger of triggers) {
     const wasActive = trigger.active;
     advanceTrigger(trigger, dt, readTrigger(trigger, dt, player, companion, world));
-    if (trigger.active !== wasActive && trigger.kind !== 'torch' && trigger.kind !== 'push') {
+    if (trigger.active !== wasActive && trigger.kind !== 'torch' && trigger.kind !== 'push' &&
+        trigger.kind !== 'eye') {
       setTriggerVisual(trigger, trigger.active);
     }
   }

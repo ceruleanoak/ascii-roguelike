@@ -31,7 +31,8 @@ import { ZONE_COLORS } from './zones.js';
  *              BarricadeSystem): `depth` counts cells inward from the wall the
  *              exit is in, `across` counts sideways from the exit's own
  *              column/row. Plus the triggerMachine fields — `kind`,
- *              `activation`, `neutralizeSeconds` — and optionally `conceal`,
+ *              `activation`, `neutralizeSeconds` (a kind is 'switch', 'panel',
+ *              'push' or 'eye') — and optionally `conceal`,
  *              naming what the fixture hides under until it is uncovered.
  *   decoys     optional placements, same lane coordinates, that get a concealing
  *              cover and nothing under it. A layout whose only cover IS the
@@ -289,10 +290,25 @@ const HAMMER_LOCK = {
   ]
 };
 
+// A Watcher Eye set in the lane in front of a sealed plug. It shuts the moment
+// it sees the player coming, and only a blade landed on it open lifts the
+// plug. Walk up and it has shut long before the swing arrives; roll up, and the
+// roll's end is where a dagger stabs on its own — the eye never saw it coming.
+// Whatever the enemies cannot see (the Cyan roll's hide, the Moss Cloak), the
+// eye cannot see either.
+const EYE_LOCK = {
+  id: 'eye_lock',
+  shape: 'trigger',
+  plugColor: ZONE_COLORS.red,
+  triggers: [
+    { depth: 3, across: 0, kind: 'eye', activation: 'permanent' }
+  ]
+};
+
 export const BARRICADE_FAMILIES = {
   green: [ROCKS, PETRIFIED_TREES, WHIP_LOCK, BOOMERANG_LOCK, SPEAR_LOCK, GRASS_LOCK, PUSH_LOCK],
   yellow: [LAVA_MOAT, ICE_BLOCKS, ELECTRIC_POLES],
-  red: [HAMMER_LOCK],
+  red: [HAMMER_LOCK, EYE_LOCK],
   cyan: [TARGETS]
 };
 

@@ -25,6 +25,7 @@ import { applyMeleeStatusDamageBonus, getMeleeStatusBonusIndicator } from './Mel
 import { applyKeenAim } from './KeenAim.js';
 import { projectileSailsOver, tagLaunchPit } from './pits.js';
 import { vaultWallBlocksReach } from './vaultWalls.js';
+import { strikeWatcherEye } from './WatcherEye.js';
 import { knockbackTakenScale } from '../entities/knockbackTaken.js';
 
 // Default maximum travel distance (in pixels) for gun bullets. Roughly 2/3 of a
@@ -845,6 +846,12 @@ export class CombatSystem {
               // chopping/thunking (equipped whip variants each carry a
               // distinct color; see items.js).
               obj.flashColor(attack.color);
+              continue;
+            }
+
+            // A Watcher Eye takes only a melee blow, and only the player's.
+            if (strikeWatcherEye(obj, attack.owner === this.game.player)) {
+              attack.hasHitObject = true;
               continue;
             }
 

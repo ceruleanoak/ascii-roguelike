@@ -1951,7 +1951,8 @@ identity, not standard programming terms.
   Gray has no family and raises nothing — gray is the Three Room's own signage.
 - **In code:** `BARRICADE_FAMILIES` keyed by family name, `FAMILY_BY_COLOR` mapping a `ZONE_COLORS`
   value onto one. A family that is empty raises nothing rather than borrowing another family's
-  question. Red's members so far: the Rubble Wall (`hammer_lock`). Cyan's only member so far is the Barricade Target, which asks for a gun or a
+  question. Red's members so far: the Rubble Wall (`hammer_lock`) and the Watcher Eye
+  (`eye_lock`). Cyan's only member so far is the Barricade Target, which asks for a gun or a
   bow rather than a sacrifice.
 - **Not:** "barricade type", "gate category", "tier", "colour group".
 
@@ -1974,6 +1975,19 @@ identity, not standard programming terms.
   which lifts the plug. The staged rocks are the descriptor's `rollables`, placed by
   `_placeRollables` and left non-structural so `isHammerRollable` accepts them. Not `bombable`.
 - **Not:** "rubble", "rock wall", "debris", "rock plug".
+
+### Watcher Eye
+- **Definition:** The red roll Barricade's trigger: an eye in the lane in front of a sealed plug.
+  It shuts when it sees the player come within three cells, and a melee blow on it while it is
+  open is the only thing that lifts the plug. It does not see a player who is rolling, hidden by
+  the Cyan roll or wearing the Moss Cloak. So the dagger's roll-end stab is the answer, and so is
+  walking up unseen. Once shut, it opens again only after the player has been out of its sight
+  for a second. Shots, thrown weapons, bombs and rolling rocks leave no mark on it.
+- **In code:** trigger kind `'eye'` (`triggerMachine.readTrigger` → `readWatcherEye`), built by
+  `createWatcherEye()` (`src/systems/WatcherEye.js`) as the `watcher_eye` Background Object
+  variant; raised by the `eye_lock` entry in `barricades.js`. CombatSystem's melee loop hands a
+  blow to `strikeWatcherEye()`. Glyphs: `o` open, `-` shut, `*` struck.
+- **Not:** "eye switch", "sentinel", "watcher", "eyeball", "eye trigger".
 
 ### Barricade Target
 - **Definition:** The cyan Barricade plug: a block of bullseyes (`◎`), each broken by one bullet
