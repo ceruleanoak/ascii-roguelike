@@ -1,0 +1,9 @@
+{
+  "boss": "green",
+  "corridors": [3, 3],
+  "shapes": { "chain": 1 },
+  "branchPuzzle": "panels",
+  "sideRooms": { "trial": "corridor", "trapRoom": ["corridor", "branch"] },
+  "diagonals": { "chance": 0, "reveals": ["clear"] },
+  "keyGate": { "pushChance": 0 }
+}

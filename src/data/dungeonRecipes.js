@@ -12,6 +12,15 @@
 //                 sub-solve; 'panels' is Green's floor-panel NPC puzzle)
 //   sideRooms     { trial: host kind, trapRoom: [host kinds] } — which floor
 //                 kind each side room hangs off, rolled per visit
+//   diagonals     { chance, reveals } — the per-visit chance of one Hidden
+//                 Descent, and the Reveals that may open it
+//   keyGate       { pushChance } — the per-visit chance of a gate rock
+//                 beside the Skull Key's door (a hidden 'push' edge)
+//
+// Yellow, Red, Cyan and Gray are drafts awaiting the user's revision
+// (claudedocs/dungeon-recipes.md). Their `branchPuzzle` ('panels') and
+// `boss` ('green') are placeholders until each zone's own puzzle and boss
+// are designed.
 
 import { validateRecipe } from '../systems/dungeonGraphBuilder.js';
 
