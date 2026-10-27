@@ -13,8 +13,9 @@ import { ZONE_COLORS } from './zones.js';
  *          room state (`room.barricade.id`)
  *   shape  what kind of question it asks (see below)
  *
- * shape 'material' — a plug of breakable Background Objects; the right tool
- * breaks them and that IS the clearing, so nothing polls it.
+ * shape 'material' — a plug of Background Objects that nothing polls; the right
+ * tool breaks them and that IS the clearing (or, for a plug nothing breaks,
+ * like the Chasm, the right move crosses it).
  *   char   the plug's glyph, for a plain BackgroundObject
  *   typeId a BACKGROUND_OBJECT_VARIANTS key, for a variant-built plug
  *          (mutually exclusive with `char`)
@@ -305,10 +306,23 @@ const EYE_LOCK = {
   ]
 };
 
+// A Chasm laid across the lane, one cell of it between the room and the exit
+// letter. Nothing breaks it and nothing fills it: it is crossed. Thrust a spear
+// at the letter and roll after the thrust while it is still out, and the roll
+// becomes a Pole Vault (PoleVault.js) that clears the one cell. The default
+// footprint is already that shape — the notch at the letter's tile leaves a
+// single Chasm cell in front of it — so nothing here overrides it. The yellow
+// mage's blink crosses it too.
+const GAP_LOCK = {
+  id: 'gap_lock',
+  shape: 'material',
+  char: '▓'
+};
+
 export const BARRICADE_FAMILIES = {
   green: [ROCKS, PETRIFIED_TREES, WHIP_LOCK, BOOMERANG_LOCK, SPEAR_LOCK, GRASS_LOCK, PUSH_LOCK],
   yellow: [LAVA_MOAT, ICE_BLOCKS, ELECTRIC_POLES],
-  red: [HAMMER_LOCK, EYE_LOCK],
+  red: [HAMMER_LOCK, EYE_LOCK, GAP_LOCK],
   cyan: [TARGETS]
 };
 

@@ -284,7 +284,10 @@ export class Player {
       slopeTimer:    0,        // countdown for the remaining slope-roll window
       slopeActive:   false,    // true once a slope tile was detected during this roll
       slopeLocked:   false,    // true during mercy phase: roll velocity zeroed, slope takes over
-      daggerAutoFire: false
+      daggerAutoFire: false,
+      // Spear Pole Vault in flight: { fromX, fromY, toX, toY }, else null
+      // (PoleVault.js). Set at roll start, cleared on landing.
+      vault: null
     };
 
     // Post-dodge crit window — set when dodge ends if equipped weapon has critAfterDodge.
@@ -318,6 +321,9 @@ export class Player {
     this.actionCooldownMax = 0;
     this.rollCharge = 0;   // Green ranger: energy drained while rolling, restored during cooldown
     this.continuousRollActive = false; // Sustained slide while holding arrow keys
+    // True only while a Pole Vault carries the player over a Chasm
+    // (PoleVault.js) — the one time the player ignores solid objects.
+    this.ignoreBackgroundCollision = false;
     this.pendingBlink = null; // Yellow mage: deferred teleport resolved in main.js
     this.greenIdleDamageBonus = 0;
     this.greenCombatDamagePenalty = 0;
@@ -823,17 +829,8 @@ export class Player {
     this.backstabMultiplier = 1.0;
     this._lastDamageCause = null;
 
-    // Reset dodge roll state
-    this.dodgeRoll.active = false;
-    this.dodgeRoll.cooldownTimer = 0;
-    this.dodgeRoll.slopeTimer = 0;
-    this.dodgeRoll.slopeActive = false;
-    this.dodgeRoll.slopeLocked = false;
-
-    // Reset hide-roll hidden flag
-    this.hidden = false;
-    this.dodgeRoll.hideTimer = 0;
-    this.dodgeRoll.invisRecoveryTimer = 0;
+    // Reset dodge roll state — the roll in flight, its cooldown, the hide window
+    PlayerDodgeRollSystem.reset(this);
 
     // Reset inLiquid (set per-frame by main.js)
     this.inLiquid = false;

@@ -5,6 +5,7 @@
 // hidden, ...); this module is pure logic with no state of its own, operating
 // directly on the player it's passed.
 import { PHYSICS } from '../game/GameConfig.js';
+import { stepPoleVault, endPoleVault } from './PoleVault.js';
 
 const DAGGER_POST_DODGE_CRIT_WINDOW = 0.6;
 
@@ -124,6 +125,23 @@ export const PlayerDodgeRollSystem = {
     return true;
   },
 
+  // Clear every roll in flight or cooling down, and the hide window a Cyan
+  // roll leaves behind (Player.reset). A Pole Vault is dropped where it is,
+  // not landed — whoever resets the player also places them.
+  reset(player) {
+    const roll = player.dodgeRoll;
+    roll.active = false;
+    roll.vault = null;
+    roll.cooldownTimer = 0;
+    roll.slopeTimer = 0;
+    roll.slopeActive = false;
+    roll.slopeLocked = false;
+    roll.hideTimer = 0;
+    roll.invisRecoveryTimer = 0;
+    player.ignoreBackgroundCollision = false;
+    player.hidden = false;
+  },
+
   update(player, deltaTime) {
     // Cooldown tick
     if (player.dodgeRoll.cooldownTimer > 0) {
@@ -143,6 +161,10 @@ export const PlayerDodgeRollSystem = {
         player.hidden = false;
       }
     }
+
+    // A Pole Vault whose roll was ended from outside (a polymorph, a reset)
+    // still lands on its far cell — never left standing in the Chasm.
+    if (player.dodgeRoll.vault && !player.dodgeRoll.active) endPoleVault(player);
 
     // Active roll movement
     if (player.dodgeRoll.active) {
@@ -176,6 +198,7 @@ export const PlayerDodgeRollSystem = {
         player.velocity.vy = 0;
         player.acceleration.ax = 0;
         player.acceleration.ay = 0;
+        endPoleVault(player);
         // Applied on finishing, not starting, so the ram itself flies true;
         // only a roll chained while still dizzy veers (start(), above).
         if (player.dodgeRoll.dizzyAfter > 0) {
@@ -189,6 +212,9 @@ export const PlayerDodgeRollSystem = {
           player.postDodgeCritTimer = DAGGER_POST_DODGE_CRIT_WINDOW;
           player.dodgeRoll.daggerAutoFire = true;
         }
+      } else if (player.dodgeRoll.vault) {
+        // Pole Vault (PoleVault.js): placed along the jump, not driven.
+        stepPoleVault(player);
       } else if (player.dodgeRoll.type !== 'blink') {
         if (player.dodgeRoll.slopeLocked) {
           // Mercy phase: zero roll velocity so slope push / ice momentum drives

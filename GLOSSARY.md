@@ -1951,8 +1951,8 @@ identity, not standard programming terms.
   Gray has no family and raises nothing — gray is the Three Room's own signage.
 - **In code:** `BARRICADE_FAMILIES` keyed by family name, `FAMILY_BY_COLOR` mapping a `ZONE_COLORS`
   value onto one. A family that is empty raises nothing rather than borrowing another family's
-  question. Red's members so far: the Rubble Wall (`hammer_lock`) and the Watcher Eye
-  (`eye_lock`). Cyan's only member so far is the Barricade Target, which asks for a gun or a
+  question. Red's members: the Rubble Wall (`hammer_lock`), the Watcher Eye
+  (`eye_lock`) and the Chasm the Pole Vault crosses (`gap_lock`). Cyan's only member so far is the Barricade Target, which asks for a gun or a
   bow rather than a sacrifice.
 - **Not:** "barricade type", "gate category", "tier", "colour group".
 
@@ -1988,6 +1988,34 @@ identity, not standard programming terms.
   variant; raised by the `eye_lock` entry in `barricades.js`. CombatSystem's melee loop hands a
   blow to `strikeWatcherEye()`. Glyphs: `o` open, `-` shut, `*` struck.
 - **Not:** "eye switch", "sentinel", "watcher", "eyeball", "eye trigger".
+
+### Pole Vault
+- **Definition:** The spear's crossing move. Thrust a spear, then roll the same way while the
+  thrust is still out, and the roll carries the player over one cell of Chasm and lands on the far
+  side. The roll keeps its ordinary effects, such as i-frames, hide and cooldown; only its path
+  changes. If the cell past the Chasm is not open, the vault does not happen and the roll is an
+  ordinary one. It answers the red `gap_lock` Barricade, a Chasm in front of the exit letter. The
+  yellow mage's Blink crosses the same Chasm.
+- **In code:** `tryPoleVault()` (`src/systems/PoleVault.js`), called by CharacterSystem right
+  after a roll starts. It sets `player.dodgeRoll.vault` (`{fromX, fromY, toX, toY}`) and
+  `player.ignoreBackgroundCollision`. PlayerDodgeRollSystem eases the body along the jump
+  (`stepPoleVault`), and `endPoleVault` lands it. Only Chasm objects (`data.chasm`) count. A
+  dungeon Gap is a collision-map cell, so it cannot be vaulted.
+- **Not:** the Vault (the V Room's locked chamber) or the Dungeon's Vault floor; "pole jump",
+  "spear jump", "leap".
+
+### Vault
+- **Definition:** The locked chamber in a V Room. Each zone guards it its own way. In green, a
+  key rock beside it gives up the Vault Key. Gray asks for the Skull Key. In red, brute force
+  breaks its wall: the Red Warrior's roll, a boulder, a bomb, or the room's Push Rock. In cyan, a
+  switch is buried in the snow. Yellow has no lock, so only Blink gets in. Every Vault but
+  yellow's can also be bombed open.
+- **In code:** `room.vaultInfo` (built in `RoomGenerator`), with `unlockMethod` taken from
+  `VAULT_UNLOCK_BY_ZONE` (`roomFeatures.js`) and opened through InteractionSystem
+  (`unlockVault`, `tryBreakVaultWall`, `tryBombVaultWall`, `activateVaultSwitch`,
+  `openVaultByPush`).
+- **Not:** the Dungeon's Vault floor kind (the boss floor; see Floor Kind), which shares the name;
+  the Pole Vault.
 
 ### Barricade Target
 - **Definition:** The cyan Barricade plug: a block of bullseyes (`◎`), each broken by one bullet
@@ -2250,8 +2278,8 @@ identity, not standard programming terms.
 
 ### Hidden Descent
 - **Definition:** A Dungeon descent that isn't drawn until its Reveal fires — not a locked door,
-  just bare floor, until the floor is solved and it appears. It sits on a diagonal footprint (a
-  North corner, NW or NE) and is always a shortcut: every floor stays reachable through the
+  just bare floor, until the floor is solved and it appears. Most sit on a diagonal footprint (a
+  North corner, NW or NE); the `push` one is the exception (below). It is always a shortcut: every floor stays reachable through the
   descents that are drawn. Only a floor event (`clear`, `triggers`, or the gate rock's `push`)
   may open one, never a held item. The `push` one sits under a gate rock, on any free footprint,
   and leads where the Skull Key's door does.

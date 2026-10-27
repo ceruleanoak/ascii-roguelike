@@ -10,6 +10,7 @@ import { StatusEffectSystem } from './StatusEffectSystem.js';
 import { isInputCaptured } from '../game/inputCapture.js';
 import { aimFacingAtNearestEnemy, keenStrikeReach } from './KeenAim.js';
 import { stashEquipment, loadEquipment } from './characterLoadout.js';
+import { tryPoleVault } from './PoleVault.js';
 
 export class CharacterSystem {
   constructor(game) {
@@ -432,6 +433,8 @@ export class CharacterSystem {
               game.warpSystem.resolveBlinkTeleport(player.pendingBlink);
               player.pendingBlink = null;
             }
+            // A spear thrust still out turns a roll the same way into a Pole Vault.
+            tryPoleVault(game, player, player.dodgeRoll.direction);
           }
 
           // Show red X if dodge roll blocked by goo (with cooldown to prevent spam)
