@@ -18,6 +18,10 @@ import { ZONE_COLORS } from './zones.js';
  *   char   the plug's glyph, for a plain BackgroundObject
  *   typeId a BACKGROUND_OBJECT_VARIANTS key, for a variant-built plug
  *          (mutually exclusive with `char`)
+ *   rollables  optional placements, in the lane coordinates the triggers use
+ *          (see 'trigger' below), each a loose Cavern Rock the Onyx Hammer can
+ *          knock into a rolling rock — for a plug that only a rolling rock
+ *          breaks, the rock it is answered with
  *
  * shape 'trigger' — an unbreakable plug plus trigger fixtures scattered in the
  * room in front of it. The plug lifts when every fixture is active at once;
@@ -264,13 +268,31 @@ const TARGETS = {
   typeId: 'barricade_target'
 };
 
+// ── Red: mastery gates ──────────────────────────────────────────────────────
+// Combos. Each asks for a thing the run already owns used together with a
+// second thing — a weapon with a move, a key item with the room — in a way the
+// red zone's danger has had time to teach. None names its tool: the layout is
+// the question, the same as green's, only harder to read.
+
+// A heap of Rubble Wall with two loose rocks waiting in the lane in front of
+// it. Swings bounce off the rubble and so does a bomb; only a rolling rock
+// brings it down, and the Onyx Hammer is what sets one rolling. Stand behind a
+// rock, swing toward the rubble, and the rock does the rest. Two rocks so that
+// one knocked off at an angle is a lesson rather than a lockout.
+const HAMMER_LOCK = {
+  id: 'hammer_lock',
+  shape: 'material',
+  typeId: 'rubble_wall',
+  rollables: [
+    { depth: 5, across: 0 },
+    { depth: 7, across: 0 }
+  ]
+};
+
 export const BARRICADE_FAMILIES = {
   green: [ROCKS, PETRIFIED_TREES, WHIP_LOCK, BOOMERANG_LOCK, SPEAR_LOCK, GRASS_LOCK, PUSH_LOCK],
   yellow: [LAVA_MOAT, ICE_BLOCKS, ELECTRIC_POLES],
-  // Red — mastery gates, keyed to weapon-class upgrades. Deliberately empty:
-  // a red exit raises nothing until they are authored, rather than borrowing
-  // another family's question and calling it mastery.
-  red: [],
+  red: [HAMMER_LOCK],
   cyan: [TARGETS]
 };
 

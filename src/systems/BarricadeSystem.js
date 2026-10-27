@@ -119,8 +119,8 @@ export class BarricadeSystem {
     if (!this._isBarricadeable(exit)) return;
 
     // The exit letter's colour picks the family; the family picks the
-    // Barricade. A colour with no family (gray, blue) or an empty one (red)
-    // raises nothing at all — insistence included. What the world asks for is
+    // Barricade. A colour with no family (gray, blue) raises nothing at all —
+    // insistence included. What the world asks for is
     // the colour's question, and a colour with no question stays silent rather
     // than borrowing another one's.
     const descriptor = this._pickFromFamily(exit.color, room, direction);
@@ -167,7 +167,8 @@ export class BarricadeSystem {
   _fits(room, direction, descriptor) {
     const cells = [
       ...laneFootprint(direction, descriptor.deep, descriptor.spread),
-      ...[...(descriptor.triggers || []), ...(descriptor.decoys || []), ...(descriptor.poles || [])]
+      ...[...(descriptor.triggers || []), ...(descriptor.decoys || []), ...(descriptor.poles || []),
+          ...(descriptor.rollables || [])]
         .map(spec => laneCell(direction, spec.depth, spec.across))
     ];
     return cells.every(({ col, row }) => !this._isStructureCell(room, col, row));
@@ -217,6 +218,7 @@ export class BarricadeSystem {
     };
     if (descriptor.shape === 'trigger') this._placeTriggers(room, direction, descriptor);
     if (descriptor.shape === 'circuit') this._placePoles(room, direction, descriptor);
+    if (descriptor.rollables) this._placeRollables(room, direction, descriptor);
   }
 
   // The plug itself. A 'material' plug is ordinary breakable Background
@@ -283,6 +285,20 @@ export class BarricadeSystem {
       } else {
         this._buildCover(room, null, col, row);
       }
+    }
+  }
+
+  // The rocks a Rubble Wall plug is answered with, staged in the lane in front
+  // of it. Cavern Rocks like any other, except they are left non-structural:
+  // that is the one thing that lets the Onyx Hammer knock them loose
+  // (BoulderSystem.isHammerRollable). Raising runs after generation's stray
+  // sweep, so nothing comes along afterwards to clear them away.
+  _placeRollables(room, direction, descriptor) {
+    const cs = GRID.CELL_SIZE;
+    for (const spec of descriptor.rollables) {
+      const { col, row } = laneCell(direction, spec.depth, spec.across);
+      this._clearCell(room, col, row);
+      room.backgroundObjects.push(BackgroundObject.createVariant('cavern_rock', col * cs, row * cs));
     }
   }
 
@@ -508,6 +524,17 @@ export class BarricadeSystem {
     if (!barricade || barricade.cleared || barricade.direction !== direction) return false;
     const objs = room.backgroundObjects || [];
     return barricade.objects.some(plug => objs.includes(plug));
+  }
+
+  /**
+   * A rolling rock ran into a Rubble Wall (BoulderSystem._strikeFixtures). If
+   * the block is part of this room's plug, the whole plug comes down.
+   */
+  strikePlug(obj) {
+    const room = this.game?.currentRoom;
+    const barricade = room?.barricade;
+    if (!barricade || barricade.cleared || !barricade.objects.includes(obj)) return;
+    this._lift(room, barricade);
   }
 
   liftForGate(room) {

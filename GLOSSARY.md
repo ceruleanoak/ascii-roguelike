@@ -1946,12 +1946,12 @@ identity, not standard programming terms.
 - **Definition:** The set of Barricades one exit-letter colour can raise, and the kind of question
   they all ask. The colour a player already reads for "where does this go" doubles as "what will
   this ask me for": **craft gates** (green) want a tool used a particular way; **mastery gates**
-  (red) want a weapon class carried far enough; **sacrifice gates** (cyan) want meaningful progress
+  (red) want a combo — something the run owns used together with a move or with the room; **sacrifice gates** (cyan) want meaningful progress
   given away; **mage gates** (yellow) want the run's relationship to affinities and the elements.
   Gray has no family and raises nothing — gray is the Three Room's own signage.
 - **In code:** `BARRICADE_FAMILIES` keyed by family name, `FAMILY_BY_COLOR` mapping a `ZONE_COLORS`
-  value onto one. An empty family (red, for now) raises nothing rather than borrowing another
-  family's question. Cyan's only member so far is the Barricade Target, which asks for a gun or a
+  value onto one. A family that is empty raises nothing rather than borrowing another family's
+  question. Red's members so far: the Rubble Wall (`hammer_lock`). Cyan's only member so far is the Barricade Target, which asks for a gun or a
   bow rather than a sacrifice.
 - **Not:** "barricade type", "gate category", "tier", "colour group".
 
@@ -1963,6 +1963,17 @@ identity, not standard programming terms.
   ordinary Tree's `'Y'` char deliberately, because CombatSystem keys the axe requirement on the
   char; the variant keeps that gate while dropping the Tree's flammability and `slowing`.
 - **Not:** "gray tree", "stone tree", "dead tree", "fossil tree".
+
+### Rubble Wall
+- **Definition:** The red hammer Barricade's plug: a heap of fallen stone (`%`) that only a
+  rolling rock brings down, and it brings the whole plug down at once. Swings and bombs bounce off
+  it. Two loose Cavern Rocks wait in the lane in front of it for the Onyx Hammer to set rolling.
+- **In code:** the `rubble_wall` Background Object variant (`GameConfig.js`), raised by the
+  `hammer_lock` entry in `barricades.js`. Its `rockBreakable` flag is what
+  `BoulderSystem._strikeFixtures` looks for, and the hit goes to `BarricadeSystem.strikePlug`,
+  which lifts the plug. The staged rocks are the descriptor's `rollables`, placed by
+  `_placeRollables` and left non-structural so `isHammerRollable` accepts them. Not `bombable`.
+- **Not:** "rubble", "rock wall", "debris", "rock plug".
 
 ### Barricade Target
 - **Definition:** The cyan Barricade plug: a block of bullseyes (`◎`), each broken by one bullet
@@ -1997,7 +2008,7 @@ identity, not standard programming terms.
   where it is set down loose (not part of a structure) can the Onyx Hammer roll it.
 - **In code:** the `cavern_rock` Background Object variant (`GameConfig.js`, `indestructible`,
   `hammerRollable: true`); placed by `seedCavern()` (`structural`, so never rollable), as the
-  `push_lock` Barricade's decoys, the Hammer Trial's rocks and the rocks scattered on dungeon
+  `push_lock` Barricade's decoys, the `hammer_lock` Barricade's rollables, the Hammer Trial's rocks and the rocks scattered on dungeon
   Entrance and Corridor floors (`DungeonFloorGenerator._scatterUnbreakableRocks`).
 - **Not:** "boulder", "unbreakable rock" as a name, "stone".
 

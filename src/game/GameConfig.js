@@ -1388,6 +1388,31 @@ export const BACKGROUND_OBJECT_VARIANTS = {
       default: { animation: 'none', message: null }
     }
   },
+  // Rubble Wall — the red hammer gate's plug (barricades.js HAMMER_LOCK). A
+  // heap of fallen stone that gives to one thing: a rolling rock running into
+  // it (BoulderSystem._strikeFixtures → BarricadeSystem.strikePlug), which
+  // brings the whole plug down at once. Every swing bounces off it, and it is
+  // deliberately not `bombable` — a bomb is the yellow answer, and this gate
+  // asks for the Onyx Hammer and the rock staged in its lane.
+  //
+  // '%' rather than the rock glyph: the Barricade Wall's comment explains why a
+  // plug drawn as '0' is a lie the player acts on. Rubble reads as broken
+  // stone, the thing a rock smashes into, not as a rock to be swung at.
+  'rubble_wall': {
+    char: '%',
+    name: 'Rubble Wall',
+    color: '#8a6a5a',
+    bulletInteraction: 'block',
+    flammability: 'none',
+    conductivity: 'none',
+    indestructible: true,
+    rockBreakable: true,
+    hp: null,
+    solid: true,
+    interactions: {
+      default: { animation: 'bounce', message: null }
+    }
+  },
   // Electric Pole — an anchor, not an obstacle. Two flank a circuit Barricade's
   // plug, one of them already live; a tripline strung between them carries the
   // current across and the plug gives way.

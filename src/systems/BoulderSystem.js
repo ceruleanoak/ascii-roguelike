@@ -276,8 +276,9 @@ export class BoulderSystem {
       this._crushLightweight(r);
 
       // A rolling rock breaks anything a bomb breaks (Bombable Rocks and
-      // Walls, a bombable Vault wall) and strikes a Puzzle Room switch; either
-      // way the rock is spent on what it hit.
+      // Walls, a bombable Vault wall), strikes a Puzzle Room switch, and
+      // brings down a Rubble Wall, which nothing else breaks; any way, the
+      // rock is spent on what it hit.
       if (this._strikeFixtures(r)) {
         this.rocks.splice(i, 1);
         continue;
@@ -371,11 +372,13 @@ export class BoulderSystem {
     const game = this.game;
     if (game.cavernSystem?.bombBlast(r.x, r.y, BREAK_RADIUS)) return true;
     for (const obj of game._activeBackgroundObjects()) {
-      if (!obj.puzzleSignal || obj.destroyed) continue;
+      if (obj.destroyed || !(obj.puzzleSignal || obj.data?.rockBreakable)) continue;
       const dx = (obj.position.x + GRID.CELL_SIZE / 2) - r.x;
       const dy = (obj.position.y + GRID.CELL_SIZE / 2) - r.y;
       if (dx * dx + dy * dy >= HIT_RADIUS * HIT_RADIUS) continue;
-      obj.takeDamage(1);   // a puzzleSignal object pulses glitterHit, never breaks
+      // A Rubble Wall comes down whole — it is one Barricade's plug.
+      if (obj.data?.rockBreakable) game.barricadeSystem?.strikePlug(obj);
+      else obj.takeDamage(1);   // a puzzleSignal object pulses glitterHit, never breaks
       return true;
     }
     return false;
