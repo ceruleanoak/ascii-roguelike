@@ -22,7 +22,7 @@ import {
   getPuzzleTemplateGapCells, getPuzzleTemplateBombableCells, getPuzzleTemplateExitCell, getPuzzleTemplateTriggers,
   getPuzzleTemplateHookPosts, getPuzzleTemplateTorches, getPuzzleTemplatePedestal, getPuzzleTemplateDais,
   getPuzzleTemplateCellsWithGlyph, getPuzzleTemplateSpawners, getPuzzleTemplateLavaCells,
-  getPuzzleTemplateUnbreakableRocks, getPuzzleTemplateDeflectors,
+  getPuzzleTemplateUnbreakableRocks, getPuzzleTemplateDeflectors, isPuzzleTemplateProven,
 } from '../data/dungeonPuzzleTemplates.js';
 import { pickUnspawnedItem, markItemSpawned } from './spawnedItems.js';
 import { hasKeyItem } from './keyItems.js';
@@ -857,7 +857,12 @@ export class DungeonFloorGenerator {
     const exitRow = exitCell?.row ?? STAIRS_UP_ROW;
     const exitCol = exitCell?.col ?? STAIRS_COL;
     const stairsUpObj = new BackgroundObject('Ʌ', exitCol * CS, exitRow * CS);
-    paintStairsUpVisual(stairsUpObj, true);
+    // Runtime softlock net ([softlock], #401): a Puzzle Room seals the player
+    // in only when its template is proven solvable. One the Progression
+    // Solver rejects never joins the random pool, but a CheatMenu warp by name
+    // still reaches it — that copy leaves its way back open.
+    const sealed = isPuzzleTemplateProven(templateName);
+    paintStairsUpVisual(stairsUpObj, sealed);
     backgroundObjects.push(stairsUpObj);
 
     // Trigger fixtures — 'switch' is strike-based (puzzleSignal + glitterHit,
@@ -1025,7 +1030,7 @@ export class DungeonFloorGenerator {
       items, ingredients: [], npcs: [], doors: [], tombGhosts: [], spawnVents,
       viewport: this._makeViewport(cols, rows),
       exitRow: null, exitCol: null,
-      stairsUpRow: exitRow, stairsUpCol: exitCol, stairsUpObj, stairsUpLocked: true,
+      stairsUpRow: exitRow, stairsUpCol: exitCol, stairsUpObj, stairsUpLocked: sealed,
       ascendTo: { kind: 'numbered', floorIndex: originFloorIndex },
       descents: [],
       triggers, hookPosts, torches, weaponPedestal, gapCells, puzzleSolved: false,

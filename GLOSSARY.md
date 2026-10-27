@@ -2131,12 +2131,16 @@ identity, not standard programming terms.
   Bombable wall or Lock Block is optional. In a Puzzle Room the exit must be solvable with only
   what the room supplies, from every state the player can reach: a Push Rock shoved the wrong
   way, a hook taken too early or a Simple Key spent on the wrong Lock Block must not cut it off.
-- **In code:** `solveTemplate()` in `src/data/dungeon/progressionSolver.js` (pure, shared by the
-  game, the dungeon editor and the data gate). `dungeonFloorTemplates.js` /
-  `dungeonPuzzleTemplates.js` keep templates that fail it out of the random pools. A
-  Puzzle Room the solver can't model (the Hammer Trial's rolls) sets `solverExempt: true`
-  and is hand-checked instead.
-- **Not:** the editor's old advisory reachability check; a runtime check.
+- **In code:** `solveTemplate()` in `src/data/dungeon/progressionSolver.js` (pure).
+  `proveTemplate()` beside it supplies the Puzzle Room's tool kit and the `solverExempt`
+  skip, and is the one entry point for all three callers: `dungeonFloorTemplates.js` /
+  `dungeonPuzzleTemplates.js` keep templates that fail it out of the random pools,
+  `npm run check:data` fails the build on one (allowlisted debt carries a bug ref), and the
+  dungeon editor refuses to save one. A Puzzle Room the solver can't model (the Hammer
+  Trial's rolls) sets `solverExempt: true` and is hand-checked instead. The one runtime net:
+  `generatePuzzleRoom` seals the player in only behind a template in the proven pool
+  (`isPuzzleTemplateProven`), so a CheatMenu warp into a failing one leaves the way back open.
+- **Not:** the editor's old advisory reachability check; a per-frame runtime check.
 
 ## Conventions
 
