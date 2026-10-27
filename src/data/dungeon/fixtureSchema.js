@@ -11,6 +11,22 @@
 const TRIGGER_KINDS = ['switch', 'panel', 'torch', 'push'];
 const DEFLECTOR_CHARS = ['◢', '◣', '◤', '◥'];
 
+// Grid glyphs the player acts on (tiles.js): the Exit, Bombable Wall, Lock
+// Block, Simple Key, Shutter and Trigger Block. A run of one glyph (a row of
+// Bombable Wall) is one element; two different ones are two.
+const INTERACTIVE_TILES = ['X', 'B', 'L', 'K', 'S', 'T'];
+
+/**
+ * The spacing rule: two interactive elements never touch,
+ * diagonals included — at least one plain cell lies between any two, so each
+ * one reads, and is reached, on its own. True when `a` and `b` ({ row, col })
+ * are too close. The generator (DungeonFloorGenerator) holds what it places
+ * at runtime to the same rule.
+ */
+export function tooClose(a, b) {
+  return Math.max(Math.abs(a.row - b.row), Math.abs(a.col - b.col)) <= 1;
+}
+
 /**
  * Validate every optional fixture list on `data` against its grid. Every
  * fixture sits on plain floor ('.') inside the border, never on one of
@@ -47,7 +63,7 @@ export function validateTemplateFixtures(data, { rows, cols, reservedCells = [],
     return null;
   }
 
-  return eachOf('triggers', 'trigger', (t, label) => {
+  const listError = eachOf('triggers', 'trigger', (t, label) => {
     if (!TRIGGER_KINDS.includes(t.kind)) return `${label} kind must be "switch", "panel", "torch", or "push".`;
     if (t.activation !== 'permanent' && t.activation !== 'timed') {
       return `${label} activation must be "permanent" or "timed".`;
@@ -87,4 +103,35 @@ export function validateTemplateFixtures(data, { rows, cols, reservedCells = [],
       if (isItemChar && !isItemChar(it.char)) return `${label} char "${it.char}" isn't an item in items.js.`;
       return null;
     });
+  return listError ?? spacingError(data, reservedCells);
+}
+
+// Every interactive element the template holds, checked pairwise against
+// tooClose: its fixtures, pedestal, dais and Spawn Vents, its interactive
+// tiles, and the staircase footprints it must keep (`reservedCells`).
+function spacingError(data, reservedCells) {
+  const elements = [];
+  const add = (p, label, glyph = null) => elements.push({ row: p.row, col: p.col, label, glyph });
+  for (const [field, label] of [['triggers', 'trigger'], ['hookPosts', 'hook post'],
+    ['unbreakableRocks', 'Unbreakable Rock'], ['deflectors', 'Deflector'], ['torches', 'torch'],
+    ['items', 'item'], ['spawners', 'Spawn Vent']]) {
+    (data[field] ?? []).forEach(p => add(p, label));
+  }
+  if (data.pedestal) add(data.pedestal, 'pedestal');
+  if (data.dais) add(data.dais, 'dais');
+  reservedCells.forEach(p => add(p, 'staircase footprint'));
+  data.grid.forEach((line, row) => [...line].forEach((glyph, col) => {
+    if (INTERACTIVE_TILES.includes(glyph)) add({ row, col }, `"${glyph}" tile`, glyph);
+  }));
+  for (let i = 0; i < elements.length; i++) {
+    for (let j = i + 1; j < elements.length; j++) {
+      const a = elements[i], b = elements[j];
+      if (a.row === b.row && a.col === b.col) continue;   // same cell: placement() reports it
+      if (a.glyph && a.glyph === b.glyph) continue;        // one run of one tile
+      if (tooClose(a, b)) {
+        return `${a.label} (${a.row},${a.col}) touches ${b.label} (${b.row},${b.col}) — leave a plain cell between interactive elements.`;
+      }
+    }
+  }
+  return null;
 }
