@@ -3583,11 +3583,13 @@ export class RoomGenerator {
       // restored verbatim), and a neutral-room detour all find it intact. A
       // new room brings a new Dungeon. Read through
       // DungeonSystem.interiorState. Same shape as hut.interiorState, only a
-      // Dungeon holds a stack of Floors plus its Skull Key bookkeeping.
+      // Dungeon holds its visit's Dungeon Graph and Floors plus its Skull Key
+      // bookkeeping (DungeonSystem.rollVisit fills graph/keySkullNode).
       interiorState: {
-        floors: [],             // numbered spine [0..4] + side rooms by string key
-        keySkullFloor: -1,      // floor holding the Skull Key's bone pile; -1 = not rolled yet
-        keyUsed: false,         // Skull Key spent on the Key Vault descent
+        floors: {},             // generated floors, by Dungeon Graph node id
+        graph: null,            // this visit's Dungeon Graph; null = not rolled yet
+        keySkullNode: null,     // node whose floor holds the Skull Key's bone pile
+        keyUsed: false,         // Skull Key spent on its door
         templatesUsed: new Set(), // floor layouts already used in this Dungeon (no repeats)
       },
     };

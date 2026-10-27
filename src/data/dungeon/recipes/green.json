@@ -1,0 +1,7 @@
+{
+  "boss": "green",
+  "corridors": [1, 1],
+  "shapes": { "chain": 1 },
+  "branchPuzzle": "panels",
+  "sideRooms": { "trial": "corridor", "trapRoom": ["branch"] }
+}

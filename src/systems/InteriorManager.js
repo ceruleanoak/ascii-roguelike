@@ -109,7 +109,7 @@ export class InteriorManager {
     if (g.dungeonSystem?.ownsFloor(g.activeFloor)) g.dungeonSystem.stashActiveFloor();
     g.activeFloor = null;
     g.mazeInterior = null;
-    g.dungeonCurrentFloor = -1;
+    g.dungeonCurrentFloor = null;
     // A held Skull Key opens only the Dungeon that dropped it, so it lasts as
     // long as that Dungeon: kept while the room holding it is current, saved
     // for REST, or waiting behind a neutral detour; dropped from

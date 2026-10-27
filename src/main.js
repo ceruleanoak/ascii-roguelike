@@ -341,7 +341,7 @@ class Game {
     this.pendingZoneMusicResume = null; // Delayed zone-music resume after boss defeat { readyAt, zone }
     this.activeFloor = null;       // Active interior floor (hut or dungeon floor). Null on surface.
     this.mazeInterior = null;   // Active maze interior (MazeSystem)
-    this.dungeonCurrentFloor = -1; // -1 = not in dungeon
+    this.dungeonCurrentFloor = null; // Dungeon Graph node id of the live floor; null = not in a dungeon
     // The Dungeon's floors and Skull Key bookkeeping live on its D-room
     // (room.dungeon.interiorState, read through DungeonSystem.interiorState).
 

@@ -2790,7 +2790,7 @@ export const ITEMS = {
   // (claudedocs/legend-of-three.md), pyramid slot in the Floor-4 dungeon
   // puzzle. Two behavior surfaces, both built (2026-08-25):
   // - Dungeon (DungeonPuzzleSystem.updateCompassBeep): beeps only for the
-  //   skull key (whichever floor interiorState.keySkullFloor rolled) and
+  //   skull key (whichever floor interiorState.keySkullNode rolled) and
   //   Branch's companion-switch puzzle — not generic floor loot.
   // - Explore (CompassSystem.js + CompassIndicator.js widget): one-shot
   //   beep the moment a room's SecretEventSystem secret goes live

@@ -1,7 +1,10 @@
 import { GRID, PHYSICS } from '../game/GameConfig.js';
 import { freezeSurfaceRoom, thawSurfaceRoom, isInteriorActive } from './PlaneSystem.js';
 import { NORTH_ROW, STAIRS_COL } from '../data/dungeonFloorTemplates.js';
-import { PUZZLE_ROOM_TEMPLATES } from '../data/dungeonPuzzleTemplates.js';
+import { pickRandomPuzzleTemplateName, PUZZLE_ROOM_TEMPLATES } from '../data/dungeonPuzzleTemplates.js';
+import { getDungeonRecipe } from '../data/dungeonRecipes.js';
+import { buildDungeonGraph, validateGraph, edgeInto, reachableNodes, DESCENT_ID_FOR } from './dungeonGraphBuilder.js';
+import { FLOOR_KINDS } from './dungeonFloorKinds.js';
 import FOOTPRINT_CONTRACT from '../data/dungeon/footprintContract.json';
 import { landingCellFor } from '../data/dungeon/footprints.js';
 import { SpawnVentSystem } from './SpawnVentSystem.js';
@@ -18,30 +21,19 @@ import { SpawnVentSystem } from './SpawnVentSystem.js';
  *
  * Floor graph
  * ───────────
- * Floors are addressed either by numeric index (interiorState.floors[0..4],
- * the "spine" — Entrance → Corridor → Branch → Pyramid → Vault) or by string key
- * (interiorState.floors[templateName], a weighted-random Puzzle Room off
- * Corridor's North descent — the picked template's own name doubles as its
- * storage key, e.g. 'whip_trial'; see DungeonFloorGenerator._generateCorridor
- * and dungeonPuzzleTemplates.js. interiorState.floors.trapRoom, off Branch's
- * North descent, is the one remaining bespoke side room). Branch's East descent leads straight back
- * onto the spine, to the Pyramid (numbered floorIndex 3) — gated by Branch's
- * own in-room switch puzzle rather than a separate side room (bug #209:
- * the switches used to live in a side room off Branch, gated on companion
- * status; git-archaeology into the pre-rework implementation showed they
- * were always visible in the same room as the Trap Room door, so that side
- * room was folded back into Branch). Every floor/room object carries its
- * own `descents[]` (down-transitions) and `ascendTo` (up-transition target)
- * as `{ kind: 'numbered', floorIndex } | { kind: 'side', key }` destination
- * descriptors — see DungeonFloorGenerator's file header for the full shape.
- * This is what makes the Branch floor's 3-way fork representable without
- * special-casing floor-index arithmetic the way a strictly linear chain
- * would need.
+ * Each visit rolls a Dungeon Graph (GLOSSARY.md) from the zone's Dungeon
+ * Recipe — rollVisit(), on first entry. The graph names every floor as a
+ * node (a Floor Kind: entrance, corridor, branch, pyramid, vault, trapRoom,
+ * puzzleRoom) and every descent as an edge (footprint dir + Reveal).
+ * Green's graph is the chain this Dungeon has always had: Entrance →
+ * Corridor → Branch → Pyramid → Vault, with the Trial (a Puzzle Room) off
+ * the Corridor and the Trap Room off the Branch.
  *
- * The Pyramid's offering unlocks the North descent into the Vault (floor
- * index 4, the dungeon boss layer's terminal arena). There is still no
- * MAX_FLOOR_INDEX constant: the chain ends wherever a floor's own
- * descents[] ends.
+ * Floors are generated on demand and stored on interiorState.floors under
+ * their node id. Every floor carries its own `descents[]` (destination
+ * `{ node }`) and `ascendTo` (`{ node }` of the floor the player came down
+ * from, or null on the Entrance), so a floor with several ways in still
+ * climbs back to the one the player took.
  *
  * Floor data lives on the host D-room (`room.dungeon.interiorState`, read
  * through this.interiorState) and lasts as long as that room: exit and
@@ -51,6 +43,15 @@ import { SpawnVentSystem } from './SpawnVentSystem.js';
  */
 
 const INTERIOR_COLS = 24;
+
+// CheatMenu warp entries by Floor Kind (debugWarpItems). Floors without a
+// char take their position in the graph as a digit.
+const WARP_LOOK = {
+  vault:      { color: '#ffcc00' },
+  trapRoom:   { char: '!', color: '#ff8844', forceRegenerate: true },
+  puzzleRoom: { char: '?', color: '#cc66ff', forceRegenerate: true },
+  default:    { color: '#aaaaaa' },
+};
 
 // Proximity radius for door/staircase interaction (px from cell center)
 const DOOR_INTERACT_RADIUS = GRID.CELL_SIZE * 2;
@@ -91,7 +92,7 @@ export class DungeonSystem {
     const rooms = [game.currentRoom, game.inventorySystem?.savedExploreRoom, game.savedExploreState?.room];
     return rooms.some(room => {
       const state = room?.dungeon?.interiorState;
-      return !!state && state.keySkullFloor >= 0 && !state.keyUsed;
+      return !!state && state.keySkullNode != null && !state.keyUsed;
     });
   }
 
@@ -119,61 +120,46 @@ export class DungeonSystem {
     }
   }
 
-  // ─── Floor Generation (delegated) ─────────────────────────────────────────
-
-  ensureFloorGenerated(destination) {
-    const { game } = this;
-    const state = this.interiorState;
-    if (!state) return null;
-    const floors = state.floors;
-    const depth = game.getCurrentZoneDepth ? game.getCurrentZoneDepth() : 1;
-    game.currentRoom.dungeon.interiorGenerated = true;
-    if (destination.kind === 'numbered') {
-      if (!floors[destination.floorIndex]) {
-        floors[destination.floorIndex] = game.dungeonFloorGenerator.generateFloor(destination.floorIndex, depth);
-      }
-      return floors[destination.floorIndex];
-    }
-    // Side room — generated fresh only once per visit, keyed by string. A
-    // key matching a named entry in PUZZLE_ROOM_TEMPLATES is a Puzzle Room
-    // (checked first so adding a new template needs no change here — see
-    // dungeonPuzzleTemplates.js's file header); 'trapRoom' is the one
-    // remaining bespoke, non-template side room.
-    if (!floors[destination.key]) {
-      const gen = game.dungeonFloorGenerator;
-      if (PUZZLE_ROOM_TEMPLATES[destination.key]) {
-        floors[destination.key] = gen.generatePuzzleRoom(destination.key, depth, 1);
-      } else if (destination.key === 'trapRoom') {
-        floors.trapRoom = gen.generateTrapRoom(depth, 2);
-      }
-    }
-    return this.getFloorByDest(destination);
-  }
-
-  getFloorByDest(destination) {
-    const floors = this.interiorState?.floors;
-    if (!floors) return undefined;
-    return destination.kind === 'numbered'
-      ? floors[destination.floorIndex]
-      : floors[destination.key];
-  }
+  // ─── Visit roll ─────────────────────────────────────────────────────────
 
   /**
-   * { kind, key/floorIndex } identity for a floor/room object — the inverse
-   * of getFloorByDest. A Puzzle Room's storage key is its own template name
-   * (floor.templateName), not its shared roomKind ('puzzleRoom') — every
-   * puzzle-pool room carries the same roomKind, so roomKind alone can't
-   * distinguish e.g. 'whip_trial' from 'boomerang_trial'.
+   * Roll this visit's Dungeon Graph, once, on the first way in (the door or a
+   * debug warp): the zone's Dungeon Recipe lays out the floors, the Trial
+   * node gets its Puzzle Room template, and the Skull Key picks the floor its
+   * bone pile drops on — a floor that can hold it and is reachable before
+   * the door it opens. Re-entering the same D-room keeps the roll.
    */
-  _destinationOf(floor) {
-    if (floor.roomKind === 'numbered') return { kind: 'numbered', floorIndex: floor.floorIndex };
-    const key = floor.roomKind === 'puzzleRoom' ? floor.templateName : floor.roomKind;
-    return { kind: 'side', key };
+  rollVisit() {
+    const state = this.interiorState;
+    if (!state || state.graph) return;
+    const recipe = getDungeonRecipe(this.game.currentRoom?.zone || 'green');
+    const graph = buildDungeonGraph(recipe);
+    const errors = validateGraph(graph);
+    if (errors.length) console.warn(`[DungeonSystem] rolled an unsound Dungeon Graph: ${errors.join('; ')}`);
+
+    for (const node of Object.values(graph.nodes)) {
+      if (node.kind === 'puzzleRoom') node.template = pickRandomPuzzleTemplateName();
+    }
+
+    const beforeKey = reachableNodes(graph, ['key']);
+    const keyFloors = [...beforeKey].filter(id => FLOOR_KINDS[graph.nodes[id].kind].holdsSkullKey);
+    state.graph = graph;
+    state.keySkullNode = keyFloors[Math.floor(Math.random() * keyFloors.length)] ?? null;
   }
 
-  sameDestination(a, b) {
-    if (!a || !b || a.kind !== b.kind) return false;
-    return a.kind === 'numbered' ? a.floorIndex === b.floorIndex : a.key === b.key;
+  // ─── Floor Generation (delegated) ─────────────────────────────────────────
+
+  /** The floor for graph node `nodeId`, generated on first visit this Dungeon. */
+  ensureFloorGenerated(nodeId) {
+    const { game } = this;
+    const state = this.interiorState;
+    if (!state?.graph?.nodes[nodeId]) return null;
+    game.currentRoom.dungeon.interiorGenerated = true;
+    if (!state.floors[nodeId]) {
+      const depth = game.getCurrentZoneDepth ? game.getCurrentZoneDepth() : 1;
+      state.floors[nodeId] = game.dungeonFloorGenerator.generateNode(nodeId, depth);
+    }
+    return state.floors[nodeId];
   }
 
   // ─── Proximity Checks ────────────────────────────────────────────────────
@@ -237,16 +223,8 @@ export class DungeonSystem {
       y: game.player.position.y
     };
 
-    // One skull key per visit — rolled once, on first entry (not re-rolled
-    // on exit/re-entry within the same D-room visit). Must be findable
-    // before the lock it opens (Corridor's West descent into Branch), so
-    // it only rolls onto Entrance or Corridor, never past the gate itself.
-    const state = this.interiorState;
-    if (state.keySkullFloor < 0) {
-      state.keySkullFloor = Math.floor(Math.random() * 2); // floor 0 or 1
-    }
-
-    const entrance = this.ensureFloorGenerated({ kind: 'numbered', floorIndex: 0 });
+    this.rollVisit();
+    const entrance = this.ensureFloorGenerated('entrance');
 
     // Enter from exterior: spawn near the ∩ exit door.
     const spawn = { x: entrance.exitCol * GRID.CELL_SIZE, y: (entrance.exitRow - 2) * GRID.CELL_SIZE };
@@ -273,7 +251,7 @@ export class DungeonSystem {
    * "matching doors are always in the same room position" rule). Up-stairs
    * sit at the South footprint on floors entered by a North descent, and at
    * the West/East footprint on Branch/Pyramid, matching the descent that
-   * leads there.
+   * leads there (the graph node's upDir).
    *
    * Puzzle Rooms are the exception: their up-stairs is the template's locked
    * 'X' exit, placed wherever the author chose, so every puzzle template is
@@ -281,7 +259,7 @@ export class DungeonSystem {
    * arrival beside the North footprint.
    */
   _landingAnchorFor(floor) {
-    if (floor.roomKind === 'puzzleRoom') return { row: NORTH_ROW, col: STAIRS_COL };
+    if (floor.kind === 'puzzleRoom') return { row: NORTH_ROW, col: STAIRS_COL };
     return { row: floor.stairsUpRow, col: floor.stairsUpCol };
   }
 
@@ -319,7 +297,7 @@ export class DungeonSystem {
     game.trapSystem.resetTrapsForNewRoom();
 
     game.activeFloor = floor;
-    game.dungeonCurrentFloor = floor.roomKind === 'numbered' ? floor.floorIndex : -1;
+    game.dungeonCurrentFloor = floor.nodeId;
 
     game.player.setCollisionMap(floor.collisionMap);
     game.player.position.x = spawn.x;
@@ -395,11 +373,14 @@ export class DungeonSystem {
   _descend(descent) {
     const { game } = this;
     if (!descent.active || descent.locked) return;
-    const nextFloor = this.ensureFloorGenerated(descent.destination);
+    const nextFloor = this.ensureFloorGenerated(descent.destination.node);
     if (!nextFloor) return;
 
-    // Remember which staircase led here so _ascend() can reverse it exactly,
-    // and land beside the new floor's way back up (_landingAnchorFor).
+    // Remember which floor and staircase led here so _ascend() can reverse
+    // it exactly — a floor reached by more than one descent climbs back to
+    // the one the player took — and land beside the new floor's way back up
+    // (_landingAnchorFor).
+    nextFloor.ascendTo = { node: game.activeFloor.nodeId };
     nextFloor._enteredViaId = descent.id;
     const anchor = this._landingAnchorFor(nextFloor);
     const spawnCell = this._spawnOffsetFor(anchor.row, anchor.col);
@@ -430,21 +411,18 @@ export class DungeonSystem {
     // an unlocked exit did nothing (handleSpacePress still reports handled:
     // true and swallows the keypress, since it commits to calling _ascend()
     // before knowing whether it succeeds).
-    const prevFloor = this.ensureFloorGenerated(current.ascendTo);
+    const prevFloor = this.ensureFloorGenerated(current.ascendTo.node);
     if (!prevFloor) return;
 
     // Land on the exact descent used to enter `current` this visit (set by
     // _descend), not just the first descent that happens to point at the
     // same destination — a floor can have multiple descents to the same
-    // destination (e.g. Corridor's North + West both → Branch) that must
+    // destination (e.g. two descents into the Branch) that must
     // reverse independently. Falls back to a destination match, then to the
     // floor's up-stairs point, for the should-be-impossible case a floor was
     // activated without going through _descend().
     let origin = prevFloor.descents.find(d => d.id === current._enteredViaId);
-    if (!origin) {
-      const fromDest = this._destinationOf(current);
-      origin = prevFloor.descents.find(d => this.sameDestination(d.destination, fromDest));
-    }
+    if (!origin) origin = prevFloor.descents.find(d => d.destination.node === current.nodeId);
     const originRow = origin ? origin.row : prevFloor.stairsUpRow;
     const originCol = origin ? origin.col : prevFloor.stairsUpCol;
 
@@ -512,7 +490,7 @@ export class DungeonSystem {
 
     // The floors persist on the D-room (interiorState); only the live floor
     // is detached so exterior physics paths don't see stale interior state.
-    game.dungeonCurrentFloor = -1;
+    game.dungeonCurrentFloor = null;
     game.activeFloor = null;
 
     // Surface music resumes. Forced because currentMusicZone was never touched
@@ -526,64 +504,52 @@ export class DungeonSystem {
   // ─── Debug Warp (Cheat Menu) ────────────────────────────────────────────
 
   /**
-   * Cheat-menu-only: jump straight to any floor/side room in the dungeon
-   * tree from anywhere in the D room (exterior or already inside), bypassing
-   * the normal descent chain and any lock gating. `forceRegenerate` always
-   * builds a fresh floor and overwrites whatever was cached under
-   * `destination`'s key, instead of reusing ensureFloorGenerated's
-   * once-per-visit cache — the Puzzle Room and Trap Room entries use it so:
-   *   (a) picking a specific puzzle template is a genuine "brute force which
-   *       puzzle room generates" rather than replaying Corridor's one
-   *       weighted-random pick from first visit, and
+   * Cheat-menu-only: jump straight to any floor of this visit's Dungeon Graph
+   * from anywhere in the D room (exterior or already inside), bypassing the
+   * normal descent chain and any lock gating. `forceRegenerate` always builds
+   * a fresh floor and overwrites the cached one, instead of reusing
+   * ensureFloorGenerated's once-per-visit cache — the Puzzle Room and Trap
+   * Room entries use it so:
+   *   (a) picking a specific puzzle template (`template`, written onto the
+   *       Trial node) is a genuine "brute force which puzzle room generates"
+   *       rather than replaying the visit's one weighted-random pick, and
    *   (b) re-picking mid-visit resets that room's trigger/gap/solve state
    *       instead of reactivating a stale, already-solved instance.
-   * Numbered floors skip forceRegenerate — no reason to nuke Corridor/
-   * Branch's enemies/loot for a plain floor jump.
+   * Floors on the way to the Vault skip forceRegenerate — no reason to nuke
+   * a Corridor's enemies/loot for a plain floor jump.
    */
-  debugWarpTo(destination, { forceRegenerate = false } = {}) {
+  debugWarpTo(nodeId, { forceRegenerate = false, template = null } = {}) {
     const { game } = this;
     if (!game.currentRoom?.dungeon || !game.player) return false;
 
     // Mirror _enterDungeon()'s one-time setup when jumping in from outside
-    // the interior — same exit-position snapshot + skull-key roll a real
-    // door entry would produce, so ascend-to-exterior and the key hunt still
+    // the interior — same exit-position snapshot + visit roll a real door
+    // entry would produce, so ascend-to-exterior and the key hunt still
     // behave normally after a debug jump.
     if (!game.player.inDungeon) {
       game.player.dungeonExitPosition = { x: game.player.position.x, y: game.player.position.y };
-      const state = this.interiorState;
-      if (state.keySkullFloor < 0) {
-        state.keySkullFloor = Math.floor(Math.random() * 2);
-      }
     }
+    this.rollVisit();
+    const state = this.interiorState;
+    const node = state.graph.nodes[nodeId];
+    if (!node) return false;
 
-    const depth = game.getCurrentZoneDepth ? game.getCurrentZoneDepth() : 1;
-    let floor;
-    if (forceRegenerate && destination.kind === 'side') {
-      const gen = game.dungeonFloorGenerator;
-      if (PUZZLE_ROOM_TEMPLATES[destination.key]) {
-        floor = gen.generatePuzzleRoom(destination.key, depth, 1);
-      } else if (destination.key === 'trapRoom') {
-        floor = gen.generateTrapRoom(depth, 2);
-      }
-      if (!floor) return false;
-      this.interiorState.floors[destination.key] = floor;
-    } else {
-      floor = this.ensureFloorGenerated(destination);
-    }
+    if (template) node.template = template;
+    if (forceRegenerate) delete state.floors[nodeId];
+    const floor = this.ensureFloorGenerated(nodeId);
     if (!floor) return false;
 
     // Entrance is the one floor with no parent descent (reached from the
     // exterior door, not another floor) — land exactly where a real door
-    // entry does. Every other floor/side room in this tree has exactly one
-    // parent descent, so _debugEntryIdFor's fixed lookup + the existing
-    // landing-anchor/offset helpers reproduce a real playthrough's landing
-    // spot without needing a live descent object to mirror.
-    if (destination.kind === 'numbered' && destination.floorIndex === 0) {
+    // entry does. Every other floor lands as if it came down the first
+    // descent the graph leads into it by.
+    if (nodeId === 'entrance') {
       this._activateFloor(floor, { x: floor.exitCol * GRID.CELL_SIZE, y: (floor.exitRow - 2) * GRID.CELL_SIZE });
       return true;
     }
-    const id = this._debugEntryIdFor(destination);
-    floor._enteredViaId = id;
+    const entry = edgeInto(state.graph, nodeId);
+    floor.ascendTo = { node: entry.from };
+    floor._enteredViaId = DESCENT_ID_FOR[entry.dir];
     const anchor = this._landingAnchorFor(floor);
     const spawnCell = this._spawnOffsetFor(anchor.row, anchor.col);
     this._activateFloor(floor, { x: spawnCell.col * GRID.CELL_SIZE, y: spawnCell.row * GRID.CELL_SIZE });
@@ -591,15 +557,32 @@ export class DungeonSystem {
   }
 
   /**
-   * Which descent id canonically leads to `destination` — every floor/side
-   * room in the tree has exactly one parent, so this is a fixed lookup
-   * (see this file's header for the graph), not a live search over descents.
+   * CheatMenu dungeon warps: one entry per floor of this visit's Dungeon
+   * Graph (rolling the visit if the Dungeon hasn't been entered yet), plus
+   * one per named Puzzle Room template aimed at the Trial node. The Trap
+   * Room and the templates force-regenerate on each pick (see debugWarpTo).
+   * The Vault entry is a one-pick jump to the boss: landing there fires the
+   * encounter (_activateFloor → dungeonBossSystem.onFloorActivated).
    */
-  _debugEntryIdFor(destination) {
-    if (destination.kind === 'numbered') {
-      return { 1: 'north', 2: 'west', 3: 'east', 4: 'north' }[destination.floorIndex] ?? null;
-    }
-    return 'north'; // every side room (Puzzle Room pool + Trap Room) is reached via a north descent
+  debugWarpItems() {
+    this.rollVisit();
+    const graph = this.interiorState?.graph;
+    if (!graph) return [];
+    const nodeIds = Object.keys(graph.nodes);
+    const floorItems = nodeIds.map((nodeId, i) => {
+      const kind = graph.nodes[nodeId].kind;
+      const look = WARP_LOOK[kind] ?? WARP_LOOK.default;
+      return {
+        char: look.char ?? String(i % 10), name: nodeId.toUpperCase(), type: 'dungeon_warp',
+        nodeId, forceRegenerate: !!look.forceRegenerate, color: look.color,
+      };
+    });
+    const trial = nodeIds.find(id => graph.nodes[id].kind === 'puzzleRoom');
+    const templateItems = trial ? Object.keys(PUZZLE_ROOM_TEMPLATES).map(name => ({
+      char: '?', name: name.toUpperCase(), type: 'dungeon_warp',
+      nodeId: trial, template: name, forceRegenerate: true, color: '#cc66ff',
+    })) : [];
+    return [...floorItems, ...templateItems];
   }
 
   // ─── Update ───────────────────────────────────────────────────────────────

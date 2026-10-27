@@ -45,18 +45,34 @@ export class DungeonPuzzleSystem {
     this.updateCompassBeep(floor, dt);
     this._updateShutters(floor);
 
-    if (floor.roomKind === 'trapRoom') {
+    if (floor.kind === 'trapRoom') {
       this._updateTrapRoom(floor);
-    } else if (floor.roomKind === 'numbered' && floor.floorIndex === 2) {
+    } else if (floor.puzzle === 'panels') {
       this._updateBranchPanels(floor);
-    } else if (floor.roomKind === 'puzzleRoom') {
+    } else if (floor.kind === 'puzzleRoom') {
       this._updatePuzzleRoom(floor, dt);
     }
   }
 
+  /**
+   * A floor emits a Reveal (GLOSSARY.md): every locked descent on it whose
+   * Dungeon Graph edge names that Reveal opens. Returns the descents opened.
+   * Solving a puzzle never names which door it unlocks — the visit's graph
+   * decides that, so one puzzle can open a different door in another zone.
+   */
+  revealEdges(floor, reveal, { flash = true } = {}) {
+    const opened = floor.descents.filter(d => d.locked && d.reveal === reveal);
+    for (const d of opened) {
+      d.locked = false;
+      paintDescentVisual(d.obj, { active: d.active, locked: false });
+      if (flash) this._spawnUnlockEffect(d.obj);
+    }
+    return opened;
+  }
+
   // Compass (⌖) — dungeon-only beep, narrowed (2026-08-25) to exactly the
   // two dungeon secrets it's meant to flag: the skull key (wherever
-  // interiorState.keySkullFloor rolled it — Entrance or Corridor) and Branch's
+  // interiorState.keySkullNode rolled it — a floor before the key's door) and the Branch's
   // companion-panel puzzle. Generic floor loot (Pyramid slots, Puzzle Room
   // triggers, plain chests) no longer beeps. The full Explore-mode mechanic
   // (secret-reveal beep + directional arrow) lives in CompassSystem.js.
@@ -69,11 +85,10 @@ export class DungeonPuzzleSystem {
     // "not yet found" apart from "already spent" (both read false once the
     // key is consumed), so interiorState.keyUsed disambiguates.
     const state = game.dungeonSystem.interiorState;
-    const skullPending = floor.floorIndex === state?.keySkullFloor
+    const skullPending = floor.nodeId === state?.keySkullNode
       && !state.keyUsed
       && !hasKeyItem(game.inventorySystem, '⚿', game);
-    const branchPending = floor.roomKind === 'numbered' && floor.floorIndex === 2
-      && !floor.puzzleSolved;
+    const branchPending = floor.puzzle === 'panels' && !floor.puzzleSolved;
 
     if (!skullPending && !branchPending) { this._compassBeepTimer = 0; return; }
 
@@ -103,8 +118,8 @@ export class DungeonPuzzleSystem {
   // existence from a solo player; git-archaeology into the pre-rework
   // 5-floor system showed Floor 2's panels were always rendered in the
   // room regardless of companion status — only solving them needed one).
-  // Solving unlocks Branch's East descent (to the Pyramid) instead of a
-  // floor-level stairsLocked flag.
+  // Solving emits the 'panels' Reveal, which opens the Branch's descent to
+  // the Pyramid, instead of a floor-level stairsLocked flag.
   _updateBranchPanels(floor) {
     const { game } = this;
     const player = game.player;
@@ -131,12 +146,7 @@ export class DungeonPuzzleSystem {
     // First simultaneous press → permanent unlock
     if (!floor.puzzleSolved && aPressed && bPressed) {
       floor.puzzleSolved = true;
-      const onward = floor.descents.find(d => d.id === 'east');
-      if (onward) {
-        onward.locked = false;
-        paintDescentVisual(onward.obj, { active: onward.active, locked: false });
-        this._spawnUnlockEffect(onward.obj);
-      }
+      this.revealEdges(floor, 'panels');
       if (companion) companion.commandTarget = null;
       return;
     }
@@ -281,10 +291,8 @@ export class DungeonPuzzleSystem {
     if (!floor) return false;
 
     if (this._tryOpenLockBlock(floor)) return true;
-    if (floor.roomKind === 'numbered' && floor.floorIndex === 1) {
-      if (this._tryUnlockCorridorGate(floor)) return true;
-    }
-    if (floor.roomKind === 'numbered' && floor.floorIndex === 3) {
+    if (this._tryUnlockKeyGate(floor)) return true;
+    if (floor.kind === 'pyramid') {
       if (this._tryDepositPyramid(floor)) return true;
     }
     return false;
@@ -342,22 +350,21 @@ export class DungeonPuzzleSystem {
     game.audioSystem?.playSFX?.('dungeon_key_use');
   }
 
-  // Corridor floor's West descent — SPACE while locked, key in hand,
-  // standing on the footprint: consumes the key and unlocks the path down
-  // to Branch. A subsequent SPACE (now unlocked) is a normal descend,
-  // handled by DungeonSystem.
-  _tryUnlockCorridorGate(floor) {
+  // The Skull Key's door — a locked descent whose Reveal is 'key' (in
+  // Green's layout, the Corridor's West descent into the Branch). SPACE while
+  // standing on it, key in hand: consumes the key and emits the 'key'
+  // Reveal. A subsequent SPACE (now unlocked) is a normal descend, handled by
+  // DungeonSystem.
+  _tryUnlockKeyGate(floor) {
     const { game } = this;
-    const west = floor.descents.find(d => d.id === 'west');
-    if (!west || !west.locked) return false;
+    const gate = floor.descents.find(d => d.locked && d.reveal === 'key');
+    if (!gate) return false;
     if (!hasKeyItem(game.inventorySystem, '⚿', game)) return false;
-    if (!overlapsCell(game.player, west.obj.position.x, west.obj.position.y)) return false;
+    if (!overlapsCell(game.player, gate.obj.position.x, gate.obj.position.y)) return false;
 
     consumeKeyItem(game.inventorySystem, '⚿');
     game.dungeonSystem.interiorState.keyUsed = true;
-    west.locked = false;
-    paintDescentVisual(west.obj, { active: west.active, locked: false });
-    this._spawnUnlockEffect(west.obj);
+    this.revealEdges(floor, 'key');
     game.audioSystem?.playSFX?.('dungeon_key_use');
     return true;
   }
@@ -426,14 +433,10 @@ export class DungeonPuzzleSystem {
     if (!allFilled) return;
 
     floor.puzzleSolved = true;
-    // The offering's real payoff: the Vault descent unlocks (the Artifact ⚜
-    // drops alongside it — the trophy the player carries out either way).
-    const onward = floor.descents.find(d => d.id === 'north');
-    if (onward) {
-      onward.locked = false;
-      paintDescentVisual(onward.obj, { active: onward.active, locked: false });
-      this._spawnUnlockEffect(onward.obj);
-    }
+    // The offering's real payoff: it emits the 'offering' Reveal, opening
+    // the Vault descent (the Artifact ⚜ drops alongside it — the trophy the
+    // player carries out either way).
+    this.revealEdges(floor, 'offering');
     const reward = Object.assign(
       new Ingredient('⚜', 12 * GRID.CELL_SIZE, 18 * GRID.CELL_SIZE),
       { hutPlane: true }

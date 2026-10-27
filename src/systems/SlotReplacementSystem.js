@@ -56,7 +56,7 @@ export class SlotReplacementSystem {
 
   /**
    * Whether STORE IN CHEST (and by extension DISMANTLE) may be offered at all.
-   * The dungeon's Puzzle Room (floor.roomKind === 'puzzleRoom' — see
+   * The dungeon's Puzzle Room (floor.kind === 'puzzleRoom' — see
    * DungeonPuzzleSystem._updatePuzzleRoom) hides both: a picked-up item there
    * (e.g. the Torch a torch trigger needs) must be slotted, not stashed or
    * broken down, so the player can't dodge the puzzle by discarding what they
@@ -65,7 +65,7 @@ export class SlotReplacementSystem {
    * destination at all, and STORE has to stay the only way to resolve the prompt.
    */
   get storeAvailable() {
-    if (this.game.activeFloor?.roomKind !== 'puzzleRoom') return true;
+    if (this.game.activeFloor?.kind !== 'puzzleRoom') return true;
     if (this.slotType === 'consumable') {
       const blocked = this._blockedConsumableSlots();
       const equipped = this.game.inventorySystem.equippedConsumables;

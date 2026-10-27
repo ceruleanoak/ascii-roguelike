@@ -4,7 +4,6 @@ import { ENEMIES, ZONE_SPAWN_TABLES } from '../data/enemies.js';
 import { GRID, GAME_STATES } from '../game/GameConfig.js';
 import { CHARACTER_TYPES } from '../data/characters.js';
 import { sessionDeaths, downloadSessionLedger } from './DeathLedgerSystem.js';
-import { PUZZLE_ROOM_TEMPLATES } from '../data/dungeonPuzzleTemplates.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { Enemy } from '../entities/Enemy.js';
 
@@ -90,27 +89,10 @@ export class CheatMenu {
     ];
 
     // DUNGEON WARP — only offered while standing in a D room (exterior or
-    // already inside the interior), since a numeric floorIndex/template key
-    // is meaningless anywhere else. Numbered floors are a plain direct jump
-    // (ensureFloorGenerated's normal cache); Trap Room and every named
-    // Puzzle Room template force-regenerate on each pick — see
-    // DungeonSystem.debugWarpTo for why (this is the puzzle-room test tool).
-    const dungeonWarpItems = this.game?.currentRoom?.dungeon ? [
-      { char: '0', name: 'ENTRANCE', type: 'dungeon_warp', destination: { kind: 'numbered', floorIndex: 0 }, color: '#aaaaaa' },
-      { char: '1', name: 'CORRIDOR', type: 'dungeon_warp', destination: { kind: 'numbered', floorIndex: 1 }, color: '#aaaaaa' },
-      { char: '2', name: 'BRANCH', type: 'dungeon_warp', destination: { kind: 'numbered', floorIndex: 2 }, color: '#aaaaaa' },
-      { char: '3', name: 'PYRAMID', type: 'dungeon_warp', destination: { kind: 'numbered', floorIndex: 3 }, color: '#aaaaaa' },
-      // Vault = the dungeon boss floor. Landing on it fires the encounter for
-      // free: _activateFloor calls dungeonBossSystem.onFloorActivated, which
-      // keys off floor.isVault — so this is a one-pick jump to the boss
-      // without walking the Legend of Three offering first.
-      { char: '4', name: 'VAULT (BOSS)', type: 'dungeon_warp', destination: { kind: 'numbered', floorIndex: 4 }, color: '#ffcc00' },
-      { char: '!', name: 'TRAP ROOM', type: 'dungeon_warp', destination: { kind: 'side', key: 'trapRoom' }, forceRegenerate: true, color: '#ff8844' },
-      ...Object.keys(PUZZLE_ROOM_TEMPLATES).map(name => ({
-        char: '?', name: name.toUpperCase(), type: 'dungeon_warp',
-        destination: { kind: 'side', key: name }, forceRegenerate: true, color: '#cc66ff'
-      }))
-    ] : [];
+    // already inside the interior): one entry per floor of this visit's
+    // Dungeon Graph, plus one per named Puzzle Room template aimed at the
+    // Trial node. See DungeonSystem.debugWarpItems.
+    const dungeonWarpItems = this.game?.currentRoom?.dungeon ? this.game.dungeonSystem.debugWarpItems() : [];
 
     const characterItems = Object.entries(CHARACTER_TYPES).map(([type, data]) => {
       const isActive = this.game && this.game.activeCharacterType === type;
@@ -382,7 +364,7 @@ export class CheatMenu {
         game.boulderSystem?.triggerBoulderRain(1);
         break;
       case 'dungeon_warp':
-        game.dungeonSystem.debugWarpTo(result.destination, { forceRegenerate: result.forceRegenerate });
+        game.dungeonSystem.debugWarpTo(result.nodeId, { forceRegenerate: result.forceRegenerate, template: result.template });
         break;
       case 'teleport_zone':
         game.cheatWarpSystem.handleZoneTeleport(game, result.zone);

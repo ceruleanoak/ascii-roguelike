@@ -2142,6 +2142,47 @@ identity, not standard programming terms.
   (`isPuzzleTemplateProven`), so a CheatMenu warp into a failing one leaves the way back open.
 - **Not:** the editor's old advisory reachability check; a per-frame runtime check.
 
+### Dungeon Recipe
+- **Definition:** A zone's rules for laying out its Dungeon: how many corridors stand between
+  the Entrance and the Branch and how they connect, which floor each side room (the Trial, the
+  Trap Room) hangs off, which puzzle on the Branch opens the way to the Pyramid (the zone's
+  sub-solve), and which Dungeon Boss waits in the Vault. Every zone's Dungeon is built from the
+  same Floor Kinds; the Recipe is what makes each zone's flow chart its own.
+- **In code:** one JSON file per zone in `src/data/dungeon/recipes/<zone>.json`, loaded and
+  shape-checked by `src/data/dungeonRecipes.js` (`getDungeonRecipe(zone)`, falling back to
+  Green's). Fields: `boss`, `corridors: [min, max]`, `shapes`, `branchPuzzle`, `sideRooms`.
+- **Not:** a Dungeon Graph (the concrete layout one visit rolls from it); a crafting recipe.
+
+### Dungeon Graph
+- **Definition:** The concrete layout of one visit to a Dungeon, rolled from the zone's Dungeon
+  Recipe when the player first goes in and kept for as long as the D-room lasts. Each floor is a
+  node with a Floor Kind; each descent is an edge naming the footprint it sits on (N/W/E) and
+  the Reveal that opens it.
+- **In code:** `buildDungeonGraph(recipe, rng)` / `validateGraph()` in
+  `src/systems/dungeonGraphBuilder.js` (pure); `DungeonSystem.rollVisit()` stores it as
+  `room.dungeon.interiorState.graph` along with the Skull Key's floor (`keySkullNode`). Floors
+  live on `interiorState.floors` under their node id, descents point at `{ node }`, and
+  `game.dungeonCurrentFloor` is the live floor's node id.
+- **Not:** a Dungeon Recipe (the rules it was rolled from); the old numbered floor stack
+  (`floorIndex` 0-4), which it replaced.
+
+### Floor Kind
+- **Definition:** A reusable type of Dungeon floor: Entrance, Corridor, Branch, Pyramid, Vault,
+  Trap Room or Puzzle Room. The kinds are one vocabulary shared by every zone. A kind builds
+  its floor's content; the Dungeon Graph decides where its descents lead.
+- **In code:** `FLOOR_KINDS` in `src/systems/dungeonFloorKinds.js` (each kind's
+  `DungeonFloorGenerator` method, and `holdsSkullKey`); `floor.kind` on every generated floor.
+- **Not:** a floor template (a wall layout a kind may stamp); a Zone.
+
+### Reveal
+- **Definition:** What opens a Dungeon descent. `open` needs nothing; `key` spends the Skull
+  Key; `panels` is Green's floor-panel NPC puzzle on the Branch; `offering` is the Pyramid's
+  Legend of Three. A floor *emits* a Reveal when its puzzle is solved, and every locked descent
+  on that floor naming it opens. The puzzle never names which door it opens.
+- **In code:** `edge.reveal` on the Dungeon Graph, copied to `descent.reveal`;
+  `DungeonPuzzleSystem.revealEdges(floor, reveal)` opens the matching descents.
+- **Not:** a Lock Block (a template tile opened by a Simple Key); a Shutter.
+
 ## Conventions
 
 - **Casing:** types/classes PascalCase; functions/variables camelCase; constants

@@ -36,3 +36,19 @@ export function landingCellFor(row, col, contract) {
   if (col >= cols - 5) return { row, col: col - 1 };   // East side → step west
   return { row: row + 1, col };
 }
+
+/**
+ * The footprint cell for a compass direction on a dungeon floor: N/W/E are
+ * the three descent footprints, S the up-stairs. A Dungeon Graph edge's `dir`
+ * names the footprint its descent sits on.
+ */
+export function footprintCellFor(dir, contract) {
+  const { STAIRS_COL, STAIRS_UP_ROW, NORTH_ROW, SPINE_ROW, WEST_COL, EAST_COL } = contract;
+  switch (dir) {
+    case 'N': return { row: NORTH_ROW,     col: STAIRS_COL };
+    case 'S': return { row: STAIRS_UP_ROW, col: STAIRS_COL };
+    case 'W': return { row: SPINE_ROW,     col: WEST_COL };
+    case 'E': return { row: SPINE_ROW,     col: EAST_COL };
+    default:  return null;
+  }
+}

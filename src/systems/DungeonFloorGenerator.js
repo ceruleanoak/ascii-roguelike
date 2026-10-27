@@ -12,13 +12,13 @@ import {
   pickRandomTemplateName, applyTemplateToCollisionMap, getTemplateWaterCells, getTemplateBombableCells,
   getTemplateCellsWithGlyph, getTemplateSpawners,
   getTemplateSpawnCells, getReservedFootprintCells, paintDescentVisual, paintStairsUpVisual,
-  STAIRS_COL, STAIRS_UP_ROW, NORTH_ROW, SPINE_ROW, WEST_COL, EAST_COL, EXIT_ROW,
+  STAIRS_COL, STAIRS_UP_ROW, EXIT_ROW,
 } from '../data/dungeonFloorTemplates.js';
 import { getLegendOfThree } from '../data/legendOfThree.js';
 import { SLOT_CHROME } from '../data/slotChrome.js';
 import { pickWeaponTutorial } from '../data/dungeon/weaponTutorials.js';
 import {
-  pickRandomPuzzleTemplateName, applyPuzzleTemplateToCollisionMap, getPuzzleTemplateWaterCells,
+  applyPuzzleTemplateToCollisionMap, getPuzzleTemplateWaterCells,
   getPuzzleTemplateGapCells, getPuzzleTemplateBombableCells, getPuzzleTemplateExitCell, getPuzzleTemplateTriggers,
   getPuzzleTemplateHookPosts, getPuzzleTemplateTorches, getPuzzleTemplatePedestal, getPuzzleTemplateDais,
   getPuzzleTemplateCellsWithGlyph, getPuzzleTemplateSpawners, getPuzzleTemplateLavaCells,
@@ -26,51 +26,33 @@ import {
 } from '../data/dungeonPuzzleTemplates.js';
 import { pickUnspawnedItem, markItemSpawned } from './spawnedItems.js';
 import { hasKeyItem } from './keyItems.js';
+import FOOTPRINT_CONTRACT from '../data/dungeon/footprintContract.json';
+import { footprintCellFor } from '../data/dungeon/footprints.js';
+import { FLOOR_KINDS } from './dungeonFloorKinds.js';
+import { edgesFrom, edgeInto, DESCENT_ID_FOR } from './dungeonGraphBuilder.js';
 
 /**
  * DungeonFloorGenerator — content for every dungeon floor and side room
  * (6-floor rework, plan Phase 0). DungeonSystem owns lifecycle (enter/exit/
  * ascend/descend, input dispatch); this file owns what gets built.
  *
- * Floor map (see plan):
- *   index0 Entrance  — 1 active descent (North → index1)
- *   index1 Corridor  — North → a weighted-random Puzzle Room (unlocked;
- *                       template picked once per dungeon visit from every
- *                       named entry in dungeonPuzzleTemplates.js —
- *                       pickRandomPuzzleTemplateName, see _generateCorridor),
- *                       West → index2 (locked until the skull key is spent)
- *                       — a quick low-tier grab vs. a real key-gated choice
- *                       to delve deeper, rather than two identical doors.
- *   index2 Branch    — North → Trap Room (enemy gauntlet, always open, tier-2
- *                       reward on clear), West retired (inactive, no
- *                       destination — reaching Branch at all is the payoff
- *                       for spending the key), East → index3, locked until
- *                       the companion-switch puzzle is solved. The two
- *                       switches sit directly on Branch's own floor (bare
- *                       layout, no wall template — see _generateBranch), not
- *                       behind a separate door: bug #209 found that an
- *                       earlier version of this rework had relocated them
- *                       into their own side room gated invisible until a
- *                       companion was already recruited, which hid the
- *                       puzzle's existence entirely and diverged from the
- *                       original 5-floor implementation, where the switches
- *                       were always visible in the open regardless of
- *                       companion status. Restored to match.
- *   index3 Pyramid   — Legend of Three, reached directly from Branch's East
- *                       descent once the switch puzzle is solved. Its North
- *                       descent (locked until the offering completes) leads
- *                       to the Vault.
- *   index4 Vault     — terminal arena beyond the Pyramid (dungeon boss
- *                       layer; content owned by DungeonBossSystem — see
- *                       _generateVault and claudedocs/dungeon-boss-green.md).
+ * Which floors exist and where each descent leads is no longer this file's
+ * call: the visit's Dungeon Graph (interiorState.graph, rolled by
+ * DungeonSystem.rollVisit from the zone's Dungeon Recipe) names every floor
+ * as a node with a Floor Kind, and every descent as an edge with a footprint
+ * direction and a Reveal. generateNode() looks the node's kind up in
+ * FLOOR_KINDS and hands the generator a ctx:
  *
- * Side rooms (Puzzle Room / Trap Room) are stored on interiorState.floors by
- * string key, not numeric index — InteriorManager.reset() clears them for
- * free by replacing the whole array reference. A Puzzle Room's key is its
- * own template name (e.g. 'whip_trial') — the picked template's identity
- * doubles as its storage slot, same "key = content identity" convention
- * 'trapRoom' already used, now extended to data-driven rooms too (see
- * DungeonSystem.ensureFloorGenerated).
+ *   { nodeId, node, depth, zone, edges (descents leaving it), upFrom }
+ *
+ * Each kind builds its own content (Entrance's ∩ door, Branch's panels, the
+ * Pyramid's Legend of Three Slots, the Vault's bare boss arena, the Trap
+ * Room's gauntlet, a Puzzle Room's template) and lays its descents from
+ * ctx.edges through _makeGraphDescents. A descent starts locked unless its
+ * Reveal is 'open'; DungeonPuzzleSystem.revealEdges opens it when the floor
+ * emits that Reveal (the panels, the offering, a spent Skull Key).
+ *
+ * Every floor is stored on interiorState.floors under its node id.
  */
 
 const INTERIOR_COLS = 24;
@@ -430,10 +412,42 @@ export class DungeonFloorGenerator {
     return { id, row, col, obj, active, locked, destination };
   }
 
+  /**
+   * One descent per Dungeon Graph edge leaving this floor, each on the
+   * footprint its edge's dir names. Locked until its Reveal fires, unless the
+   * Reveal is 'open'. Pushes each descent's tile into backgroundObjects.
+   */
+  _makeGraphDescents(ctx, backgroundObjects) {
+    return ctx.edges.map(edge => {
+      const { row, col } = footprintCellFor(edge.dir, FOOTPRINT_CONTRACT);
+      const descent = this._makeDescent(DESCENT_ID_FOR[edge.dir], row, col, {
+        active: true, locked: edge.reveal !== 'open', destination: { node: edge.to },
+      });
+      descent.reveal = edge.reveal;
+      backgroundObjects.push(descent.obj);
+      return descent;
+    });
+  }
+
+  /**
+   * The floor's up-stairs, on the footprint the graph gives its node (the
+   * South footprint, or the West/East one matching the descent that led
+   * here — the "matching doors" rule).
+   */
+  _makeGraphStairsUp(ctx, locked) {
+    const { row, col } = footprintCellFor(ctx.node.upDir, FOOTPRINT_CONTRACT);
+    return { row, col, obj: this._makeStairsUp(locked, row, col) };
+  }
+
+  /** The way back up from a floor: the node the graph first reaches it from. */
+  _ascendToFor(ctx) {
+    return ctx.upFrom ? { node: ctx.upFrom } : null;
+  }
+
   // One key-carrying bone pile ('8', the existing Bones background object —
   // NOT a bespoke glyph; 'Ω' was already claimed by the hut Cauldron, see
   // resolved-bugs.md) per dungeon visit — floor chosen at entry
-  // (interiorState.keySkullFloor, see DungeonSystem._enterDungeon). Only
+  // (interiorState.keySkullNode, see DungeonSystem.rollVisit). Only
   // placed while the key hasn't already been obtained or spent this run. It
   // renders identically to ordinary Bones decor — dropsDungeonKey (set on
   // the instance, mirrors obj.dropsKey's K-room pattern) is what makes THIS
@@ -441,11 +455,11 @@ export class DungeonFloorGenerator {
   // room's vault key. keyChar is the real Item it spawns on destruction
   // (InteractionSystem.handleObjectEffect) — '⚿', distinct from the '8'
   // decor char so the held item itself reads as a key, not a bone.
-  _placeSkullIfDue(floorIndex, { backgroundObjects, pickOpenCell, rows, cols }) {
+  _placeSkullIfDue(nodeId, { backgroundObjects, pickOpenCell, rows, cols }) {
     const game = this.game;
     const state = game.dungeonSystem.interiorState;
     if (hasKeyItem(game.inventorySystem, '⚿') || state.keyUsed) return;
-    if (state.keySkullFloor !== floorIndex) return;
+    if (state.keySkullNode !== nodeId) return;
     const cell = pickOpenCell(6, rows - 5, 3, cols - 4);
     if (!cell) return;
     const skull = new BackgroundObject('8', cell.col * GRID.CELL_SIZE, cell.row * GRID.CELL_SIZE);
@@ -454,97 +468,85 @@ export class DungeonFloorGenerator {
     backgroundObjects.push(skull);
   }
 
-  // ── Numbered floors (0-4) ──────────────────────────────────────────────
+  // ── Floors by node ─────────────────────────────────────────────────────
 
-  generateFloor(floorIndex, depth) {
-    const zone = this.game.currentRoom?.zone || 'gray';
-    switch (floorIndex) {
-      case 0: return this._generateEntrance(depth, zone);
-      case 1: return this._generateCorridor(depth, zone);
-      case 2: return this._generateBranch(depth, zone);
-      case 3: return this._generatePyramid(depth, zone);
-      case 4: return this._generateVault(depth, zone);
-      default: return null;
-    }
+  /**
+   * Build the floor for one node of the visit's Dungeon Graph. Every floor
+   * comes back stamped with its Floor Kind and node id — the identity the
+   * rest of the Dungeon dispatches on.
+   */
+  generateNode(nodeId, depth) {
+    const graph = this.game.dungeonSystem.interiorState.graph;
+    const node = graph?.nodes[nodeId];
+    if (!node) return null;
+    const ctx = {
+      nodeId, node, depth,
+      zone: this.game.currentRoom?.zone || 'gray',
+      edges: edgesFrom(graph, nodeId),
+      upFrom: edgeInto(graph, nodeId)?.from ?? null,
+    };
+    const floor = FLOOR_KINDS[node.kind].generate(this, ctx);
+    return Object.assign(floor, { kind: node.kind, nodeId });
   }
 
-  _generateEntrance(depth, zone) {
+  _generateEntrance(ctx) {
+    const { depth, zone } = ctx;
     const { cols, rows, collisionMap, backgroundObjects, templateItems, pickOpenCell, spawnCells, spawnVents } = this._buildScaffold({ depth, zone });
     this._addDecor(backgroundObjects, pickOpenCell, rows, cols);
     this._addTombs(backgroundObjects, pickOpenCell, rows, cols);
-    this._placeSkullIfDue(0, { backgroundObjects, pickOpenCell, rows, cols });
+    this._placeSkullIfDue(ctx.nodeId, { backgroundObjects, pickOpenCell, rows, cols });
 
     backgroundObjects.push(new BackgroundObject('∩', STAIRS_COL * GRID.CELL_SIZE, EXIT_ROW * GRID.CELL_SIZE));
 
-    const north = this._makeDescent('north', NORTH_ROW, STAIRS_COL, {
-      active: true, locked: false, destination: { kind: 'numbered', floorIndex: 1 },
-    });
-    const west = this._makeDescent('west', SPINE_ROW, WEST_COL, { active: false, locked: false, destination: null });
-    const east = this._makeDescent('east', SPINE_ROW, EAST_COL, { active: false, locked: false, destination: null });
-    backgroundObjects.push(north.obj, west.obj, east.obj);
+    const descents = this._makeGraphDescents(ctx, backgroundObjects);
 
     const enemies = this._spawnEnemies(2 + Math.floor(Math.random() * 3), depth, zone,
       { collisionMap, backgroundObjects, pickOpenCell, rows, cols, spawnCells });
 
     return {
       type: 'DUNGEON_FLOOR',
-      roomKind: 'numbered',
-      floorIndex: 0,
       gridCols: cols, gridRows: rows, collisionMap, backgroundObjects, enemies,
       items: templateItems, ingredients: [], npcs: [], doors: [], tombGhosts: [], spawnVents,
       viewport: this._makeViewport(cols, rows),
       exitRow: EXIT_ROW, exitCol: STAIRS_COL,
       stairsUpRow: null, stairsUpCol: null, stairsUpObj: null, stairsUpLocked: false, ascendTo: null,
-      descents: [north, west, east],
+      descents,
     };
   }
 
-  _generateCorridor(depth, zone) {
+  _generateCorridor(ctx) {
+    const { depth, zone } = ctx;
     const { cols, rows, collisionMap, backgroundObjects, templateItems, pickOpenCell, spawnCells, spawnVents } = this._buildScaffold({ depth, zone });
     this._addDecor(backgroundObjects, pickOpenCell, rows, cols);
     this._addTombs(backgroundObjects, pickOpenCell, rows, cols);
-    this._placeSkullIfDue(1, { backgroundObjects, pickOpenCell, rows, cols });
+    this._placeSkullIfDue(ctx.nodeId, { backgroundObjects, pickOpenCell, rows, cols });
 
-    const stairsUpObj = this._makeStairsUp(false);
-    backgroundObjects.push(stairsUpObj);
+    const up = this._makeGraphStairsUp(ctx, false);
+    backgroundObjects.push(up.obj);
 
-    // North → a Puzzle Room, unlocked. Quick low-tier grab, no skull key
-    // needed. Rolled once here (weighted random across every named entry in
-    // dungeonPuzzleTemplates.js — user-ratified pool selection) and baked
-    // into the destination key, so re-entering Corridor later this same
-    // visit doesn't re-roll (descents persist on the cached floor object,
-    // same as every other descent). The picked template name IS the
-    // destination's storage key — see DungeonSystem.ensureFloorGenerated.
-    const puzzleTemplateName = pickRandomPuzzleTemplateName();
-    const north = this._makeDescent('north', NORTH_ROW, STAIRS_COL, {
-      active: true, locked: false, destination: { kind: 'side', key: puzzleTemplateName },
-    });
-    // West → Branch, locked until the skull key is spent (DungeonPuzzleSystem).
-    // The real choice this floor offers: quick grab vs. deeper delving.
-    const west = this._makeDescent('west', SPINE_ROW, WEST_COL, {
-      active: true, locked: true, destination: { kind: 'numbered', floorIndex: 2 },
-    });
-    const east = this._makeDescent('east', SPINE_ROW, EAST_COL, { active: false, locked: false, destination: null });
-    backgroundObjects.push(north.obj, west.obj, east.obj);
+    // Descents come from the graph: in Green's layout, North → the visit's
+    // Trial (a Puzzle Room, open — a quick low-tier grab) and West → the
+    // Branch, locked until the Skull Key is spent — the real choice this
+    // floor offers is quick grab vs. deeper delving.
+    const descents = this._makeGraphDescents(ctx, backgroundObjects);
 
     const enemies = this._spawnEnemies(3 + Math.floor(Math.random() * 3), depth, zone,
       { collisionMap, backgroundObjects, pickOpenCell, rows, cols, spawnCells });
 
     return {
       type: 'DUNGEON_FLOOR',
-      roomKind: 'numbered',
-      floorIndex: 1,
       gridCols: cols, gridRows: rows, collisionMap, backgroundObjects, enemies,
       items: templateItems, ingredients: [], npcs: [], doors: [], tombGhosts: [], spawnVents,
       viewport: this._makeViewport(cols, rows),
       exitRow: null, exitCol: null,
-      stairsUpRow: STAIRS_UP_ROW, stairsUpCol: STAIRS_COL, stairsUpObj, stairsUpLocked: false,
-      ascendTo: { kind: 'numbered', floorIndex: 0 },
-      descents: [north, west, east],
+      stairsUpRow: up.row, stairsUpCol: up.col, stairsUpObj: up.obj, stairsUpLocked: false,
+      ascendTo: this._ascendToFor(ctx),
+      descents,
     };
   }
 
-  _generateBranch(depth, zone) {
+  _generateBranch(ctx) {
+    const { depth, zone } = ctx;
     // Bare 'open' layout — no wall template. Matches the pre-rework 5-floor
     // system's floor 2 (git-archaeology, bug #209: "companion-panel floor
     // uses the bare 'open' layout — its puzzle assumes a clean playfield"),
@@ -558,18 +560,15 @@ export class DungeonFloorGenerator {
     const { cols, rows, collisionMap, backgroundObjects, pickOpenCell, spawnCells } = this._buildScaffold({ useTemplate: false });
     this._addDecor(backgroundObjects, pickOpenCell, rows, cols);
     this._addTombs(backgroundObjects, pickOpenCell, rows, cols);
-    // No _placeSkullIfDue here — the skull key now only rolls onto Entrance
-    // or Corridor (interiorState.keySkullFloor ∈ {0,1}), since it gates the door
-    // *into* Branch and can't be found past its own lock.
+    // No _placeSkullIfDue here — the Skull Key only drops on a floor kind
+    // that holds it (FLOOR_KINDS.holdsSkullKey) and is reachable before the
+    // door it opens, which leads *into* the Branch.
 
-    // Branch is entered via Corridor's West descent (the skull key), not the
-    // universal north point — its up-stairs sits at the West footprint to
-    // match, so the door you came through is the door you leave through (the
-    // "matching doors are always in the same room position" rule). The old
-    // Key Vault this footprint used to gate is gone, so there's no longer a
-    // separate retired 'west' descent object competing for the same cell.
-    const stairsUpObj = this._makeStairsUp(false, SPINE_ROW, WEST_COL);
-    backgroundObjects.push(stairsUpObj);
+    // In Green's layout the Branch is entered via the Corridor's West descent
+    // (the Skull Key), so its up-stairs sits at the West footprint to match —
+    // the door you came through is the door you leave through.
+    const up = this._makeGraphStairsUp(ctx, false);
+    backgroundObjects.push(up.obj);
 
     // Companion-panel puzzle — always visible, sitting directly in Branch
     // alongside the Trap Room door (bug #209: previously relocated into an
@@ -588,54 +587,45 @@ export class DungeonFloorGenerator {
     setTriggerVisual(panelBObj, false);
     backgroundObjects.push(panelBObj);
 
-    // North → Trap Room, always open — sealed enemy gauntlet, tier-2 reward
-    // on clear (real risk room; reaching Branch at all was the key-gated cost).
-    const north = this._makeDescent('north', NORTH_ROW, STAIRS_COL, {
-      active: true, locked: false, destination: { kind: 'side', key: 'trapRoom' },
-    });
-    // East → Pyramid, visible but locked until the panel puzzle is solved
-    // (same visible-but-locked contract as Corridor's West/skull-key door).
-    const east = this._makeDescent('east', SPINE_ROW, EAST_COL, {
-      active: true, locked: true, destination: { kind: 'numbered', floorIndex: 3 },
-    });
-    backgroundObjects.push(north.obj, east.obj);
+    // Descents come from the graph: in Green's layout, North → the Trap Room
+    // (open — a sealed enemy gauntlet with a tier-2 reward on clear) and
+    // East → the Pyramid, visible but locked until the panel puzzle emits the
+    // 'panels' Reveal (DungeonPuzzleSystem._updateBranchPanels).
+    const descents = this._makeGraphDescents(ctx, backgroundObjects);
 
     const enemies = this._spawnEnemies(4 + Math.floor(Math.random() * 3), depth, zone,
       { collisionMap, backgroundObjects, pickOpenCell, rows, cols, spawnCells });
 
     return {
       type: 'DUNGEON_FLOOR',
-      roomKind: 'numbered',
-      floorIndex: 2,
       gridCols: cols, gridRows: rows, collisionMap, backgroundObjects, enemies,
       items: [], ingredients: [], npcs: [], doors: [], tombGhosts: [], spawnVents: [],
       viewport: this._makeViewport(cols, rows),
       exitRow: null, exitCol: null,
-      stairsUpRow: SPINE_ROW, stairsUpCol: WEST_COL, stairsUpObj, stairsUpLocked: false,
-      ascendTo: { kind: 'numbered', floorIndex: 1 },
-      descents: [north, east],
+      stairsUpRow: up.row, stairsUpCol: up.col, stairsUpObj: up.obj, stairsUpLocked: false,
+      ascendTo: this._ascendToFor(ctx),
+      descents,
+      // The zone's sub-solve on this floor (Dungeon Recipe branchPuzzle).
+      puzzle: ctx.node.puzzle,
       panelAObj, panelBObj, puzzleSolved: false,
     };
   }
 
-  _generatePyramid(depth, zone) {
+  _generatePyramid(ctx) {
+    const { zone } = ctx;
     // Static edifice — zero enemies (plan Phase 3), bare playfield.
     const { cols, rows, collisionMap, backgroundObjects } = this._buildScaffold({ useTemplate: false });
 
-    // Entered directly via Branch's East descent (once the switch puzzle is
-    // solved), so the up-stairs sits at the East footprint to match — same
-    // "matching doors" rule as Branch's own West up-stairs.
-    const stairsUpObj = this._makeStairsUp(false, SPINE_ROW, EAST_COL);
-    backgroundObjects.push(stairsUpObj);
+    // In Green's layout the Pyramid is entered via the Branch's East descent
+    // (once the panel puzzle is solved), so the up-stairs sits at the East
+    // footprint to match — same "matching doors" rule as the Branch.
+    const up = this._makeGraphStairsUp(ctx, false);
+    backgroundObjects.push(up.obj);
 
-    // North → the Vault (floor index 4), visible but locked until the
-    // Legend of Three offering completes (DungeonPuzzleSystem unlocks it in
-    // _checkPyramidComplete — same visible-but-locked contract as Branch's
-    // own East door). The dungeon boss layer's arena lives down there.
-    const north = this._makeDescent('north', NORTH_ROW, STAIRS_COL, {
-      active: true, locked: true, destination: { kind: 'numbered', floorIndex: 4 },
-    });
-    backgroundObjects.push(north.obj);
+    // Descent to the Vault, visible but locked until the Legend of Three
+    // offering emits the 'offering' Reveal (DungeonPuzzleSystem.
+    // _checkPyramidComplete). The dungeon boss layer's arena lives down there.
+    const descents = this._makeGraphDescents(ctx, backgroundObjects);
 
     // Legend of Three Slots — top (Justice), bottom-left (Truth), bottom-right
     // (Help). Each is built in the game's ubiquitous Slot shape: '[' + the
@@ -672,15 +662,13 @@ export class DungeonFloorGenerator {
 
     return {
       type: 'DUNGEON_FLOOR',
-      roomKind: 'numbered',
-      floorIndex: 3,
       gridCols: cols, gridRows: rows, collisionMap, backgroundObjects, enemies: [],
       items: [], ingredients: [], npcs: [], doors: [], tombGhosts: [], spawnVents: [],
       viewport: this._makeViewport(cols, rows),
       exitRow: null, exitCol: null,
-      stairsUpRow: SPINE_ROW, stairsUpCol: EAST_COL, stairsUpObj, stairsUpLocked: false,
-      ascendTo: { kind: 'numbered', floorIndex: 2 },
-      descents: [north], // the offering unlocks this descent into the Vault
+      stairsUpRow: up.row, stairsUpCol: up.col, stairsUpObj: up.obj, stairsUpLocked: false,
+      ascendTo: this._ascendToFor(ctx),
+      descents, // the offering unlocks the descent into the Vault
       pyramidSlots,
       // Only zones with real legendOfThree.js content are solvable; unauthored
       // zones get a dormant/inert pyramid (same shape as puzzles.js's
@@ -690,7 +678,7 @@ export class DungeonFloorGenerator {
     };
   }
 
-  // Vault (floor index 4) — terminal arena beyond the Pyramid, reached via
+  // Vault — terminal arena beyond the Pyramid, reached via
   // its North descent once the Legend of Three offering completes. The
   // dungeon boss layer's home: content here is owned by DungeonBossSystem
   // (per-zone spec), not by this generator — the floor itself is a bare
@@ -699,7 +687,7 @@ export class DungeonFloorGenerator {
   // everything the player sees and fights. `isVault` is the marker the boss
   // system and the gilded-companion trigger key off; `gildedTriggered`
   // guards that trigger so re-activating a cached floor doesn't re-fire it.
-  _generateVault(depth, zone) {
+  _generateVault(ctx) {
     const { cols, rows, collisionMap, backgroundObjects } = this._buildScaffold({ useTemplate: false });
 
     // Entered via the Pyramid's North descent — up-stairs at the top of the
@@ -726,36 +714,30 @@ export class DungeonFloorGenerator {
 
     return {
       type: 'DUNGEON_FLOOR',
-      roomKind: 'numbered',
-      floorIndex: 4,
       isVault: true,
       gridCols: cols, gridRows: rows, collisionMap, backgroundObjects, enemies: [],
       items: [], ingredients: [], npcs: [], doors: [], tombGhosts: [], spawnVents: [],
       viewport: this._makeViewport(cols, rows),
       exitRow: null, exitCol: null,
       stairsUpRow: VAULT_STAIRS_UP_ROW, stairsUpCol: STAIRS_COL, stairsUpObj, stairsUpLocked: true,
-      ascendTo: { kind: 'numbered', floorIndex: 3 },
-      descents: [], // terminal — the delve ends here
+      ascendTo: this._ascendToFor(ctx),
+      descents: this._makeGraphDescents(ctx, backgroundObjects), // none in any recipe yet — the delve ends here
       gildedTriggered: false,
     };
   }
 
   // ── Side rooms ──────────────────────────────────────────────────────────
-  // Stored on interiorState.floors by string key (not numeric index) — see
-  // file header. originFloorIndex varies by room: a Puzzle Room's origin is
-  // Corridor (index1), Trap Room's is Branch (index2). (Branch's own
-  // companion-switch puzzle isn't a side room — see _generateBranch above —
-  // so it needs no originFloorIndex of its own.) Always threaded through as
-  // a parameter rather than hardcoded, so a future branch elsewhere in the
-  // tree doesn't require touching these generators.
+  // Floors hung off a corridor or the Branch rather than on the way to the
+  // Vault. Which floor each hangs off is the graph's call (ctx.upFrom), so
+  // the generators never name their origin.
 
   // Trap Room — sealed enemy gauntlet. Exit stays locked until every enemy
   // is cleared (same "all-N-cleared" shape as MazeSystem._checkMazeCleared;
   // DungeonPuzzleSystem unlocks it), rewarding a tier-2 weapon on clear.
   // Reintroduces the pre-Whip-Trial trapRoom shape (see git history, commit
   // 4429455) now that 'trapRoom' names this room instead.
-  generateTrapRoom(depth, originFloorIndex) {
-    const zone = this.game.currentRoom?.zone || 'gray';
+  generateTrapRoom(ctx) {
+    const { depth, zone } = ctx;
     const { cols, rows, collisionMap, backgroundObjects, templateItems, pickOpenCell, spawnCells, spawnVents } = this._buildScaffold({ depth, zone });
 
     // Locked exit until every enemy is cleared — DungeonPuzzleSystem unlocks it.
@@ -785,14 +767,12 @@ export class DungeonFloorGenerator {
 
     return {
       type: 'DUNGEON_FLOOR',
-      roomKind: 'trapRoom',
-      floorIndex: null,
       gridCols: cols, gridRows: rows, collisionMap, backgroundObjects, enemies,
       items: [rewardItem, ...templateItems], ingredients: [], npcs: [], doors: [], tombGhosts: [], spawnVents,
       viewport: this._makeViewport(cols, rows),
       exitRow: null, exitCol: null,
       stairsUpRow: STAIRS_UP_ROW, stairsUpCol: STAIRS_COL, stairsUpObj, stairsUpLocked: true,
-      ascendTo: { kind: 'numbered', floorIndex: originFloorIndex },
+      ascendTo: this._ascendToFor(ctx),
       descents: [],
     };
   }
@@ -806,13 +786,16 @@ export class DungeonFloorGenerator {
   // pedestal (dungeonPuzzleTemplates.js); this method just instantiates that
   // data as a live floor. Every named template (including the original Whip
   // Trial, now authored as whip_trial.json) is reachable this way, picked by
-  // weighted random per dungeon visit — see _generateCorridor.
+  // weighted random per dungeon visit — DungeonSystem.rollVisit writes the
+  // pick onto the graph node (ctx.node.template).
   //
   // Exit unlock rule: every trigger in the template must be active at once
   // (DungeonPuzzleSystem._updatePuzzleRoom) — the generalized form of the
   // original Whip Trial's "both switches struck together" and Branch's
   // "both switches pressed together" rules, extended to any trigger count/mix.
-  generatePuzzleRoom(templateName, depth, originFloorIndex) {
+  generatePuzzleRoom(ctx) {
+    const { depth } = ctx;
+    const templateName = ctx.node.template;
     const CS = GRID.CELL_SIZE;
     const { cols, rows, collisionMap, backgroundObjects } = this._buildScaffold({ useTemplate: false });
 
@@ -1018,20 +1001,14 @@ export class DungeonFloorGenerator {
 
     return {
       type: 'DUNGEON_FLOOR',
-      roomKind: 'puzzleRoom',
-      // Every puzzle-pool room shares roomKind 'puzzleRoom' (that's what
-      // dispatches update() to _updatePuzzleRoom); templateName is what
-      // distinguishes which one this is — it's also this floor's own
-      // interiorState.floors storage key (see DungeonSystem.ensureFloorGenerated/
-      // _destinationOf).
+      // Which puzzle-pool template this room was built from.
       templateName,
-      floorIndex: null,
       gridCols: cols, gridRows: rows, collisionMap, backgroundObjects, enemies: [],
       items, ingredients: [], npcs: [], doors: [], tombGhosts: [], spawnVents,
       viewport: this._makeViewport(cols, rows),
       exitRow: null, exitCol: null,
       stairsUpRow: exitRow, stairsUpCol: exitCol, stairsUpObj, stairsUpLocked: sealed,
-      ascendTo: { kind: 'numbered', floorIndex: originFloorIndex },
+      ascendTo: this._ascendToFor(ctx),
       descents: [],
       triggers, hookPosts, torches, weaponPedestal, gapCells, puzzleSolved: false,
       // Bomb Trial dais cell ({ row, col } or null) — holds the Bomb Bag.
