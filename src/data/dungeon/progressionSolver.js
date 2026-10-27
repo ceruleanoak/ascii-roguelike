@@ -71,6 +71,31 @@ export function toolKitForItem(item) {
   return kit;
 }
 
+/**
+ * Prove one template file the way every caller must: the game's random pools,
+ * the data gate (tools/check-data.js) and the dungeon editor's save all go
+ * through here, so none of them can drift on which tools a pedestal supplies
+ * or which templates are exempt.
+ *
+ * A Puzzle Room's pedestal weapon is the room's supplied kit; `solverExempt`
+ * templates (hand-checked, e.g. the Hammer Trial's rolling rocks) pass
+ * without a proof and report `exempt: true`.
+ *
+ * @param {object} data       the template JSON
+ * @param {'floor'|'puzzle'} mode
+ * @param {object} contract   footprintContract.json
+ * @param {object} items      the ITEMS catalogue (passed in so this module stays pure)
+ */
+export function proveTemplate(data, mode, contract, items) {
+  if (mode === 'puzzle' && data.solverExempt) {
+    return { ok: true, exempt: true, errors: [], warnings: [], regions: { unreached: [] } };
+  }
+  const suppliedTools = mode === 'puzzle' && data.pedestal
+    ? toolKitForItem(items[data.pedestal.weaponChar])
+    : {};
+  return solveTemplate({ grid: data.grid, fixtures: data, mode, contract, suppliedTools });
+}
+
 const cellName = (row, col) => `(${row},${col})`;
 
 /**

@@ -28,6 +28,7 @@ import { BACKGROUND_OBJECTS } from '../src/game/GameConfig.js';
 import { SECRET_PATTERNS } from '../src/data/exitLetters.js';
 import { normalizeOfferSteps } from '../src/systems/ExitSystem.js';
 import { pickWeaponTutorial } from '../src/data/dungeon/weaponTutorials.js';
+import { proveTemplate } from '../src/data/dungeon/progressionSolver.js';
 import { SPELLS } from '../src/data/spells.js';
 import * as LOOK_HERE from '../src/data/lookHereLines.js';
 
@@ -263,6 +264,30 @@ for (const file of readdirSync(puzzleTemplateDir).filter(f => f.endsWith('.json'
   const { pedestal } = JSON.parse(readFileSync(join(puzzleTemplateDir, file), 'utf8'));
   if (pedestal && !pickWeaponTutorial(pedestal.weaponChar)) {
     fail(`puzzle template ${file}: pedestal weaponChar '${pedestal.weaponChar}' is not a weapon in ITEMS — the pedestal never appears (#347 pattern)`);
+  }
+}
+
+// ── Dungeon templates pass the Progression Solver ──────────────────────────
+// The softlock contract (bug #401, category [softlock]) is a data invariant:
+// a floor template whose staircases need a tool, or a Puzzle Room that can't
+// be solved with what it supplies, fails the build here rather than being
+// quietly dropped from the random pool at load (dungeon*Templates.js).
+const footprintContract = JSON.parse(readFileSync(join(root, 'src/data/dungeon/footprintContract.json'), 'utf8'));
+// Known failures, each tied to a bug: they stay out of the random pool at
+// runtime, and the gate warns instead of failing until the bug closes.
+const SOLVER_ALLOWLIST = {
+  'floor/bombable.json': '#467',  // draft: no Bombable Walls yet, the up-stairs box is sealed
+  'floor/separated.json': '#467', // only the West descent connects; valid once footprints reserve per direction
+};
+for (const [mode, dir] of [['floor', 'floorTemplates'], ['puzzle', 'puzzleTemplates']]) {
+  const templateDir = join(root, 'src/data/dungeon', dir);
+  for (const file of readdirSync(templateDir).filter(f => f.endsWith('.json'))) {
+    const data = JSON.parse(readFileSync(join(templateDir, file), 'utf8'));
+    const { ok, errors, warnings } = proveTemplate(data, mode, footprintContract, ITEMS);
+    const allowed = SOLVER_ALLOWLIST[`${mode}/${file}`];
+    if (!ok && allowed) warn(`${mode} template ${file} fails the Progression Solver: ${allowed}`);
+    else if (!ok) fail(`${mode} template ${file} fails the Progression Solver: ${errors.join(' ')}`);
+    for (const w of warnings) warn(`${mode} template ${file}: ${w}`);
   }
 }
 

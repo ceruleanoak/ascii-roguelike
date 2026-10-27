@@ -106,7 +106,7 @@
 // must pass.
 
 import FOOTPRINT_CONTRACT from './dungeon/footprintContract.json';
-import { solveTemplate, toolKitForItem } from './dungeon/progressionSolver.js';
+import { proveTemplate } from './dungeon/progressionSolver.js';
 import { ITEMS } from './items.js';
 import { DUNGEON_TILES, cellsWithGlyph } from './dungeon/tiles.js';
 
@@ -133,15 +133,22 @@ export function getPuzzleTemplate(templateName) {
 // CheatMenu can still warp into it by name.
 const TEMPLATE_WEIGHTS = Object.entries(PUZZLE_ROOM_TEMPLATES)
   .filter(([name, data]) => {
-    if (data.solverExempt) return true;
-    const suppliedTools = data.pedestal ? toolKitForItem(ITEMS[data.pedestal.weaponChar]) : {};
-    const { ok, errors } = solveTemplate({
-      grid: data.grid, fixtures: data, mode: 'puzzle', contract: FOOTPRINT_CONTRACT, suppliedTools,
-    });
+    const { ok, errors } = proveTemplate(data, 'puzzle', FOOTPRINT_CONTRACT, ITEMS);
     if (!ok) console.warn(`[dungeonPuzzleTemplates] "${name}" left out of the puzzle pool: ${errors[0]}`);
     return ok;
   })
   .map(([name, data]) => ({ name, weight: data.weight }));
+
+const PROVEN_NAMES = new Set(TEMPLATE_WEIGHTS.map(t => t.name));
+
+/**
+ * True when the template passed the Progression Solver (or is solverExempt) —
+ * i.e. it is in the random pool. DungeonFloorGenerator.generatePuzzleRoom
+ * seals the player in only behind a proven template.
+ */
+export function isPuzzleTemplateProven(templateName) {
+  return PROVEN_NAMES.has(templateName);
+}
 
 /**
  * Pick a random puzzle-room template name using the configured weights.

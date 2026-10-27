@@ -52,7 +52,7 @@
 
 import FOOTPRINT_CONTRACT from './dungeon/footprintContract.json';
 import { reservedFootprintCells } from './dungeon/footprints.js';
-import { solveTemplate } from './dungeon/progressionSolver.js';
+import { proveTemplate } from './dungeon/progressionSolver.js';
 import { DUNGEON_TILES, cellsWithGlyph } from './dungeon/tiles.js';
 
 export const STAIRS_COL    = FOOTPRINT_CONTRACT.STAIRS_COL;     // vertical spine column (up-stairs, North descent, exit door)
@@ -129,7 +129,7 @@ export const DUNGEON_FLOOR_TEMPLATES = Object.fromEntries(
 // direct lookup by name still finds it.
 const TEMPLATE_WEIGHTS = Object.entries(TEMPLATE_DATA)
   .filter(([name, data]) => {
-    const { ok, errors } = solveTemplate({ grid: data.grid, fixtures: data, mode: 'floor', contract: FOOTPRINT_CONTRACT });
+    const { ok, errors } = proveTemplate(data, 'floor', FOOTPRINT_CONTRACT);
     if (!ok) console.warn(`[dungeonFloorTemplates] "${name}" left out of the floor pool: ${errors[0]}`);
     return ok;
   })
