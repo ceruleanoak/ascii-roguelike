@@ -149,6 +149,29 @@ function loadTilesModule() {
   return _tilesModulePromise;
 }
 
+// The Progression Solver (src/data/dungeon/progressionSolver.js) and the item
+// catalogue its Puzzle Room proof reads the pedestal's tools from. A save runs
+// the same proveTemplate() the game's random pools and the data gate
+// (tools/check-data.js) run, so a template the build would reject never
+// leaves the editor (softlock contract, bug #401).
+let _solverModulesPromise = null;
+function loadSolverModules() {
+  if (!_solverModulesPromise) {
+    _solverModulesPromise = Promise.all([
+      import(pathToFileURL(path.join(DATA_ROOT, 'progressionSolver.js')).href),
+      import(pathToFileURL(path.join(__dirname, '..', '..', 'src', 'data', 'items.js')).href),
+    ]).then(([solver, items]) => ({ proveTemplate: solver.proveTemplate, ITEMS: items.ITEMS }));
+  }
+  return _solverModulesPromise;
+}
+
+/** Solver errors refuse the save; warnings ride back to the advisory readout. */
+async function proveForSave(data, mode) {
+  const { proveTemplate, ITEMS } = await loadSolverModules();
+  const { ok, errors, warnings } = proveTemplate(data, mode, readJSON(FOOTPRINT_CONTRACT_FILE), ITEMS);
+  return { error: ok ? null : `Progression Solver: ${errors.join(' ')}`, warnings };
+}
+
 // The enemy catalogue (src/data/enemies.js) — a Spawn Vent's enemyChar is
 // checked against it, same posture as the pedestal's weaponChar above. A
 // failed import (the module growing a Vite-only dependency) skips the check
@@ -250,8 +273,10 @@ ipcMain.handle('floor-template-load', (_e, name) => readJSON(resolveFloorTemplat
 ipcMain.handle('floor-template-save', async (_e, name, data) => {
   const err = await validateFloorTemplate(data);
   if (err) return { ok: false, error: err };
+  const { error, warnings } = await proveForSave(data, 'floor');
+  if (error) return { ok: false, error, warnings };
   writeJSONAtomic(resolveFloorTemplatePath(name), data);
-  return { ok: true };
+  return { ok: true, warnings };
 });
 
 ipcMain.handle('floor-template-delete', (_e, name) => deleteTemplate(resolveFloorTemplatePath, name));
@@ -521,8 +546,10 @@ ipcMain.handle('puzzle-template-load', (_e, name) => readJSON(resolvePuzzleTempl
 ipcMain.handle('puzzle-template-save', async (_e, name, data) => {
   const err = await validatePuzzleTemplate(data);
   if (err) return { ok: false, error: err };
+  const { error, warnings } = await proveForSave(data, 'puzzle');
+  if (error) return { ok: false, error, warnings };
   writeJSONAtomic(resolvePuzzleTemplatePath(name), data);
-  return { ok: true };
+  return { ok: true, warnings };
 });
 
 ipcMain.handle('puzzle-template-delete', (_e, name) => deleteTemplate(resolvePuzzleTemplatePath, name));

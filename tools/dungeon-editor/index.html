@@ -1133,7 +1133,8 @@
     }
     if (result.ok) {
       dirty = false;
-      setValidation('');
+      // Solver warnings (unreachable cells, timed-trigger pacing) never block a save.
+      setValidation(result.warnings?.length ? 'Solver: ' + result.warnings.join(' ') : '');
       setStatus('Saved ' + currentName);
     } else {
       setValidation(result.error);
