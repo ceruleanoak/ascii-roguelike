@@ -2006,7 +2006,11 @@ identity, not standard programming terms.
   `backgroundObjects`, `isReserved`, `onMove`) decides which cells it may slide into. It is placed
   by the `push_lock` Barricade (among `cavern_rock` decoys, via `decoyTypeId`), by floor and
   Puzzle Room templates (dungeon editor Push Rock tool; on a numbered floor `isReserved` keeps it
-  off every staircase and landing cell, `floorAnchorCells`), and on every Ocean Room's sand
+  off every staircase and landing cell, `floorAnchorCells`), as a Dungeon's gate rock (the
+  Skull Key's alternative: `floor.gateRock`, set on the footprint of the floor's `push` descent
+  by `DungeonFloorGenerator._buildScaffold` among the `cavern_rock`s scattered on every
+  Entrance and Corridor floor, ticked by `DungeonPuzzleSystem._updateGateRock`, which emits
+  the `push` Reveal once it is shoved off), and on every Ocean Room's sand
   (`OceanPushRockSystem`: `placeOceanPushRock` from `generateOceanTerrain`, `room.oceanPushRock`).
 - **Not:** "pushable block", "movable rock", "push block", "boulder".
 
@@ -2155,7 +2159,13 @@ identity, not standard programming terms.
   `dungeonPuzzleTemplates.js` keep templates that fail it out of the random pools,
   `npm run check:data` fails the build on one (allowlisted debt carries a bug ref), and the
   dungeon editor refuses to save one. A Puzzle Room the solver can't model (the Hammer
-  Trial's rolls) sets `solverExempt: true` and is hand-checked instead. The one runtime net:
+  Trial's rolls) sets `solverExempt: true` and is hand-checked instead. `proveTemplate`'s
+  `gateRock` option adds a gate rock on a footprint and requires it can be shoved off from the
+  staircases' side; `proveFloorLayout` (`dungeonFloorTemplates.js`) re-proves a floor with the
+  generator's scattered `cavern_rock`s added, and a rock that fails it is not placed. The
+  shared fixture schema (`fixtureSchema.js`) also refuses any two interactive elements that
+  touch, diagonals included (`tooClose`), and the generator spaces what it places at runtime
+  by the same rule. The one runtime net:
   `generatePuzzleRoom` seals the player in only behind a template in the proven pool
   (`isPuzzleTemplateProven`), so a CheatMenu warp into a failing one leaves the way back open.
 - **Not:** the editor's old advisory reachability check; a per-frame runtime check.
@@ -2174,7 +2184,9 @@ identity, not standard programming terms.
   keyed and the long way round open, so the loop is the key's bypass); `branchPuzzle`;
   `sideRooms` (`trial: 'corridor'`, `trapRoom`: the Floor Kinds it may hang off); `diagonals`
   (`{ chance, reveals }` — the per-visit chance of one Hidden Descent, and the Reveals that may
-  open it). Every recipe
+  open it); `keyGate` (`{ pushChance }` — the per-visit chance that the Skull Key's door gets a
+  Push Rock alternative: a hidden `push` edge from the same floor to the same floor, on another
+  footprint, under a gate rock). Every recipe
   is batch-checked by `npm run check:graphs` (`tools/check-dungeon-graphs.mjs`).
 - **Not:** a Dungeon Graph (the concrete layout one visit rolls from it); a crafting recipe.
 
@@ -2196,10 +2208,12 @@ identity, not standard programming terms.
 - **Definition:** A Dungeon descent that isn't drawn until its Reveal fires — not a locked door,
   just bare floor, until the floor is solved and it appears. It sits on a diagonal footprint (a
   North corner, NW or NE) and is always a shortcut: every floor stays reachable through the
-  descents that are drawn. Only a floor event (`clear` or `triggers`) may open one, never a
-  held item.
+  descents that are drawn. Only a floor event (`clear`, `triggers`, or the gate rock's `push`)
+  may open one, never a held item. The `push` one sits under a gate rock, on any free footprint,
+  and leads where the Skull Key's door does.
 - **In code:** a Dungeon Graph edge with `hidden: true` and `dir` `NW`/`NE`, rolled by
-  `buildDungeonGraph` on the recipe's `diagonals.chance`; `descent.hidden` on the floor, painted
+  `buildDungeonGraph` on the recipe's `diagonals.chance` (or, for `push`, on `keyGate.pushChance`,
+  on any free footprint); `descent.hidden` on the floor, painted
   blank by `paintDescentVisual` while locked. A corner is reserved only on a floor that uses it
   (`reservedFootprintCells(contract, diagonals)`), and such a floor draws only templates the
   Progression Solver proved can host that corner (`hosts` in `dungeonFloorTemplates.js`). A
@@ -2220,7 +2234,8 @@ identity, not standard programming terms.
   Key; `panels` is Green's floor-panel NPC puzzle on the Branch; `offering` is the Pyramid's
   Legend of Three; `clear` fires once the floor holds no counted enemy and no standing Spawn
   Vent (the same moment its Shutters open); `triggers` fires once every trigger on a numbered
-  floor is active at once (the same moment its Trigger Blocks open). A floor *emits* a Reveal when its puzzle is solved, and every locked descent
+  floor is active at once (the same moment its Trigger Blocks open); `push` fires once the
+  floor's gate rock is shoved off its footprint. A floor *emits* a Reveal when its puzzle is solved, and every locked descent
   on that floor naming it opens. The puzzle never names which door it opens.
 - **In code:** `edge.reveal` on the Dungeon Graph, copied to `descent.reveal`;
   `DungeonPuzzleSystem.revealEdges(floor, reveal)` opens the matching descents.

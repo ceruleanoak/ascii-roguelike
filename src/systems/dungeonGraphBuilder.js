@@ -15,7 +15,9 @@
 //   reveal  what opens the descent (a Reveal): 'open' needs nothing; 'key'
 //           spends the Skull Key; 'panels' is Green's floor-panel NPC puzzle
 //           on the Branch; 'offering' is the Pyramid's Legend of Three;
-//           'clear' fires once the floor's enemies and Spawn Vents are gone
+//           'clear' fires once the floor's enemies and Spawn Vents are gone;
+//           'triggers' once the floor's triggers are all active; 'push' once
+//           the gate rock covering the descent is shoved off it
 //   hidden  a Hidden Descent: not drawn at all until its Reveal fires
 //
 // Layout (buildDungeonGraph): Entrance → the corridor layer → Branch →
@@ -28,7 +30,10 @@
 // floor kind the recipe names. On a `diagonals.chance` roll, one corridor
 // also gets a Hidden Descent in a North corner: a shortcut that skips ahead
 // (to the Branch, a later corridor, or a side room it doesn't already lead
-// to), appearing when its Reveal fires.
+// to), appearing when its Reveal fires. On a `keyGate.pushChance` roll, the
+// Skull Key's door gets a Push Rock alternative: a second, hidden way from the
+// same corridor into the Branch, on a free footprint, under a gate rock — so
+// the edge opens with the key or the push.
 //
 // Pure (no game state, no imports beyond the Floor Kind table) so check:data,
 // the dungeon editor and the game all build and validate graphs the same way.
@@ -37,10 +42,13 @@ import { FLOOR_KINDS } from './dungeonFloorKinds.js';
 
 const DIRS = ['N', 'W', 'E'];
 const DIAGONALS = ['NW', 'NE'];
-const REVEALS = ['open', 'key', 'panels', 'offering', 'clear', 'triggers'];
+const REVEALS = ['open', 'key', 'panels', 'offering', 'clear', 'triggers', 'push'];
 // What may open a Hidden Descent: a floor event, never a held item — a door
 // the player can't see must not ask for a key.
-const HIDDEN_REVEALS = ['clear', 'triggers'];
+const HIDDEN_REVEALS = ['clear', 'triggers', 'push'];
+// What a recipe's diagonals may roll: 'push' needs a gate rock, which only
+// the key gate places.
+const DIAGONAL_REVEALS = ['clear', 'triggers'];
 const BRANCH_PUZZLES = ['panels'];
 const SHAPES = ['chain', 'triangle'];
 const TRAP_ROOM_HOSTS = ['branch', 'corridor'];
@@ -75,9 +83,13 @@ export function validateRecipe(recipe) {
   if (recipe.diagonals !== undefined) {
     const { chance, reveals } = recipe.diagonals ?? {};
     if (!(chance >= 0 && chance <= 1)) errors.push('diagonals.chance must be between 0 and 1');
-    if (!Array.isArray(reveals) || !reveals.length || reveals.some(r => !HIDDEN_REVEALS.includes(r))) {
-      errors.push(`diagonals.reveals must list Reveals from ${HIDDEN_REVEALS.join(', ')}`);
+    if (!Array.isArray(reveals) || !reveals.length || reveals.some(r => !DIAGONAL_REVEALS.includes(r))) {
+      errors.push(`diagonals.reveals must list Reveals from ${DIAGONAL_REVEALS.join(', ')}`);
     }
+  }
+  if (recipe.keyGate !== undefined) {
+    const { pushChance } = recipe.keyGate ?? {};
+    if (!(pushChance >= 0 && pushChance <= 1)) errors.push('keyGate.pushChance must be between 0 and 1');
   }
   return errors;
 }
@@ -153,6 +165,14 @@ export function buildDungeonGraph(recipe, rng = Math.random) {
     }
   }
 
+  // Rolled last, and only by a recipe that has a keyGate, so a recipe
+  // without one draws the same graphs from the same seed.
+  if (recipe.keyGate && rng() < recipe.keyGate.pushChance) {
+    const keyEdge = edges.find(e => e.reveal === 'key');
+    const free = [...DIRS, ...DIAGONALS].filter(dir => !edges.some(e => e.from === keyEdge.from && e.dir === dir));
+    if (free.length) edges.push({ from: keyEdge.from, dir: pick(free), to: keyEdge.to, reveal: 'push', hidden: true });
+  }
+
   return { nodes, edges };
 }
 /** The descents leaving `nodeId`, in graph order. */
@@ -212,6 +232,10 @@ export function validateGraph(graph) {
     if (!REVEALS.includes(e.reveal)) errors.push(`edge ${e.from}→${e.to}: bad reveal "${e.reveal}"`);
     if (e.hidden && !HIDDEN_REVEALS.includes(e.reveal)) {
       errors.push(`edge ${e.from}→${e.to}: a Hidden Descent can't open with "${e.reveal}"`);
+    }
+    // A gate rock is only ever the key's alternative: the same way down.
+    if (e.reveal === 'push' && !graph.edges.some(k => k.reveal === 'key' && k.from === e.from && k.to === e.to)) {
+      errors.push(`edge ${e.from}→${e.to}: a 'push' descent must pair with the Skull Key's door`);
     }
   }
   for (const id of ids) {

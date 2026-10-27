@@ -2,6 +2,8 @@ import { GRID } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { setTriggerVisual } from './triggerMachine.js';
 import { placeTemplateFixtures } from './dungeonFixtures.js';
+import { createPushRock } from './PushRock.js';
+import { tooClose } from '../data/dungeon/fixtureSchema.js';
 import { Enemy } from '../entities/Enemy.js';
 import { Item } from '../entities/Item.js';
 import { BOMB_BAG_CHAR } from './BombBagSystem.js';
@@ -10,7 +12,7 @@ import { getZoneRandomEnemy } from '../data/enemies.js';
 import { applyZoneCombatModifiers } from '../data/zones.js';
 import {
   pickRandomTemplateName, applyTemplateToCollisionMap, getTemplateWaterCells, getTemplateBombableCells,
-  getTemplateCellsWithGlyph, getTemplateSpawners, getTemplateData,
+  getTemplateCellsWithGlyph, getTemplateSpawners, getTemplateData, proveFloorLayout,
   getTemplateSpawnCells, getReservedFootprintCells, paintDescentVisual, paintStairsUpVisual,
   STAIRS_COL, STAIRS_UP_ROW, EXIT_ROW,
 } from '../data/dungeonFloorTemplates.js';
@@ -76,6 +78,13 @@ const TRAP_ROOM_REWARD_POOL = ['‡', '⟘', 'ⲯ', '⇒']; // Flame Sword, Maul
 // between them (see _generateBranch's bare-layout comment for why that walk
 // must never cross a wall).
 const BRANCH_PANEL_ROW = 11;
+
+// Cavern Rocks scattered on an Entrance or Corridor floor
+// (_scatterUnbreakableRocks): how many are wanted, and how many solver
+// proofs one floor may spend finding spots for them before settling for fewer.
+const UNBREAKABLE_ROCKS_MIN = 2;
+const UNBREAKABLE_ROCKS_MAX = 4;
+const UNBREAKABLE_ROCK_PROOFS = 12;
 const BRANCH_PANEL_A_COL = 7;
 const BRANCH_PANEL_B_COL = 17;
 
@@ -102,7 +111,11 @@ export class DungeonFloorGenerator {
   // kept clear, and the template drawn from those proven to keep them
   // reachable (bare scaffold when no template can).
   // `wantsTriggers`: the floor has a descent behind its 'triggers' Reveal.
-  _buildScaffold({ useTemplate = true, extraReservedCells = [], depth = 1, zone = 'gray', diagonals = [], wantsTriggers = false } = {}) {
+  // `gateRockDir`: the footprint of a 'push' descent — the Push Rock
+  // alternative to the Skull Key — which a gate rock covers; the template is
+  // drawn from those proven to take it there (bare scaffold when none can).
+  // `unbreakableRocks`: scatter Cavern Rocks (_scatterUnbreakableRocks).
+  _buildScaffold({ useTemplate = true, extraReservedCells = [], depth = 1, zone = 'gray', diagonals = [], wantsTriggers = false, gateRockDir = null, unbreakableRocks = false } = {}) {
     const cols = INTERIOR_COLS;
     const rows = INTERIOR_ROWS;
     const collisionMap = [];
@@ -124,8 +137,9 @@ export class DungeonFloorGenerator {
       // A floor with a descent behind its 'triggers' Reveal draws from the
       // templates whose triggers can all be solved; when none fits, any
       // template will do and generateNode falls those descents back to 'clear'.
-      templateName = (wantsTriggers && pickRandomTemplateName(used, diagonals, { triggers: true }))
-        || pickRandomTemplateName(used, diagonals);
+      const gateRock = gateRockDir;
+      templateName = (wantsTriggers && pickRandomTemplateName(used, diagonals, { triggers: true, gateRock }))
+        || pickRandomTemplateName(used, diagonals, { gateRock });
       if (templateName) {
         used.add(templateName);
         applyTemplateToCollisionMap(collisionMap, templateName, reservedCells);
@@ -163,6 +177,30 @@ export class DungeonFloorGenerator {
     fixtures.triggersSolved = false;
     fixtures.diagonals = diagonals;
 
+    // The gate rock (DungeonPuzzleSystem._updateGateRock): a Push Rock on the
+    // 'push' descent's own footprint. Not one of the floor's triggers — it
+    // opens that descent alone, never the Trigger Blocks.
+    const gateRockCell = gateRockDir ? footprintCellFor(gateRockDir, FOOTPRINT_CONTRACT) : null;
+    fixtures.gateRock = gateRockCell ? createPushRock(gateRockCell.col, gateRockCell.row) : null;
+    if (fixtures.gateRock) backgroundObjects.push(fixtures.gateRock);
+
+    // What the spacing rule (fixtureSchema.js tooClose) keeps everything
+    // placed from here on clear of: the staircase footprints, the template's
+    // items and Spawn Vents, and every object already on the floor except
+    // water. Read live, so each placement also spaces the next.
+    const ventCells = templateName ? getTemplateSpawners(templateName, reservedCells) : [];
+    const isSpaced = cell => {
+      if (reservedCells.some(p => tooClose(p, cell)) || ventCells.some(p => tooClose(p, cell))) return false;
+      const near = obj => tooClose({ row: Math.round(obj.position.y / GRID.CELL_SIZE), col: Math.round(obj.position.x / GRID.CELL_SIZE) }, cell);
+      return !templateItems.some(near) && !backgroundObjects.some(obj => obj.char !== '~' && near(obj));
+    };
+
+    if (unbreakableRocks) {
+      this._scatterUnbreakableRocks({
+        templateName, diagonals, gateRockCell, collisionMap, backgroundObjects, reservedCells, isSpaced, rows, cols,
+      });
+    }
+
     // Everything placed on this floor must stand where the player can reach
     // it. A template may wall off a walkable pocket (open.json's sealed
     // pool): an enemy spawned there kept the Trap Room sealed forever, since
@@ -186,8 +224,10 @@ export class DungeonFloorGenerator {
     // Random open cell (reachable, not a reserved footprint cell, not
     // already holding a background object). Used for decor/enemy/skull
     // placement so templates never trap entities or bury the staircases.
-    const pickOpenCell = (minRow, maxRow, minCol, maxCol) => {
-      for (let attempt = 0; attempt < 20; attempt++) {
+    // `spaced` (the default) also keeps the cell clear of every interactive
+    // element by the spacing rule; enemies, which walk anyway, opt out.
+    const pickOpenCell = (minRow, maxRow, minCol, maxCol, { spaced = true } = {}) => {
+      for (let attempt = 0; attempt < 40; attempt++) {
         const r = minRow + Math.floor(Math.random() * (maxRow - minRow + 1));
         const c = minCol + Math.floor(Math.random() * (maxCol - minCol + 1));
         if (!reachable.has(`${r},${c}`)) continue;
@@ -195,6 +235,7 @@ export class DungeonFloorGenerator {
         const x = c * GRID.CELL_SIZE;
         const y = r * GRID.CELL_SIZE;
         if (backgroundObjects.some(o => o.position.x === x && o.position.y === y)) continue;
+        if (spaced && !isSpaced({ row: r, col: c })) continue;
         return { row: r, col: c };
       }
       return null;
@@ -215,6 +256,42 @@ export class DungeonFloorGenerator {
       if (map[row]) map[row][col] = true;
     }
     return map;
+  }
+
+  // Cavern Rocks ('cavern_rock', the unbreakable rock look) scattered on a
+  // numbered floor, so the rocks a dungeon holds are not all ones that move:
+  // a gate rock looks exactly like them, and the Onyx Hammer has something
+  // to roll. Each rock stands on open, reachable floor by the spacing rule,
+  // and is only kept if the Progression Solver, re-run with it in place
+  // (and the gate rock, wherever it can be shoved), still passes and leaves
+  // no cell it reached before out of reach. A rolled rock never comes back
+  // to rest, so the hammer can only ever open a floor further.
+  _scatterUnbreakableRocks({ templateName, diagonals, gateRockCell, collisionMap, backgroundObjects, reservedCells, isSpaced, rows, cols }) {
+    const proof = extraRocks => proveFloorLayout(templateName, diagonals, { gateRock: gateRockCell, extraRocks });
+    const base = proof([]);
+    if (!base.ok) return;
+    const unreached = base.regions.unreached.length;
+    const reachable = this._reachableCells(this._withSolidObjects(collisionMap, backgroundObjects),
+      rows, cols, STAIRS_UP_ROW, STAIRS_COL);
+    const candidates = this._shuffled([...reachable].map(key => {
+      const [row, col] = key.split(',').map(Number);
+      return { row, col };
+    }).filter(({ row, col }) => row >= 2 && row <= rows - 3 && col >= 2 && col <= cols - 3
+      && !reservedCells.some(p => p.row === row && p.col === col)
+      && !backgroundObjects.some(o => o.position.x === col * GRID.CELL_SIZE && o.position.y === row * GRID.CELL_SIZE)));
+    const want = UNBREAKABLE_ROCKS_MIN + Math.floor(Math.random() * (UNBREAKABLE_ROCKS_MAX - UNBREAKABLE_ROCKS_MIN + 1));
+    const placed = [];
+    let proofs = 0;
+    for (const cell of candidates) {
+      if (placed.length >= want || proofs >= UNBREAKABLE_ROCK_PROOFS) break;
+      if (!isSpaced(cell)) continue;
+      proofs++;
+      const result = proof([...placed, cell]);
+      if (!result.ok || result.regions.unreached.length !== unreached) continue;
+      if (base.regions.triggersSolvable && !result.regions.triggersSolvable) continue;
+      placed.push(cell);
+      backgroundObjects.push(BackgroundObject.createVariant('cavern_rock', cell.col * GRID.CELL_SIZE, cell.row * GRID.CELL_SIZE));
+    }
   }
 
   // BFS-reachable interior cells from (startRow, startCol), 4-connected,
@@ -367,7 +444,7 @@ export class DungeonFloorGenerator {
       if (!enemyChar) continue;
       // Random placement keeps 2 rows clear above the South up-stairs, where
       // a player descending North lands (DungeonSystem._landingAnchorFor).
-      const cell = pool.length ? pool.pop() : pickOpenCell(4, rows - 7, 3, cols - 4);
+      const cell = pool.length ? pool.pop() : pickOpenCell(4, rows - 7, 3, cols - 4, { spaced: false });
       if (!cell) continue;
       const enemy = new Enemy(enemyChar, cell.col * GRID.CELL_SIZE, cell.row * GRID.CELL_SIZE, depth);
       enemy.setCollisionMap(collisionMap);
@@ -496,6 +573,9 @@ export class DungeonFloorGenerator {
     };
     ctx.diagonals = ctx.edges.filter(e => DIAGONAL_DIRS.includes(e.dir)).map(e => e.dir);
     ctx.wantsTriggers = ctx.edges.some(e => e.reveal === 'triggers');
+    // The Push Rock alternative to the Skull Key (dungeonGraphBuilder keyGate):
+    // the footprint a gate rock covers on this floor, if the visit rolled one.
+    ctx.gateRockDir = ctx.edges.find(e => e.reveal === 'push')?.dir ?? null;
     const floor = FLOOR_KINDS[node.kind].generate(this, ctx);
     // A 'triggers' Reveal needs triggers that can all be solved. A floor that
     // drew no such template (none hosts its diagonals, or the kind is
@@ -509,12 +589,15 @@ export class DungeonFloorGenerator {
 
   _generateEntrance(ctx) {
     const { depth, zone } = ctx;
-    const { cols, rows, collisionMap, backgroundObjects, templateItems, pickOpenCell, spawnCells, spawnVents, fixtures } = this._buildScaffold({ depth, zone, diagonals: ctx.diagonals, wantsTriggers: ctx.wantsTriggers });
+    const { cols, rows, collisionMap, backgroundObjects, templateItems, pickOpenCell, spawnCells, spawnVents, fixtures } = this._buildScaffold({
+      depth, zone, diagonals: ctx.diagonals, wantsTriggers: ctx.wantsTriggers,
+      gateRockDir: ctx.gateRockDir, unbreakableRocks: true,
+    });
+    // The ∩ door goes down first, so the decor below is spaced from it.
+    backgroundObjects.push(new BackgroundObject('∩', STAIRS_COL * GRID.CELL_SIZE, EXIT_ROW * GRID.CELL_SIZE));
     this._addDecor(backgroundObjects, pickOpenCell, rows, cols);
     this._addTombs(backgroundObjects, pickOpenCell, rows, cols);
     this._placeSkullIfDue(ctx.nodeId, { backgroundObjects, pickOpenCell, rows, cols });
-
-    backgroundObjects.push(new BackgroundObject('∩', STAIRS_COL * GRID.CELL_SIZE, EXIT_ROW * GRID.CELL_SIZE));
 
     const descents = this._makeGraphDescents(ctx, backgroundObjects);
 
@@ -535,7 +618,10 @@ export class DungeonFloorGenerator {
 
   _generateCorridor(ctx) {
     const { depth, zone } = ctx;
-    const { cols, rows, collisionMap, backgroundObjects, templateItems, pickOpenCell, spawnCells, spawnVents, fixtures } = this._buildScaffold({ depth, zone, diagonals: ctx.diagonals, wantsTriggers: ctx.wantsTriggers });
+    const { cols, rows, collisionMap, backgroundObjects, templateItems, pickOpenCell, spawnCells, spawnVents, fixtures } = this._buildScaffold({
+      depth, zone, diagonals: ctx.diagonals, wantsTriggers: ctx.wantsTriggers,
+      gateRockDir: ctx.gateRockDir, unbreakableRocks: true,
+    });
     this._addDecor(backgroundObjects, pickOpenCell, rows, cols);
     this._addTombs(backgroundObjects, pickOpenCell, rows, cols);
     this._placeSkullIfDue(ctx.nodeId, { backgroundObjects, pickOpenCell, rows, cols });
@@ -577,14 +663,6 @@ export class DungeonFloorGenerator {
     // and reverted — see BRANCH_PANEL_ROW/COL comment below for the columns
     // this preserves clearance for).
     const { cols, rows, collisionMap, backgroundObjects, pickOpenCell, spawnCells } = this._buildScaffold({ useTemplate: false });
-    this._addDecor(backgroundObjects, pickOpenCell, rows, cols);
-    this._addTombs(backgroundObjects, pickOpenCell, rows, cols);
-    // No _placeSkullIfDue here — the Skull Key only drops on a floor kind
-    // that holds it (FLOOR_KINDS.holdsSkullKey) and is reachable before the
-    // door it opens, which leads *into* the Branch.
-
-    const up = this._makeGraphStairsUp(ctx, false);
-    backgroundObjects.push(up.obj);
 
     // Companion-panel puzzle — always visible, sitting directly in Branch
     // alongside the Trap Room door (bug #209: previously relocated into an
@@ -593,6 +671,7 @@ export class DungeonFloorGenerator {
     // Only *solving* it needs a companion (_updateBranchPanels); a solo
     // player can walk in, see both panels, and read the puzzle before
     // recruiting anyone. Row/cols mirror the original floor 2 constants.
+    // Placed before the decor, so the decor is spaced from them.
     const panelAObj = new BackgroundObject('▭', BRANCH_PANEL_A_COL * GRID.CELL_SIZE, BRANCH_PANEL_ROW * GRID.CELL_SIZE);
     panelAObj.kind = 'panel';
     setTriggerVisual(panelAObj, false);
@@ -602,6 +681,15 @@ export class DungeonFloorGenerator {
     panelBObj.kind = 'panel';
     setTriggerVisual(panelBObj, false);
     backgroundObjects.push(panelBObj);
+
+    this._addDecor(backgroundObjects, pickOpenCell, rows, cols);
+    this._addTombs(backgroundObjects, pickOpenCell, rows, cols);
+    // No _placeSkullIfDue here — the Skull Key only drops on a floor kind
+    // that holds it (FLOOR_KINDS.holdsSkullKey) and is reachable before the
+    // door it opens, which leads *into* the Branch.
+
+    const up = this._makeGraphStairsUp(ctx, false);
+    backgroundObjects.push(up.obj);
 
     // Descents come from the graph: the Pyramid, visible but locked until the
     // panel puzzle emits the 'panels' Reveal (DungeonPuzzleSystem.

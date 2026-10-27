@@ -139,6 +139,8 @@ For the ADR backlog, row 49 ("branching destination graph… no explicit cap") g
 - The rock's `onMove` emits `push` once it leaves the footprint, so the edge opens with either the key or the push.
 - The footprint is reserved, so the rock can't be pushed back onto it. If no fitting template exists, the push alternative is dropped for that visit.
 - Remove part (2) from the planning-inbox entry.
+- **As built (2026-10-26):** the key edge itself keeps its `key` Reveal. The push alternative is a separate hidden `push` edge from the same floor to the same floor, on a free footprint (a rock on the key door's own footprint would cover the door it is meant to stand beside). Templates are filtered by a solver proof (`proveTemplate`'s `gateRock` option: the rock must be shoveable off the footprint from the staircases' side without cutting any anchor off), with the bare scaffold as the fallback, so the alternative is never dropped. `DungeonPuzzleSystem._updateGateRock` emits `push` when the slide lands.
+- **Added scope (user, 2026-10-26):** numbered floors had no unbreakable rocks, so a gate rock stood out. Every Entrance and Corridor floor now scatters 2-4 `cavern_rock`s, each kept only if `proveFloorLayout` still passes with no newly cut-off cells. Everything the generator places is spaced by the "never adjacent" rule (`fixtureSchema.js tooClose`), which the schema also enforces on templates.
 
 ## Phase 6: Draft recipes for Yellow, Red, Cyan and Gray (for you to revise)
 - **Recipes:** draft `recipes/<zone>.json` from the zone paths in `claudedocs/zone-cosmology.md`: Power (Yellow), Glory (Red), Knowledge (Cyan), and Gray's mist. Each draft sets corridor range, shape weights, side-room placement and diagonal reveals.

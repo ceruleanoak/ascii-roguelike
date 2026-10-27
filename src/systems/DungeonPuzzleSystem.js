@@ -62,6 +62,7 @@ export class DungeonPuzzleSystem {
     // Any other templated floor's triggers (a Trap Room's too) open its
     // Trigger Blocks and emit its 'triggers' Reveal.
     if (floor.kind !== 'puzzleRoom') this._updateFloorTriggers(floor, dt);
+    this._updateGateRock(floor, dt);
   }
 
   /**
@@ -240,14 +241,7 @@ export class DungeonPuzzleSystem {
   _updateFloorTriggers(floor, dt) {
     if (!floor.triggers?.length || floor.triggersSolved) return;
     const { game } = this;
-    const anchorCells = new Set(floorAnchorCells(FOOTPRINT_CONTRACT, floor.diagonals)
-      .map(({ row, col }) => `${row},${col}`));
-    const world = {
-      collisionMap: floor.collisionMap,
-      backgroundObjects: floor.backgroundObjects,
-      isReserved: (col, row) => anchorCells.has(`${row},${col}`),
-    };
-    if (!tickTriggers(floor.triggers, dt, game.player, game.companion, world)) return;
+    if (!tickTriggers(floor.triggers, dt, game.player, game.companion, this._pushWorld(floor))) return;
     floor.triggersSolved = true;
     for (const block of floor.backgroundObjects.filter(obj => obj.typeId === 'trigger_block' && !obj.destroyed)) {
       floor.backgroundObjects.splice(floor.backgroundObjects.indexOf(block), 1);
@@ -259,6 +253,32 @@ export class DungeonPuzzleSystem {
     game.renderer?.markBackgroundDirty?.();
     game.audioSystem?.playSFX?.('dungeon_key_use');
     this.revealEdges(floor, 'triggers');
+  }
+
+  // The gate rock (DungeonFloorGenerator._buildScaffold): a Push Rock sitting
+  // on the footprint of the floor's 'push' descent, the alternative to the
+  // Skull Key. One shove off the footprint — never onto another anchor
+  // cell — and the floor emits its 'push' Reveal, opening that descent.
+  _updateGateRock(floor, dt) {
+    if (!floor.gateRock || floor.gateRock.active) return;
+    const { game } = this;
+    // The 'push' descent is hidden, so revealEdges sounds the chime itself.
+    if (tickTriggers([floor.gateRock], dt, game.player, game.companion, this._pushWorld(floor))) {
+      this.revealEdges(floor, 'push');
+    }
+  }
+
+  // The world a numbered floor's Push Rocks slide through: its walls and
+  // objects, with every anchor cell (staircases, landings, the Entrance's
+  // door) forbidden — the cells the Progression Solver proves stay connected.
+  _pushWorld(floor) {
+    const anchorCells = new Set(floorAnchorCells(FOOTPRINT_CONTRACT, floor.diagonals)
+      .map(({ row, col }) => `${row},${col}`));
+    return {
+      collisionMap: floor.collisionMap,
+      backgroundObjects: floor.backgroundObjects,
+      isReserved: (col, row) => anchorCells.has(`${row},${col}`),
+    };
   }
 
   // Puzzle Room — generic template-driven puzzle side room (see

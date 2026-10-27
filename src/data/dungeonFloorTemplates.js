@@ -60,7 +60,7 @@
 // unchanged from before the migration, so no call site elsewhere had to move.
 
 import FOOTPRINT_CONTRACT from './dungeon/footprintContract.json';
-import { reservedFootprintCells, DIAGONAL_DIRS } from './dungeon/footprints.js';
+import { reservedFootprintCells, footprintCellFor, DIAGONAL_DIRS } from './dungeon/footprints.js';
 import { proveTemplate } from './dungeon/progressionSolver.js';
 import { DUNGEON_TILES, cellsWithGlyph } from './dungeon/tiles.js';
 
@@ -168,6 +168,19 @@ const TEMPLATE_WEIGHTS = Object.entries(TEMPLATE_DATA)
       .map(diagonalKey)),
   }));
 
+// Whether a template can take a gate rock (a Push Rock covering one descent
+// footprint — DungeonFloorGenerator's Push Rock alternative to the Skull Key)
+// on footprint `dir` with `diagonals` in use: proven on first ask, then kept.
+const gateRockProofs = new Map();
+function hostsGateRock(name, dir, diagonals) {
+  const key = `${name}|${dir}|${diagonalKey(diagonals)}`;
+  if (!gateRockProofs.has(key)) {
+    gateRockProofs.set(key, proveTemplate(TEMPLATE_DATA[name], 'floor', FOOTPRINT_CONTRACT, null, diagonals,
+      { gateRock: footprintCellFor(dir, FOOTPRINT_CONTRACT) }).ok);
+  }
+  return gateRockProofs.get(key);
+}
+
 /**
  * Pick a random template name using the configured weights. `excludeNames`
  * (a Set) is used to keep every floor's layout distinct within one dungeon
@@ -177,12 +190,15 @@ const TEMPLATE_WEIGHTS = Object.entries(TEMPLATE_DATA)
  * `diagonals` narrows the pool to templates that can host those diagonal
  * footprints; null when none can (the floor goes bare). `triggers` narrows
  * it to templates whose triggers can all be made active; null when none fit.
+ * `gateRock` (a footprint dir) narrows it to templates proven to take a gate
+ * rock there; null when none can.
  */
-export function pickRandomTemplateName(excludeNames = null, diagonals = [], { triggers = false } = {}) {
+export function pickRandomTemplateName(excludeNames = null, diagonals = [], { triggers = false, gateRock = null } = {}) {
   let pool = diagonals.length
     ? TEMPLATE_WEIGHTS.filter(t => t.hosts.has(diagonalKey(diagonals)))
     : TEMPLATE_WEIGHTS;
   if (triggers) pool = pool.filter(t => t.solvesTriggers);
+  if (gateRock) pool = pool.filter(t => hostsGateRock(t.name, gateRock, diagonals));
   if (pool.length === 0) return null;
   if (excludeNames && excludeNames.size > 0) {
     const remaining = pool.filter(t => !excludeNames.has(t.name));
@@ -227,6 +243,26 @@ export function applyTemplateToCollisionMap(collisionMap, templateName, reserved
  */
 export function getTemplateData(templateName) {
   return TEMPLATE_DATA[templateName] ?? TEMPLATE_DATA.open;
+}
+
+// An untemplated floor as the solver sees it: the border wall around open floor.
+const BARE_TEMPLATE = {
+  grid: Array.from({ length: FOOTPRINT_CONTRACT.rows }, (_, row) =>
+    (row === 0 || row === FOOTPRINT_CONTRACT.rows - 1)
+      ? '#'.repeat(FOOTPRINT_CONTRACT.cols)
+      : `#${'.'.repeat(FOOTPRINT_CONTRACT.cols - 2)}#`),
+};
+
+/**
+ * Prove one generated floor layout: `templateName` (null = the bare
+ * scaffold) with its `diagonals` in use, a gate rock at `gateRock`
+ * ({ row, col } or null), and the generator's `extraRocks` (Unbreakable Rocks
+ * it scattered) added to the template's own. The Progression Solver's result.
+ */
+export function proveFloorLayout(templateName, diagonals = [], { gateRock = null, extraRocks = [] } = {}) {
+  const data = templateName ? getTemplateData(templateName) : BARE_TEMPLATE;
+  const unbreakableRocks = [...(data.unbreakableRocks ?? []), ...extraRocks];
+  return proveTemplate({ ...data, unbreakableRocks }, 'floor', FOOTPRINT_CONTRACT, null, diagonals, { gateRock });
 }
 
 /**

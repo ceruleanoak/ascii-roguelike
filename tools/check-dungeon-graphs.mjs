@@ -35,8 +35,9 @@ function seededRng(seed) {
 function layerName(graph) {
   const corridors = Object.values(graph.nodes).filter(n => n.kind === 'corridor').length;
   const intoBranch = graph.edges.filter(e => e.to === 'branch' && !e.hidden).length;
-  const hidden = graph.edges.some(e => e.hidden) ? '+hidden' : '';
-  return `${corridors} ${intoBranch > 1 ? 'triangle' : 'chain'}${hidden}`;
+  const hidden = graph.edges.some(e => e.hidden && e.reveal !== 'push') ? '+hidden' : '';
+  const push = graph.edges.some(e => e.reveal === 'push') ? '+push' : '';
+  return `${corridors} ${intoBranch > 1 ? 'triangle' : 'chain'}${hidden}${push}`;
 }
 
 let failed = false;

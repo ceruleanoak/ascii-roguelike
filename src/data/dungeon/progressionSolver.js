@@ -88,15 +88,17 @@ export function toolKitForItem(item) {
  * @param {object} items      the ITEMS catalogue (passed in so this module stays pure)
  * @param {string[]} [diagonals] floor mode: diagonal footprints (NW/NE) the floor uses,
  *                              proven clear and connected alongside the base four
+ * @param {object} [opts.gateRock] floor mode: { row, col } of a gate rock covering a footprint
  */
-export function proveTemplate(data, mode, contract, items, diagonals = []) {
+export function proveTemplate(data, mode, contract, items, diagonals = [], { gateRock = null } = {}) {
   if (mode === 'puzzle' && data.solverExempt) {
     return { ok: true, exempt: true, errors: [], warnings: [], regions: { unreached: [] } };
   }
   const suppliedTools = mode === 'puzzle' && data.pedestal
     ? toolKitForItem(items[data.pedestal.weaponChar])
     : {};
-  return solveTemplate({ grid: data.grid, fixtures: data, mode, contract, suppliedTools, diagonals });
+  const fixtures = gateRock ? { ...data, gateRock } : data;
+  return solveTemplate({ grid: data.grid, fixtures, mode, contract, suppliedTools, diagonals });
 }
 
 const cellName = (row, col) => `(${row},${col})`;
@@ -105,7 +107,7 @@ const cellName = (row, col) => `(${row},${col})`;
  * @param {object} args
  * @param {string[]} args.grid       the template's rows
  * @param {object}   [args.fixtures] { triggers, hookPosts, unbreakableRocks, deflectors, spawners } — both modes;
- *                                    { pedestal, dais } — puzzle mode; { items } — floor mode
+ *                                    { pedestal, dais } — puzzle mode; { items, gateRock } — floor mode
  * @param {'floor'|'puzzle'} args.mode
  * @param {object}   args.contract   footprintContract.json
  * @param {object}   [args.suppliedTools] toolKitForItem() of the pedestal item — picked up at the pedestal
@@ -195,7 +197,15 @@ function solveFloor(map, contract, fixtures, errors, warnings, diagonals = []) {
   // Fixtures that stand solid on a plain floor cell: Unbreakable Rocks and
   // Deflectors for good, Push Rocks wherever they have been shoved to.
   const triggers = (fixtures.triggers ?? []).map(t => ({ ...t, index: at(t.row, t.col) }));
-  const pushRocks = triggers.filter(t => t.kind === 'push');
+  // A gate rock: a Push Rock the generator sets ON a descent footprint (the
+  // Push Rock alternative to the Skull Key, DungeonFloorGenerator), covering
+  // the Hidden Descent that shoving it off reveals. It is not one of the
+  // floor's triggers; it must be pushable, and its footprint only has to
+  // connect once it is uncovered.
+  const gateRock = fixtures.gateRock
+    ? { ...fixtures.gateRock, kind: 'push', index: at(fixtures.gateRock.row, fixtures.gateRock.col) }
+    : null;
+  const pushRocks = [...triggers.filter(t => t.kind === 'push'), ...(gateRock ? [gateRock] : [])];
   const plainTriggers = triggers.filter(t => t.kind !== 'push');
   const fixedSolid = new Set([...(fixtures.unbreakableRocks ?? []), ...(fixtures.deflectors ?? [])]
     .map(p => at(p.row, p.col)));
@@ -209,7 +219,7 @@ function solveFloor(map, contract, fixtures, errors, warnings, diagonals = []) {
   for (const p of points) {
     if (tileSolid(p.index)) {
       errors.push(`${p.what} ${cellName(p.row, p.col)} is solid — the player would land in a wall.`);
-    } else if (fixedSolid.has(p.index) || startRocks.has(p.index)) {
+    } else if (fixedSolid.has(p.index) || (startRocks.has(p.index) && p.index !== gateRock?.index)) {
       errors.push(`${p.what} ${cellName(p.row, p.col)} holds a rock or Deflector — the player would land in it.`);
     }
   }
@@ -253,6 +263,7 @@ function solveFloor(map, contract, fixtures, errors, warnings, diagonals = []) {
     const closedAnchor = closed[points[0].index];
     const problems = [];
     for (const p of points) {
+      if (p.index === gateRock?.index && rockCells.has(p.index)) continue;   // still covered
       const shut = hasShutters && p.arrival;
       if ((shut ? closed : labels)[p.index] !== (shut ? closedAnchor : anchor)) {
         const how = shut ? 'without tools or opening a Shutter' : 'without tools';
@@ -272,7 +283,11 @@ function solveFloor(map, contract, fixtures, errors, warnings, diagonals = []) {
   for (const problem of connectionProblems(startRocks)) errors.push(`${problem}.`);
   if (errors.length) return { unreached: [] };
 
+  let gateRockMoves = false;
   if (pushRocks.length) searchPushRocks();
+  if (gateRock && !gateRockMoves && !errors.length) {
+    errors.push(`The gate rock ${cellName(gateRock.row, gateRock.col)} can't be pushed off its footprint from the staircases' side.`);
+  }
   checkHookPosts();
 
   // Leaning on a Push Rock is open to anyone, so every place the rocks can be
@@ -316,6 +331,7 @@ function solveFloor(map, contract, fixtures, errors, warnings, diagonals = []) {
             if (reported++ < 3) errors.push(`Softlock: ${[...trace, step].join(' → ')} — ${problems[0]}.`);
             return;
           }
+          if (rock === gateRock) gateRockMoves = true;
           queue.push({ dirs: next, trace: [...trace, step] });
         });
       });
