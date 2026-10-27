@@ -16,6 +16,9 @@
 //              'clear' — opens for good once its floor has no live enemies
 //                       and no standing Spawn Vent
 //                       (DungeonPuzzleSystem._updateShutters)
+//              'triggers' — opens for good once every trigger on its floor
+//                       is active at once
+//                       (DungeonPuzzleSystem._updateFloorTriggers)
 //   reachOver  a strike (whip crack, boomerang) passes over it even though it
 //              is solid — a Gap is a void, not a wall
 //   modes      which template kinds may use it: 'floor' (Interior —
@@ -54,12 +57,12 @@ export const DUNGEON_TILES = {
   // hallway to its switch.
   '=': {
     name: 'Lava', solid: false, opensWith: null, reachOver: true,
-    modes: ['puzzle'],
+    modes: ['floor', 'puzzle'],
     editor: { bg: '#5c1c0c' },
   },
   'G': {
     name: 'Gap', solid: true, opensWith: null, reachOver: true,
-    modes: ['puzzle'],
+    modes: ['floor', 'puzzle'],
     editor: { bg: '#050506' },
   },
   'B': {
@@ -83,6 +86,15 @@ export const DUNGEON_TILES = {
     name: 'Shutter', solid: true, opensWith: 'clear', reachOver: false,
     modes: ['floor', 'puzzle'],
     editor: { bg: '#24243a', fg: '#b0b0ff', glyph: 'S' },
+  },
+  // Solid until every trigger on the floor is active at once, then every
+  // Trigger Block opens for good. Numbered floors only, and what it hides is
+  // optional reward — a floor's way on never waits on its triggers (a Puzzle
+  // Room's triggers open its Exit instead).
+  'T': {
+    name: 'Trigger Block', solid: true, opensWith: 'triggers', reachOver: false,
+    modes: ['floor'],
+    editor: { bg: '#3a3018', fg: '#d0a850', glyph: 'T' },
   },
 };
 

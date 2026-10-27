@@ -149,6 +149,24 @@ function loadTilesModule() {
   return _tilesModulePromise;
 }
 
+// The template fixture schema (src/data/dungeon/fixtureSchema.js) — the same
+// check of triggers, hook posts, rocks, deflectors, torches and items that the
+// data gate runs, so both template kinds' validators below share one copy.
+let _fixtureSchemaPromise = null;
+function loadFixtureSchemaModule() {
+  if (!_fixtureSchemaPromise) {
+    _fixtureSchemaPromise = import(pathToFileURL(path.join(DATA_ROOT, 'fixtureSchema.js')).href);
+  }
+  return _fixtureSchemaPromise;
+}
+
+/** The shared fixture check, with `items` chars resolved against ITEMS. */
+async function validateFixtures(data, opts) {
+  const { validateTemplateFixtures } = await loadFixtureSchemaModule();
+  const { ITEMS } = await loadSolverModules();
+  return validateTemplateFixtures(data, { ...opts, isItemChar: char => !!ITEMS[char] });
+}
+
 // The Progression Solver (src/data/dungeon/progressionSolver.js) and the item
 // catalogue its Puzzle Room proof reads the pedestal's tools from. A save runs
 // the same proveTemplate() the game's random pools and the data gate
@@ -253,10 +271,14 @@ async function validateFloorTemplate(data) {
   // contract existed. The editor still locks these cells from painting (see
   // index.html's isLockedInterior) as an authoring aid, but that's a UI
   // convenience, not a data invariant worth failing a save over.
-  // A Spawn Vent is a different matter: the generator would put a live
-  // fixture on the staircase, so validateSpawners rejects reserved cells.
+  // Fixtures and Spawn Vents are a different matter: the generator would put
+  // a live fixture on the staircase, so both checks reject reserved cells.
   const { reservedFootprintCells } = await loadFootprintsModule();
-  return validateSpawners(data.spawners, data.grid, { rows, cols, reservedCells: reservedFootprintCells(contract) });
+  const reservedCells = reservedFootprintCells(contract);
+  const seen = new Set();
+  const fixtureErr = await validateFixtures(data, { rows, cols, reservedCells, seen });
+  if (fixtureErr) return fixtureErr;
+  return validateSpawners(data.spawners, data.grid, { rows, cols, reservedCells, seen });
 }
 
 ipcMain.handle('footprint-contract-load', () => readJSON(FOOTPRINT_CONTRACT_FILE));
@@ -409,93 +431,9 @@ async function validatePuzzleTemplate(data) {
   // hook posts, torches, the pedestal, the dais, spawn vents) — two different fixtures sharing one
   // cell is invalid regardless of which categories they come from.
   const seen = new Set();
-  for (let i = 0; i < data.triggers.length; i++) {
-    const t = data.triggers[i];
-    if (!t || typeof t !== 'object') return `trigger ${i} must be an object.`;
-    if (!Number.isInteger(t.row) || t.row < 1 || t.row > PUZZLE_ROWS - 2) return `trigger ${i} row out of bounds.`;
-    if (!Number.isInteger(t.col) || t.col < 1 || t.col > PUZZLE_COLS - 2) return `trigger ${i} col out of bounds.`;
-    const key = `${t.row},${t.col}`;
-    if (seen.has(key)) return `trigger ${i} shares a cell with another fixture.`;
-    seen.add(key);
-    const cellChar = data.grid[t.row][t.col];
-    if (cellChar !== '.') return `trigger ${i} at (${t.row},${t.col}) must sit on plain floor ('.'), not "${cellChar}".`;
-    if (t.kind !== 'switch' && t.kind !== 'panel' && t.kind !== 'torch' && t.kind !== 'push') {
-      return `trigger ${i} kind must be "switch", "panel", "torch", or "push".`;
-    }
-    if (t.activation !== 'permanent' && t.activation !== 'timed') {
-      return `trigger ${i} activation must be "permanent" or "timed".`;
-    }
-    // A torch trigger ignites and stays lit — 'timed' would mean it
-    // extinguishes itself, which doesn't match the fixture's own visual
-    // (permanent flame) or DungeonPuzzleSystem's ignite-only update logic.
-    if (t.kind === 'torch' && t.activation !== 'permanent') {
-      return `trigger ${i} is a torch — activation must be "permanent" (a lit torch never reverts).`;
-    }
-    // A Push Rock slides once and stays where it was shoved.
-    if (t.kind === 'push' && t.activation !== 'permanent') {
-      return `trigger ${i} is a Push Rock — activation must be "permanent" (it never slides back).`;
-    }
-    if (t.activation === 'timed' && !(Number.isFinite(t.neutralizeSeconds) && t.neutralizeSeconds > 0)) {
-      return `trigger ${i} is timed but neutralizeSeconds must be a number > 0.`;
-    }
-  }
-
-  // Hook posts — optional, manually placed (not auto-derived from Gap
-  // cells); each sits on plain floor like a trigger.
-  if (data.hookPosts !== undefined) {
-    if (!Array.isArray(data.hookPosts)) return 'hookPosts must be an array.';
-    for (let i = 0; i < data.hookPosts.length; i++) {
-      const p = data.hookPosts[i];
-      if (!p || typeof p !== 'object') return `hookPost ${i} must be an object.`;
-      if (!Number.isInteger(p.row) || p.row < 1 || p.row > PUZZLE_ROWS - 2) return `hookPost ${i} row out of bounds.`;
-      if (!Number.isInteger(p.col) || p.col < 1 || p.col > PUZZLE_COLS - 2) return `hookPost ${i} col out of bounds.`;
-      const key = `${p.row},${p.col}`;
-      if (seen.has(key)) return `hookPost ${i} shares a cell with another fixture.`;
-      seen.add(key);
-      const cellChar = data.grid[p.row][p.col];
-      if (cellChar !== '.') return `hookPost ${i} at (${p.row},${p.col}) must sit on plain floor ('.'), not "${cellChar}".`;
-    }
-  }
-
-  // Unbreakable Rocks — optional Cavern Rocks the Onyx Hammer rolls (the
-  // Hammer Trial); Deflectors — optional { row, col, char } triangles that
-  // turn a rolling rock or a shot. Both sit on plain floor.
-  for (const [field, label] of [['unbreakableRocks', 'unbreakableRock'], ['deflectors', 'deflector']]) {
-    if (data[field] === undefined) continue;
-    if (!Array.isArray(data[field])) return `${field} must be an array.`;
-    for (let i = 0; i < data[field].length; i++) {
-      const p = data[field][i];
-      if (!p || typeof p !== 'object') return `${label} ${i} must be an object.`;
-      if (!Number.isInteger(p.row) || p.row < 1 || p.row > PUZZLE_ROWS - 2) return `${label} ${i} row out of bounds.`;
-      if (!Number.isInteger(p.col) || p.col < 1 || p.col > PUZZLE_COLS - 2) return `${label} ${i} col out of bounds.`;
-      const key = `${p.row},${p.col}`;
-      if (seen.has(key)) return `${label} ${i} shares a cell with another fixture.`;
-      seen.add(key);
-      const cellChar = data.grid[p.row][p.col];
-      if (cellChar !== '.') return `${label} ${i} at (${p.row},${p.col}) must sit on plain floor ('.'), not "${cellChar}".`;
-      if (field === 'deflectors' && !['◢', '◣', '◤', '◥'].includes(p.char)) return `deflector ${i} char must be one of ◢ ◣ ◤ ◥.`;
-    }
-  }
+  const fixtureErr = await validateFixtures(data, { rows: PUZZLE_ROWS, cols: PUZZLE_COLS, seen });
+  if (fixtureErr) return fixtureErr;
   if (data.solverExempt !== undefined && data.solverExempt !== true) return 'solverExempt must be true or absent.';
-
-  // Torches — optional, DECORATIVE maze-parity fixtures (contrast the
-  // torch-KIND trigger above, which looks the same but gates the exit);
-  // also sit on plain floor. `lit` is an optional starting-state flag.
-  if (data.torches !== undefined) {
-    if (!Array.isArray(data.torches)) return 'torches must be an array.';
-    for (let i = 0; i < data.torches.length; i++) {
-      const t = data.torches[i];
-      if (!t || typeof t !== 'object') return `torch ${i} must be an object.`;
-      if (!Number.isInteger(t.row) || t.row < 1 || t.row > PUZZLE_ROWS - 2) return `torch ${i} row out of bounds.`;
-      if (!Number.isInteger(t.col) || t.col < 1 || t.col > PUZZLE_COLS - 2) return `torch ${i} col out of bounds.`;
-      const key = `${t.row},${t.col}`;
-      if (seen.has(key)) return `torch ${i} shares a cell with another fixture.`;
-      seen.add(key);
-      const cellChar = data.grid[t.row][t.col];
-      if (cellChar !== '.') return `torch ${i} at (${t.row},${t.col}) must sit on plain floor ('.'), not "${cellChar}".`;
-      if (t.lit !== undefined && typeof t.lit !== 'boolean') return `torch ${i} lit must be a boolean.`;
-    }
-  }
 
   // Pedestal — optional, opt-in single marker (generalized off Whip Trial;
   // any template may set one). weaponChar is free text (the dungeon editor's

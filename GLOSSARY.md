@@ -2004,8 +2004,9 @@ identity, not standard programming terms.
   `createPushRock()` and read by `readPushRock()` (`src/systems/PushRock.js`) as triggerMachine
   kind `'push'`, always `activation: 'permanent'`. The caller's `world` (`collisionMap`,
   `backgroundObjects`, `isReserved`, `onMove`) decides which cells it may slide into. It is placed
-  by the `push_lock` Barricade (among `cavern_rock` decoys, via `decoyTypeId`), by Puzzle Room
-  templates (dungeon editor Push Rock tool), and on every Ocean Room's sand
+  by the `push_lock` Barricade (among `cavern_rock` decoys, via `decoyTypeId`), by floor and
+  Puzzle Room templates (dungeon editor Push Rock tool; on a numbered floor `isReserved` keeps it
+  off every staircase and landing cell, `floorAnchorCells`), and on every Ocean Room's sand
   (`OceanPushRockSystem`: `placeOceanPushRock` from `generateOceanTerrain`, `room.oceanPushRock`).
 - **Not:** "pushable block", "movable rock", "push block", "boulder".
 
@@ -2114,6 +2115,22 @@ identity, not standard programming terms.
   Vent to be reachable before the Shutters it holds shut.
 - **Not:** a Lock Block (opened with a key) or a Barricade; "door", "gate", "clear wall".
 
+### Trigger Block
+- **Definition:** A solid block on a numbered dungeon floor that opens for good once every
+  trigger on its floor (switch, floor panel, torch or Push Rock) is active at the same time.
+  Every Trigger Block on the floor opens at once. What it walls off is always optional reward,
+  never the way on; the same solve can also fire the floor's `triggers` Reveal.
+- **In code:** template grid glyph `T` (`src/data/dungeon/tiles.js`, `opensWith: 'triggers'`,
+  floor templates only), stamped solid and topped by a `trigger_block` Background Object variant
+  (`GameConfig.js`, `▥`, `coversWall`) placed by `placeTemplateFixtures`
+  (`src/systems/dungeonFixtures.js`, the fixture placement numbered floors and Puzzle Rooms
+  share); opened by `DungeonPuzzleSystem._updateFloorTriggers`. The reward is template-authored:
+  a `K` Simple Key or an entry in the template's `items` list (`{ row, col, char }`, any
+  `ITEMS` key). The fixture lists are checked by `validateTemplateFixtures`
+  (`src/data/dungeon/fixtureSchema.js`), shared by the dungeon editor and `check:data`.
+- **Not:** a Shutter (opened by clearing the floor), a Lock Block, or a Puzzle Room's Exit
+  (which the room's triggers open instead).
+
 ### Spawn Vent
 - **Definition:** A breakable dungeon fixture that keeps producing enemies on its own cell, with
   at most `maxAlive` of its enemies alive at once and one new enemy every `interval` seconds.
@@ -2128,7 +2145,8 @@ identity, not standard programming terms.
 ### Progression Solver
 - **Definition:** The static proof that a dungeon template cannot softlock. On a numbered floor
   every staircase and landing must connect without tools or keys, so anything behind a
-  Bombable wall or Lock Block is optional. In a Puzzle Room the exit must be solvable with only
+  Bombable wall, Lock Block or Trigger Block is optional, and must stay connected after any
+  shove of its Push Rocks and any hook-post pull. In a Puzzle Room the exit must be solvable with only
   what the room supplies, from every state the player can reach: a Push Rock shoved the wrong
   way, a hook taken too early or a Simple Key spent on the wrong Lock Block must not cut it off.
 - **In code:** `solveTemplate()` in `src/data/dungeon/progressionSolver.js` (pure).
@@ -2178,12 +2196,15 @@ identity, not standard programming terms.
 - **Definition:** A Dungeon descent that isn't drawn until its Reveal fires — not a locked door,
   just bare floor, until the floor is solved and it appears. It sits on a diagonal footprint (a
   North corner, NW or NE) and is always a shortcut: every floor stays reachable through the
-  descents that are drawn. Only a floor event (`clear`) may open one, never a held item.
+  descents that are drawn. Only a floor event (`clear` or `triggers`) may open one, never a
+  held item.
 - **In code:** a Dungeon Graph edge with `hidden: true` and `dir` `NW`/`NE`, rolled by
   `buildDungeonGraph` on the recipe's `diagonals.chance`; `descent.hidden` on the floor, painted
   blank by `paintDescentVisual` while locked. A corner is reserved only on a floor that uses it
   (`reservedFootprintCells(contract, diagonals)`), and such a floor draws only templates the
-  Progression Solver proved can host that corner (`hosts` in `dungeonFloorTemplates.js`).
+  Progression Solver proved can host that corner (`hosts` in `dungeonFloorTemplates.js`). A
+  `triggers` edge asks for a template whose triggers the solver proved reachable
+  (`solvesTriggers`); a floor that couldn't get one opens the descent on `clear` instead.
 - **Not:** a locked descent (drawn, waiting on its Reveal); a Bombable Wall.
 
 ### Floor Kind
@@ -2198,7 +2219,8 @@ identity, not standard programming terms.
 - **Definition:** What opens a Dungeon descent. `open` needs nothing; `key` spends the Skull
   Key; `panels` is Green's floor-panel NPC puzzle on the Branch; `offering` is the Pyramid's
   Legend of Three; `clear` fires once the floor holds no counted enemy and no standing Spawn
-  Vent (the same moment its Shutters open). A floor *emits* a Reveal when its puzzle is solved, and every locked descent
+  Vent (the same moment its Shutters open); `triggers` fires once every trigger on a numbered
+  floor is active at once (the same moment its Trigger Blocks open). A floor *emits* a Reveal when its puzzle is solved, and every locked descent
   on that floor naming it opens. The puzzle never names which door it opens.
 - **In code:** `edge.reveal` on the Dungeon Graph, copied to `descent.reveal`;
   `DungeonPuzzleSystem.revealEdges(floor, reveal)` opens the matching descents.

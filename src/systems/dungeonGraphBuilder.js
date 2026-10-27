@@ -37,10 +37,10 @@ import { FLOOR_KINDS } from './dungeonFloorKinds.js';
 
 const DIRS = ['N', 'W', 'E'];
 const DIAGONALS = ['NW', 'NE'];
-const REVEALS = ['open', 'key', 'panels', 'offering', 'clear'];
+const REVEALS = ['open', 'key', 'panels', 'offering', 'clear', 'triggers'];
 // What may open a Hidden Descent: a floor event, never a held item — a door
 // the player can't see must not ask for a key.
-const HIDDEN_REVEALS = ['clear'];
+const HIDDEN_REVEALS = ['clear', 'triggers'];
 const BRANCH_PUZZLES = ['panels'];
 const SHAPES = ['chain', 'triangle'];
 const TRAP_ROOM_HOSTS = ['branch', 'corridor'];

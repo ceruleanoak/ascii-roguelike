@@ -1,7 +1,7 @@
 import { GRID } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { setTriggerVisual } from './triggerMachine.js';
-import { createPushRock } from './PushRock.js';
+import { placeTemplateFixtures } from './dungeonFixtures.js';
 import { Enemy } from '../entities/Enemy.js';
 import { Item } from '../entities/Item.js';
 import { BOMB_BAG_CHAR } from './BombBagSystem.js';
@@ -10,7 +10,7 @@ import { getZoneRandomEnemy } from '../data/enemies.js';
 import { applyZoneCombatModifiers } from '../data/zones.js';
 import {
   pickRandomTemplateName, applyTemplateToCollisionMap, getTemplateWaterCells, getTemplateBombableCells,
-  getTemplateCellsWithGlyph, getTemplateSpawners,
+  getTemplateCellsWithGlyph, getTemplateSpawners, getTemplateData,
   getTemplateSpawnCells, getReservedFootprintCells, paintDescentVisual, paintStairsUpVisual,
   STAIRS_COL, STAIRS_UP_ROW, EXIT_ROW,
 } from '../data/dungeonFloorTemplates.js';
@@ -18,11 +18,9 @@ import { getLegendOfThree } from '../data/legendOfThree.js';
 import { SLOT_CHROME } from '../data/slotChrome.js';
 import { pickWeaponTutorial } from '../data/dungeon/weaponTutorials.js';
 import {
-  applyPuzzleTemplateToCollisionMap, getPuzzleTemplateWaterCells,
-  getPuzzleTemplateGapCells, getPuzzleTemplateBombableCells, getPuzzleTemplateExitCell, getPuzzleTemplateTriggers,
-  getPuzzleTemplateHookPosts, getPuzzleTemplateTorches, getPuzzleTemplatePedestal, getPuzzleTemplateDais,
-  getPuzzleTemplateCellsWithGlyph, getPuzzleTemplateSpawners, getPuzzleTemplateLavaCells,
-  getPuzzleTemplateUnbreakableRocks, getPuzzleTemplateDeflectors, isPuzzleTemplateProven,
+  getPuzzleTemplate, applyPuzzleTemplateToCollisionMap, getPuzzleTemplateWaterCells,
+  getPuzzleTemplateBombableCells, getPuzzleTemplateExitCell, getPuzzleTemplatePedestal, getPuzzleTemplateDais,
+  getPuzzleTemplateCellsWithGlyph, getPuzzleTemplateSpawners, isPuzzleTemplateProven,
 } from '../data/dungeonPuzzleTemplates.js';
 import { pickUnspawnedItem, markItemSpawned } from './spawnedItems.js';
 import { hasKeyItem } from './keyItems.js';
@@ -81,27 +79,6 @@ const BRANCH_PANEL_ROW = 11;
 const BRANCH_PANEL_A_COL = 7;
 const BRANCH_PANEL_B_COL = 17;
 
-// Puzzle Room torch fixture — maze-parity ignite behavior (unlit until the
-// player approaches while wielding the Torch item, permanent once lit,
-// pulsing glow while lit), minus the ghost-shielding half of MazeSystem's
-// own MazeTorch (Puzzle Rooms have no ghosts — Tomb Ghosts, the dungeon's
-// only ghost type, spawn from Tombs on numbered floors only; see
-// DungeonGhostSystem, _addTombs below). A distinct, local class rather
-// than importing MazeTorch itself — MazeSystem/DungeonSystem are
-// independent siblings (Interior System Pattern, CLAUDE.md); only the
-// shared visual constants are reused (DungeonPuzzleSystem's ignite check,
-// HutInteriorOverlay's render block).
-class PuzzleTorch {
-  constructor(col, row, lit = false) {
-    this.char       = '!';
-    this.col        = col;
-    this.row        = row;
-    this.position   = { x: col * GRID.CELL_SIZE, y: row * GRID.CELL_SIZE };
-    this.lit        = lit;
-    this.pulseTimer = 0;
-  }
-}
-
 export class DungeonFloorGenerator {
   constructor(game) {
     this.game = game;
@@ -124,7 +101,8 @@ export class DungeonFloorGenerator {
   // `diagonals`: the NW/NE footprints this floor's Hidden Descents sit on —
   // kept clear, and the template drawn from those proven to keep them
   // reachable (bare scaffold when no template can).
-  _buildScaffold({ useTemplate = true, extraReservedCells = [], depth = 1, zone = 'gray', diagonals = [] } = {}) {
+  // `wantsTriggers`: the floor has a descent behind its 'triggers' Reveal.
+  _buildScaffold({ useTemplate = true, extraReservedCells = [], depth = 1, zone = 'gray', diagonals = [], wantsTriggers = false } = {}) {
     const cols = INTERIOR_COLS;
     const rows = INTERIOR_ROWS;
     const collisionMap = [];
@@ -143,7 +121,11 @@ export class DungeonFloorGenerator {
       // has appeared once (templatesUsed on the D-room's interiorState, so it
       // lives and dies with the Dungeon itself).
       const used = this.game.dungeonSystem.interiorState.templatesUsed;
-      templateName = pickRandomTemplateName(used, diagonals);
+      // A floor with a descent behind its 'triggers' Reveal draws from the
+      // templates whose triggers can all be solved; when none fits, any
+      // template will do and generateNode falls those descents back to 'clear'.
+      templateName = (wantsTriggers && pickRandomTemplateName(used, diagonals, { triggers: true }))
+        || pickRandomTemplateName(used, diagonals);
       if (templateName) {
         used.add(templateName);
         applyTemplateToCollisionMap(collisionMap, templateName, reservedCells);
@@ -170,6 +152,16 @@ export class DungeonFloorGenerator {
       spawnCells = getTemplateSpawnCells(templateName, reservedCells)
         .filter(({ row, col }) => !collisionMap[row]?.[col]);
     }
+    // The fixtures a template authors (dungeonFixtures.js) — the same lists
+    // a Puzzle Room takes. Spread onto the floor by every templated generator.
+    const fixtures = templateName
+      ? placeTemplateFixtures(getTemplateData(templateName), { backgroundObjects, items: templateItems, reservedCells })
+      : { triggers: [], hookPosts: [], torches: [], gapCells: null };
+    // Set once the floor's triggers are all active at once
+    // (DungeonPuzzleSystem._updateFloorTriggers); the anchor cells a Push
+    // Rock may never be shoved onto come from `diagonals`.
+    fixtures.triggersSolved = false;
+    fixtures.diagonals = diagonals;
 
     // Everything placed on this floor must stand where the player can reach
     // it. A template may wall off a walkable pocket (open.json's sealed
@@ -178,7 +170,9 @@ export class DungeonFloorGenerator {
     // Tomb there was simply lost. Measured from the up-stairs footprint,
     // which the Progression Solver checks connects to every other staircase
     // and landing.
-    const reachable = this._reachableCells(collisionMap, rows, cols, STAIRS_UP_ROW, STAIRS_COL);
+    // Solid fixtures (rocks, Deflectors, Push Rocks) wall cells off too.
+    const reachable = this._reachableCells(this._withSolidObjects(collisionMap, backgroundObjects),
+      rows, cols, STAIRS_UP_ROW, STAIRS_COL);
     spawnCells = spawnCells.filter(({ row, col }) => reachable.has(`${row},${col}`));
     // A vent in a sealed pocket would hold its Shutters shut forever, so it
     // is left out the same way (the Progression Solver rejects that layout).
@@ -206,7 +200,21 @@ export class DungeonFloorGenerator {
       return null;
     };
 
-    return { cols, rows, collisionMap, backgroundObjects, templateItems, pickOpenCell, spawnCells, spawnVents };
+    return { cols, rows, collisionMap, backgroundObjects, templateItems, pickOpenCell, spawnCells, spawnVents, fixtures };
+  }
+
+  // A copy of collisionMap with every solid background object's cell marked
+  // blocked — for reachability, since a template's rocks and Deflectors are
+  // solid objects rather than stamped collision.
+  _withSolidObjects(collisionMap, backgroundObjects) {
+    const map = collisionMap.map(row => row.slice());
+    for (const obj of backgroundObjects) {
+      if (!obj.data?.solid || obj.destroyed) continue;
+      const row = Math.round(obj.position.y / GRID.CELL_SIZE);
+      const col = Math.round(obj.position.x / GRID.CELL_SIZE);
+      if (map[row]) map[row][col] = true;
+    }
+    return map;
   }
 
   // BFS-reachable interior cells from (startRow, startCol), 4-connected,
@@ -487,13 +495,21 @@ export class DungeonFloorGenerator {
       upFrom: edgeInto(graph, nodeId)?.from ?? null,
     };
     ctx.diagonals = ctx.edges.filter(e => DIAGONAL_DIRS.includes(e.dir)).map(e => e.dir);
+    ctx.wantsTriggers = ctx.edges.some(e => e.reveal === 'triggers');
     const floor = FLOOR_KINDS[node.kind].generate(this, ctx);
+    // A 'triggers' Reveal needs triggers that can all be solved. A floor that
+    // drew no such template (none hosts its diagonals, or the kind is
+    // untemplated) opens those descents when it is cleared instead, so a
+    // Hidden Descent always has a way to appear.
+    if (ctx.wantsTriggers && !floor.triggers?.length) {
+      for (const d of floor.descents) if (d.reveal === 'triggers') d.reveal = 'clear';
+    }
     return Object.assign(floor, { kind: node.kind, nodeId });
   }
 
   _generateEntrance(ctx) {
     const { depth, zone } = ctx;
-    const { cols, rows, collisionMap, backgroundObjects, templateItems, pickOpenCell, spawnCells, spawnVents } = this._buildScaffold({ depth, zone, diagonals: ctx.diagonals });
+    const { cols, rows, collisionMap, backgroundObjects, templateItems, pickOpenCell, spawnCells, spawnVents, fixtures } = this._buildScaffold({ depth, zone, diagonals: ctx.diagonals, wantsTriggers: ctx.wantsTriggers });
     this._addDecor(backgroundObjects, pickOpenCell, rows, cols);
     this._addTombs(backgroundObjects, pickOpenCell, rows, cols);
     this._placeSkullIfDue(ctx.nodeId, { backgroundObjects, pickOpenCell, rows, cols });
@@ -513,12 +529,13 @@ export class DungeonFloorGenerator {
       exitRow: EXIT_ROW, exitCol: STAIRS_COL,
       stairsUpRow: null, stairsUpCol: null, stairsUpObj: null, stairsUpLocked: false, ascendTo: null,
       descents,
+      ...fixtures,
     };
   }
 
   _generateCorridor(ctx) {
     const { depth, zone } = ctx;
-    const { cols, rows, collisionMap, backgroundObjects, templateItems, pickOpenCell, spawnCells, spawnVents } = this._buildScaffold({ depth, zone, diagonals: ctx.diagonals });
+    const { cols, rows, collisionMap, backgroundObjects, templateItems, pickOpenCell, spawnCells, spawnVents, fixtures } = this._buildScaffold({ depth, zone, diagonals: ctx.diagonals, wantsTriggers: ctx.wantsTriggers });
     this._addDecor(backgroundObjects, pickOpenCell, rows, cols);
     this._addTombs(backgroundObjects, pickOpenCell, rows, cols);
     this._placeSkullIfDue(ctx.nodeId, { backgroundObjects, pickOpenCell, rows, cols });
@@ -543,6 +560,7 @@ export class DungeonFloorGenerator {
       stairsUpRow: up.row, stairsUpCol: up.col, stairsUpObj: up.obj, stairsUpLocked: false,
       ascendTo: this._ascendToFor(ctx),
       descents,
+      ...fixtures,
     };
   }
 
@@ -733,7 +751,7 @@ export class DungeonFloorGenerator {
   // 4429455) now that 'trapRoom' names this room instead.
   generateTrapRoom(ctx) {
     const { depth, zone } = ctx;
-    const { cols, rows, collisionMap, backgroundObjects, templateItems, pickOpenCell, spawnCells, spawnVents } = this._buildScaffold({ depth, zone, diagonals: ctx.diagonals });
+    const { cols, rows, collisionMap, backgroundObjects, templateItems, pickOpenCell, spawnCells, spawnVents, fixtures } = this._buildScaffold({ depth, zone, diagonals: ctx.diagonals, wantsTriggers: ctx.wantsTriggers });
 
     // Locked exit until every enemy is cleared — DungeonPuzzleSystem unlocks it.
     const stairsUpObj = this._makeStairsUp(true);
@@ -747,7 +765,8 @@ export class DungeonFloorGenerator {
     // free to wall off regions elsewhere, so a fixed (STAIRS_COL, SPINE_ROW)
     // coordinate could land inside a sealed pocket (e.g. a walled-off water
     // pool). Bug report: reward spawned unreachable in exactly that shape.
-    const reachable = this._reachableCells(collisionMap, rows, cols, STAIRS_UP_ROW, STAIRS_COL);
+    const reachable = this._reachableCells(this._withSolidObjects(collisionMap, backgroundObjects),
+      rows, cols, STAIRS_UP_ROW, STAIRS_COL);
     const rewardCell = this._pickReachableCell(
       reachable, collisionMap, backgroundObjects, getReservedFootprintCells(ctx.diagonals),
       6, rows - 5, 3, cols - 4, STAIRS_UP_ROW, STAIRS_COL
@@ -769,6 +788,7 @@ export class DungeonFloorGenerator {
       stairsUpRow: STAIRS_UP_ROW, stairsUpCol: STAIRS_COL, stairsUpObj, stairsUpLocked: true,
       ascendTo: this._ascendToFor(ctx),
       descents: [],
+      ...fixtures,
     };
   }
 
@@ -801,29 +821,12 @@ export class DungeonFloorGenerator {
       backgroundObjects.push(new BackgroundObject('~', col * CS, row * CS));
     }
 
-    for (const { row, col } of getPuzzleTemplateLavaCells(templateName)) {
-      backgroundObjects.push(BackgroundObject.createVariant('lava', col * CS, row * CS));
-    }
-
-    // Hammer Trial fixtures: Cavern Rocks the Onyx Hammer rolls, and the
-    // Deflectors that turn a rolling rock toward its target.
-    for (const { row, col } of getPuzzleTemplateUnbreakableRocks(templateName)) {
-      backgroundObjects.push(BackgroundObject.createVariant('cavern_rock', col * CS, row * CS));
-    }
-    for (const { row, col, char } of getPuzzleTemplateDeflectors(templateName)) {
-      backgroundObjects.push(new BackgroundObject(char, col * CS, row * CS));
-    }
-
-    // Gap cells ('G') — impassable, chasm-rendered (same "reach across, not
-    // walk around" mechanic as the original Whip Trial's hardcoded gap band,
-    // generalized to arbitrary per-cell shapes). Collision is already
-    // stamped solid by applyPuzzleTemplateToCollisionMap above; gapCells is
-    // rendering-only metadata (HutInteriorOverlay draws chasm edge glyphs +
-    // true void instead of an ordinary wall for any cell in this set).
-    const gapCellList = getPuzzleTemplateGapCells(templateName);
-    const gapCells = gapCellList.length
-      ? new Set(gapCellList.map(({ row, col }) => `${row},${col}`))
-      : null;
+    // Lava, Hammer Trial rocks and Deflectors, Gaps, triggers, hook posts
+    // and torches — the fixtures every templated floor shares
+    // (dungeonFixtures.js). Items the template authors land in `items`.
+    const items = [];
+    const { triggers, hookPosts, torches, gapCells } =
+      placeTemplateFixtures(getPuzzleTemplate(templateName), { backgroundObjects, items });
 
     this._placeBombableWalls(backgroundObjects, getPuzzleTemplateBombableCells(templateName));
     this._placeLockBlocks(backgroundObjects, getPuzzleTemplateCellsWithGlyph(templateName, 'L'));
@@ -843,113 +846,6 @@ export class DungeonFloorGenerator {
     paintStairsUpVisual(stairsUpObj, sealed);
     backgroundObjects.push(stairsUpObj);
 
-    // Trigger fixtures — 'switch' is strike-based (puzzleSignal + glitterHit,
-    // indestructible override so a hit never destroys it, just pulses);
-    // 'panel' is occupancy-only and needs no override at all — its char is
-    // unregistered in BACKGROUND_OBJECTS, so BackgroundObject's constructor
-    // already falls back to indestructible:true/hp:null (see the hook-post
-    // comment below for the full mechanism), which is exactly right for a
-    // floor panel: nothing should ever be able to attack it. 'torch' is a
-    // third kind, built as a plain object rather than a BackgroundObject —
-    // ignition is proximity + held-item (same contract as a decorative
-    // PuzzleTorch below), not a combat strike, so it needs none of
-    // BackgroundObject's hp/collision machinery, just the generic
-    // activation/active/_timer trio _advanceTrigger already reads. Kept
-    // deliberately distinct from PuzzleTorch (which uses `.lit`) rather than
-    // a shared class: a decorative torch and a torch-trigger are genuinely
-    // different lifecycles (ambience that never gates vs. a real trigger
-    // that feeds the exit-unlock check) and conflating them risks reading
-    // the wrong field from the wrong render/update path.
-    const triggers = [];
-    for (const t of getPuzzleTemplateTriggers(templateName)) {
-      if (t.kind === 'torch') {
-        triggers.push({
-          char: '!',
-          col: t.col, row: t.row,
-          position: { x: t.col * CS, y: t.row * CS },
-          kind: 'torch',
-          activation: 'permanent',
-          active: false,
-          _timer: 0,
-          pulseTimer: 0,
-        });
-        continue;
-      }
-      // A Push Rock is its own fixture: a Cavern Rock look-alike that slides
-      // a cell when leaned on (PushRock.js). Always permanent.
-      if (t.kind === 'push') {
-        const rock = createPushRock(t.col, t.row);
-        backgroundObjects.push(rock);
-        triggers.push(rock);
-        continue;
-      }
-      const isSwitch = t.kind === 'switch';
-      const obj = new BackgroundObject(isSwitch ? '○' : '▭', t.col * CS, t.row * CS);
-      obj.kind = t.kind;
-      setTriggerVisual(obj, false);
-      if (isSwitch) {
-        obj.puzzleSignal = true;
-        obj.indestructible = false;
-        obj.hp = 1;
-        obj.maxHp = 1;
-      }
-      obj.activation = t.activation;
-      obj.neutralizeSeconds = t.neutralizeSeconds;
-      obj.active = false;
-      obj._timer = 0;
-      backgroundObjects.push(obj);
-      triggers.push(obj);
-    }
-
-    // Hook posts — manually authored pull fixtures (independent of Gap
-    // placement; an author positions them anywhere). Same puzzleSignal/
-    // glitterHit strike contract as a switch, but pulls the player to the
-    // post's own position instead of arming a trigger (player.hookedByWhip;
-    // PhysicsSystem owns the actual traversal) — the mechanic the original
-    // Whip Trial used to cross its gap. '•' (bullet) — prominent, round,
-    // human-readable at a glance; distinct from the switches' ○/● pair so
-    // "pull fixture" vs. "strike fixture" read as different symbol
-    // families. Unregistered in BACKGROUND_OBJECTS, so BackgroundObject's
-    // constructor falls back to synthetic data with indestructible:true,
-    // hp:null (src/entities/BackgroundObject.js's unregistered-char
-    // branch). takeDamage() checks `this.indestructible || this.hp === null`
-    // BEFORE it ever reaches the puzzleSignal/glitterHit branch, so that
-    // fallback would silently eat every strike — hence the explicit
-    // override below. minAttackSegment gates on CombatSystem's per-segment
-    // collision check: a post commonly sits at the player's own natural
-    // standing cell, so without this ANY swing (even the near segments)
-    // would trigger it by accident — only a reach weapon's farthest
-    // segments (its actual reach) should count.
-    const hookPosts = [];
-    for (const { row, col } of getPuzzleTemplateHookPosts(templateName)) {
-      const obj = new BackgroundObject('•', col * CS, row * CS);
-      obj.color = '#ddaa55';
-      obj.animationChar = '•';
-      obj.animationColor = '#ddaa55';
-      obj.puzzleSignal = true;
-      obj.indestructible = false;
-      obj.hp = 1;
-      obj.maxHp = 1;
-      obj.minAttackSegment = 4;
-      backgroundObjects.push(obj);
-      hookPosts.push(obj);
-    }
-
-    // Torches — maze-parity fixture: unlit until the player approaches while
-    // wielding the Torch item, permanent once lit, pulsing glow while lit.
-    // Purely decorative — never gates anything (contrast the 'torch'-kind
-    // trigger above, a separate mechanic for a torch that DOES gate the
-    // exit). `lit` is an optional per-entry starting flag (author can place
-    // a torch already burning); everything else about the fixture is
-    // identical whether it started lit or was lit by the player.
-    // Visual/lighting only (no ghost-shielding — Puzzle Rooms have no ghosts;
-    // see MazeSystem's own MazeTorch for the maze's fuller mechanic). Reuses
-    // MazeSystem's exported visual constants directly — see PuzzleTorch
-    // above, DungeonPuzzleSystem._updatePuzzleRoom, and HutInteriorOverlay's
-    // torch render block.
-    const torches = getPuzzleTemplateTorches(templateName)
-      .map(({ row, col, lit }) => new PuzzleTorch(col, row, !!lit));
-
     // Weapon-tutorial pedestal — opt-in per template (generalized from the
     // original Whip Trial's own hardcoded version): a real pickup-able
     // weapon flanked by grayed decorative recipe-ingredient chrome, drawn
@@ -962,7 +858,6 @@ export class DungeonFloorGenerator {
     // reading as one continuous [x][x][x] frame), anchored on the marker's
     // own column so any template can place it anywhere.
     const pedestalMarker = getPuzzleTemplatePedestal(templateName);
-    const items = [];
     this._placeSimpleKeys(items, getPuzzleTemplateCellsWithGlyph(templateName, 'K'));
     let weaponPedestal = null;
     if (pedestalMarker) {

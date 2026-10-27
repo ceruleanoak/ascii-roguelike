@@ -68,3 +68,25 @@ export function footprintCellFor(dir, contract) {
     default:  return null;
   }
 }
+
+/**
+ * Every cell a floor must keep standable and connected: each footprint
+ * (`reservedFootprintCells`), the landing beside each one, and the Entrance's
+ * arrival cell and the cell beside its exterior door. `arrival` marks the
+ * cells a floor is first entered by (the up-stairs, its landing, and the
+ * Entrance's two). The Progression Solver proves these connect; the runtime
+ * keeps a Push Rock from ever being shoved onto one.
+ */
+export function floorAnchorCells(contract, diagonals = []) {
+  const { STAIRS_COL, EXIT_ROW } = contract;
+  const footprints = reservedFootprintCells(contract, diagonals);
+  const names = ['Up-stairs', 'North descent', 'West descent', 'East descent',
+    ...diagonals.map(dir => `${dir} descent`)];
+  const cells = footprints.map((cell, k) => ({ ...cell, what: names[k], arrival: k === 0 }));
+  footprints.forEach(({ row, col }, k) => {
+    cells.push({ ...landingCellFor(row, col, contract), what: `${names[k]} landing`, arrival: k === 0 });
+  });
+  cells.push({ row: EXIT_ROW - 2, col: STAIRS_COL, what: 'Entrance arrival', arrival: true });
+  cells.push({ row: EXIT_ROW - 1, col: STAIRS_COL, what: 'Entrance door', arrival: true });
+  return cells;
+}

@@ -1543,6 +1543,27 @@ export const BACKGROUND_OBJECT_VARIANTS = {
       default: { animation: 'bounce', message: null }
     }
   },
+  // Trigger Block — a numbered-floor template cell (glyph 'T') that stays
+  // shut until every trigger on its floor is active at once, then every
+  // Trigger Block on the floor opens for good
+  // (DungeonPuzzleSystem._updateFloorTriggers). What it walls off is optional
+  // reward, never the floor's way on. Stamped solid like a Lock Block; the
+  // barred '▥' is the Lock Block's '▣' family, read as a portcullis.
+  'trigger_block': {
+    char: '▥',
+    name: 'Trigger Block',
+    color: '#c0a060',
+    bulletInteraction: 'block',
+    flammability: 'none',
+    conductivity: 'none',
+    indestructible: true,
+    coversWall: true,
+    hp: null,
+    solid: true,
+    interactions: {
+      default: { animation: 'bounce', message: null }
+    }
+  },
   // Spawn Vent — a dungeon template fixture (`spawners` list) that keeps up
   // to its maxAlive enemies alive at once, one more every interval seconds,
   // each born on the vent's own cell (SpawnVentSystem). Walkable and

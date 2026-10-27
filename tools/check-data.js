@@ -29,6 +29,8 @@ import { SECRET_PATTERNS } from '../src/data/exitLetters.js';
 import { normalizeOfferSteps } from '../src/systems/ExitSystem.js';
 import { pickWeaponTutorial } from '../src/data/dungeon/weaponTutorials.js';
 import { proveTemplate } from '../src/data/dungeon/progressionSolver.js';
+import { validateTemplateFixtures } from '../src/data/dungeon/fixtureSchema.js';
+import { reservedFootprintCells } from '../src/data/dungeon/footprints.js';
 import { SPELLS } from '../src/data/spells.js';
 import * as LOOK_HERE from '../src/data/lookHereLines.js';
 
@@ -283,6 +285,16 @@ for (const [mode, dir] of [['floor', 'floorTemplates'], ['puzzle', 'puzzleTempla
   const templateDir = join(root, 'src/data/dungeon', dir);
   for (const file of readdirSync(templateDir).filter(f => f.endsWith('.json'))) {
     const data = JSON.parse(readFileSync(join(templateDir, file), 'utf8'));
+    // The fixture lists the editor validates on save (fixtureSchema.js), so a
+    // hand-edited fixture — a stale item char, a rock on a staircase — fails
+    // here too instead of being skipped at runtime with a console.warn.
+    const fixtureErr = validateTemplateFixtures(data, {
+      rows: data.grid.length,
+      cols: [...data.grid[0]].length,
+      reservedCells: mode === 'floor' ? reservedFootprintCells(footprintContract) : [],
+      isItemChar: char => !!ITEMS[char],
+    });
+    if (fixtureErr) fail(`${mode} template ${file}: ${fixtureErr}`);
     const { ok, errors, warnings } = proveTemplate(data, mode, footprintContract, ITEMS);
     const allowed = SOLVER_ALLOWLIST[`${mode}/${file}`];
     if (!ok && allowed) warn(`${mode} template ${file} fails the Progression Solver: ${allowed}`);

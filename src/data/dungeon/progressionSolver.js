@@ -36,12 +36,13 @@
 // CommonJS main process, the plain-Node data gate and the game all share it.
 
 import { DUNGEON_TILES } from './tiles.js';
-import { reservedFootprintCells, landingCellFor } from './footprints.js';
+import { reservedFootprintCells, landingCellFor, floorAnchorCells } from './footprints.js';
 
 const CELL_PX = 16;                 // GRID.CELL_SIZE
 const WALK_PX_PER_SECOND = 180;     // PLAYER_SPEED
 const BASE_STRIKE_CELLS = 1.5;      // a held melee weapon reaches the 8 neighbouring cells
-const HOOK_MIN_CELLS = 4;           // hook posts only count a crack segment this far out (generatePuzzleRoom)
+const HOOK_MIN_CELLS = 4;           // hook posts only count a crack segment this far out (placeTemplateFixtures)
+const NOMINAL_WHIP_CELLS = 5;       // a floor supplies no whip; judge its hook posts by the default reach (toolKitForItem)
 const BOMB_BLAST_CELLS = 40 / CELL_PX;
 const TORCH_IGNITE_CELLS = 1.2;     // TORCH_INTERACT_RADIUS
 const LOCK_REACH_CELLS = 1.5;       // LOCK_BLOCK_REACH (DungeonPuzzleSystem)
@@ -103,13 +104,15 @@ const cellName = (row, col) => `(${row},${col})`;
 /**
  * @param {object} args
  * @param {string[]} args.grid       the template's rows
- * @param {object}   [args.fixtures] { triggers, hookPosts, pedestal, dais } — puzzle mode;
- *                                    { spawners } — both modes
+ * @param {object}   [args.fixtures] { triggers, hookPosts, unbreakableRocks, deflectors, spawners } — both modes;
+ *                                    { pedestal, dais } — puzzle mode; { items } — floor mode
  * @param {'floor'|'puzzle'} args.mode
  * @param {object}   args.contract   footprintContract.json
  * @param {object}   [args.suppliedTools] toolKitForItem() of the pedestal item — picked up at the pedestal
  * @param {string[]} [args.diagonals] floor mode: diagonal footprints (NW/NE) the floor uses
- * @returns {{ ok: boolean, errors: string[], warnings: string[], regions: { unreached: {row:number,col:number}[] } }}
+ * @returns {{ ok: boolean, errors: string[], warnings: string[], regions: { unreached: {row:number,col:number}[], triggersSolvable?: boolean } }}
+ *   floor mode: `regions.triggersSolvable` — the floor has triggers and every one is in reach,
+ *   so its 'triggers' Reveal can fire
  */
 export function solveTemplate({ grid, fixtures = {}, mode, contract, suppliedTools = {}, diagonals = [] }) {
   const errors = [];
@@ -187,38 +190,27 @@ function labelRegions(map, blocked) {
 
 function solveFloor(map, contract, fixtures, errors, warnings, diagonals = []) {
   const { cols, tiles } = map;
-  // `closed`: Shutters still shut. `labels`: the floor once they open — the
-  // same map when the template has no Shutter.
-  const closed = labelRegions(map, i => DUNGEON_TILES[tiles[i]].solid);
+  const at = (row, col) => row * cols + col;
+  const tileSolid = i => DUNGEON_TILES[tiles[i]].solid;
+  // Fixtures that stand solid on a plain floor cell: Unbreakable Rocks and
+  // Deflectors for good, Push Rocks wherever they have been shoved to.
+  const triggers = (fixtures.triggers ?? []).map(t => ({ ...t, index: at(t.row, t.col) }));
+  const pushRocks = triggers.filter(t => t.kind === 'push');
+  const plainTriggers = triggers.filter(t => t.kind !== 'push');
+  const fixedSolid = new Set([...(fixtures.unbreakableRocks ?? []), ...(fixtures.deflectors ?? [])]
+    .map(p => at(p.row, p.col)));
   const hasShutters = tiles.includes('S');
-  const labels = hasShutters
-    ? labelRegions(map, i => tiles[i] !== 'S' && DUNGEON_TILES[tiles[i]].solid)
-    : closed;
-  const { STAIRS_COL, EXIT_ROW } = contract;
-  const vents = (fixtures.spawners ?? []).map(v => ({ ...v, index: v.row * cols + v.col }));
-
-  const footprints = reservedFootprintCells(contract, diagonals);
-  const names = ['Up-stairs', 'North descent', 'West descent', 'East descent',
-    ...diagonals.map(dir => `${dir} descent`)];
-  const points = footprints.map((cell, k) => ({ ...cell, what: names[k] }));
-  // Where the player lands beside each footprint: beside the up-stairs on
-  // the way down (DungeonSystem._landingAnchorFor), beside a descent on the
-  // way back up (DungeonSystem._ascend).
-  for (let k = 0; k < footprints.length; k++) {
-    const { row, col } = footprints[k];
-    points.push({ ...landingCellFor(row, col, contract), what: `${names[k]} landing` });
-  }
-  // The Entrance's arrival cell and the cell beside its exterior door.
-  points.push({ row: EXIT_ROW - 2, col: STAIRS_COL, what: 'Entrance arrival', arrival: true });
-  points.push({ row: EXIT_ROW - 1, col: STAIRS_COL, what: 'Entrance door', arrival: true });
-  // A floor is first entered by its up-stairs (or, on the Entrance, its door),
-  // so those must sit with the enemies and Vents while the Shutters are shut.
-  points[0].arrival = true;
-  points[footprints.length].arrival = true;
+  const vents = (fixtures.spawners ?? []).map(v => ({ ...v, index: at(v.row, v.col) }));
+  const items = (fixtures.items ?? []).map(it => ({ ...it, index: at(it.row, it.col) }));
+  const points = floorAnchorCells(contract, diagonals).map(p => ({ ...p, index: at(p.row, p.col) }));
+  const anchorCells = new Set(points.map(p => p.index));
+  const startRocks = new Set(pushRocks.map(r => r.index));
 
   for (const p of points) {
-    if (DUNGEON_TILES[tiles[p.row * cols + p.col]].solid) {
+    if (tileSolid(p.index)) {
       errors.push(`${p.what} ${cellName(p.row, p.col)} is solid — the player would land in a wall.`);
+    } else if (fixedSolid.has(p.index) || startRocks.has(p.index)) {
+      errors.push(`${p.what} ${cellName(p.row, p.col)} holds a rock or Deflector — the player would land in it.`);
     }
   }
   for (const v of vents) {
@@ -226,25 +218,174 @@ function solveFloor(map, contract, fixtures, errors, warnings, diagonals = []) {
       errors.push(`Spawn Vent ${cellName(v.row, v.col)} sits on a solid cell.`);
     }
   }
-  if (errors.length) return { unreached: [] };
-
-  const anchor = labels[points[0].row * cols + points[0].col];
-  const closedAnchor = closed[points[0].row * cols + points[0].col];
-  for (const p of points) {
-    const shut = hasShutters && p.arrival;
-    if ((shut ? closed : labels)[p.row * cols + p.col] !== (shut ? closedAnchor : anchor)) {
-      const how = shut ? 'without tools or opening a Shutter' : 'without tools';
-      errors.push(`${p.what} ${cellName(p.row, p.col)} is cut off from the Up-stairs ${how}.`);
+  for (const it of items) {
+    if (DUNGEON_TILES[tiles[it.index]]?.solid !== false) {
+      errors.push(`Item ${it.char} ${cellName(it.row, it.col)} sits on a solid cell.`);
     }
   }
-  if (hasShutters) {
-    for (const v of vents) {
-      if (closed[v.index] !== closedAnchor) {
-        errors.push(`Spawn Vent ${cellName(v.row, v.col)} is cut off from the Up-stairs — its Shutters would never open.`);
+  if (errors.length) return { unreached: [] };
+
+  // The floor's base-kit geometry with the rocks at `rockCells`: `closed`
+  // with the Shutters still shut, `labels` once they open.
+  const baseGeometry = rockCells => {
+    const blocked = i => rockCells.has(i) || fixedSolid.has(i);
+    const closed = labelRegions(map, i => blocked(i) || tileSolid(i));
+    const labels = hasShutters
+      ? labelRegions(map, i => blocked(i) || (tileSolid(i) && tiles[i] !== 'S'))
+      : closed;
+    return { closed, labels };
+  };
+  // Where the player could ever walk with the rocks at `rockCells`: every
+  // tile that opens (a Shutter, a Bomb, a key, the triggers) counted as open.
+  // Generous on purpose — a rock shoved from there is still a rock in the way.
+  const freeGeometry = (rockCells, keepClosed = null) => {
+    const blocked = i => rockCells.has(i) || fixedSolid.has(i);
+    const solid = i => blocked(i) || (tileSolid(i) && (!DUNGEON_TILES[tiles[i]].opensWith || tiles[i] === keepClosed));
+    const stopsStrike = i => blocked(i) || (tileSolid(i) && !DUNGEON_TILES[tiles[i]].reachOver);
+    return { solid, stopsStrike, labels: labelRegions(map, solid) };
+  };
+
+  // Every anchor cell must connect to the Up-stairs. The cells a floor is
+  // entered by (and every Vent) must do so with the Shutters still shut.
+  const connectionProblems = rockCells => {
+    const { closed, labels } = baseGeometry(rockCells);
+    const anchor = labels[points[0].index];
+    const closedAnchor = closed[points[0].index];
+    const problems = [];
+    for (const p of points) {
+      const shut = hasShutters && p.arrival;
+      if ((shut ? closed : labels)[p.index] !== (shut ? closedAnchor : anchor)) {
+        const how = shut ? 'without tools or opening a Shutter' : 'without tools';
+        problems.push(`${p.what} ${cellName(p.row, p.col)} is cut off from the Up-stairs ${how}`);
+      }
+    }
+    if (hasShutters) {
+      for (const v of vents) {
+        if (closed[v.index] !== closedAnchor) {
+          problems.push(`Spawn Vent ${cellName(v.row, v.col)} is cut off from the Up-stairs — its Shutters would never open`);
+        }
+      }
+    }
+    return problems;
+  };
+
+  for (const problem of connectionProblems(startRocks)) errors.push(`${problem}.`);
+  if (errors.length) return { unreached: [] };
+
+  if (pushRocks.length) searchPushRocks();
+  checkHookPosts();
+
+  // Leaning on a Push Rock is open to anyone, so every place the rocks can be
+  // shoved to must keep the floor connected — and keep the player on the
+  // connected side. PushRock never slides onto an anchor cell (the runtime
+  // reserves them), and each rock moves only once.
+  function searchPushRocks() {
+    const keyOf = dirs => dirs.join(',');
+    const start = pushRocks.map(() => -1);
+    const queue = [{ dirs: start, trace: [] }];
+    const seen = new Set([keyOf(start)]);
+    let reported = 0;
+    while (queue.length) {
+      if (seen.size > STATE_CAP) {
+        warnings.push(`Solver stopped after ${STATE_CAP} Push Rock positions — too many to prove this floor safe.`);
+        return;
+      }
+      const { dirs, trace } = queue.shift();
+      const rockCells = new Set(pushRocks.map((rock, k) => rockAt(rock, dirs[k])));
+      const geo = freeGeometry(rockCells);
+      const here = geo.labels[points[0].index];
+      pushRocks.forEach((rock, k) => {
+        if (dirs[k] !== -1) return;
+        DIRECTIONS_4.forEach(([dr, dc], d) => {
+          const from = at(rock.row - dr, rock.col - dc);
+          const to = at(rock.row + dr, rock.col + dc);
+          if (geo.labels[from] !== here || geo.solid(to) || rockCells.has(to) || anchorCells.has(to)) return;
+          const next = dirs.slice();
+          next[k] = d;
+          const key = keyOf(next);
+          if (seen.has(key)) return;
+          seen.add(key);
+          const step = `push rock ${cellName(rock.row, rock.col)} ${DIRECTION_NAMES[`${dr},${dc}`]}`;
+          const nextRocks = new Set(pushRocks.map((r, j) => rockAt(r, next[j])));
+          const problems = connectionProblems(nextRocks);
+          const nextGeo = freeGeometry(nextRocks);
+          if (nextGeo.labels[from] !== nextGeo.labels[points[0].index]) {
+            problems.push('the player is shut in away from the staircases');
+          }
+          if (problems.length) {
+            if (reported++ < 3) errors.push(`Softlock: ${[...trace, step].join(' → ')} — ${problems[0]}.`);
+            return;
+          }
+          queue.push({ dirs: next, trace: [...trace, step] });
+        });
+      });
+    }
+  }
+
+  // A Hook Post the player can be pulled to across a Gap must not strand
+  // them: from its side there has to be a post back on the staircases' side
+  // in reach of the same whip.
+  function checkHookPosts() {
+    const posts = (fixtures.hookPosts ?? []).map(p => at(p.row, p.col));
+    if (!posts.length) return;
+    const geo = freeGeometry(startRocks);
+    const home = geo.labels[points[0].index];
+    for (const post of posts) {
+      const there = geo.labels[post];
+      if (there === home || there === -1) continue;
+      if (!strikeReaches(map, geo, home, post, NOMINAL_WHIP_CELLS, HOOK_MIN_CELLS)) continue;
+      const wayBack = posts.some(back => geo.labels[back] === home
+        && strikeReaches(map, geo, there, back, NOMINAL_WHIP_CELLS, HOOK_MIN_CELLS));
+      if (!wayBack) {
+        errors.push(`Hook post ${cellName(Math.floor(post / cols), post % cols)} pulls the player across to a side with no post to pull them back.`);
       }
     }
   }
 
+  function rockAt(rock, d) {
+    return d === -1 ? rock.index : at(rock.row + DIRECTIONS_4[d][0], rock.col + DIRECTIONS_4[d][1]);
+  }
+
+  // Triggers open only optional reward (Trigger Blocks) or a Hidden
+  // Descent, so what they can't reach is a warning, not a softlock.
+  const blocks = tiles.filter(t => t === 'T').length;
+  if (blocks && !triggers.length) {
+    warnings.push(`${blocks} Trigger Block(s) but no trigger — they never open.`);
+  }
+  let triggersSolvable = false;
+  if (triggers.length) {
+    // The Trigger Blocks themselves stay shut until the triggers are done.
+    const geo = freeGeometry(startRocks, 'T');
+    const home = geo.labels[points[0].index];
+    const reachable = t => {
+      if (t.kind === 'panel') return geo.labels[t.index] === home;
+      if (t.kind === 'torch') return regionNear(map, geo, home, t.index, TORCH_IGNITE_CELLS);
+      if (t.kind === 'push') return DIRECTIONS_4.some(([dr, dc]) => geo.labels[at(t.row + dr, t.col + dc)] === home);
+      return strikeReaches(map, geo, home, t.index, BASE_STRIKE_CELLS);
+    };
+    const outOfReach = triggers.filter(t => !reachable(t));
+    for (const t of outOfReach) {
+      warnings.push(`${t.kind === 'push' ? 'Push Rock' : t.kind} ${cellName(t.row, t.col)} is out of reach — the triggers can never all be active.`);
+    }
+    triggersSolvable = outOfReach.length === 0;
+  }
+  if (items.length) {
+    const geo = freeGeometry(startRocks);
+    const home = geo.labels[points[0].index];
+    for (const it of items) {
+      if (geo.labels[it.index] !== home) {
+        warnings.push(`Item ${it.char} ${cellName(it.row, it.col)} can't be reached even with every gate open.`);
+      }
+    }
+  }
+
+  // What the base kit reaches once the Shutters open — and, when every
+  // trigger can be made active, the Trigger Blocks too: what they wall off
+  // is optional reward, not a sealed pocket.
+  const { labels } = triggersSolvable
+    ? { labels: labelRegions(map, i => startRocks.has(i) || fixedSolid.has(i) || (tileSolid(i) && tiles[i] !== 'S' && tiles[i] !== 'T')) }
+    : baseGeometry(startRocks);
+  const anchor = labels[points[0].index];
   const unreached = [];
   let unreachedSpawns = 0;
   for (let i = 0; i < tiles.length; i++) {
@@ -263,7 +404,41 @@ function solveFloor(map, contract, fixtures, errors, warnings, diagonals = []) {
   if (locks > keys) {
     warnings.push(`${locks} Lock Block(s) but ${keys} Simple Key(s) — the rest open only with a key carried in.`);
   }
-  return { unreached };
+  return { unreached, triggersSolvable };
+}
+
+// Is there a cell in region `label` within `reach` of `target` along one of
+// the 8 directions (and at least `minReach` away), with nothing between that
+// stops a strike? `geo` supplies `labels` and `stopsStrike`.
+function strikeReaches(map, geo, label, target, reach, minReach = 0) {
+  const { rows, cols } = map;
+  const r0 = Math.floor(target / cols), c0 = target % cols;
+  for (const [dr, dc] of DIRECTIONS_8) {
+    const step = Math.hypot(dr, dc);
+    for (let k = 1; k * step <= reach; k++) {
+      const r = r0 + dr * k, c = c0 + dc * k;
+      if (r < 0 || c < 0 || r >= rows || c >= cols) break;
+      const i = r * cols + c;
+      if (geo.labels[i] === label && k * step >= minReach) return true;
+      if (geo.stopsStrike(i)) break;
+    }
+  }
+  return false;
+}
+
+// Does region `label` come within `radius` cells of `target`?
+function regionNear(map, geo, label, target, radius) {
+  const { rows, cols } = map;
+  const r0 = Math.floor(target / cols), c0 = target % cols;
+  const span = Math.ceil(radius);
+  for (let r = r0 - span; r <= r0 + span; r++) {
+    for (let c = c0 - span; c <= c0 + span; c++) {
+      if (r < 0 || c < 0 || r >= rows || c >= cols) continue;
+      if (Math.hypot(r - r0, c - c0) > radius) continue;
+      if (geo.labels[r * cols + c] === label) return true;
+    }
+  }
+  return false;
 }
 
 // ── Puzzle mode ─────────────────────────────────────────────────────────────
@@ -354,34 +529,9 @@ function solvePuzzle(map, contract, fixtures, suppliedTools, errors, warnings) {
     return geo;
   };
 
-  // Is there a cell in region `label` within `reach` of `target` along one of
-  // the 8 directions, with nothing between that stops a strike?
-  const struckFrom = (geo, label, target, reach, minReach = 0) => {
-    const r0 = rowOf(target), c0 = colOf(target);
-    for (const [dr, dc] of DIRECTIONS_8) {
-      const step = Math.hypot(dr, dc);
-      for (let k = 1; k * step <= reach; k++) {
-        const r = r0 + dr * k, c = c0 + dc * k;
-        if (r < 0 || c < 0 || r >= rows || c >= cols) break;
-        const i = at(r, c);
-        if (geo.labels[i] === label && k * step >= minReach) return true;
-        if (geo.stopsStrike(i)) break;
-      }
-    }
-    return false;
-  };
-  const regionWithin = (geo, label, target, radius) => {
-    const r0 = rowOf(target), c0 = colOf(target);
-    const span = Math.ceil(radius);
-    for (let r = r0 - span; r <= r0 + span; r++) {
-      for (let c = c0 - span; c <= c0 + span; c++) {
-        if (r < 0 || c < 0 || r >= rows || c >= cols) continue;
-        if (Math.hypot(r - r0, c - c0) > radius) continue;
-        if (geo.labels[at(r, c)] === label) return true;
-      }
-    }
-    return false;
-  };
+  const struckFrom = (geo, label, target, reach, minReach = 0) =>
+    strikeReaches(map, geo, label, target, reach, minReach);
+  const regionWithin = (geo, label, target, radius) => regionNear(map, geo, label, target, radius);
 
   const canActivate = (trigger, geo, label, kit) => {
     if (trigger.kind === 'panel') return geo.labels[trigger.index] === label;

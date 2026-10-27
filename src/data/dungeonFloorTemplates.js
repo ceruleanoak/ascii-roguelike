@@ -11,6 +11,15 @@
 // shut, so the Progression Solver requires every Vent to be reachable from
 // the Up-stairs with the Shutters still closed.
 //
+// A numbered floor takes the same fixture lists a Puzzle Room does —
+// `triggers`, `hookPosts`, `torches`, `unbreakableRocks`, `deflectors`
+// (schema in dungeonPuzzleTemplates.js; placed by dungeonFixtures.js) —
+// plus `items`: [{ row, col, char }], any ITEMS char laid on a plain floor
+// cell. On a numbered floor the triggers open the floor's Trigger Blocks
+// ('T') and emit its 'triggers' Reveal; what they open is optional reward,
+// never the way on (DungeonPuzzleSystem._updateFloorTriggers). The Puzzle
+// Room's Exit, pedestal and dais stay puzzle-only.
+//
 // Coordinate contract:
 //   The grid is 24 cols × 24 rows. Row 0, row 23, col 0, col 23 are the
 //   outer border (always walls — the generator stamps these unconditionally).
@@ -151,6 +160,9 @@ const TEMPLATE_WEIGHTS = Object.entries(TEMPLATE_DATA)
   .map(([name, data]) => ({
     name,
     weight: data.weight,
+    // Its triggers can all be made active, so a floor whose node has a
+    // 'triggers' Reveal can draw it (pickRandomTemplateName's `triggers`).
+    solvesTriggers: !!proveTemplate(data, 'floor', FOOTPRINT_CONTRACT).regions.triggersSolvable,
     hosts: new Set(DIAGONAL_SETS
       .filter(dirs => proveTemplate(data, 'floor', FOOTPRINT_CONTRACT, null, dirs).ok)
       .map(diagonalKey)),
@@ -163,12 +175,14 @@ const TEMPLATE_WEIGHTS = Object.entries(TEMPLATE_DATA)
  * this run, so a repeat only happens once every named template has already
  * appeared (more template-consuming rooms than templates exist).
  * `diagonals` narrows the pool to templates that can host those diagonal
- * footprints; null when none can (the floor goes bare).
+ * footprints; null when none can (the floor goes bare). `triggers` narrows
+ * it to templates whose triggers can all be made active; null when none fit.
  */
-export function pickRandomTemplateName(excludeNames = null, diagonals = []) {
+export function pickRandomTemplateName(excludeNames = null, diagonals = [], { triggers = false } = {}) {
   let pool = diagonals.length
     ? TEMPLATE_WEIGHTS.filter(t => t.hosts.has(diagonalKey(diagonals)))
     : TEMPLATE_WEIGHTS;
+  if (triggers) pool = pool.filter(t => t.solvesTriggers);
   if (pool.length === 0) return null;
   if (excludeNames && excludeNames.size > 0) {
     const remaining = pool.filter(t => !excludeNames.has(t.name));
@@ -204,6 +218,15 @@ export function applyTemplateToCollisionMap(collisionMap, templateName, reserved
       collisionMap[r][c] = true;
     }
   }
+}
+
+/**
+ * A template's whole JSON ({ weight, grid, spawners?, and the fixture lists
+ * dungeonPuzzleTemplates.js documents }) — what dungeonFixtures.js's
+ * placeTemplateFixtures reads. Falls back to 'open' like every getter here.
+ */
+export function getTemplateData(templateName) {
+  return TEMPLATE_DATA[templateName] ?? TEMPLATE_DATA.open;
 }
 
 /**

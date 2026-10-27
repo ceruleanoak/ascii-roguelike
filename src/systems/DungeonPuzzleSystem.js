@@ -11,6 +11,8 @@ import { BOMB_CHAR } from './BombBagSystem.js';
 import { SIMPLE_KEY_CHAR } from '../data/items.js';
 import { hasStandingVent } from './SpawnVentSystem.js';
 import { consumeKeyItem, hasKeyItem, holdsUniversalKey } from './keyItems.js';
+import { floorAnchorCells } from '../data/dungeon/footprints.js';
+import FOOTPRINT_CONTRACT from '../data/dungeon/footprintContract.json';
 
 // Proximity radius for door/switch/slot interaction (px from cell center) —
 // mirrors DungeonSystem's DOOR_INTERACT_RADIUS.
@@ -48,6 +50,8 @@ export class DungeonPuzzleSystem {
       this.revealEdges(floor, 'clear');
     }
 
+    this._updateFixtures(floor, dt);
+
     if (floor.kind === 'trapRoom') {
       this._updateTrapRoom(floor);
     } else if (floor.puzzle === 'panels') {
@@ -55,6 +59,9 @@ export class DungeonPuzzleSystem {
     } else if (floor.kind === 'puzzleRoom') {
       this._updatePuzzleRoom(floor, dt);
     }
+    // Any other templated floor's triggers (a Trap Room's too) open its
+    // Trigger Blocks and emit its 'triggers' Reveal.
+    if (floor.kind !== 'puzzleRoom') this._updateFloorTriggers(floor, dt);
   }
 
   /**
@@ -189,34 +196,19 @@ export class DungeonPuzzleSystem {
     }
   }
 
-  // Puzzle Room — generic template-driven puzzle side room (see
-  // DungeonFloorGenerator.generatePuzzleRoom). Every trigger in room.triggers
-  // (a 'switch', strike-triggered via the puzzleSignal/glitterHit contract;
-  // a 'panel', occupancy-triggered like Branch's own panels; a 'torch',
-  // ignited by the same proximity + held-Torch-item contract as a decorative
-  // PuzzleTorch below; or a 'push', a Push Rock shoved one cell) runs through the shared triggerMachine state
-  // machine; the exit unlocks once every trigger is active at once — the
-  // generalized form of both Branch's own "all at once" solve rule and the
-  // original Whip Trial's "both switches struck together" rule (now itself
-  // just an editor-authored template, whip_trial.json), extended to any
-  // trigger count/mix. Hook posts and the DECORATIVE torches below
-  // (room.torches, not room.triggers) are independent of the trigger/solve
-  // state — they keep working before, during, and after the room is solved
-  // (a hook post is a traversal aid, not a one-time gate; a decorative torch
-  // is pure ambience) — so both run before the solved early-return. A
-  // torch-KIND trigger is the opposite of that decorative torch: it's a real
-  // gate, so it's handled in the triggers loop below like switch/panel, not
-  // up here.
-  _updatePuzzleRoom(room, dt) {
-    const { game } = this;
-    const player = game.player;
-    const companion = game.companion;
+  // Hook posts and decorative torches, on any floor whose template placed
+  // them (dungeonFixtures.js). Neither gates anything, so both keep working
+  // before, during and after a floor's triggers are solved — a hook post is
+  // a traversal aid, not a one-time gate; a torch is pure ambience.
+  _updateFixtures(floor, dt) {
+    const player = this.game.player;
+    if (!floor.hookPosts?.length && !floor.torches?.length) return;
 
     // Hook posts — same pull contract as the original Whip Trial's posts:
     // each strike pulls the player to that post's own position (see
     // PhysicsSystem.updateEntity's hookedByWhip handling for the actual
     // traversal).
-    for (const post of room.hookPosts) {
+    for (const post of floor.hookPosts ?? []) {
       if (post.glitterHit) {
         post.glitterHit = false;
         if (!player.hookedByWhip) {
@@ -227,9 +219,9 @@ export class DungeonPuzzleSystem {
 
     // Torches — maze-parity ignite: unlit until the player approaches while
     // wielding the Torch item, permanent once lit (see PuzzleTorch in
-    // DungeonFloorGenerator.js / MazeSystem's own MazeTorch for the fuller
+    // dungeonFixtures.js / MazeSystem's own MazeTorch for the fuller
     // maze mechanic this mirrors).
-    for (const torch of room.torches) {
+    for (const torch of floor.torches ?? []) {
       torch.pulseTimer += dt;
       if (torch.lit) continue;
       if (player.heldItem?.data?.weaponSubtype !== 'torch') continue; // Torch or Lantern
@@ -237,7 +229,57 @@ export class DungeonPuzzleSystem {
         torch.lit = true;
       }
     }
+  }
 
+  // A numbered floor's triggers (dungeonFixtures.js): once every one is
+  // active at once, every Trigger Block on the floor opens for good and the
+  // floor emits its 'triggers' Reveal, opening any descent that waits on it
+  // (a Hidden Descent most often). Push Rocks are kept off every anchor cell
+  // (staircases, landings, the Entrance's door), the cells the Progression
+  // Solver proves stay connected.
+  _updateFloorTriggers(floor, dt) {
+    if (!floor.triggers?.length || floor.triggersSolved) return;
+    const { game } = this;
+    const anchorCells = new Set(floorAnchorCells(FOOTPRINT_CONTRACT, floor.diagonals)
+      .map(({ row, col }) => `${row},${col}`));
+    const world = {
+      collisionMap: floor.collisionMap,
+      backgroundObjects: floor.backgroundObjects,
+      isReserved: (col, row) => anchorCells.has(`${row},${col}`),
+    };
+    if (!tickTriggers(floor.triggers, dt, game.player, game.companion, world)) return;
+    floor.triggersSolved = true;
+    for (const block of floor.backgroundObjects.filter(obj => obj.typeId === 'trigger_block' && !obj.destroyed)) {
+      floor.backgroundObjects.splice(floor.backgroundObjects.indexOf(block), 1);
+      const row = Math.round(block.position.y / GRID.CELL_SIZE);
+      const col = Math.round(block.position.x / GRID.CELL_SIZE);
+      if (floor.collisionMap[row]) floor.collisionMap[row][col] = false;
+      this._spawnUnlockEffect(block);
+    }
+    game.renderer?.markBackgroundDirty?.();
+    game.audioSystem?.playSFX?.('dungeon_key_use');
+    this.revealEdges(floor, 'triggers');
+  }
+
+  // Puzzle Room — generic template-driven puzzle side room (see
+  // DungeonFloorGenerator.generatePuzzleRoom). Every trigger in room.triggers
+  // (a 'switch', strike-triggered via the puzzleSignal/glitterHit contract;
+  // a 'panel', occupancy-triggered like Branch's own panels; a 'torch',
+  // ignited by the same proximity + held-Torch-item contract as a decorative
+  // PuzzleTorch (dungeonFixtures.js); or a 'push', a Push Rock shoved one cell) runs through the shared triggerMachine state
+  // machine; the exit unlocks once every trigger is active at once — the
+  // generalized form of both Branch's own "all at once" solve rule and the
+  // original Whip Trial's "both switches struck together" rule (now itself
+  // just an editor-authored template, whip_trial.json), extended to any
+  // trigger count/mix. Hook posts and the DECORATIVE torches
+  // (room.torches, not room.triggers) are independent of the trigger/solve
+  // state and run in _updateFixtures on every floor. A torch-KIND trigger is
+  // the opposite of that decorative torch: it's a real gate, so it's handled
+  // with the triggers below like switch/panel.
+  _updatePuzzleRoom(room, dt) {
+    const { game } = this;
+    const player = game.player;
+    const companion = game.companion;
     if (room.puzzleSolved) return;
 
     this._restockBomb(room);
