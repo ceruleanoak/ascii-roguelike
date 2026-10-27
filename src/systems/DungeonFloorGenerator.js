@@ -393,13 +393,9 @@ export class DungeonFloorGenerator {
     return obj;
   }
 
-  // row/col default to the South footprint (STAIRS_UP_ROW) — the right
-  // choice for every floor entered via a 'north' descent (Corridor, Trap
-  // Room): the player goes down through the north side and arrives from the
-  // south. A floor entered via 'west' or 'east' passes the matching footprint
-  // instead (see _generateBranch, _generatePyramid), so its up-stairs sits in
-  // the same room position as the descent that led there; the Vault passes
-  // its own row (VAULT_STAIRS_UP_ROW).
+  // row/col default to the South footprint (STAIRS_UP_ROW), where every
+  // graph floor's way up sits (node.upDir is always 'S', leaving N/W/E free
+  // for descents); the Vault passes its own row (VAULT_STAIRS_UP_ROW).
   _makeStairsUp(locked, row = STAIRS_UP_ROW, col = STAIRS_COL) {
     const obj = new BackgroundObject('{', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
     paintStairsUpVisual(obj, locked);
@@ -430,9 +426,8 @@ export class DungeonFloorGenerator {
   }
 
   /**
-   * The floor's up-stairs, on the footprint the graph gives its node (the
-   * South footprint, or the West/East one matching the descent that led
-   * here — the "matching doors" rule).
+   * The floor's up-stairs, on the footprint the graph gives its node
+   * (node.upDir — the South footprint).
    */
   _makeGraphStairsUp(ctx, locked) {
     const { row, col } = footprintCellFor(ctx.node.upDir, FOOTPRINT_CONTRACT);
@@ -524,10 +519,9 @@ export class DungeonFloorGenerator {
     const up = this._makeGraphStairsUp(ctx, false);
     backgroundObjects.push(up.obj);
 
-    // Descents come from the graph: in Green's layout, North → the visit's
-    // Trial (a Puzzle Room, open — a quick low-tier grab) and West → the
-    // Branch, locked until the Skull Key is spent — the real choice this
-    // floor offers is quick grab vs. deeper delving.
+    // Descents come from the graph: the next corridor, the Branch (behind
+    // the Skull Key, or open on a triangle's bypass side), and possibly the
+    // visit's Trial (North, open — a quick low-tier grab) or the Trap Room.
     const descents = this._makeGraphDescents(ctx, backgroundObjects);
 
     const enemies = this._spawnEnemies(3 + Math.floor(Math.random() * 3), depth, zone,
@@ -564,9 +558,6 @@ export class DungeonFloorGenerator {
     // that holds it (FLOOR_KINDS.holdsSkullKey) and is reachable before the
     // door it opens, which leads *into* the Branch.
 
-    // In Green's layout the Branch is entered via the Corridor's West descent
-    // (the Skull Key), so its up-stairs sits at the West footprint to match —
-    // the door you came through is the door you leave through.
     const up = this._makeGraphStairsUp(ctx, false);
     backgroundObjects.push(up.obj);
 
@@ -587,10 +578,10 @@ export class DungeonFloorGenerator {
     setTriggerVisual(panelBObj, false);
     backgroundObjects.push(panelBObj);
 
-    // Descents come from the graph: in Green's layout, North → the Trap Room
-    // (open — a sealed enemy gauntlet with a tier-2 reward on clear) and
-    // East → the Pyramid, visible but locked until the panel puzzle emits the
-    // 'panels' Reveal (DungeonPuzzleSystem._updateBranchPanels).
+    // Descents come from the graph: the Pyramid, visible but locked until the
+    // panel puzzle emits the 'panels' Reveal (DungeonPuzzleSystem.
+    // _updateBranchPanels), and possibly the Trap Room (open — a sealed enemy
+    // gauntlet with a tier-2 reward on clear).
     const descents = this._makeGraphDescents(ctx, backgroundObjects);
 
     const enemies = this._spawnEnemies(4 + Math.floor(Math.random() * 3), depth, zone,
@@ -616,9 +607,6 @@ export class DungeonFloorGenerator {
     // Static edifice — zero enemies (plan Phase 3), bare playfield.
     const { cols, rows, collisionMap, backgroundObjects } = this._buildScaffold({ useTemplate: false });
 
-    // In Green's layout the Pyramid is entered via the Branch's East descent
-    // (once the panel puzzle is solved), so the up-stairs sits at the East
-    // footprint to match — same "matching doors" rule as the Branch.
     const up = this._makeGraphStairsUp(ctx, false);
     backgroundObjects.push(up.obj);
 

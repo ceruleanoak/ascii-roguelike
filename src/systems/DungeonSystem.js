@@ -3,8 +3,7 @@ import { freezeSurfaceRoom, thawSurfaceRoom, isInteriorActive } from './PlaneSys
 import { NORTH_ROW, STAIRS_COL } from '../data/dungeonFloorTemplates.js';
 import { pickRandomPuzzleTemplateName, PUZZLE_ROOM_TEMPLATES } from '../data/dungeonPuzzleTemplates.js';
 import { getDungeonRecipe } from '../data/dungeonRecipes.js';
-import { buildDungeonGraph, validateGraph, edgeInto, reachableNodes, DESCENT_ID_FOR } from './dungeonGraphBuilder.js';
-import { FLOOR_KINDS } from './dungeonFloorKinds.js';
+import { buildDungeonGraph, validateGraph, edgeInto, skullKeyNodes, DESCENT_ID_FOR } from './dungeonGraphBuilder.js';
 import FOOTPRINT_CONTRACT from '../data/dungeon/footprintContract.json';
 import { landingCellFor } from '../data/dungeon/footprints.js';
 import { SpawnVentSystem } from './SpawnVentSystem.js';
@@ -25,9 +24,10 @@ import { SpawnVentSystem } from './SpawnVentSystem.js';
  * Recipe — rollVisit(), on first entry. The graph names every floor as a
  * node (a Floor Kind: entrance, corridor, branch, pyramid, vault, trapRoom,
  * puzzleRoom) and every descent as an edge (footprint dir + Reveal).
- * Green's graph is the chain this Dungeon has always had: Entrance →
- * Corridor → Branch → Pyramid → Vault, with the Trial (a Puzzle Room) off
- * the Corridor and the Trap Room off the Branch.
+ * Every graph runs Entrance → 1-3 corridors (a chain, or a triangle whose
+ * open side bypasses the Skull Key door) → Branch → Pyramid → Vault, with
+ * the Trial (a Puzzle Room) off a corridor and the Trap Room off whichever
+ * floor kinds the recipe allows (dungeonGraphBuilder.js).
  *
  * Floors are generated on demand and stored on interiorState.floors under
  * their node id. Every floor carries its own `descents[]` (destination
@@ -141,8 +141,7 @@ export class DungeonSystem {
       if (node.kind === 'puzzleRoom') node.template = pickRandomPuzzleTemplateName();
     }
 
-    const beforeKey = reachableNodes(graph, ['key']);
-    const keyFloors = [...beforeKey].filter(id => FLOOR_KINDS[graph.nodes[id].kind].holdsSkullKey);
+    const keyFloors = skullKeyNodes(graph);
     state.graph = graph;
     state.keySkullNode = keyFloors[Math.floor(Math.random() * keyFloors.length)] ?? null;
   }
@@ -248,10 +247,8 @@ export class DungeonSystem {
   /**
    * Where a player arriving on `floor` from above lands: beside the floor's
    * own up-stairs, so the way back is the door they came through (the
-   * "matching doors are always in the same room position" rule). Up-stairs
-   * sit at the South footprint on floors entered by a North descent, and at
-   * the West/East footprint on Branch/Pyramid, matching the descent that
-   * leads there (the graph node's upDir).
+   * "matching doors are always in the same room position" rule). Every
+   * graph floor's up-stairs sits at the South footprint (the node's upDir).
    *
    * Puzzle Rooms are the exception: their up-stairs is the template's locked
    * 'X' exit, placed wherever the author chose, so every puzzle template is

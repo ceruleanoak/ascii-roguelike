@@ -8,7 +8,8 @@
     "check:arch": "node tools/check-architecture.js",
     "check:data": "node tools/check-data.js",
     "check:frames": "node tools/check-frame-passes.js",
-    "build": "npm run check:arch && npm run check:data && npm run check:frames && NODE_ENV=production vite build",
+    "check:graphs": "node tools/check-dungeon-graphs.mjs",
+    "build": "npm run check:arch && npm run check:data && npm run check:frames && npm run check:graphs && NODE_ENV=production vite build",
     "preview": "vite preview",
     "deploy": "npm run build && gh-pages -d dist --no-history"
   },

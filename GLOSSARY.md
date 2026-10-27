@@ -2150,14 +2150,20 @@ identity, not standard programming terms.
   same Floor Kinds; the Recipe is what makes each zone's flow chart its own.
 - **In code:** one JSON file per zone in `src/data/dungeon/recipes/<zone>.json`, loaded and
   shape-checked by `src/data/dungeonRecipes.js` (`getDungeonRecipe(zone)`, falling back to
-  Green's). Fields: `boss`, `corridors: [min, max]`, `shapes`, `branchPuzzle`, `sideRooms`.
+  Green's). Fields: `boss`; `corridors: [min, max]` (1-3); `shapes` (weights for `chain` —
+  corridors in a row, the last one's Branch door taking the Skull Key — and `triangle` — the
+  last two corridors both lead into the Branch and to each other, the first one's Branch door
+  keyed and the long way round open, so the loop is the key's bypass); `branchPuzzle`;
+  `sideRooms` (`trial: 'corridor'`, `trapRoom`: the Floor Kinds it may hang off). Every recipe
+  is batch-checked by `npm run check:graphs` (`tools/check-dungeon-graphs.mjs`).
 - **Not:** a Dungeon Graph (the concrete layout one visit rolls from it); a crafting recipe.
 
 ### Dungeon Graph
 - **Definition:** The concrete layout of one visit to a Dungeon, rolled from the zone's Dungeon
   Recipe when the player first goes in and kept for as long as the D-room lasts. Each floor is a
   node with a Floor Kind; each descent is an edge naming the footprint it sits on (N/W/E) and
-  the Reveal that opens it.
+  the Reveal that opens it. Every floor's way back up is its South footprint; a floor with two
+  ways in (the Branch of a triangle) climbs back to whichever one the player came down.
 - **In code:** `buildDungeonGraph(recipe, rng)` / `validateGraph()` in
   `src/systems/dungeonGraphBuilder.js` (pure); `DungeonSystem.rollVisit()` stores it as
   `room.dungeon.interiorState.graph` along with the Skull Key's floor (`keySkullNode`). Floors

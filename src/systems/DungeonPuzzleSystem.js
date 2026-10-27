@@ -350,8 +350,8 @@ export class DungeonPuzzleSystem {
     game.audioSystem?.playSFX?.('dungeon_key_use');
   }
 
-  // The Skull Key's door — a locked descent whose Reveal is 'key' (in
-  // Green's layout, the Corridor's West descent into the Branch). SPACE while
+  // The Skull Key's door — a locked descent whose Reveal is 'key' (the
+  // corridor layer's door into the Branch; on a triangle, the shortcut). SPACE while
   // standing on it, key in hand: consumes the key and emits the 'key'
   // Reveal. A subsequent SPACE (now unlocked) is a normal descend, handled by
   // DungeonSystem.
