@@ -178,8 +178,18 @@ export class CavernSystem {
     // Only a surface rock can be the Cavern's door — a Bombable Wall broken on
     // an interior floor may share the door's cell coordinates by chance.
     if (isInteriorActive(game)) return;
-    const col = Math.round(rock.position.x / CS);
-    const row = Math.round(rock.position.y / CS);
+    this.revealDoorAt(Math.round(rock.position.x / CS), Math.round(rock.position.y / CS), backgroundObjects);
+  }
+
+  /**
+   * Set the Cavern's door on its cell, once the rock sealing it is gone —
+   * bombed (bombBlast) or, on a push-seal Cavern, leaned into the hollow
+   * behind it (PushRockSystem). A cell that is not the door does nothing.
+   */
+  revealDoorAt(col, row, backgroundObjects) {
+    const { game } = this;
+    const cavern = game.currentRoom?.cavern;
+    if (!cavern || cavern.revealed || isInteriorActive(game)) return;
     if (cavern.doorPosition.col !== col || cavern.doorPosition.row !== row) return;
 
     const door = new BackgroundObject('∩', col * CS, row * CS);

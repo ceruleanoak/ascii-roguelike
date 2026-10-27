@@ -51,11 +51,13 @@ const FACE_GAP_MIN = -8;
 
 /**
  * Build a Push Rock at a cell. Every field the push read touches is declared
- * here, so the object never grows state lazily at runtime.
+ * here, so the object never grows state lazily at runtime. `typeId` picks the
+ * rock's data: a push-seal Cavern's rock is a `bombable_rock` that also gives
+ * to a lean, so a bomb and a push both open it.
  */
-export function createPushRock(col, row) {
+export function createPushRock(col, row, typeId = 'push_rock') {
   const cs = GRID.CELL_SIZE;
-  const obj = BackgroundObject.createVariant('push_rock', col * cs, row * cs);
+  const obj = BackgroundObject.createVariant(typeId, col * cs, row * cs);
   obj.kind = 'push';
   obj.activation = 'permanent';
   obj.neutralizeSeconds = 0;

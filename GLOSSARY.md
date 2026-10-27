@@ -1978,18 +1978,33 @@ identity, not standard programming terms.
 - **Definition:** Like layer 1 in the U room, but a smaller, hut-sized area meant for secrets.
   Its hidden entrance sits inside a large, conspicuous cluster of unbreakable rocks; Bombs reveal
   it (or OPENCAVE, which breaks the rock the same way with a carried Sledgehammer, Onyx Hammer
-  or bomb). It always has 2 lit torches that can be destroyed. The friendly Goblin (`G`) inside says
+  or bomb). On a push-seal Cavern (a quarter of them) the sealing rock is also a Push Rock with a
+  hollow behind it, so leaning on it from the front opens the entrance too. It always has 2 lit torches that can be destroyed. The friendly Goblin (`G`) inside says
   "It's a secret to everybody." and drops between 2 and 5 coins.
 - **In code:** `room.cavern` (a hut record with `hutKind: 'cavern'`), seeded by `seedCavern()`
   (`roomFeatures.js`) in any room letter where wall structures can spawn, never on top of one.
   Entered and exited through HutSystem; the interior comes from
-  `CavernSystem.generateCavernInterior()`. The rocks are the `cavern_rock` Background Object
-  variant; the torches are `cavern_torch`. The Goblin is `FriendlyGoblin`.
+  `CavernSystem.generateCavernInterior()`. The rocks are Cavern Rocks; the torches are
+  `cavern_torch`. The Goblin is `FriendlyGoblin`. A push-seal Cavern (`CAVERN_PUSH_SEAL_CHANCE`)
+  builds from `CAVERN_PUSH_SEAL_PATTERN`: its seal is `createPushRock(col, row, 'bombable_rock')`
+  on `room.pushRocks` with `answer: 'cavern'`, and either way in ends at
+  `CavernSystem.revealDoorAt()`.
 - **Not:** "cave", "grotto", "secret room", "hidden hut".
+
+### Cavern Rock
+- **Definition:** The unbreakable rock a Cavern's mound is piled from. Bombs, hammers and pushes
+  do nothing to one; it is the rock every Bombable rock and Push Rock is made to look like. Only
+  where it is set down loose (not part of a structure) can the Onyx Hammer roll it.
+- **In code:** the `cavern_rock` Background Object variant (`GameConfig.js`, `indestructible`,
+  `hammerRollable: true`); placed by `seedCavern()` (`structural`, so never rollable), as the
+  `push_lock` Barricade's decoys, the Hammer Trial's rocks and the rocks scattered on dungeon
+  Entrance and Corridor floors (`DungeonFloorGenerator._scatterUnbreakableRocks`).
+- **Not:** "boulder", "unbreakable rock" as a name, "stone".
 
 ### Bombable rock
 - **Definition:** A rock that can technically be destroyed, but only by bombs. It hides a
-  Cavern's entrance among the unbreakable rocks and looks the same as them.
+  Cavern's entrance among the Cavern Rocks and looks the same as them. On a push-seal Cavern it
+  is also a Push Rock.
 - **In code:** the `bombable_rock` Background Object variant (`GameConfig.js`, `bombable: true`),
   broken by `CavernSystem.bombBlast()` from the Bomb consumable and the Remote Bomb trap.
 - **Not:** "cracked rock", "weak wall", "breakable rock".

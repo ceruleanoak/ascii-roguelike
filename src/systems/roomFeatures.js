@@ -8,6 +8,7 @@ import { ENEMIES, getZoneRandomEnemy, createBossEnemy, BOSS_ENCOUNTERS } from '.
 import { ZONES } from '../data/zones.js';
 import { seedSunkenGlints } from './SunkenGlintSystem.js';
 import { placeOceanPushRock } from './PushRockSystem.js';
+import { createPushRock } from './PushRock.js';
 import { ITEM_TYPES } from '../data/items.js';
 import { WeaponsMaster } from '../entities/WeaponsMaster.js';
 import { Jeweler } from '../entities/Jeweler.js';
@@ -2538,9 +2539,12 @@ export function stampWaterBlobs(gen, room, nodes, edgeNoise, waterDensity) {
 
 // ─── Cavern ──────────────────────────────────────────────────────────────────
 // A Cavern is a small secret interior hidden behind a Bombable Rock set in a
-// large, conspicuous cluster of Cavern Rocks. Only a bomb opens the Bombable
-// Rock; its cell then holds the Cavern's door (CavernSystem.bombBlast), and
-// HutSystem enters the Cavern like any hut via the `room.cavern` record.
+// large, conspicuous cluster of Cavern Rocks. A bomb opens the Bombable Rock;
+// its cell then holds the Cavern's door (CavernSystem.bombBlast), and
+// HutSystem enters the Cavern like any hut via the `room.cavern` record. On a
+// push-seal Cavern the Bombable Rock is also a Push Rock, with a hollow
+// behind it, so leaning on it from the front opens the door too
+// (PushRockSystem's 'cavern' answer).
 
 // Chance an eligible room hides a Cavern. Rare on purpose: the cluster is a
 // secret the player learns to recognise, not furniture.
@@ -2555,6 +2559,18 @@ const CAVERN_CLUSTER_PATTERN = [
   'RRRRRRR',
   'RRRBRRR',
 ];
+
+// The push-seal mound: the same pile with 'H', a hollow left open behind the
+// seal, so a lean from the front has somewhere to slide it.
+const CAVERN_PUSH_SEAL_PATTERN = [
+  '..RRR..',
+  '.RRRRR.',
+  'RRRHRRR',
+  'RRRBRRR',
+];
+
+// Share of Caverns whose seal also gives to a push (bomb-or-push).
+const CAVERN_PUSH_SEAL_CHANCE = 0.25;
 
 // Mirrors getRandomPosition's exit clearance: nothing of the Cavern may sit
 // within this many cells of an exit's spawn cell.
@@ -2605,7 +2621,8 @@ export function occupiedEntityCells(room) {
 /**
  * Rolls a Cavern into an eligible room: a Cavern Rock cluster with a Bombable
  * Rock at its bottom-centre, recorded on `room.cavern` (a hut record that
- * stays hidden until CavernSystem.bombBlast reveals its door). Runs at the end
+ * stays hidden until CavernSystem.bombBlast reveals its door — or, on a
+ * push-seal Cavern, until the seal is leaned into its hollow). Runs at the end
  * of RoomGenerator.generateRoom, after every other placement pass, so it can
  * see — and refuse — wall structures, protected structures and entities.
  */
@@ -2613,9 +2630,12 @@ export function seedCavern(room) {
   if (!roomAllowsCavern(room)) return;
   if (Math.random() >= CAVERN_SPAWN_CHANCE) return;
 
+  const pushSeal = Math.random() < CAVERN_PUSH_SEAL_CHANCE;
+  const pattern = pushSeal ? CAVERN_PUSH_SEAL_PATTERN : CAVERN_CLUSTER_PATTERN;
+
   const CS = GRID.CELL_SIZE;
-  const height = CAVERN_CLUSTER_PATTERN.length;
-  const width = CAVERN_CLUSTER_PATTERN[0].length;
+  const height = pattern.length;
+  const width = pattern[0].length;
   const exitCells = exitSpawnCells();
   const occupied = occupiedEntityCells(room);
   const cellKey = (obj) => `${Math.round(obj.position.x / CS)},${Math.round(obj.position.y / CS)}`;
@@ -2649,12 +2669,12 @@ export function seedCavern(room) {
     if (!ok) continue;
 
     // Clear scenery from the cluster and the approach cell, then build.
-    const doorCol = minCol + CAVERN_CLUSTER_PATTERN[height - 1].indexOf('B');
+    const doorCol = minCol + pattern[height - 1].indexOf('B');
     const doorRow = minRow + height - 1;
     const footprint = [{ col: doorCol, row: doorRow + 1 }];
     for (let dy = 0; dy < height; dy++) {
       for (let dx = 0; dx < width; dx++) {
-        if (CAVERN_CLUSTER_PATTERN[dy][dx] !== '.') footprint.push({ col: minCol + dx, row: minRow + dy });
+        if (pattern[dy][dx] !== '.') footprint.push({ col: minCol + dx, row: minRow + dy });
       }
     }
     const inFootprint = new Set(footprint.map(c => `${c.col},${c.row}`));
@@ -2662,10 +2682,18 @@ export function seedCavern(room) {
 
     for (let dy = 0; dy < height; dy++) {
       for (let dx = 0; dx < width; dx++) {
-        const mark = CAVERN_CLUSTER_PATTERN[dy][dx];
-        if (mark === '.') continue;
+        const mark = pattern[dy][dx];
+        if (mark === '.' || mark === 'H') continue;
+        const col = minCol + dx, row = minRow + dy;
+        if (mark === 'B' && pushSeal) {
+          // createPushRock marks it structural like the rest of the pile.
+          const rock = createPushRock(col, row, 'bombable_rock');
+          room.backgroundObjects.push(rock);
+          room.pushRocks.push({ rock, col, row, answer: 'cavern' });
+          continue;
+        }
         const typeId = mark === 'B' ? 'bombable_rock' : 'cavern_rock';
-        const rock = new BackgroundObject('0', (minCol + dx) * CS, (minRow + dy) * CS, { typeId });
+        const rock = new BackgroundObject('0', col * CS, row * CS, { typeId });
         rock.structural = true;
         room.backgroundObjects.push(rock);
       }

@@ -18,6 +18,10 @@ import { isCellProtected, occupiedEntityCells } from './roomFeatures.js';
  *   vault     a red V room — the Vault's wall gives to brute force, and an
  *             unassuming rock somewhere in the room is one: the push breaks
  *             the wall (InteractionSystem.openVaultByPush).
+ *   cavern    a push-seal Cavern (roomFeatures.seedCavern) — the seal is a
+ *             Bombable Rock that also gives to a lean, sliding into the hollow
+ *             behind it; the door appears on the cell it left
+ *             (CavernSystem.revealDoorAt). A bomb still opens it the old way.
  *
  * The rock is placed the way a Barricade places its Push Rock
  * (BarricadeSystem._placeTriggers): the cell is cleared first, then the stock
@@ -153,7 +157,8 @@ export class PushRockSystem {
   update(deltaTime) {
     const game = this.game;
     const room = game.currentRoom;
-    const live = room?.pushRocks?.filter(e => !e.rock.active && !e.rock.destroyed);
+    const live = room?.pushRocks?.filter(e =>
+      !e.rock.active && !e.rock.destroyed && !e.rock.destroyAfterAnimation);
     if (!live?.length || isInteriorActive(game)) return;
     const world = {
       collisionMap: room.collisionMap,
@@ -180,6 +185,9 @@ export class PushRockSystem {
       }
       case 'vault':
         game.interactionSystem.openVaultByPush();
+        break;
+      case 'cavern':
+        game.cavernSystem.revealDoorAt(entry.col, entry.row, game._activeBackgroundObjects());
         break;
     }
   }
