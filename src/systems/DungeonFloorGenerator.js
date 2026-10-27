@@ -130,9 +130,10 @@ export class DungeonFloorGenerator {
     let templateName = null;
     if (useTemplate) {
       // Excludes templates already used elsewhere this dungeon visit, so no
-      // layout repeats within a single dungeon until every named template
-      // has appeared once (templatesUsed on the D-room's interiorState, so it
-      // lives and dies with the Dungeon itself).
+      // layout ever repeats within a single dungeon — when every fitting
+      // template is used, the floor takes the bare scaffold instead
+      // (templatesUsed on the D-room's interiorState, so it lives and dies
+      // with the Dungeon itself).
       const used = this.game.dungeonSystem.interiorState.templatesUsed;
       // A floor with a descent behind its 'triggers' Reveal draws from the
       // templates whose triggers can all be solved; when none fits, any

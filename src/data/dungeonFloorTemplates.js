@@ -183,10 +183,10 @@ function hostsGateRock(name, dir, diagonals) {
 
 /**
  * Pick a random template name using the configured weights. `excludeNames`
- * (a Set) is used to keep every floor's layout distinct within one dungeon
- * visit — DungeonFloorGenerator passes the set of templates already used
- * this run, so a repeat only happens once every named template has already
- * appeared (more template-consuming rooms than templates exist).
+ * (a Set) keeps every floor's layout distinct within one dungeon visit —
+ * DungeonFloorGenerator passes the set of templates already used this visit,
+ * and a used template is never picked again: when every candidate has been
+ * used, this returns null and the floor goes bare rather than repeating.
  * `diagonals` narrows the pool to templates that can host those diagonal
  * footprints; null when none can (the floor goes bare). `triggers` narrows
  * it to templates whose triggers can all be made active; null when none fit.
@@ -200,10 +200,8 @@ export function pickRandomTemplateName(excludeNames = null, diagonals = [], { tr
   if (triggers) pool = pool.filter(t => t.solvesTriggers);
   if (gateRock) pool = pool.filter(t => hostsGateRock(t.name, gateRock, diagonals));
   if (pool.length === 0) return null;
-  if (excludeNames && excludeNames.size > 0) {
-    const remaining = pool.filter(t => !excludeNames.has(t.name));
-    if (remaining.length > 0) pool = remaining;
-  }
+  if (excludeNames && excludeNames.size > 0) pool = pool.filter(t => !excludeNames.has(t.name));
+  if (pool.length === 0) return null;
   const total = pool.reduce((s, t) => s + t.weight, 0);
   let r = Math.random() * total;
   for (const t of pool) {
