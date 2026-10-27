@@ -43,7 +43,10 @@ export class DungeonPuzzleSystem {
   update(floor, dt) {
     if (!floor) return;
     this.updateCompassBeep(floor, dt);
-    this._updateShutters(floor);
+    if (this._floorCleared(floor)) {
+      this._updateShutters(floor);
+      this.revealEdges(floor, 'clear');
+    }
 
     if (floor.kind === 'trapRoom') {
       this._updateTrapRoom(floor);
@@ -64,8 +67,14 @@ export class DungeonPuzzleSystem {
     const opened = floor.descents.filter(d => d.locked && d.reveal === reveal);
     for (const d of opened) {
       d.locked = false;
-      paintDescentVisual(d.obj, { active: d.active, locked: false });
+      paintDescentVisual(d.obj, { active: d.active, locked: false, hidden: d.hidden });
       if (flash) this._spawnUnlockEffect(d.obj);
+    }
+    // A Hidden Descent appearing is the floor's only answer — no door was
+    // ever shown — so it gets the unlock chime as well as the flash.
+    if (opened.some(d => d.hidden)) {
+      this.game.renderer?.markBackgroundDirty?.();
+      this.game.audioSystem?.playSFX?.('dungeon_key_use');
     }
     return opened;
   }
@@ -328,17 +337,21 @@ export class DungeonPuzzleSystem {
     return true;
   }
 
-  // Shutters ('S') — on any floor, every Shutter opens at once, for good,
-  // the first tick the floor holds no counted enemy and no standing Spawn
+  // A floor is cleared once it holds no counted enemy and no standing Spawn
   // Vent. Counted, not raw, so a hidden or pacifist enemy can't hold a door
-  // shut forever. A floor with Shutters and nothing to fight opens them the
-  // moment the player arrives.
+  // shut forever. Clearing opens the floor's Shutters and emits the 'clear'
+  // Reveal (a Hidden Descent) on the same tick.
+  _floorCleared(floor) {
+    return this.game._countedEnemies(floor.enemies).length === 0 && !hasStandingVent(floor);
+  }
+
+  // Shutters ('S') — on any floor, every Shutter opens at once, for good,
+  // the first tick the floor is cleared (_floorCleared). A floor with
+  // Shutters and nothing to fight opens them the moment the player arrives.
   _updateShutters(floor) {
     const { game } = this;
     const shutters = floor.backgroundObjects.filter(obj => obj.typeId === 'shutter' && !obj.destroyed);
     if (shutters.length === 0) return;
-    if (game._countedEnemies(floor.enemies).length > 0) return;
-    if (hasStandingVent(floor)) return;
     for (const shutter of shutters) {
       floor.backgroundObjects.splice(floor.backgroundObjects.indexOf(shutter), 1);
       const row = Math.round(shutter.position.y / GRID.CELL_SIZE);

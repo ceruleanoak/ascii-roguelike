@@ -27,7 +27,7 @@ import {
 import { pickUnspawnedItem, markItemSpawned } from './spawnedItems.js';
 import { hasKeyItem } from './keyItems.js';
 import FOOTPRINT_CONTRACT from '../data/dungeon/footprintContract.json';
-import { footprintCellFor } from '../data/dungeon/footprints.js';
+import { footprintCellFor, DIAGONAL_DIRS } from '../data/dungeon/footprints.js';
 import { FLOOR_KINDS } from './dungeonFloorKinds.js';
 import { edgesFrom, edgeInto, DESCENT_ID_FOR } from './dungeonGraphBuilder.js';
 
@@ -121,7 +121,10 @@ export class DungeonFloorGenerator {
   // room with fixed interior content.
   // depth/zone are what the floor's Spawn Vents spawn at — only templated
   // floors can hold one, so untemplated callers may leave them out.
-  _buildScaffold({ useTemplate = true, extraReservedCells = [], depth = 1, zone = 'gray' } = {}) {
+  // `diagonals`: the NW/NE footprints this floor's Hidden Descents sit on —
+  // kept clear, and the template drawn from those proven to keep them
+  // reachable (bare scaffold when no template can).
+  _buildScaffold({ useTemplate = true, extraReservedCells = [], depth = 1, zone = 'gray', diagonals = [] } = {}) {
     const cols = INTERIOR_COLS;
     const rows = INTERIOR_ROWS;
     const collisionMap = [];
@@ -132,7 +135,7 @@ export class DungeonFloorGenerator {
       }
     }
 
-    const reservedCells = [...getReservedFootprintCells(), ...extraReservedCells];
+    const reservedCells = [...getReservedFootprintCells(diagonals), ...extraReservedCells];
     let templateName = null;
     if (useTemplate) {
       // Excludes templates already used elsewhere this dungeon visit, so no
@@ -140,9 +143,11 @@ export class DungeonFloorGenerator {
       // has appeared once (templatesUsed on the D-room's interiorState, so it
       // lives and dies with the Dungeon itself).
       const used = this.game.dungeonSystem.interiorState.templatesUsed;
-      templateName = pickRandomTemplateName(used);
-      used.add(templateName);
-      applyTemplateToCollisionMap(collisionMap, templateName, reservedCells);
+      templateName = pickRandomTemplateName(used, diagonals);
+      if (templateName) {
+        used.add(templateName);
+        applyTemplateToCollisionMap(collisionMap, templateName, reservedCells);
+      }
     }
 
     const backgroundObjects = [];
@@ -402,22 +407,23 @@ export class DungeonFloorGenerator {
     return obj;
   }
 
-  _makeDescent(id, row, col, { active, locked, destination }) {
+  _makeDescent(id, row, col, { active, locked, hidden = false, destination }) {
     const obj = new BackgroundObject('x', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
-    paintDescentVisual(obj, { active, locked });
-    return { id, row, col, obj, active, locked, destination };
+    paintDescentVisual(obj, { active, locked, hidden });
+    return { id, row, col, obj, active, locked, hidden, destination };
   }
 
   /**
    * One descent per Dungeon Graph edge leaving this floor, each on the
    * footprint its edge's dir names. Locked until its Reveal fires, unless the
-   * Reveal is 'open'. Pushes each descent's tile into backgroundObjects.
+   * Reveal is 'open'; a Hidden Descent paints as bare floor until then.
+   * Pushes each descent's tile into backgroundObjects.
    */
   _makeGraphDescents(ctx, backgroundObjects) {
     return ctx.edges.map(edge => {
       const { row, col } = footprintCellFor(edge.dir, FOOTPRINT_CONTRACT);
       const descent = this._makeDescent(DESCENT_ID_FOR[edge.dir], row, col, {
-        active: true, locked: edge.reveal !== 'open', destination: { node: edge.to },
+        active: true, locked: edge.reveal !== 'open', hidden: !!edge.hidden, destination: { node: edge.to },
       });
       descent.reveal = edge.reveal;
       backgroundObjects.push(descent.obj);
@@ -480,13 +486,14 @@ export class DungeonFloorGenerator {
       edges: edgesFrom(graph, nodeId),
       upFrom: edgeInto(graph, nodeId)?.from ?? null,
     };
+    ctx.diagonals = ctx.edges.filter(e => DIAGONAL_DIRS.includes(e.dir)).map(e => e.dir);
     const floor = FLOOR_KINDS[node.kind].generate(this, ctx);
     return Object.assign(floor, { kind: node.kind, nodeId });
   }
 
   _generateEntrance(ctx) {
     const { depth, zone } = ctx;
-    const { cols, rows, collisionMap, backgroundObjects, templateItems, pickOpenCell, spawnCells, spawnVents } = this._buildScaffold({ depth, zone });
+    const { cols, rows, collisionMap, backgroundObjects, templateItems, pickOpenCell, spawnCells, spawnVents } = this._buildScaffold({ depth, zone, diagonals: ctx.diagonals });
     this._addDecor(backgroundObjects, pickOpenCell, rows, cols);
     this._addTombs(backgroundObjects, pickOpenCell, rows, cols);
     this._placeSkullIfDue(ctx.nodeId, { backgroundObjects, pickOpenCell, rows, cols });
@@ -511,7 +518,7 @@ export class DungeonFloorGenerator {
 
   _generateCorridor(ctx) {
     const { depth, zone } = ctx;
-    const { cols, rows, collisionMap, backgroundObjects, templateItems, pickOpenCell, spawnCells, spawnVents } = this._buildScaffold({ depth, zone });
+    const { cols, rows, collisionMap, backgroundObjects, templateItems, pickOpenCell, spawnCells, spawnVents } = this._buildScaffold({ depth, zone, diagonals: ctx.diagonals });
     this._addDecor(backgroundObjects, pickOpenCell, rows, cols);
     this._addTombs(backgroundObjects, pickOpenCell, rows, cols);
     this._placeSkullIfDue(ctx.nodeId, { backgroundObjects, pickOpenCell, rows, cols });
@@ -726,7 +733,7 @@ export class DungeonFloorGenerator {
   // 4429455) now that 'trapRoom' names this room instead.
   generateTrapRoom(ctx) {
     const { depth, zone } = ctx;
-    const { cols, rows, collisionMap, backgroundObjects, templateItems, pickOpenCell, spawnCells, spawnVents } = this._buildScaffold({ depth, zone });
+    const { cols, rows, collisionMap, backgroundObjects, templateItems, pickOpenCell, spawnCells, spawnVents } = this._buildScaffold({ depth, zone, diagonals: ctx.diagonals });
 
     // Locked exit until every enemy is cleared — DungeonPuzzleSystem unlocks it.
     const stairsUpObj = this._makeStairsUp(true);
@@ -742,7 +749,7 @@ export class DungeonFloorGenerator {
     // pool). Bug report: reward spawned unreachable in exactly that shape.
     const reachable = this._reachableCells(collisionMap, rows, cols, STAIRS_UP_ROW, STAIRS_COL);
     const rewardCell = this._pickReachableCell(
-      reachable, collisionMap, backgroundObjects, getReservedFootprintCells(),
+      reachable, collisionMap, backgroundObjects, getReservedFootprintCells(ctx.diagonals),
       6, rows - 5, 3, cols - 4, STAIRS_UP_ROW, STAIRS_COL
     );
     // Shares the Spawned Items list with the surface rooms (spawnedItems.js).

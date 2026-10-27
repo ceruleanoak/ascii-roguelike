@@ -85,15 +85,17 @@ export function toolKitForItem(item) {
  * @param {'floor'|'puzzle'} mode
  * @param {object} contract   footprintContract.json
  * @param {object} items      the ITEMS catalogue (passed in so this module stays pure)
+ * @param {string[]} [diagonals] floor mode: diagonal footprints (NW/NE) the floor uses,
+ *                              proven clear and connected alongside the base four
  */
-export function proveTemplate(data, mode, contract, items) {
+export function proveTemplate(data, mode, contract, items, diagonals = []) {
   if (mode === 'puzzle' && data.solverExempt) {
     return { ok: true, exempt: true, errors: [], warnings: [], regions: { unreached: [] } };
   }
   const suppliedTools = mode === 'puzzle' && data.pedestal
     ? toolKitForItem(items[data.pedestal.weaponChar])
     : {};
-  return solveTemplate({ grid: data.grid, fixtures: data, mode, contract, suppliedTools });
+  return solveTemplate({ grid: data.grid, fixtures: data, mode, contract, suppliedTools, diagonals });
 }
 
 const cellName = (row, col) => `(${row},${col})`;
@@ -106,9 +108,10 @@ const cellName = (row, col) => `(${row},${col})`;
  * @param {'floor'|'puzzle'} args.mode
  * @param {object}   args.contract   footprintContract.json
  * @param {object}   [args.suppliedTools] toolKitForItem() of the pedestal item — picked up at the pedestal
+ * @param {string[]} [args.diagonals] floor mode: diagonal footprints (NW/NE) the floor uses
  * @returns {{ ok: boolean, errors: string[], warnings: string[], regions: { unreached: {row:number,col:number}[] } }}
  */
-export function solveTemplate({ grid, fixtures = {}, mode, contract, suppliedTools = {} }) {
+export function solveTemplate({ grid, fixtures = {}, mode, contract, suppliedTools = {}, diagonals = [] }) {
   const errors = [];
   const warnings = [];
   const { rows, cols } = contract;
@@ -123,9 +126,9 @@ export function solveTemplate({ grid, fixtures = {}, mode, contract, suppliedToo
     }
   }
 
-  const map = buildTileMap(grid, mode, contract);
+  const map = buildTileMap(grid, mode, contract, diagonals);
   const result = mode === 'floor'
-    ? solveFloor(map, contract, fixtures, errors, warnings)
+    ? solveFloor(map, contract, fixtures, errors, warnings, diagonals)
     : solvePuzzle(map, contract, fixtures, suppliedTools, errors, warnings);
   return { ok: errors.length === 0, errors, warnings, regions: result };
 }
@@ -133,12 +136,13 @@ export function solveTemplate({ grid, fixtures = {}, mode, contract, suppliedToo
 // ── Tile map ────────────────────────────────────────────────────────────────
 
 // The glyph grid as the game stamps it: the outer ring is always wall, and on
-// floor templates the footprint cells are always plain floor
-// (applyTemplateToCollisionMap and getTemplateWaterCells skip them).
-function buildTileMap(grid, mode, contract) {
+// floor templates the footprint cells — and any diagonal the floor uses — are
+// always plain floor (applyTemplateToCollisionMap and getTemplateWaterCells
+// skip them).
+function buildTileMap(grid, mode, contract, diagonals = []) {
   const { rows, cols } = contract;
   const reserved = new Set(
-    mode === 'floor' ? reservedFootprintCells(contract).map(({ row, col }) => row * cols + col) : []
+    mode === 'floor' ? reservedFootprintCells(contract, diagonals).map(({ row, col }) => row * cols + col) : []
   );
   const tiles = new Array(rows * cols);
   for (let r = 0; r < rows; r++) {
@@ -181,7 +185,7 @@ function labelRegions(map, blocked) {
 
 // ── Floor mode ──────────────────────────────────────────────────────────────
 
-function solveFloor(map, contract, fixtures, errors, warnings) {
+function solveFloor(map, contract, fixtures, errors, warnings, diagonals = []) {
   const { cols, tiles } = map;
   // `closed`: Shutters still shut. `labels`: the floor once they open — the
   // same map when the template has no Shutter.
@@ -193,8 +197,9 @@ function solveFloor(map, contract, fixtures, errors, warnings) {
   const { STAIRS_COL, EXIT_ROW } = contract;
   const vents = (fixtures.spawners ?? []).map(v => ({ ...v, index: v.row * cols + v.col }));
 
-  const footprints = reservedFootprintCells(contract);
-  const names = ['Up-stairs', 'North descent', 'West descent', 'East descent'];
+  const footprints = reservedFootprintCells(contract, diagonals);
+  const names = ['Up-stairs', 'North descent', 'West descent', 'East descent',
+    ...diagonals.map(dir => `${dir} descent`)];
   const points = footprints.map((cell, k) => ({ ...cell, what: names[k] }));
   // Where the player lands beside each footprint: beside the up-stairs on
   // the way down (DungeonSystem._landingAnchorFor), beside a descent on the

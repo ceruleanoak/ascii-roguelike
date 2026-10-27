@@ -34,8 +34,9 @@ function seededRng(seed) {
 // A short name for the corridor layer a graph rolled, for the coverage line.
 function layerName(graph) {
   const corridors = Object.values(graph.nodes).filter(n => n.kind === 'corridor').length;
-  const intoBranch = graph.edges.filter(e => e.to === 'branch').length;
-  return `${corridors} ${intoBranch > 1 ? 'triangle' : 'chain'}`;
+  const intoBranch = graph.edges.filter(e => e.to === 'branch' && !e.hidden).length;
+  const hidden = graph.edges.some(e => e.hidden) ? '+hidden' : '';
+  return `${corridors} ${intoBranch > 1 ? 'triangle' : 'chain'}${hidden}`;
 }
 
 let failed = false;

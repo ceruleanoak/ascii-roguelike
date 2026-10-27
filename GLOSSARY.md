@@ -2154,7 +2154,9 @@ identity, not standard programming terms.
   corridors in a row, the last one's Branch door taking the Skull Key — and `triangle` — the
   last two corridors both lead into the Branch and to each other, the first one's Branch door
   keyed and the long way round open, so the loop is the key's bypass); `branchPuzzle`;
-  `sideRooms` (`trial: 'corridor'`, `trapRoom`: the Floor Kinds it may hang off). Every recipe
+  `sideRooms` (`trial: 'corridor'`, `trapRoom`: the Floor Kinds it may hang off); `diagonals`
+  (`{ chance, reveals }` — the per-visit chance of one Hidden Descent, and the Reveals that may
+  open it). Every recipe
   is batch-checked by `npm run check:graphs` (`tools/check-dungeon-graphs.mjs`).
 - **Not:** a Dungeon Graph (the concrete layout one visit rolls from it); a crafting recipe.
 
@@ -2172,6 +2174,18 @@ identity, not standard programming terms.
 - **Not:** a Dungeon Recipe (the rules it was rolled from); the old numbered floor stack
   (`floorIndex` 0-4), which it replaced.
 
+### Hidden Descent
+- **Definition:** A Dungeon descent that isn't drawn until its Reveal fires — not a locked door,
+  just bare floor, until the floor is solved and it appears. It sits on a diagonal footprint (a
+  North corner, NW or NE) and is always a shortcut: every floor stays reachable through the
+  descents that are drawn. Only a floor event (`clear`) may open one, never a held item.
+- **In code:** a Dungeon Graph edge with `hidden: true` and `dir` `NW`/`NE`, rolled by
+  `buildDungeonGraph` on the recipe's `diagonals.chance`; `descent.hidden` on the floor, painted
+  blank by `paintDescentVisual` while locked. A corner is reserved only on a floor that uses it
+  (`reservedFootprintCells(contract, diagonals)`), and such a floor draws only templates the
+  Progression Solver proved can host that corner (`hosts` in `dungeonFloorTemplates.js`).
+- **Not:** a locked descent (drawn, waiting on its Reveal); a Bombable Wall.
+
 ### Floor Kind
 - **Definition:** A reusable type of Dungeon floor: Entrance, Corridor, Branch, Pyramid, Vault,
   Trap Room or Puzzle Room. The kinds are one vocabulary shared by every zone. A kind builds
@@ -2183,7 +2197,8 @@ identity, not standard programming terms.
 ### Reveal
 - **Definition:** What opens a Dungeon descent. `open` needs nothing; `key` spends the Skull
   Key; `panels` is Green's floor-panel NPC puzzle on the Branch; `offering` is the Pyramid's
-  Legend of Three. A floor *emits* a Reveal when its puzzle is solved, and every locked descent
+  Legend of Three; `clear` fires once the floor holds no counted enemy and no standing Spawn
+  Vent (the same moment its Shutters open). A floor *emits* a Reveal when its puzzle is solved, and every locked descent
   on that floor naming it opens. The puzzle never names which door it opens.
 - **In code:** `edge.reveal` on the Dungeon Graph, copied to `descent.reveal`;
   `DungeonPuzzleSystem.revealEdges(floor, reveal)` opens the matching descents.

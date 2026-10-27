@@ -51,7 +51,7 @@
 // unchanged from before the migration, so no call site elsewhere had to move.
 
 import FOOTPRINT_CONTRACT from './dungeon/footprintContract.json';
-import { reservedFootprintCells } from './dungeon/footprints.js';
+import { reservedFootprintCells, DIAGONAL_DIRS } from './dungeon/footprints.js';
 import { proveTemplate } from './dungeon/progressionSolver.js';
 import { DUNGEON_TILES, cellsWithGlyph } from './dungeon/tiles.js';
 
@@ -65,13 +65,15 @@ export const EXIT_ROW      = FOOTPRINT_CONTRACT.EXIT_ROW;       // floor 0 exter
 
 /**
  * The 4 single-cell footprints that must stay walkable on every floor/side-
- * room, regardless of which descent footprints that floor activates. Callers
- * pass this straight through to applyTemplateToCollisionMap's reservedCells.
+ * room, regardless of which descent footprints that floor activates, plus
+ * each diagonal (NW/NE) in `diagonals` the floor's Hidden Descents use.
+ * Callers pass this straight through to applyTemplateToCollisionMap's
+ * reservedCells.
  * Deliberately just the 4 points — see the file header for why no connecting
  * corridor is reserved between them.
  */
-export function getReservedFootprintCells() {
-  return reservedFootprintCells(FOOTPRINT_CONTRACT);
+export function getReservedFootprintCells(diagonals = []) {
+  return reservedFootprintCells(FOOTPRINT_CONTRACT, diagonals);
 }
 
 // ── Footprint visual contract (3-state model) ───────────────────────────────
@@ -86,10 +88,15 @@ export const FOOTPRINT_LOCKED_COLOR   = '#cc3333';
 export const FOOTPRINT_UNLOCKED_COLOR = '#8b7355';
 export const FOOTPRINT_INACTIVE_COLOR = '#333333';
 
-/** Paint a descent footprint tile per its active/locked state. */
-export function paintDescentVisual(obj, { active, locked }) {
+/**
+ * Paint a descent footprint tile per its active/locked state. A Hidden
+ * Descent (GLOSSARY.md) that is still locked paints as nothing at all, the
+ * same blank as an inactive footprint — it isn't a locked door, it simply
+ * isn't there until its Reveal fires.
+ */
+export function paintDescentVisual(obj, { active, locked, hidden = false }) {
   let char, color;
-  if (!active) { char = ' '; color = FOOTPRINT_INACTIVE_COLOR; }  // renders nothing — see file header
+  if (!active || (hidden && locked)) { char = ' '; color = FOOTPRINT_INACTIVE_COLOR; }  // renders nothing — see file header
   else if (locked) { char = '⚿'; color = FOOTPRINT_LOCKED_COLOR; }  // squared key — reads as "needs a key"
   else { char = 'v'; color = FOOTPRINT_UNLOCKED_COLOR; }
   obj.char = char;
@@ -127,15 +134,27 @@ export const DUNGEON_FLOOR_TEMPLATES = Object.fromEntries(
 // draft that could strand the player (a landing in a wall, a footprint cut
 // off without tools) never reaches play. It stays in the map above, so a
 // direct lookup by name still finds it.
+//
+// Each pooled template also records which diagonal footprint sets it can
+// host (`hosts`, keys like 'NW' or 'NW+NE'): the set is reserved clear and
+// re-proven connected, so a floor with a Hidden Descent in a corner only
+// ever draws a template that keeps that corner reachable.
+const DIAGONAL_SETS = [['NW'], ['NE'], DIAGONAL_DIRS];
+const diagonalKey = dirs => [...dirs].sort().join('+');
+
 const TEMPLATE_WEIGHTS = Object.entries(TEMPLATE_DATA)
   .filter(([name, data]) => {
     const { ok, errors } = proveTemplate(data, 'floor', FOOTPRINT_CONTRACT);
     if (!ok) console.warn(`[dungeonFloorTemplates] "${name}" left out of the floor pool: ${errors[0]}`);
     return ok;
   })
-  .map(([name, data]) => ({ name, weight: data.weight }));
-
-const TOTAL_WEIGHT = TEMPLATE_WEIGHTS.reduce((s, t) => s + t.weight, 0);
+  .map(([name, data]) => ({
+    name,
+    weight: data.weight,
+    hosts: new Set(DIAGONAL_SETS
+      .filter(dirs => proveTemplate(data, 'floor', FOOTPRINT_CONTRACT, null, dirs).ok)
+      .map(diagonalKey)),
+  }));
 
 /**
  * Pick a random template name using the configured weights. `excludeNames`
@@ -143,11 +162,16 @@ const TOTAL_WEIGHT = TEMPLATE_WEIGHTS.reduce((s, t) => s + t.weight, 0);
  * visit — DungeonFloorGenerator passes the set of templates already used
  * this run, so a repeat only happens once every named template has already
  * appeared (more template-consuming rooms than templates exist).
+ * `diagonals` narrows the pool to templates that can host those diagonal
+ * footprints; null when none can (the floor goes bare).
  */
-export function pickRandomTemplateName(excludeNames = null) {
-  let pool = TEMPLATE_WEIGHTS;
+export function pickRandomTemplateName(excludeNames = null, diagonals = []) {
+  let pool = diagonals.length
+    ? TEMPLATE_WEIGHTS.filter(t => t.hosts.has(diagonalKey(diagonals)))
+    : TEMPLATE_WEIGHTS;
+  if (pool.length === 0) return null;
   if (excludeNames && excludeNames.size > 0) {
-    const remaining = TEMPLATE_WEIGHTS.filter(t => !excludeNames.has(t.name));
+    const remaining = pool.filter(t => !excludeNames.has(t.name));
     if (remaining.length > 0) pool = remaining;
   }
   const total = pool.reduce((s, t) => s + t.weight, 0);

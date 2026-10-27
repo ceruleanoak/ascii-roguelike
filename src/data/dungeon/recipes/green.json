@@ -3,5 +3,6 @@
   "corridors": [1, 3],
   "shapes": { "chain": 1, "triangle": 1 },
   "branchPuzzle": "panels",
-  "sideRooms": { "trial": "corridor", "trapRoom": ["branch", "corridor"] }
+  "sideRooms": { "trial": "corridor", "trapRoom": ["branch", "corridor"] },
+  "diagonals": { "chance": 0.5, "reveals": ["clear"] }
 }

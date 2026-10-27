@@ -4,16 +4,19 @@
 //
 // Graph shape:
 //   nodes: { [id]: { kind, upDir, puzzle?, template?, boss? } }
-//   edges: [{ from, dir, to, reveal }]
+//   edges: [{ from, dir, to, reveal, hidden? }]
 //
 //   kind    a Floor Kind (src/systems/dungeonFloorKinds.js)
 //   upDir   the footprint of the floor's way back up — always 'S', so every
 //           descent footprint (N/W/E) stays free for the graph to use;
 //           absent on the Entrance, whose way out is the ∩ door
-//   dir     the descent's footprint on the `from` floor: N, W or E
+//   dir     the descent's footprint on the `from` floor: N, W or E, or a
+//           diagonal corner (NW/NE) for a Hidden Descent
 //   reveal  what opens the descent (a Reveal): 'open' needs nothing; 'key'
 //           spends the Skull Key; 'panels' is Green's floor-panel NPC puzzle
-//           on the Branch; 'offering' is the Pyramid's Legend of Three
+//           on the Branch; 'offering' is the Pyramid's Legend of Three;
+//           'clear' fires once the floor's enemies and Spawn Vents are gone
+//   hidden  a Hidden Descent: not drawn at all until its Reveal fires
 //
 // Layout (buildDungeonGraph): Entrance → the corridor layer → Branch →
 // Pyramid → Vault. The corridor layer is 1-3 corridors, either a chain (each
@@ -22,7 +25,10 @@
 // also leads to B — A's Branch door takes the key, B's is open, so the long
 // way round the loop is the bypass and the key is a shortcut). The
 // Trial hangs off a corridor's North; the Trap Room off any free door of a
-// floor kind the recipe names.
+// floor kind the recipe names. On a `diagonals.chance` roll, one corridor
+// also gets a Hidden Descent in a North corner: a shortcut that skips ahead
+// (to the Branch, a later corridor, or a side room it doesn't already lead
+// to), appearing when its Reveal fires.
 //
 // Pure (no game state, no imports beyond the Floor Kind table) so check:data,
 // the dungeon editor and the game all build and validate graphs the same way.
@@ -30,14 +36,18 @@
 import { FLOOR_KINDS } from './dungeonFloorKinds.js';
 
 const DIRS = ['N', 'W', 'E'];
-const REVEALS = ['open', 'key', 'panels', 'offering'];
+const DIAGONALS = ['NW', 'NE'];
+const REVEALS = ['open', 'key', 'panels', 'offering', 'clear'];
+// What may open a Hidden Descent: a floor event, never a held item — a door
+// the player can't see must not ask for a key.
+const HIDDEN_REVEALS = ['clear'];
 const BRANCH_PUZZLES = ['panels'];
 const SHAPES = ['chain', 'triangle'];
 const TRAP_ROOM_HOSTS = ['branch', 'corridor'];
 
 // A descent's id names its footprint — what DungeonSystem._ascend matches to
 // land the player back on the exact door they took down.
-export const DESCENT_ID_FOR = { N: 'north', W: 'west', E: 'east' };
+export const DESCENT_ID_FOR = { N: 'north', W: 'west', E: 'east', NW: 'northwest', NE: 'northeast' };
 
 /** Recipe shape errors (empty array when the recipe is usable). */
 export function validateRecipe(recipe) {
@@ -61,6 +71,13 @@ export function validateRecipe(recipe) {
   const trapHosts = recipe.sideRooms?.trapRoom;
   if (!Array.isArray(trapHosts) || !trapHosts.length || trapHosts.some(h => !TRAP_ROOM_HOSTS.includes(h))) {
     errors.push(`sideRooms.trapRoom must list host kinds from ${TRAP_ROOM_HOSTS.join(', ')}`);
+  }
+  if (recipe.diagonals !== undefined) {
+    const { chance, reveals } = recipe.diagonals ?? {};
+    if (!(chance >= 0 && chance <= 1)) errors.push('diagonals.chance must be between 0 and 1');
+    if (!Array.isArray(reveals) || !reveals.length || reveals.some(r => !HIDDEN_REVEALS.includes(r))) {
+      errors.push(`diagonals.reveals must list Reveals from ${HIDDEN_REVEALS.join(', ')}`);
+    }
   }
   return errors;
 }
@@ -126,6 +143,16 @@ export function buildDungeonGraph(recipe, rng = Math.random) {
   link(pick(trapHosts), 'trapRoom', 'open');
   link('pyramid', 'vault', 'offering');
 
+  if (recipe.diagonals && rng() < recipe.diagonals.chance) {
+    const from = pick(corridors);
+    const ahead = corridors.slice(corridors.indexOf(from) + 1);
+    const targets = [...ahead, 'branch', 'trial', 'trapRoom']
+      .filter(to => !edges.some(e => e.from === from && e.to === to));
+    if (targets.length) {
+      edges.push({ from, dir: pick(DIAGONALS), to: pick(targets), reveal: pick(recipe.diagonals.reveals), hidden: true });
+    }
+  }
+
   return { nodes, edges };
 }
 /** The descents leaving `nodeId`, in graph order. */
@@ -179,14 +206,21 @@ export function validateGraph(graph) {
   }
   for (const e of graph.edges) {
     if (!graph.nodes[e.from] || !graph.nodes[e.to]) errors.push(`edge ${e.from}→${e.to}: unknown node`);
-    if (!DIRS.includes(e.dir)) errors.push(`edge ${e.from}→${e.to}: bad dir "${e.dir}"`);
+    if (!DIRS.includes(e.dir) && !(e.hidden && DIAGONALS.includes(e.dir))) {
+      errors.push(`edge ${e.from}→${e.to}: bad dir "${e.dir}"`);
+    }
     if (!REVEALS.includes(e.reveal)) errors.push(`edge ${e.from}→${e.to}: bad reveal "${e.reveal}"`);
+    if (e.hidden && !HIDDEN_REVEALS.includes(e.reveal)) {
+      errors.push(`edge ${e.from}→${e.to}: a Hidden Descent can't open with "${e.reveal}"`);
+    }
   }
   for (const id of ids) {
     const used = edgesFrom(graph, id).map(e => e.dir);
     if (new Set(used).size !== used.length) errors.push(`${id}: two doors share one footprint`);
   }
-  const reachable = reachableNodes(graph);
+  // A Hidden Descent is a shortcut, never the only way: every floor must be
+  // reachable through the doors that are drawn.
+  const reachable = reachableNodes({ ...graph, edges: graph.edges.filter(e => !e.hidden) });
   for (const id of ids) if (!reachable.has(id)) errors.push(`${id}: unreachable from the Entrance`);
   if (graph.edges.some(e => e.reveal === 'key') && skullKeyNodes(graph).length === 0) {
     errors.push('no floor before the Skull Key door can hold the key');
