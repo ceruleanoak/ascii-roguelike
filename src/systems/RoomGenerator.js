@@ -14,6 +14,7 @@ import { Fairy } from '../entities/Fairy.js';
 import { spawnCellBlockedByBackground, findSafeSpawnPosition } from './safeSpawn.js';
 import { maybeSpawnPeacefulFishingRoom, maybeSpawnRoamingAlchemist, buildVaultInteriorLoot, buildVaultCoinAbundance, buildVaultUnlockExtras, getIslandPosition, protectRegion, isCellProtected, cleanupStrayBackgroundObjects, resolveLavaHazards, seedCavern, rotatePattern, darkenColor, spawnBatFlock, spawnBelfryBats, stampHutFootprint, placeWhirlpool, generateSettlementRoom as generateSettlementRoomImpl, generateJewelerRoom, buildForcedRiverParams, generateYellowWaterTemplate, cellularCaveGrid, isCaveEntranceLanding, generateCalderaRoom, seedAscentZone, seedSinkholes, injectSinkholeLake, spawnMinibossOrFallback, generateGrassSwaths, generateSnowFields, spawnGuaranteedItems, offerL1Weapon, offerWeaponIfUnarmed, seedTunnelZone, generateOceanTerrain as generateOceanTerrainImpl, stampWaterBlobs as stampWaterBlobsImpl } from './roomFeatures.js';
 import { pickUnspawnedItem, markItemSpawned } from './spawnedItems.js';
+import { placeVaultPushRock } from './PushRockSystem.js';
 import { generateRecipeSign, generateSpellSign } from './roomSigns.js';
 import { seedMetalPlatform, makeZoneLava, islandLavaFeatures } from './MetalPlatformSystem.js';
 
@@ -148,6 +149,7 @@ export class RoomGenerator {
       recipeSign: null, // Visual-only recipe hint (not a BackgroundObject)
       spellSign: null, // Visual-only ciphered spell word, read with the Spectacles (roomSigns.js)
       barricade: null, // Set by BarricadeSystem.raiseForRoom once the exits are final
+      pushRocks: [], // Room Push Rocks, each the answer to one lock here (PushRockSystem)
       dragonForge: null, // Set by ForgeSystem.placeForge when the Goo Dragon falls
       exits: this.exitSystem ? this.exitSystem.generateExits(this.currentDepth, type, zoneType, progressionColor, exitLetter) : { north: false, east: false, west: false, south: true },
       playerStartPos: playerStartPos,  // Store for enemy generation
@@ -317,6 +319,10 @@ export class RoomGenerator {
     // Rare Cavern (bomb-revealed secret interior) — after every placement
     // pass so it can refuse walls/structures/entities; roomFeatures.js.
     seedCavern(room);
+
+    // A red Vault's unassuming Push Rock, after the Cavern so neither lands
+    // on the other — PushRockSystem.js.
+    placeVaultPushRock(room);
 
     // Final pass: strip stray bg objects inside protected structure regions
     // (hut footprint, maze shell, ravine band, well ring, …) and on room

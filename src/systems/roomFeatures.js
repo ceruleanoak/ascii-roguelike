@@ -7,7 +7,7 @@ import { Ingredient } from '../entities/Ingredient.js';
 import { ENEMIES, getZoneRandomEnemy, createBossEnemy, BOSS_ENCOUNTERS } from '../data/enemies.js';
 import { ZONES } from '../data/zones.js';
 import { seedSunkenGlints } from './SunkenGlintSystem.js';
-import { placeOceanPushRock } from './OceanPushRockSystem.js';
+import { placeOceanPushRock } from './PushRockSystem.js';
 import { ITEM_TYPES } from '../data/items.js';
 import { WeaponsMaster } from '../entities/WeaponsMaster.js';
 import { Jeweler } from '../entities/Jeweler.js';
@@ -2579,7 +2579,7 @@ function blocksCavern(obj) {
 // Cells holding anything generation already placed that isn't a background
 // object — enemies, items, crows, NPCs, recipe/spell-sign glyphs, the player start.
 // Scans every collection on the room so a new one can't be silently missed.
-function occupiedEntityCells(room) {
+export function occupiedEntityCells(room) {
   const CS = GRID.CELL_SIZE;
   const cells = new Set();
   const mark = (x, y) => {

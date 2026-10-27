@@ -1998,7 +1998,8 @@ identity, not standard programming terms.
 - **Definition:** A rock that looks identical to the unbreakable rocks around it but slides one
   cell when the player leans into it from a side with room. It is never a secret on its own,
   only the answer to a locked thing (in every green Ocean (`O`) Room the lock is the deep sea,
-  and the Flippers lie under the rock). Moving it is a trigger. It cannot be moved back and never
+  and the Flippers lie under the rock; in a red V Room the lock is the Vault, whose wall gives
+  to brute force, and an unassuming rock somewhere in the room is one). Moving it is a trigger. It cannot be moved back and never
   moves again.
 - **In code:** the `push_rock` Background Object variant (`GameConfig.js`), built by
   `createPushRock()` and read by `readPushRock()` (`src/systems/PushRock.js`) as triggerMachine
@@ -2010,8 +2011,11 @@ identity, not standard programming terms.
   Skull Key's alternative: `floor.gateRock`, set on the footprint of the floor's `push` descent
   by `DungeonFloorGenerator._buildScaffold` among the `cavern_rock`s scattered on every
   Entrance and Corridor floor, ticked by `DungeonPuzzleSystem._updateGateRock`, which emits
-  the `push` Reveal once it is shoved off), and on every Ocean Room's sand
-  (`OceanPushRockSystem`: `placeOceanPushRock` from `generateOceanTerrain`, `room.oceanPushRock`).
+  the `push` Reveal once it is shoved off), and as a Room Push Rock: an entry on
+  `room.pushRocks` (`{ rock, col, row, answer }`, `PushRockSystem`) whose `answer` names its
+  lock — `flippers` on every Ocean Room's sand (`placeOceanPushRock` from
+  `generateOceanTerrain`), `vault` anywhere in a red V Room outside the Vault
+  (`placeVaultPushRock`, opening the wall through `InteractionSystem.openVaultByPush`).
 - **Not:** "pushable block", "movable rock", "push block", "boulder".
 
 ### Bombable wall

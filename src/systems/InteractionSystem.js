@@ -269,6 +269,18 @@ export class InteractionSystem {
     return true;
   }
 
+  // Red zone: the room's unassuming Push Rock (PushRockSystem) is brute force
+  // too — the push that lands it breaks the wall from wherever it stood.
+  openVaultByPush() {
+    const game = this.game;
+    const vault = game.currentRoom?.vaultInfo;
+    if (!vault || vault.unlockMethod !== 'break' || vault.unlocked) return false;
+
+    this._openVaultWall(vault);
+    game.audioSystem?.playSFX?.('vault_wall_break');
+    return true;
+  }
+
   // Every zone but yellow: a Bomb blast (the Bomb consumable or a Remote
   // Bomb, via CavernSystem.bombBlast) that reaches the wall opens it, on top
   // of the zone's own unlock method. Returns true if this call broke the wall.

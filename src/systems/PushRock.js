@@ -12,7 +12,8 @@ import { BackgroundObject } from '../entities/BackgroundObject.js';
  * whichever gate placed it. It only ever appears where such a gate exists:
  * the rock is never a secret on its own, only the answer to a locked thing.
  * The Ocean room's rock is the same answer: the lock is the deep sea, and
- * the Flippers that open it lie under the rock (OceanPushRockSystem).
+ * the Flippers that open it lie under the rock, and a red Vault's wall gives
+ * to a rock somewhere in its room (PushRockSystem).
  *
  * Rules:
  *   - Pushing is input, not contact: the player must be lined up with the

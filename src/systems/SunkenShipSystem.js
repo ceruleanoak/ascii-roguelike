@@ -10,7 +10,7 @@ import { flagSunkenGlints } from './SunkenGlintSystem.js';
  *
  *   - The sea drowns the player on the ordinary wet-pip clock. The answer is
  *     the Flippers, found under the Push Rock every Ocean room keeps on its
- *     sand (OceanPushRockSystem) — the room itself supplies nothing.
+ *     sand (PushRockSystem) — the room itself supplies nothing.
  *   - The hold is flooded a darker blue, and glints catch the light in it
  *     (SunkenGlintSystem). One of them, the Slow Glint, blinks five times less
  *     often than the rest. Finding it opens a secret south exit — no message,
