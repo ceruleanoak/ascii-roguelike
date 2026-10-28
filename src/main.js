@@ -2795,7 +2795,7 @@ class Game {
         return;
       }
 
-      this.zoneSystem.recordExit(exitObj);
+      this.zoneSystem.recordExit(exitObj, 'north');
       this.compassSystem.onExitTaken('north');
       this.barricadeSystem.recordTraversal('north');
       const letterPath = this.zoneSystem.pathHistory.map(exit => exit.letter).join('-');
@@ -2882,7 +2882,7 @@ class Game {
         if ((inEastExit || crossedEastExit || isPressingIntoExitGap(this.player, this.keys, 'east')) && this.exitSystem.isExitOpen(this.currentRoom, this.player, 'east')) {
           const exitObj = this.currentRoom.exits.east;
           this.threeRoomSystem.breakStreak(); // only consecutive norths count
-          this.zoneSystem.recordExit(exitObj);
+          this.zoneSystem.recordExit(exitObj, 'east');
           this.compassSystem.onExitTaken('east');
           this.barricadeSystem.recordTraversal('east');
           const letterPath = this.zoneSystem.pathHistory.map(exit => exit.letter).join('-');
@@ -2933,7 +2933,7 @@ class Game {
           if ((inWestExit || crossedWestExit || isPressingIntoExitGap(this.player, this.keys, 'west')) && this.exitSystem.isExitOpen(this.currentRoom, this.player, 'west')) {
             const exitObj = this.currentRoom.exits.west;
             this.threeRoomSystem.breakStreak(); // only consecutive norths count
-            this.zoneSystem.recordExit(exitObj);
+            this.zoneSystem.recordExit(exitObj, 'west');
             this.compassSystem.onExitTaken('west');
             this.barricadeSystem.recordTraversal('west');
             const letterPath = this.zoneSystem.pathHistory.map(exit => exit.letter).join('-');

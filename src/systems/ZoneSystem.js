@@ -40,7 +40,7 @@ function blendColors(color1, color2, percent) {
 export class ZoneSystem {
   constructor() {
     this.currentZone = 'green'; // Default starting zone
-    this.pathHistory = []; // Last 10 exit choices (objects with {letter, color})
+    this.pathHistory = []; // Last 10 exit choices (objects with {letter, color, direction})
     this.roomsSinceRest = 0;
 
     // Gray zone unlock tracking (green zone only)
@@ -78,10 +78,11 @@ export class ZoneSystem {
     this.engagedBosses = new Set();
   }
 
-  recordExit(exitObject) {
+  recordExit(exitObject, direction = null) {
     this.pathHistory.push({
       letter: exitObject.letter,
-      color: exitObject.color
+      color: exitObject.color,
+      direction // 'north' | 'east' | 'west' — ExitSystem._eastOwesOcean
     });
     if (this.pathHistory.length > 10) {
       this.pathHistory.shift(); // Keep only last 10

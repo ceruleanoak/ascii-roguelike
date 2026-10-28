@@ -49,8 +49,12 @@ export class CompassSystem {
     const candidates = MARKABLE_DIRECTIONS.filter(dir => room?.exits?.[dir]?.letter);
     if (candidates.length === 0) { this.markedDirection = null; return; }
 
-    const dir = candidates[Math.floor(Math.random() * candidates.length)];
-    if (this._pendingForceD) {
+    // The forced 'D' never takes an east exit owed to the Ocean (the third
+    // east in a row, ExitSystem._eastOwesOcean) — the cardinal rule wins.
+    const dCandidates = this._pendingForceD ? candidates.filter(d => !room.exits[d].oceanOwed) : candidates;
+    const pool = dCandidates.length ? dCandidates : candidates;
+    const dir = pool[Math.floor(Math.random() * pool.length)];
+    if (this._pendingForceD && !room.exits[dir].oceanOwed) {
       mutateExitLetter(room.exits[dir], 'D', { source: 'compass' });
       this._pendingForceD = false;
     }

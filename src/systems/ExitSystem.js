@@ -45,6 +45,22 @@ function offersDungeonAt(depth) {
 // at random here has to skip those slots, or it lands on an exit the player
 // will never be able to walk through.
 const EXIT_RULE_SLOT = { disableNorth: 0, disableEast: 1, disableWest: 2 };
+const SLOT_DIRECTIONS = ['north', 'east', 'west'];
+
+// The cardinal meanings (claudedocs/zone-cosmology.md): north climbs toward
+// the Ridge and gray, east runs out to the Ocean, south is REST. A letter
+// bound to a direction is never written onto a side that contradicts it, by
+// any path — rolled, sequence-forced, or cycled by the Sword of the Letter.
+// 'O' also can't be a west exit for a physical reason: entering an Ocean
+// from the west would put the player in the sea.
+export function letterRefusesSide(letter, direction) {
+  if (letter === 'R') return direction !== 'north';
+  if (letter === 'O') return direction === 'west';
+  return false;
+}
+
+// After two easts in a row, the third east is always the Ocean.
+const EAST_STREAK_TO_OCEAN = 2;
 
 // Reverse lookup: which zone does an exit color represent? Colors are unique
 // per zone in ZONE_COLORS, so this is safe both ways.
@@ -82,11 +98,12 @@ function randomOpenSlot(closedSlots) {
 // that is a defined entry in EXIT_LETTERS. Wraps A→...→Z→A. Non-alphabet
 // inputs (e.g. '?') start the search from before 'A'. Used by the
 // Sword of the Letter to cycle exit destinations on hit.
-export function cycleExitLetter(currentLetter, game = null) {
+export function cycleExitLetter(currentLetter, game = null, direction = null) {
   const startCode = /^[A-Z]$/.test(currentLetter) ? currentLetter.charCodeAt(0) : 64;
   for (let i = 1; i <= 26; i++) {
     const next = String.fromCharCode(((startCode - 65 + i) % 26) + 65);
-    if (EXIT_LETTERS[next] && !isLetterRetired(next, game)) return next;
+    if (EXIT_LETTERS[next] && !isLetterRetired(next, game) &&
+        !(direction && letterRefusesSide(next, direction))) return next;
   }
   return currentLetter;
 }
@@ -294,7 +311,7 @@ export function applyExitMutatingSwordHit(attack, room, game = null) {
   if (attack.cyclesExitLetter && !attack.hasCycledLetter) {
     const hit = findExitAtPoint(room, attack.position.x, attack.position.y, attack.width, attack.height);
     if (hit) {
-      const next = cycleExitLetter(hit.exit.letter, game);
+      const next = cycleExitLetter(hit.exit.letter, game, hit.direction);
       if (mutateExitLetter(hit.exit, next, { source: 'sword' })) {
         attack.hasCycledLetter = true;
       }
@@ -326,9 +343,8 @@ export class ExitSystem {
    * [north, east, west] here as everywhere else in this file.
    */
   _slotRefuses(slot, letter, currentDepth, zoneType) {
-    // 'O' (Ocean) cannot be a west exit — entering from the west would put the
-    // player in the ocean.
-    if (slot === 2 && letter === 'O') return true;
+    // Direction-bound letters: 'R' north only, 'O' never west.
+    if (letterRefusesSide(letter, SLOT_DIRECTIONS[slot])) return true;
 
     // 'R' (Ridge) cannot be the north exit when the room behind it would stand
     // on the run's second consecutive north. Crossing a Ridge is a promise:
@@ -376,6 +392,19 @@ export class ExitSystem {
     if (!ZONES[zoneType]?.alternativeZones?.length) return null;
     const remaining = this.zoneSystem.undefeatedBossZones();
     return remaining.length > 0 ? remaining : null;
+  }
+
+  /**
+   * The last EAST_STREAK_TO_OCEAN exits taken were all east (pathHistory
+   * entries carry the direction crossed — ZoneSystem.recordExit), so this
+   * room's east exit is the next east in the streak and must be the Ocean.
+   * A trip through REST records nothing and doesn't break the streak, the
+   * same as the north streak the Three answers (ThreeRoomSystem).
+   */
+  _eastOwesOcean() {
+    const history = this.zoneSystem?.pathHistory;
+    if (!history || history.length < EAST_STREAK_TO_OCEAN) return false;
+    return history.slice(-EAST_STREAK_TO_OCEAN).every(e => e.direction === 'east');
   }
 
   /** All zone Bosses down: the north exit of every drifting zone leads to gray. */
@@ -473,6 +502,27 @@ export class ExitSystem {
     // until this zone's miniboss has been cleared this run (gray excluded,
     // same as the miniboss gating elsewhere).
     const closedSlots = closedSlotsForLetter(currentLetter);
+
+    // Third east in a row: the east slot is the Ocean, and every placement
+    // below (forced 'B', guaranteed 'D'/'S', a sequence's next letter) treats
+    // it as taken. The Compass's forced 'D' reads exits.east.oceanOwed and
+    // lands elsewhere (CompassSystem.onRoomEntered).
+    const oceanOwed = !closedSlots.has(1) && this._eastOwesOcean();
+    if (oceanOwed) {
+      const dupe = letters.indexOf('O');
+      letters[1] = 'O';
+      if (dupe !== -1 && dupe !== 1) {
+        for (let attempts = 0; attempts < 50; attempts++) {
+          const letter = this.selectExitLetter(currentDepth, zoneType);
+          if (!letters.includes(letter) && letter !== currentLetter &&
+              !this._slotRefuses(dupe, letter, currentDepth, zoneType)) {
+            letters[dupe] = letter;
+            break;
+          }
+        }
+      }
+    }
+    const pinned = oceanOwed ? new Set([...closedSlots, 1]) : closedSlots;
     // North still carries a letter, but its color is not ours to pick when it
     // is about to be repainted gray (a Ridge's north exit, or every drifting
     // zone once all zone Bosses are down). Coloring treats it as closed so the
@@ -480,6 +530,7 @@ export class ExitSystem {
     // otherwise the only STAY exit could be the one painted gray.
     const northIsGray = currentLetter === 'R' || this._northLeadsToGray(zoneType);
     const colorClosed = northIsGray ? new Set([...closedSlots, 0]) : closedSlots;
+    const pinnedColor = oceanOwed ? new Set([...colorClosed, 1]) : colorClosed;
 
     let forcedBossIndex = -1;
     if (currentDepth >= 5 && zoneType !== 'gray' && currentLetter !== 'B' &&
@@ -487,13 +538,13 @@ export class ExitSystem {
       // Keep the forced 'B' off a north slot that leads to gray — a
       // gray-colored 'B' would carry the player out of the zone whose
       // miniboss it is meant to guarantee.
-      forcedBossIndex = randomOpenSlot(colorClosed);
+      forcedBossIndex = randomOpenSlot(pinnedColor);
       letters[forcedBossIndex] = 'B';
-      this._keepStreakSlotOpen(letters, colorClosed, forcedBossIndex, progressionColor, currentDepth, zoneType, currentLetter);
+      this._keepStreakSlotOpen(letters, pinnedColor, forcedBossIndex, progressionColor, currentDepth, zoneType, currentLetter);
     }
 
-    this._guaranteeDungeonExit(letters, closedSlots, forcedBossIndex, currentDepth, currentLetter);
-    this._guaranteeSettlementExit(letters, closedSlots, forcedBossIndex, currentLetter, zoneType);
+    this._guaranteeDungeonExit(letters, pinned, forcedBossIndex, currentDepth, currentLetter);
+    this._guaranteeSettlementExit(letters, pinned, forcedBossIndex, currentLetter, zoneType);
 
     // Assign colors based on zone and progression state. The forced 'B' slot
     // is reserved: alt/streak colors are placed on the other open slots, so
@@ -523,7 +574,8 @@ export class ExitSystem {
       const forceIt = sequenceOffer.offerClass === 'always' ||
         (sequenceOffer.offerClass === 'sometimes' && Math.random() < 0.5);
       if (forceIt) {
-        const candidates = [0, 1, 2].filter(i => i !== forcedBossIndex && !closedSlots.has(i));
+        const candidates = [0, 1, 2].filter(i => i !== forcedBossIndex && !pinned.has(i) &&
+          !this._slotRefuses(i, sequenceOffer.letter, currentDepth, zoneType));
         if (candidates.length > 0) {
           const slot = candidates[Math.floor(Math.random() * candidates.length)];
           letters[slot] = sequenceOffer.letter;
@@ -548,7 +600,7 @@ export class ExitSystem {
     // Return exit objects with letter + color
     const exits = {
       north: { letter: letters[0], color: sequenceColors[0] },
-      east: { letter: letters[1], color: sequenceColors[1] },
+      east: { letter: letters[1], color: sequenceColors[1], ...(oceanOwed && letters[1] === 'O' ? { oceanOwed: true } : {}) },
       west: { letter: letters[2], color: sequenceColors[2] },
       // South is boolean (return to REST); noRest zones have no way back.
       // Once Charon's farewell has sealed REST, every room keeps a south door
