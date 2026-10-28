@@ -23,10 +23,11 @@ export const PUZZLES = {
   // their turning shows:
   //   letters  each visible exit takes the letter the ring holds on its side;
   //            solved when S sits south (the side that never shows a letter)
-  //   colors   each visible exit takes the color the ring holds on its side;
-  //            the gray one turns its letter to R on the north and to N
-  //            (North, the red herring) on the east or west, but an S keeps
-  //            its letter; solved when gray is north
+  //   colors   the four zone colors turn round the exits, each visible exit
+  //            taking the one on its side; the ring also carries N (North,
+  //            the red herring), which replaces the letter on the east or
+  //            west; brought north, it makes the north exit a gray R — the
+  //            solve. An S keeps its letter wherever N lands
   //   symbols  the diamond, whose corners carry each direction's meaning;
   //            solved when every symbol faces its own way
   // All three solved → the Compass. The exits never close.
