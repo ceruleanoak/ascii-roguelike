@@ -295,7 +295,7 @@ export class ConsumableTriggerSystem {
       case 'arrowRefill': {
         // Fletch of Arrows: only makes sense with an empty bow slot — a
         // physical precondition, stays absolute even under manual.
-        const emptyBow = player.quickSlots.find(s => s?.data?.weaponType === 'BOW' && s.usesRemaining <= 0);
+        const emptyBow = player.quickSlots.find(s => s?.data?.weaponType === 'BOW' && s.maxUses !== null && s.usesRemaining <= 0);
         if (!emptyBow) return false;
         return { windup: THROW_DURATION, effectType: 'arrowRefill' };
       }
@@ -403,7 +403,7 @@ export class ConsumableTriggerSystem {
         break;
       }
       case 'arrowRefill': {
-        const emptyBow = player.quickSlots.find(s => s?.data?.weaponType === 'BOW' && s.usesRemaining <= 0);
+        const emptyBow = player.quickSlots.find(s => s?.data?.weaponType === 'BOW' && s.maxUses !== null && s.usesRemaining <= 0);
         if (emptyBow) emptyBow.usesRemaining = Math.min(emptyBow.usesRemaining + (cd.amount || 5), emptyBow.maxUses ?? Infinity);
         break;
       }

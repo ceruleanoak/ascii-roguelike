@@ -446,8 +446,9 @@ export const ITEMS = {
   // Item.js's bullet pipeline instead of createArrow — a straight, non-directional
   // shot rather than an arrow. maxChargeTime overrides the 1.5s default draw;
   // requiresFullCharge means the stone only flies from a full draw — let go
-  // early and the draw is cancelled (Item.releaseBow). Its Keen and Pearl
-  // upgrades carry the same rule.
+  // early and the draw is cancelled (Item.releaseBow). maxUses: null — stones
+  // never run out, so the full-draw rule is the only rate limit. Its Keen and
+  // Pearl upgrades carry both rules.
   'Ψ': {
     char: 'Ψ',
     tier: 1,
@@ -462,7 +463,7 @@ export const ITEMS = {
     bulletSpeed: 450,
     bulletSize: 0.6,
     bulletRange: 260,
-    maxUses: 12,
+    maxUses: null,
     accuracy: .92,
     critChance: 0.10,
     color: '#aaaaaa'
@@ -487,7 +488,7 @@ export const ITEMS = {
     bulletSpeed: 450,
     bulletSize: 0.6,
     bulletRange: 260,
-    maxUses: 12,
+    maxUses: null,
     accuracy: .92,
     critChance: 0.15,
     color: '#dddd66'
@@ -513,7 +514,7 @@ export const ITEMS = {
     bulletSpeed: 450,
     bulletSize: 0.6,
     bulletRange: 420,
-    maxUses: 12,
+    maxUses: null,
     accuracy: .92,
     critChance: 0.15,
     color: '#eeeeff'
