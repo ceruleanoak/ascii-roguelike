@@ -346,10 +346,15 @@ export class ConsumableTriggerSystem {
     switch (windup.effectType) {
       case 'heal': {
         const p = params();
-        const healAmount = p?.amount ?? cd.amount;
-        player.heal(healAmount);
-        this.game.combatSystem.showHeal(healAmount, player.position.x, player.position.y, player);
-        if (p?.isUnstableBadRoll) player.takeDamage?.(Math.abs(Math.round(p.unstableRoll) - cd.amount));
+        // An Unstable roll is whole HP: 0+ heals that much, below 0 hurts by
+        // that much (POTION_MODIFIERS.H.unstable — "heal 0-7 or damage 2").
+        const amount = p?.amount ?? cd.amount;
+        if (amount < 0) {
+          player.takeDamage?.(-amount);
+          break;
+        }
+        player.heal(amount);
+        this.game.combatSystem.showHeal(amount, player.position.x, player.position.y, player);
         break;
       }
       case 'fairyHeal':

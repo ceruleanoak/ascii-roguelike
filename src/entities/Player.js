@@ -563,7 +563,7 @@ export class Player {
   }
 
   heal(amount) {
-    this.hp += amount;
+    this.hp += Math.round(amount); // HP is whole hearts; no heal source is fractional
     if (this.hp > this.maxHp) this.hp = this.maxHp;
   }
 

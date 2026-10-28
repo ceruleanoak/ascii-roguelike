@@ -202,7 +202,7 @@ export function getPotionEffectParams(potionChar, modifier = null) {
       // Apply the rolled value to the appropriate parameter
       if (unstableSpec.min !== undefined && typeof unstableSpec.min === 'number') {
         // Find which parameter was being rolled
-        if (baseDef.amount !== undefined) params.amount = rollValue;
+        if (baseDef.amount !== undefined) params.amount = Math.round(rollValue);
         else if (baseDef.hasteAmount !== undefined) params.hasteAmount = rollValue;
         else if (baseDef.damageBonus !== undefined) params.damageBonus = Math.round(rollValue);
         else if (baseDef.regenAmount !== undefined) params.regenAmount = Math.round(rollValue);
