@@ -1423,12 +1423,14 @@ identity, not standard programming terms.
   accuracy (a miss shows MISS), thrown with the Slime's windup, cooldown and one-cell blinking
   Telegraph, in yellow. Skips Background Objects and a Maze's cover objects (an unarmed SPACE
   beside one interacts instead; a cover object still recovering from a hit swallows the press rather
-  than letting a Punch through). Not thrown at REST or in NEUTRAL rooms.
+  than letting a Punch through). Not thrown at REST or in NEUTRAL rooms. Armor can harden it:
+  the Dragon Gauntlets (𐤕, Scale + Scale at the Dragon Forge) raise its damage and give it knockback.
 - **In code:** `src/systems/PunchSystem.js` — `tryPunch()` (spent check: `Item.isSpent()`), `update(dt)` (the windup on the
   enemy-melee clock, read straight off `ENEMIES.o`), `reset()` (Reset Registry, room scope).
   The landed blow is a player melee hitbox via `CombatSystem.createAttack` with `accuracy`
   (rolled per swing as `attack.missed`), `telegraphDrawn` and `isPunch` (MazeSystem's cover-object
-  hit pass skips it). Drawn by the `punches` Frame Pass.
+  hit pass skips it). Damage/knockback come from the equipped armor's `punchDamage`/`punchKnockback`
+  when authored (`ITEMS` armor fields), else 1 / 0. Drawn by the `punches` Frame Pass.
 - **Not:** a weapon or Item; not "unarmed attack" / "fist" / "melee strike".
 
 ### Fight

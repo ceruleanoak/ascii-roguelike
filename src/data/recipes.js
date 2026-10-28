@@ -195,6 +195,7 @@ export const RECIPES = [
   { left: '⛓', right: 's', result: '𐤓', name: 'Dragon Scale Armor' }, // Chain Mail + Scale = Dragon Scale Armor (scales set into the rings)
   { left: 'F', right: 's', result: 'ᛝ', name: 'Dragon Spirit' },   // Fire Essence + Scale = Dragon Spirit
   { left: 's', right: 'F', result: 'ᛝ', name: 'Dragon Spirit' },   // either order (the Echo)
+  { left: 's', right: 's', result: '𐤕', name: 'Dragon Gauntlets' }, // Scale + Scale = Dragon Gauntlets (the Punch, upgraded)
   { left: 'g', right: 'f', result: '⚗', name: 'Slurry' },         // Goo + Fur = Slurry
   { left: 'm', right: '~', result: '♥', name: 'Heart' },          // Meat + String = Heart
   { left: 'c', right: 'F', result: '★', name: 'Lucky Coin' },     // Coin + Fire = Lucky Coin

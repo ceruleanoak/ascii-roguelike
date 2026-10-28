@@ -1748,6 +1748,8 @@ export const ITEMS = {
   //   speedBoost / speedPenalty  movement speed modifiers
   //   flavor         ARMOR_FLAVORS.x  Armor Flavor — word floated on equip (see ARMOR_FLAVORS)
   //   splinterChance 0–1  Splinter: chance a landed melee hit destroys the armor (bone)
+  //   punchDamage    N    the Punch's damage while worn (base 1; PunchSystem)
+  //   punchKnockback px/s the Punch's knockback while worn (base 0; PunchSystem)
 
   // ── Tier 1: common drops / basic crafts ───────────────────────────────────
   '𐤀': {
@@ -1944,6 +1946,18 @@ export const ITEMS = {
     massBonus: 2.0,
     rollCooldownMult: 1.45,
     spellDescription: 'ELEMENTAL RESISTANCE.',
+    color: '#ff00ff'
+  },
+  // Dragon Gauntlets (Scale + Scale, Dragon Forge): scaled fists in place of
+  // body armor. Light defense; the worth is the Punch — with empty hands or a
+  // spent weapon it hits for punchDamage and knocks back by punchKnockback
+  // (PunchSystem reads both off the equipped armor).
+  '𐤕': {
+    char: '𐤕', name: 'Dragon Gauntlets', type: ITEM_TYPES.ARMOR,
+    defense: 2,
+    punchDamage: 4,
+    punchKnockback: 280,
+    spellDescription: 'THE BARE HAND STRIKES TRUE.',
     color: '#ff00ff'
   },
 

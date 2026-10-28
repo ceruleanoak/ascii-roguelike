@@ -121,6 +121,9 @@ export class PunchSystem {
   // instead (main.js), so a Punch is only ever thrown at open ground.
   _land(punch) {
     const player = this.game.player;
+    // Dragon Gauntlets (or any armor authoring punchDamage/punchKnockback)
+    // harden the blow; bare skin is the Slime's 1-damage, no-knockback hit.
+    const armor = this.game.inventorySystem?.equippedArmor?.data;
     this.game.combatSystem.createAttack({
       type: 'melee',
       char: '',
@@ -128,9 +131,9 @@ export class PunchSystem {
       position: this._hitPosition(player, punch.facing, punch.reach),
       width: CELL,
       height: CELL,
-      damage: PUNCH_DAMAGE,
+      damage: armor?.punchDamage ?? PUNCH_DAMAGE,
       accuracy: PUNCH_ACCURACY,
-      knockback: 0,
+      knockback: armor?.punchKnockback ?? 0,
       color: punch.color,
       duration: 0.15,          // real seconds: one test frame, then the flash finishes here
       owner: player,
