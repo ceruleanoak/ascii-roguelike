@@ -290,7 +290,9 @@ export class RoomGenerator {
     // X (Crossroads) rooms: a flock of crows hoards a random shiny.
     // Same mechanic, different pool — gems/coin/pearl all possible.
     // Skip if the intro flock already populated this room (depth-1 green).
-    if (exitLetter === 'X' && introRoomEligible && room.crows.length === 0) {
+    // Green only: the crows are green's Help lesson (Legend of Three — feed
+    // them Bread, gain a companion); other zones teach Help their own way.
+    if (exitLetter === 'X' && zoneType === 'green' && introRoomEligible && room.crows.length === 0) {
       this.spawnCrows(room, { hoardPool: RoomGenerator.CROW_HOARD_POOL });
       console.log(`[Crows] spawned ${room.crows.length} in X crossroads room`);
     }
