@@ -14,6 +14,15 @@ import { ENEMIES } from '../data/enemies.js';
 // two never drift apart.
 const FROG_BURN_WEAKNESS = ENEMIES.g.elementalAffinity.weakness.burn;
 
+// A hit is electric when its source says so (element 'electric', or a 'zap'
+// on-hit) or when an electric-affinity enemy lands it: those enemies' bolts
+// and strikes carry no element tag of their own. Rubber Boots and the Topaz
+// Necklace both read this one classification.
+function isElectricHit(damageSource) {
+  return damageSource.element === 'electric' || damageSource.element === 'zap'
+    || !!damageSource.attacker?.data?.affinities?.includes('electric');
+}
+
 export const PlayerDamageSystem = {
   // Returns false (no damage), an object describing what happened
   // (dodged/blocked/immune/damaged/reflect), or true (lethal hit).
@@ -55,6 +64,15 @@ export const PlayerDamageSystem = {
       return { dodged: true, lucky: false };
     }
 
+    const electric = isElectricHit(damageSource);
+
+    // Rubber Boots: while they hold charge the wearer is insulated from every
+    // electric source, not only electrified water. A blocked hit costs no
+    // charge — the boots drain only while standing in water.
+    if (electric && player.waterImmunityTimer > 0) {
+      return { immune: true };
+    }
+
     // Elemental immunity checks
     if (damageSource.element) {
       if (player.fireImmune && damageSource.element === 'burn') {
@@ -90,7 +108,7 @@ export const PlayerDamageSystem = {
       : 0;
 
     // Gem Necklace: a flat cut from hits of the necklace's element
-    const elementAbsorb = player.elementReduction?.[damageSource.element] || 0;
+    const elementAbsorb = player.elementReduction?.[electric ? 'electric' : damageSource.element] || 0;
 
     // Apply defense (reduce damage, minimum 1)
     const actualDamage = Math.max(1, amount - player.defense - meleeAbsorb - burnAbsorb - elementAbsorb);

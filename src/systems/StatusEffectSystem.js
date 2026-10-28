@@ -109,6 +109,8 @@ export const StatusEffectSystem = {
    * knocked loose (applyPlayerDisarm, next frame).
    */
   applyPlayerStatusEffect(player, effect, duration = 3.0, pips = null) {
+    // Charged Rubber Boots insulate the wearer: no electric source zaps them.
+    if (effect === 'zap' && player.waterImmunityTimer > 0) return;
     const wasLocked = this.isPlayerLocked(player);
     if (effect === 'poison' && player.poisonResist > 0) duration *= 1 - player.poisonResist;
     const slot = applyStatusEffect(player, effect, duration, pips);

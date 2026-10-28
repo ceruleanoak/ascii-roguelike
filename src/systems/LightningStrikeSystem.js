@@ -144,7 +144,9 @@ export class LightningStrikeSystem {
       const dx = px - s.x;
       const dy = py - s.y;
       if (Math.sqrt(dx * dx + dy * dy) <= s.radius) {
-        const result = game.player.takeDamage(s.damage, s.attacker ? { attacker: s.attacker } : { cause: DEATH_CAUSES.lightning });
+        const result = game.player.takeDamage(s.damage, s.attacker
+          ? { attacker: s.attacker, element: 'electric' }
+          : { cause: DEATH_CAUSES.lightning, element: 'electric' });
         game.physicsSystem.applyDamageKnockback(game.player, result, s.x, s.y);
       }
     }
