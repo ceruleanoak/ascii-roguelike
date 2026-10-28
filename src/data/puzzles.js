@@ -44,10 +44,10 @@ export const PUZZLES = {
     rings: [
       { kind: 'letters', shape: 'circle',  radius: 8, gap: { dx: 2, dy: -8 }, turnSeconds: 1.2 },
       { kind: 'colors',  shape: 'circle',  radius: 5, gap: { dx: -5, dy: -2 }, turnSeconds: 0.9 },
-      // Tokens by home corner [north, east, south, west]: the pyramid (Ridge,
-      // toward Gray), the sea (Ocean), the flower (REST), the book (Canon,
-      // the written — a placeholder glyph until West has its rule).
-      { kind: 'symbols', shape: 'diamond', radius: 2, gap: { dx: 1, dy: 1 }, turnSeconds: 0.6, tokens: ['^', '~', '*', '='] }
+      // Tokens by home corner [north, east, south, west]: the pyramid ▲
+      // (Ridge, toward Gray), the sea ~ (Ocean), the flower ❀ (REST), the open
+      // book ◫ (Canon, the written — its meaning waits on West's rule).
+      { kind: 'symbols', shape: 'diamond', radius: 2, gap: { dx: 1, dy: 1 }, turnSeconds: 0.6, tokens: ['▲', '~', '❀', '◫'] }
     ],
     stoneColor: '#6a8a6a',
     markerColor: '#e8e8d0',

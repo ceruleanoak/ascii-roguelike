@@ -321,9 +321,9 @@ identity, not standard programming terms.
   is solved with `S` south, the side that never shows a letter. The **middle** (color) circle sets
   each exit's color; its gray turns the letter into `R` on the north and into `N` (North) on the
   east or west, but an `S` keeps its letter. It is solved with gray north. The **inner** (symbol)
-  diamond is the only ring with glyphs: its corners hold each direction's meaning, north `^` the
-  pyramid (Ridge, toward Gray), east `~` the sea (Ocean), south `*` the flower (REST), west `=` the
-  book (Canon, a placeholder). It is solved when every symbol faces its own way. With all three
+  diamond is the only ring with glyphs: its corners hold each direction's meaning, north `▲` the
+  pyramid (Ridge, toward Gray), east `~` the sea (Ocean), south `❀` the flower (REST), west `◫` the
+  open book (Canon, its meaning still open). It is solved when every symbol faces its own way. With all three
   rings solved, the rings stop and the Compass `⌖` lies at the center. No enemies, and the exits
   never close. P is green-only and is rolled only on the zone-change beat (L3/L6/L9).
 - **In code:** `PUZZLES.green` (`type: 'compass_rose'`) in `src/data/puzzles.js`; `PuzzleSystem`
