@@ -1873,7 +1873,7 @@ export class PhysicsSystem {
       if (entity.statusEffects?.goo?.active) clearStatusEffect(entity, 'goo');
 
       // Check water immunity (Rubber Boots) — blocks elemental status effects but not movement slow
-      const isImmune = entity === game.player && game.player.waterImmunityTimer > 0;
+      const isImmune = entity === game.player && game.player.waterImmune;
       // An authored wet immunity (elementalAffinity.immunity 'wet'; no enemy
       // carries one today) blocks only the wet status — electrified water
       // still shocks it.

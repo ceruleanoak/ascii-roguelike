@@ -143,9 +143,6 @@ export class Item {
     // over liquid (FloatingBootsSystem). Lives on the instance so a half-spent
     // pair keeps its charge across rooms.
     this.floatCharge = this.data.floatCharge ?? null;
-    // Rubber Boots — seconds of water immunity left; drains only while the
-    // wearer stands in water (FloatingBootsSystem).
-    this.waterCharge = this.data.waterCharge ?? null;
 
     // Wand use limit system (resets per room)
     this.maxUsesPerRoom = this.data.maxUsesPerRoom || null; // null = unlimited

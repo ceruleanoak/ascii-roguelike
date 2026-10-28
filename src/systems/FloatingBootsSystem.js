@@ -1,25 +1,19 @@
-// FloatingBootsSystem — owns the charge lifecycle of the charged boots:
-// Floating Boots (ѡ, float) and their sibling Rubber Boots (ѽ, water
-// immunity).
+// FloatingBootsSystem — owns the charge lifecycle of the Floating Boots (ѡ).
 //
-// Both are passive slot items, never thrown or consumed. Their charge
-// (seconds, `item.floatCharge` / `item.waterCharge`) lives on the slot's Item
-// instance so it survives slot reorders and travels with the boots. Each frame,
-// per pair:
+// A passive slot item, never thrown or consumed. Its charge (seconds,
+// `item.floatCharge`) lives on the slot's Item instance so it survives slot
+// reorders and travels with the boots. Each frame:
 //   - the charge is projected onto the player (`player.floatCharge`, which
 //     PhysicsSystem reads to keep the player afloat and to open 'float'
-//     passable zones; `player.waterImmunityTimer`, which PhysicsSystem and
-//     ElectricitySystem read to skip water's wet status and shock);
-//   - while the player is in the boots' medium, the charge drains in real
-//     seconds — dry ground costs nothing. Float drains over any liquid
-//     (`player.overLiquid`), rubber over water only (`player.inLiquid`);
+//     passable zones);
+//   - while there is liquid underfoot (`player.overLiquid`), the charge drains
+//     in real seconds — dry ground costs nothing;
 //   - at zero the slot reverts to the boots' `spentChar` (plain Boots ꙍ).
 //
 // Runs from Game.updatePlayerMechanics, so it ticks in every state that moves
 // the player (REST / EXPLORE / NEUTRAL) — no per-state wiring needed.
 const CHARGED_BOOTS = [
   { charge: 'floatCharge', playerField: 'floatCharge',        drains: player => player.overLiquid },
-  { charge: 'waterCharge', playerField: 'waterImmunityTimer', drains: player => player.inLiquid },
 ];
 
 export class FloatingBootsSystem {

@@ -2350,22 +2350,21 @@ export const ITEMS = {
     spentChar: 'ꙍ',
     color: '#ffaa44'
   },
-  // Rubber Boots — Goo + Boots. Floating Boots' sibling: a slot-holding
-  // passive, never thrown. Instead of float, the wearer is immune to water's
-  // elemental effects (no wet status), and waterCharge (seconds) drains only
-  // while standing in water. While charged the boots also insulate: no
-  // electric source lands (electrified water or slime, wires, lightning,
-  // conduction, electric enemies' attacks) — PlayerDamageSystem refuses the
-  // hit and StatusEffectSystem the zap. Spent, the slot holds the plain Boots
-  // (spentChar). FloatingBootsSystem owns the drain.
+  // Rubber Boots — Goo + Boots. A slot-holding passive, never thrown or used
+  // up: while worn, the player is immune to water's elemental effects
+  // (waterImmune: no wet status, no poisoned-water contact) and insulated from
+  // every electric source (electricImmune: electrified water or slime, wires,
+  // lightning, conduction, electric enemies' attacks — PlayerDamageSystem
+  // refuses the hit and StatusEffectSystem the zap). EquipmentEffectsSystem
+  // projects both onto the player.
   'ѽ': {
     char: 'ѽ',
     name: 'Rubber Boots',
     type: ITEM_TYPES.CONSUMABLE,
     passive: true,
     exclusiveGroup: 'boots',
-    waterCharge: 25,
-    spentChar: 'ꙍ',
+    waterImmune: true,
+    electricImmune: true,
     color: '#ffdd44'
   },
 

@@ -176,9 +176,10 @@ export class Player {
     this.emberStackTimer = 0;
     this.emberStackCooldown = 0; // minimum 0.5s between stack gains
 
-    // Water immunity (from Rubber Boots): seconds of charge left in the equipped
-    // boots, projected each frame by FloatingBootsSystem (0 = none equipped).
-    this.waterImmunityTimer = 0;
+    // Rubber Boots, while worn (EquipmentEffectsSystem): no water status, no
+    // electric hit or zap.
+    this.waterImmune = false;
+    this.electricImmune = false;
 
     // Float (from Floating Boots) — ignores lava, water, and mud.
     // floatCharge: seconds of float left in the equipped boots, projected each
@@ -790,7 +791,6 @@ export class Player {
     this.batFormTimer = 0;
     this.blockBoostTimer = 0;
     this.blockBoostAmount = 0;
-    this.waterImmunityTimer = 0;
     this.floatCharge = 0;
     this.overLiquid = false;
     this.steamTrailTimer = 0;

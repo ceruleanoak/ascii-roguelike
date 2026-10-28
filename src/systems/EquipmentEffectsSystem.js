@@ -105,6 +105,8 @@ export class EquipmentEffectsSystem {
     player.elementReduction = { burn: 0, freeze: 0, poison: 0, electric: 0 };
     player.poisonResist = 0;
     player.slimeResist = 0;
+    player.waterImmune = false;
+    player.electricImmune = false;
     let critBonus = 0;
     inventorySystem.equippedConsumables.forEach((slot, idx) => {
       const cd = slot?.data;
@@ -127,6 +129,9 @@ export class EquipmentEffectsSystem {
       // the stronger one, so a pair can't zero either effect out.
       if (cd.poisonResist) player.poisonResist = Math.max(player.poisonResist, cd.poisonResist);
       if (cd.slimeResist) player.slimeResist = Math.max(player.slimeResist, cd.slimeResist);
+      // Rubber Boots: water and electric immunity for as long as they're worn.
+      if (cd.waterImmune) player.waterImmune = true;
+      if (cd.electricImmune) player.electricImmune = true;
       // Boots: part of the unarmed sprint speed (and its footstep trail)
       // while armed — routed through Player.getSprintMultiplier().
       if (cd.passiveSprint) player.bootsSprintMult = Math.max(player.bootsSprintMult, cd.passiveSprint);

@@ -66,10 +66,8 @@ export const PlayerDamageSystem = {
 
     const electric = isElectricHit(damageSource);
 
-    // Rubber Boots: while they hold charge the wearer is insulated from every
-    // electric source, not only electrified water. A blocked hit costs no
-    // charge — the boots drain only while standing in water.
-    if (electric && player.waterImmunityTimer > 0) {
+    // Rubber Boots: worn, they insulate the player from every electric source.
+    if (electric && player.electricImmune) {
       return { immune: true };
     }
 
