@@ -302,6 +302,16 @@ identity, not standard programming terms.
   `currentRoom.backgroundObjects`.
 - **Not:** "Interior", "Floor", "Zone".
 
+### North (N)
+- **Definition:** The exit letter `N`, a Room named for a direction it does not face. The Compass
+  Rose's red herring: its gray color token writes `N` onto an east or west exit, while only the
+  north exit can read `R` (Ridge). Never rolled (weight 0). Its Room is undesigned and borrows the
+  Crossroads (`X`) layout, without X's crow flock.
+- **In code:** `EXIT_LETTERS.N` (`src/data/exitLetters.js`); `LETTER_TEMPLATES.N`, spread from
+  `LETTER_TEMPLATES.X` (`src/data/letterTemplates.js`).
+- **Not:** the north exit itself (that is a direction, written lowercase `north` in exit code); the
+  Ridge (`R`), which is what the north exit leads toward.
+
 ### Enemy
 - **Definition:** Any autonomous hostile actor. Behaviors are composed, not subclassed.
 - **In code:** `Enemy` base in `src/entities/`; data in `src/data/enemies.js`.

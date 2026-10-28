@@ -776,3 +776,14 @@ export const LETTER_TEMPLATES = {
     huntableGame: true
   }
 };
+
+// N (North) — for now the Crossroads clearing under another name. Its job is
+// the Compass Rose's red herring: the gray color token turns an east or west
+// exit into 'N', which says "north" from a side that isn't (PuzzleSystem).
+// Its own room is still undesigned, so it borrows X's layout; X's crow flock
+// is keyed on the letter X in RoomGenerator and does not come along.
+LETTER_TEMPLATES.N = {
+  ...LETTER_TEMPLATES.X,
+  name: 'North',
+  description: 'A clearing named for a direction it does not face',
+};

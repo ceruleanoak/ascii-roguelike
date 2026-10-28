@@ -126,6 +126,14 @@ export const EXIT_LETTERS = {
     },
     spellDescription: 'THE SEEKER PATH.'
   },
+  // Weight is zero — only the Compass Rose offers 'N', as its red herring
+  // (a gray exit on east or west). Its room is a copy of X for now.
+  'N': {
+    name: 'North',
+    roomType: 'COMBAT',
+    weight: 0,
+    spellDescription: 'NORTH IS NOT A NAME.'
+  },
   'O': {
     name: 'Ocean',
     roomType: 'COMBAT',
