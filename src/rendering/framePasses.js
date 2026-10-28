@@ -32,7 +32,7 @@
  */
 
 import { GRID, GAME_STATES } from '../game/GameConfig.js';
-import { isInteriorActive, inSamePlane } from '../systems/PlaneSystem.js';
+import { isInteriorActive, inSamePlane, isDeathHeldOffSurface } from '../systems/PlaneSystem.js';
 import { drawWires } from './effects/WireEffects.js';
 import { drawShoreFishermanCoin } from './effects/ArcTossEffects.js';
 import { drawStatusPips } from './effects/StatusPipEffects.js';
@@ -79,7 +79,9 @@ const isInterior = (owner) => owner === 'floor' || owner === 'maze';
 
 // PiP death hold: the death screen shows only particles/debris there,
 // matching the surface GAME_OVER path (GameOverRenderer never draws the player).
-const deathHeld = (game, owner) => isInterior(owner) && game.characterDeathPending;
+// Keyed on the hold itself, not characterDeathPending — that flag is false on
+// the last character's death (a true GAME OVER), which left the glyph standing.
+const deathHeld = (game, owner) => isInterior(owner) && isDeathHeldOffSurface(game);
 
 const NO_ENEMIES = 'REST has no enemies (Game State: REST)';
 const PLAIN_PRIZES = 'NeutralRenderer draws room prizes plainly: the shared tall-grass concealment would hide Leshy grass prizes';
@@ -159,8 +161,8 @@ export const FRAME_PASSES = {
     {
       id: 'torchLight',
       on: { surface: 'surface torch light is the cave-fog torch boost (drawVisionFogOverlay)', floor: true, maze: true, rest: NO_DARK, neutral: 'neutral light is the underwater Lantern glow (drawVisionFogOverlay)' },
-      draw: (rc, game) => {
-        if (!hasTorchLight(game)) return;
+      draw: (rc, game, owner) => {
+        if (deathHeld(game, owner) || !hasTorchLight(game)) return;
         drawPlayerTorchLight(rc.renderer,
           game.player.position.x + GRID.CELL_SIZE / 2, game.player.position.y + GRID.CELL_SIZE / 2);
       }
@@ -175,8 +177,8 @@ export const FRAME_PASSES = {
     },
     {
       id: 'dizzy', on: everywhere,
-      draw: (rc, game) => {
-        if (!game.player.isDizzy?.()) return;
+      draw: (rc, game, owner) => {
+        if (deathHeld(game, owner) || !game.player.isDizzy?.()) return;
         drawDizzyOrbitals(rc.renderer.fgCtx,
           game.player.position.x + GRID.CELL_SIZE / 2, game.player.position.y + GRID.CELL_SIZE / 2,
           game.player.statusBlinkTimer);
@@ -189,7 +191,7 @@ export const FRAME_PASSES = {
     // Fairy King in a Bottle ready: a fairy circles the player.
     { id: 'fairyKingOrbit', on: everywhere, draw: (rc, game, owner) => { if (!deathHeld(game, owner)) drawFairyKingOrbit(rc.renderer, game); } },
     // Attack-direction '^' orbiting tight around the player.
-    { id: 'facingIndicator', on: { ...everywhere, rest: 'REST is the safe hub; the attack-direction cue is hidden there by design' }, draw: (rc, game) => drawPlayerFacingIndicator(rc.renderer, game) },
+    { id: 'facingIndicator', on: { ...everywhere, rest: 'REST is the safe hub; the attack-direction cue is hidden there by design' }, draw: (rc, game, owner) => { if (!deathHeld(game, owner)) drawPlayerFacingIndicator(rc.renderer, game); } },
     { id: 'staffBlockStance', on: everywhere, draw: (rc, game) => er(rc).drawStaffBlockStance(game) },
     { id: 'knownSpellHints', on: everywhere, draw: (rc, game) => { if (game.knownSpells?.size > 0) drawKnownSpellHints(rc.renderer, game); } },
     { id: 'gemWandCharge', on: everywhere, draw: (rc, game) => er(rc).drawGemWandCharge(game) },

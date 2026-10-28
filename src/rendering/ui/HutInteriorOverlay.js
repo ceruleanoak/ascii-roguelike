@@ -272,7 +272,7 @@ export class HutInteriorOverlay {
     // ── 9-15. Shared combat Frame Passes, then the player and everything
     // attached to them (glyph, torch glow, pips, poses, reticule, in-flight
     // throwables). The player passes hide during the death hold
-    // (game.characterDeathPending), matching the surface GAME_OVER path.
+    // (isDeathHeldOffSurface), matching the surface GAME_OVER path.
     drawFramePasses(this.renderController, game, 'floor', 'combat');
     drawFramePasses(this.renderController, game, 'floor', 'player');
 
