@@ -2,7 +2,7 @@ import { GRID, GAME_STATES } from '../game/GameConfig.js';
 import { buildTerrainGrid, lineWithin, DRY_GROUND } from './steeringTerrain.js';
 import { HeldKeySteering } from './heldKeySteering.js';
 import { entityCenter } from '../game/Telegraph.js';
-import { planeOf } from './PlaneSystem.js';
+import { planeOf, isInteriorActive } from './PlaneSystem.js';
 import { getThrowProfile } from './TrapSystem.js';
 
 const CELL = GRID.CELL_SIZE;
@@ -38,6 +38,11 @@ const FRAME = 1 / 60;
 const TRAP_HOLD_MIN = CELL * 2.5;
 const WIRE_MIN_THROW = CELL * 2;
 
+// Crossing a tunnel or cave gate to the layer the enemies are on: walk to
+// GATE_LEAD before the gate, then straight through it, so the player is
+// moving the way PhysicsSystem.updatePlane flips the Plane.
+const GATE_LEAD = CELL * 1.5;
+
 /**
  * FightSystem — the FIGHT Spell: auto-combat against whichever enemy is nearest,
  * until the player's next keypress.
@@ -69,6 +74,8 @@ const WIRE_MIN_THROW = CELL * 2;
  *
  * Damage still lands on the player; the fight is not a Beeline. It re-targets
  * as enemies fall and ends when none are left, or when any key is pressed.
+ * Enemies left only on the other layer of a tunnel or cave room don't end
+ * it: FIGHT walks through the nearest gate to them (_gateKeys).
  */
 export class FightSystem {
   constructor(game) {
@@ -133,7 +140,7 @@ export class FightSystem {
     const player = this.game.player;
     const target = this._nearestEnemy();
     const none = { w: false, a: false, s: false, d: false };
-    if (!target) return none;
+    if (!target) return this._gateKeys() ?? none;
 
     const p = entityCenter(player);
     const t = entityCenter(target);
@@ -210,9 +217,14 @@ export class FightSystem {
 
     // No one left: the fight is over. Ending here also drops a reposition
     // begun by the shot that felled the last enemy; left standing, its roll
-    // direction kept driving the dodge roll every frame.
+    // direction kept driving the dodge roll every frame. Enemies left on the
+    // other layer keep it going: heldKeys walks through a gate to them.
     const target = this._nearestEnemy();
-    if (!target) { this.reset(); return; }
+    if (!target) {
+      if (this._gateCrossing()) this.reposition = null;
+      else this.reset();
+      return;
+    }
     if (this._remoteBombInReach()) game.trapSystem.detonateRemoteBombs();
     if (this._repositioning(target)) return;
     // Swimming: hold fire and get out (heldKeys). A shot or swing stalls the
@@ -569,13 +581,80 @@ export class FightSystem {
     return best;
   }
 
-  // Every enemy FIGHT may target (see _nearestEnemy).
-  _foes() {
+  // Every enemy FIGHT may target (see _nearestEnemy); with `anyPlane`, on
+  // either layer of the room.
+  _foes(anyPlane = false) {
     const game = this.game;
     const player = game.player;
     return (game._activeEnemies() || []).filter(e =>
       !(e.hp <= 0 || e.dead || e.aloft)
       && !game._isHiddenEnemy(e) && !e.isCharmed?.()
-      && planeOf(e) === planeOf(player));
+      && (anyPlane || planeOf(e) === planeOf(player)));
+  }
+
+  // The way to enemies left only on the other layer of a tunnel or cave room
+  // (room.tunnel / room.underground): the nearest gate, its middle, the way
+  // through it and the point to walk to before it, or null when there are none, or no
+  // gate (an Interior, or the Sinkhole, whose cave SinkholeSystem flips).
+  // A gate's `direction` points out of the tunnel or cave, so leaving
+  // (plane 1 → 0) walks that way through it and entering walks against it.
+  _gateCrossing() {
+    const game = this.game;
+    const player = game.player;
+    if (isInteriorActive(game)) return null;
+    const plane = planeOf(player);
+    if (!this._foes(true).some(e => planeOf(e) !== plane)) return null;
+    const room = game.currentRoom;
+    const entrances = room?.tunnel?.entrances?.length ? room.tunnel.entrances : room?.underground?.entrances;
+    if (!entrances?.length) return null;
+
+    const OUT = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+    const gates = new Map();
+    for (const e of entrances) {
+      if (!OUT[e.direction]) continue;
+      if (!gates.has(e.direction)) gates.set(e.direction, []);
+      gates.get(e.direction).push(e);
+    }
+    const p = entityCenter(player);
+    let best = null;
+    for (const [direction, cells] of gates) {
+      const cols = cells.map(c => c.col), rows = cells.map(c => c.row);
+      const gate = {
+        x: (Math.min(...cols) + Math.max(...cols) + 1) * CELL / 2,
+        y: (Math.min(...rows) + Math.max(...rows) + 1) * CELL / 2,
+      };
+      const [ox, oy] = OUT[direction];
+      const sign = plane === 0 ? -1 : 1;
+      const mx = ox * sign, my = oy * sign;
+      const d = Math.hypot(gate.x - p.x, gate.y - p.y);
+      if (best && d >= best.dist) continue;
+      best = {
+        dist: d,
+        move: { x: mx, y: my },
+        gate,
+        before: { x: gate.x - mx * GATE_LEAD, y: gate.y - my * GATE_LEAD },
+      };
+    }
+    return best;
+  }
+
+  // Held keys toward the nearest gate's crossing (_gateCrossing), or null.
+  // Short of the gate's line, or off to its side, the player walks to the
+  // point before it; lined up on that side, straight through it. The gate is
+  // a HAZARD to the player's route (steeringTerrain), so the crossing is the
+  // one key held the way it flips the Plane, not a route.
+  _gateKeys() {
+    const crossing = this._gateCrossing();
+    if (!crossing) return null;
+    const player = this.game.player;
+    const p = entityCenter(player);
+    const { move, gate, before } = crossing;
+    // Along the crossing: how far past the gate's middle the player stands
+    // (negative short of it). Across: how far off its middle.
+    const along = (p.x - gate.x) * move.x + (p.y - gate.y) * move.y;
+    const across = Math.abs((p.x - gate.x) * move.y - (p.y - gate.y) * move.x);
+    const lined = along >= -GATE_LEAD - CELL * 0.5 && across <= CELL * 0.5;
+    if (lined) return { w: move.y < 0, s: move.y > 0, a: move.x < 0, d: move.x > 0 };
+    return this.steering.keysToward(before.x - player.width / 2, before.y - player.height / 2);
   }
 }

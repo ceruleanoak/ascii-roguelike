@@ -190,6 +190,22 @@ export function buildTerrainGrid(game, entity, collisionMap) {
     }
   }
 
+  // Layer gates: the entrance cells where PhysicsSystem.updatePlane flips a
+  // body between a tunnel or cave and the surface. The player's grid is read
+  // only by the Spells that drive it (FIGHT, CHOP/MINE/HARVEST, GET), and a
+  // drive that wanders onto a gate leaves the layer its target is on, so to
+  // the player a gate is a HAZARD. FIGHT crosses one on purpose
+  // (FightSystem._gateKeys) with held keys, not a route.
+  if (entity === game?.player && !isInteriorActive(game)) {
+    const gateRoom = game.currentRoom;
+    for (const gate of [...(gateRoom?.tunnel?.entrances ?? []), ...(gateRoom?.underground?.entrances ?? [])]) {
+      if (gate.col < 0 || gate.row < 0 || gate.col >= cols || gate.row >= rows) continue;
+      const i = gate.row * cols + gate.col;
+      cost[i] = heavier(cost[i], HAZARD);
+      otherHazard[i] = 1;
+    }
+  }
+
   const swim = new Uint8Array(cols * rows);
   for (let i = 0; i < swim.length; i++) swim[i] = deep[i] && !otherHazard[i] && cost[i] === HAZARD ? 1 : 0;
   return { cols, rows, cost, swim };
