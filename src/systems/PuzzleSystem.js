@@ -438,6 +438,12 @@ export class PuzzleSystem {
   _solveCompassRose(puzzle) {
     const cfg = puzzle.cfg;
     puzzle.solved = true;
+    // Every stone, the diamond's symbols too, turns yellow: the solve has to
+    // be seen across the whole room, not only at the Compass in the middle.
+    for (const ring of puzzle.rings) {
+      for (const { obj } of ring.stones) obj.color = obj.animationColor = cfg.solvedStoneColor;
+    }
+    this.game.renderer?.markBackgroundDirty?.();
     const x = cfg.centerCol * CS;
     const y = cfg.centerRow * CS;
     const compass = tagLootLayer(this.game, new Item(cfg.rewardChar, x, y));

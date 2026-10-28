@@ -51,6 +51,7 @@ export const PUZZLES = {
     ],
     stoneColor: '#6a8a6a',
     markerColor: '#e8e8d0',
+    solvedStoneColor: '#d8c050', // every stone, once all three rings are right
     pushHoldSeconds: 0.35, // the Push Rock lean (PushRock.PUSH_HOLD_SECONDS)
     rewardChar: '⌖'
   }
