@@ -7,7 +7,7 @@ import { tooClose } from '../data/dungeon/fixtureSchema.js';
 import { Enemy } from '../entities/Enemy.js';
 import { Item } from '../entities/Item.js';
 import { BOMB_BAG_CHAR } from './BombBagSystem.js';
-import { SIMPLE_KEY_CHAR } from '../data/items.js';
+import { SIMPLE_KEY_CHAR, ITEMS } from '../data/items.js';
 import { getZoneRandomEnemy } from '../data/enemies.js';
 import { applyZoneCombatModifiers } from '../data/zones.js';
 import {
@@ -739,11 +739,14 @@ export class DungeonFloorGenerator {
     //
     // Columns are 4 apart around STAIRS_COL (12), so the three 3-cell frames
     // (7-9, 11-13, 15-17) never touch.
+    // Which inventory a slot draws from is the wanted item's own type (its
+    // ITEMS entry), never authored here: a hand-written per-slot type once
+    // sent green's Bread to the weapon quick slots and softlocked the Vault (#470).
     const legend = getLegendOfThree(zone);
     const slotDefs = [
-      { key: 'justice', row: 8,  col: STAIRS_COL,      itemType: 'consumable' },
-      { key: 'truth',   row: 14, col: STAIRS_COL - 4,  itemType: 'weapon' },
-      { key: 'help',    row: 14, col: STAIRS_COL + 4,  itemType: 'weapon' },
+      { key: 'justice', row: 8,  col: STAIRS_COL },
+      { key: 'truth',   row: 14, col: STAIRS_COL - 4 },
+      { key: 'help',    row: 14, col: STAIRS_COL + 4 },
     ];
     const pyramidSlots = {};
     for (const def of slotDefs) {
@@ -758,7 +761,7 @@ export class DungeonFloorGenerator {
       );
       pyramidSlots[def.key] = {
         row: def.row, col: def.col, obj: slotObj,
-        requiredChar, itemType: def.itemType, filled: !requiredChar,
+        requiredChar, itemType: ITEMS[requiredChar]?.type ?? null, filled: !requiredChar,
       };
     }
 

@@ -1,7 +1,7 @@
 import { GRID } from '../game/GameConfig.js';
 import { Particle } from '../entities/Particle.js';
 import { Ingredient } from '../entities/Ingredient.js';
-import { ITEMS } from '../data/items.js';
+import { ITEMS, ITEM_TYPES } from '../data/items.js';
 import { paintDescentVisual, paintStairsUpVisual } from '../data/dungeonFloorTemplates.js';
 import { TORCH_INTERACT_RADIUS } from './MazeSystem.js';
 import { tickTriggers, within, overlapsCell, setTriggerVisual } from './triggerMachine.js';
@@ -445,9 +445,10 @@ export class DungeonPuzzleSystem {
   }
 
   // Pyramid — "walk up + offer" verb (WellSystem/FountainSystem precedent).
-  // Justice (Lucky Coin) lives in the consumable slot; Truth (Compass) and
-  // Help (Bread) are weapon-slot items — both are checked via quickSlots
-  // since Item exposes .char directly. One deposit per SPACE press.
+  // Each slot takes its item from wherever that item's type lives: a
+  // consumable (green: Lucky Coin, Bread) from the equipped consumables, any
+  // other type (green: Compass) from the quick slots, where Item exposes
+  // .char directly. One deposit per SPACE press.
   _tryDepositPyramid(floor) {
     const { game } = this;
     const player = game.player;
@@ -456,7 +457,7 @@ export class DungeonPuzzleSystem {
       if (slot.filled || !slot.requiredChar) continue;
       if (!this._nearCell(player, slot.obj.position.x, slot.obj.position.y, INTERACT_RADIUS)) continue;
 
-      if (slot.itemType === 'consumable') {
+      if (slot.itemType === ITEM_TYPES.CONSUMABLE) {
         const slots = game.inventorySystem?.equippedConsumables || [];
         const idx = slots.findIndex(it => it?.char === slot.requiredChar || it?.data?.char === slot.requiredChar);
         if (idx < 0) continue;
