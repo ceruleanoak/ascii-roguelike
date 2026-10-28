@@ -12,7 +12,7 @@ import { CampNPC } from '../entities/CampNPC.js';
 import { Crow } from '../entities/Crow.js';
 import { Fairy } from '../entities/Fairy.js';
 import { spawnCellBlockedByBackground, findSafeSpawnPosition } from './safeSpawn.js';
-import { maybeSpawnPeacefulFishingRoom, maybeSpawnRoamingAlchemist, buildVaultInteriorLoot, buildVaultCoinAbundance, buildVaultUnlockExtras, getIslandPosition, protectRegion, isCellProtected, cleanupStrayBackgroundObjects, resolveLavaHazards, seedCavern, rotatePattern, darkenColor, spawnBatFlock, spawnBelfryBats, stampHutFootprint, placeWhirlpool, generateSettlementRoom as generateSettlementRoomImpl, generateJewelerRoom, buildForcedRiverParams, generateYellowWaterTemplate, cellularCaveGrid, isCaveEntranceLanding, generateCalderaRoom, seedAscentZone, seedSinkholes, injectSinkholeLake, spawnMinibossOrFallback, generateGrassSwaths, generateSnowFields, spawnGuaranteedItems, offerL1Weapon, offerWeaponIfUnarmed, seedTunnelZone, generateOceanTerrain as generateOceanTerrainImpl, stampWaterBlobs as stampWaterBlobsImpl } from './roomFeatures.js';
+import { maybeSpawnPeacefulFishingRoom, maybeSpawnRoamingAlchemist, buildVaultInteriorLoot, buildVaultCoinAbundance, buildVaultUnlockExtras, getIslandPosition, protectRegion, isCellProtected, cleanupStrayBackgroundObjects, resolveLavaHazards, seedCavern, rotatePattern, darkenColor, spawnBatFlock, spawnBelfryBats, stampHutFootprint, placeWhirlpool, generateSettlementRoom as generateSettlementRoomImpl, generateJewelerRoom, buildForcedRiverParams, generateYellowWaterTemplate, cellularCaveGrid, isCaveEntranceLanding, generateCalderaRoom, seedAscentZone, seedSinkholes, injectSinkholeLake, spawnMinibossOrFallback, generateGrassSwaths, generateSnowFields, generateRedZoneDeflectors, spawnGuaranteedItems, offerL1Weapon, offerWeaponIfUnarmed, seedTunnelZone, generateOceanTerrain as generateOceanTerrainImpl, stampWaterBlobs as stampWaterBlobsImpl } from './roomFeatures.js';
 import { pickUnspawnedItem, markItemSpawned } from './spawnedItems.js';
 import { placeVaultPushRock } from './PushRockSystem.js';
 import { generateRecipeSign, generateSpellSign } from './roomSigns.js';
@@ -2011,6 +2011,10 @@ export class RoomGenerator {
           : null;
         generateYellowWaterTemplate(this, room, forced);
       }
+    } else if (room.exitLetter === 'B' && !zoneHasSpecialLiquid) {
+      // B rooms in a water zone stay dry: random ponds and streams split a
+      // miniboss arena (Giant Slime, Goblin Army) into swim lanes. Lava zones
+      // keep their lava below — it's the zone's hazard, not scenery.
     } else if (!islandLavaFeatures(room, this.currentLetterTemplate)) { // a lava Island's lake is its only lava
       // Structured liquid (depth 3+, or always in zones with special liquids like lava)
       if (this.currentDepth >= 3 || zoneHasSpecialLiquid) {
@@ -2047,7 +2051,7 @@ export class RoomGenerator {
     // RED zone: scatter right-triangle deflectors so projectile/boulder routing
     // becomes part of normal combat, not just the puzzle.
     if (effectiveZone === 'red') {
-      this.generateRedZoneDeflectors(room);
+      generateRedZoneDeflectors(this, room);
     }
 
     // CYAN zone: deep snow fields — large swaths of full-block white terrain
@@ -2058,21 +2062,6 @@ export class RoomGenerator {
     // Letter template: Generate corner clusters if specified
     if (this.currentLetterTemplate?.bgObjectRules?.cornerClusters?.enabled) {
       this.generateCornerClusters(room);
-    }
-  }
-
-  // Scatter 2–4 deflector triangles in a red-zone room. Each one picks a random
-  // orientation; placement uses the same valid-position check as other objects.
-  generateRedZoneDeflectors(room) {
-    const DEFLECTOR_CHARS = ['◣', '◢', '◥', '◤'];
-    const count = this.randInt(2, 4);
-    for (let i = 0; i < count; i++) {
-      const pos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos);
-      if (!pos) continue;
-      const char = DEFLECTOR_CHARS[Math.floor(Math.random() * DEFLECTOR_CHARS.length)];
-      const obj = new BackgroundObject(char, pos.x, pos.y);
-      this.applyZoneProperties(obj, 'red');
-      room.backgroundObjects.push(obj);
     }
   }
 
@@ -2815,7 +2804,8 @@ export class RoomGenerator {
     for (let i = 0; i < objectCount; i++) {
       const char = this.weightedRandomChoice(weights);
       if (char === '~' && islandLavaFeatures(room, this.currentLetterTemplate)) continue;
-      const pos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos);
+      if (char === '~' && room.exitLetter === 'B' && features?.liquidType !== 'lava') continue; // dry B arena (see generateBackgroundObjects)
+      const pos =this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos);
       if (!pos) continue;
 
       const bgObject = new BackgroundObject(char, pos.x, pos.y);

@@ -2281,6 +2281,23 @@ export function spawnBossEncounter(gen, room, encounter) {
   });
 }
 
+// Red zone: scatter 2–4 deflector triangles so projectile/boulder routing
+// becomes part of normal combat, not just the puzzle. Each one picks a random
+// orientation; placement uses the same valid-position check as other objects.
+// Called from RoomGenerator.generateBackgroundObjects for red rooms.
+export function generateRedZoneDeflectors(gen, room) {
+  const DEFLECTOR_CHARS = ['◣', '◢', '◥', '◤'];
+  const count = gen.randInt(2, 4);
+  for (let i = 0; i < count; i++) {
+    const pos = gen.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos);
+    if (!pos) continue;
+    const char = DEFLECTOR_CHARS[Math.floor(Math.random() * DEFLECTOR_CHARS.length)];
+    const obj = new BackgroundObject(char, pos.x, pos.y);
+    gen.applyZoneProperties(obj, 'red');
+    room.backgroundObjects.push(obj);
+  }
+}
+
 // Cyan zone: deep snow fields — large swaths of full-block white terrain.
 // Called from RoomGenerator.generateBackgroundObjects for cyan rooms.
 // Each hazard step (ZoneSystem.hazardStep) adds a snow cluster, thickens every
