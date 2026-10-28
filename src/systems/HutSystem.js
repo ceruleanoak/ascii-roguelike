@@ -56,6 +56,21 @@ const isHutFloor = (floor) => floor != null && floor.gridCols <= 12;
 const SHOPKEEPER_ALCOVE_ROW = 1;
 const SHOPKEEPER_COUNTER_ROW = SHOPKEEPER_ALCOVE_ROW + 1;
 
+// The Wizard Hut's Summoning Circle: a 5×5 ring of floor glyphs (offsets from
+// its centre cell) — a single glyph didn't read as a circle.
+//     . * .
+//   *       *
+//   .   o   .
+//   *       *
+//     . * .
+const SUMMONING_CIRCLE_CELLS = [
+  { dc: -1, dr: -2, char: '.' }, { dc: 0, dr: -2, char: '*' }, { dc: 1, dr: -2, char: '.' },
+  { dc: -2, dr: -1, char: '*' }, { dc: 2, dr: -1, char: '*' },
+  { dc: -2, dr: 0, char: '.' }, { dc: 0, dr: 0, char: 'o' }, { dc: 2, dr: 0, char: '.' },
+  { dc: -2, dr: 1, char: '*' }, { dc: 2, dr: 1, char: '*' },
+  { dc: -1, dr: 2, char: '.' }, { dc: 0, dr: 2, char: '*' }, { dc: 1, dr: 2, char: '.' },
+];
+
 // Proximity radius for door interaction (px from door center)
 const DOOR_INTERACT_RADIUS = GRID.CELL_SIZE * 2;
 
@@ -338,19 +353,22 @@ export class HutSystem {
       );
       if (traveler) npcs.push(traveler);
     } else if (hutKind === 'wizard') {
-      // Wizard at interior center; summoning circle 2 cells south of them —
-      // the ground point WizardSystem's lightning strike lands on and the
-      // golem appears at. Position cached on the returned floor object
-      // (below) so WizardSystem doesn't have to re-derive it.
+      // Wizard at the head of the summoning circle; the circle's centre, 3
+      // cells south of them, is the ground point WizardSystem's lightning
+      // strike lands on and the golem appears at. Position cached on the
+      // returned floor object (below) so WizardSystem doesn't have to
+      // re-derive it.
       const centerCol = Math.floor(cols / 2);
       const centerRow = Math.floor(rows / 2) - 1;
-      npcs.push(new WizardNPC(centerCol * GRID.CELL_SIZE, centerRow * GRID.CELL_SIZE));
+      npcs.push(new WizardNPC(centerCol * GRID.CELL_SIZE, (centerRow - 1) * GRID.CELL_SIZE));
 
       const circleCol = centerCol;
       const circleRow = centerRow + 2;
-      const circle = new BackgroundObject('◎', circleCol * GRID.CELL_SIZE, circleRow * GRID.CELL_SIZE);
-      circle.color = '#aa66ff';
-      backgroundObjects.push(circle);
+      for (const { dc, dr, char } of SUMMONING_CIRCLE_CELLS) {
+        backgroundObjects.push(new BackgroundObject(char,
+          (circleCol + dc) * GRID.CELL_SIZE, (circleRow + dr) * GRID.CELL_SIZE,
+          { typeId: 'summoning_circle' }));
+      }
       wizardCirclePosition = {
         x: circleCol * GRID.CELL_SIZE + GRID.CELL_SIZE / 2,
         y: circleRow * GRID.CELL_SIZE + GRID.CELL_SIZE / 2,

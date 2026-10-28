@@ -1358,6 +1358,19 @@ export const BACKGROUND_OBJECT_VARIANTS = {
       default: { animation: 'shake', message: null }
     }
   },
+  // Summoning Circle — the Wizard Hut's 5×5 ring of floor glyphs
+  // (HutSystem's wizard branch), where WizardSystem's bolt lands and the golem
+  // appears. One variant for every cell; the per-cell char ('.', '*', 'o')
+  // draws the ring. Floor, not furniture: walkable, shot passes over it.
+  'summoning_circle': {
+    name: 'Summoning Circle',
+    color: '#aa66ff',
+    indestructible: true,
+    solid: false,
+    bulletInteraction: 'pass-through',
+    flammability: 'none',
+    conductivity: 'none'
+  },
   // Barricade Wall — the unbreakable plug a 'trigger' or 'circuit' Barricade
   // stands in the exit gap. Solid block, because that is what the room's own
   // perimeter is: ASCIIRenderer.drawBorder paints the border as filled cells,
