@@ -30,6 +30,8 @@ const HEAD_DATA = {
   color: '#118833',
   drops: [],
   affinities: ['goo'],  // auto-immune to goo-affinity effects (slime bomb, slime puddle)
+  // Goo shrugs off venom, like the Slimes (ENEMIES 'o'/'M').
+  elementalAffinity: { immunity: ['poison'], resistance: {}, weakness: {} },
 };
 
 export class GooHead extends Enemy {
@@ -39,6 +41,7 @@ export class GooHead extends Enemy {
     // ── Identity ──────────────────────────────────────────────────────────────
     this.char      = 'ⲱ';
     this.data      = HEAD_DATA;
+    this.elementalAffinity = HEAD_DATA.elementalAffinity; // super('?') resolved it from the dummy char
     this.hp        = HEAD_DATA.hp;
     this.maxHp     = HEAD_DATA.hp;
     this.speed     = HEAD_DATA.speed;

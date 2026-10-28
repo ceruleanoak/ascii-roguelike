@@ -36,6 +36,8 @@ const BOSS_DATA = {
   color: '#22cc44',
   drops: [],
   affinities: ['goo'],
+  // Goo shrugs off venom, like the Slimes (ENEMIES 'o'/'M').
+  elementalAffinity: { immunity: ['poison'], resistance: {}, weakness: {} },
   sfx: { hit: 'goo_hit', death: ['goo_death_1', 'goo_death_2'] }
 };
 
@@ -46,6 +48,7 @@ export class GooDragon extends Enemy {
     // ── Identity ──────────────────────────────────────────────────────────────
     this.char      = 'Ⲱ';
     this.data      = BOSS_DATA;
+    this.elementalAffinity = BOSS_DATA.elementalAffinity; // super('?') resolved it from the dummy char
     this.hp        = BOSS_DATA.hp;
     this.maxHp     = BOSS_DATA.hp;
     this.speed     = BOSS_DATA.speed;
