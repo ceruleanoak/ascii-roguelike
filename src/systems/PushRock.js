@@ -126,7 +126,7 @@ function advanceSlide(rock, dt, world) {
 // The one cardinal direction the player is leaning into the rock along, or
 // null when they are not lined up, not touching, or not pressing exactly that
 // way.
-function pushDirection(rock, player) {
+export function pushDirection(rock, player) {
   const input = player?.inputState;
   if (!input) return null;
   const x = (input.right ? 1 : 0) - (input.left ? 1 : 0);

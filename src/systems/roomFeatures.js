@@ -1827,7 +1827,7 @@ export function spawnRoomNeutralCharacters(game, room) {
 // existing literal-grid-stamp precedent to reuse wholesale (LETTER_TEMPLATES'
 // 'B'/'V' entries are declarative rule-sets for procedural placement, not
 // literal per-cell layouts — closest actual precedent is the {col,row} array
-// shape used by PuzzleSystem's three_conductors config), so this composes its
+// shape PuzzleSystem's retired three_conductors config used), so this composes its
 // layout from two small deterministic lattices rather than inventing a new
 // generic ascii-grid template DSL for a single consumer.
 // Mirrors CentipedeSystem.js's own CENTIPEDE_BODY_COUNT — duplicated rather

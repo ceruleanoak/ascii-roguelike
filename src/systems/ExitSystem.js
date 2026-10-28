@@ -871,6 +871,12 @@ export class ExitSystem {
         weight = 0;
       }
 
+      // Compass Rose (P): rolled on the zone-change beat (L3/L6/L9) only, the
+      // depths whose exits can carry a new zone's color — the color ring's lesson.
+      if (letter === 'P' && !offersZoneChangeAt(depth)) {
+        weight = 0;
+      }
+
       if (isLetterRetired(letter, this.game)) weight = 0;
 
       // Lucky blessing reshapes the route: more vaults, key rooms, mystery,

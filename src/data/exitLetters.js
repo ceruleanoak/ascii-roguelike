@@ -144,10 +144,13 @@ export const EXIT_LETTERS = {
   'P': {
     name: 'Puzzle',
     roomType: 'PUZZLE',
+    // The Compass Rose: green-only, and only on the L3/L6/L9 beat (see
+    // ExitSystem.getLetterWeightsForZone) — its color ring is a lesson in the
+    // zone-change exits that beat offers.
     weight: 0.05,
     zoneBoosts: {
       green: 1.5,
-      yellow: 1.5,
+      yellow: 0,
       red: 0,
       cyan: 0,
       gray: 0
