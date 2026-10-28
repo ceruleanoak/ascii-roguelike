@@ -1,4 +1,4 @@
-import { GRID, PHYSICS } from '../game/GameConfig.js';
+import { GRID } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { Enemy } from '../entities/Enemy.js';
 import { Item } from '../entities/Item.js';
@@ -876,42 +876,9 @@ export class HutSystem {
       // Only process if this is a hut interior (10-12 cols), not a dungeon (24 cols)
       if (!isHutFloor(game.activeFloor)) return;
 
-      // Update interior enemies. The return value carries side-effect requests
-      // (slime trail, goo spew, item attacks, Trap Goblin traps, aggro sound)
-      // that EnemyUpdateSystem.handleUpdateResult consumes for the surface —
-      // interior enemies route through the same method, or any request it
-      // handles that a local copy forgot silently does nothing here.
-      for (const enemy of game.activeFloor.enemies) {
-        if (!game.combatSystem.applyTargetOverrides(enemy, game.activeFloor.enemies, game.player, game.activeNoiseSource)) {
-          enemy.target = game.player;
-        }
-        // Canonical interior tick (bug #92): 2× rate (enemy timing data is
-        // double-seconds), result cached for CombatSystem — which used to be
-        // the duplicate second tick and now only consumes.
-        const r = enemy.update(dt * PHYSICS.ENEMY_TIMER_RATE);
-        enemy._frameUpdateResult = r;
-        if (!r) continue;
-        // Same result consumer as the surface loop — never a local subset.
-        game.enemyUpdateSystem.handleUpdateResult(enemy, game.player, r, dt);
-      }
-
-      // Process interior enemy deaths
-      for (let i = game.activeFloor.enemies.length - 1; i >= 0; i--) {
-        const enemy = game.activeFloor.enemies[i];
-        if (enemy.hp <= 0) {
-          game.audioSystem?.playSFX('destroy');
-
-          // Spawn loot (LootSystem marks hutPlane when player.inHut)
-          game.spawnLoot(enemy);
-
-          // Death detritus (goo blobs for slimes, gray debris otherwise);
-          // hutPlane so the overlay renders it. Inherits knockback velocity.
-          game.worldEffectsSystem.spawnDeathDetritus(enemy, { hutPlane: true });
-
-          game.physicsSystem.removeEntity(enemy);
-          game.activeFloor.enemies.splice(i, 1);
-        }
-      }
+      // Interior enemies tick and die through the one canonical pipeline,
+      // EnemyUpdateSystem.update / removeDeadEnemies, which read the active
+      // layer — never a floor-local copy.
 
       // Update interior background objects
       for (const obj of game.activeFloor.backgroundObjects) {

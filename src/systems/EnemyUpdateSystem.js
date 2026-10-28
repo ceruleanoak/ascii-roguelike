@@ -1,6 +1,6 @@
 import { GRID, PHYSICS } from '../game/GameConfig.js';
 import { MAGIC_SFX_NAMES } from '../data/enemies.js';
-import { inSamePlane, tagInteriorPlane, isInteriorActive } from './PlaneSystem.js';
+import { inSamePlane, tagInteriorPlane, isInteriorActive, lootOnActiveLayer } from './PlaneSystem.js';
 import { CAMP_NPC_STATE } from '../entities/CampNPC.js';
 import { GooBlob } from '../entities/GooBlob.js';
 import { createEmberBurst, createExplosion } from '../entities/Particle.js';
@@ -61,14 +61,19 @@ export class EnemyUpdateSystem {
     // that must drive an entity does so through assertSingleDrive().
     game._enemyTickFrame = (game._enemyTickFrame ?? 0) + 1;
     beginVisionFrame();
-    // layer-guard-ok: deliberately surface-scoped — this is the surface
-    // per-frame ticker (bug #92); interior floor enemies are driven by the
-    // DungeonSystem/HutSystem interior loops instead.
-    const enemies = game.currentRoom.enemies; // layer-guard-ok: surface ticker (#92)
+    // The ONE per-enemy pipeline for every layer: the surface room, or the
+    // hut/dungeon floor the player stands in (game._activeEnemies()). Interior
+    // floors used to run their own hand-copied tick, so every mechanic hooked
+    // in here (Bumper contact, Boar charge contact, item use, slime contact...)
+    // silently did nothing indoors until someone noticed. Never add a second
+    // enemy.update() loop for a layer — route it through here.
+    const interior = isInteriorActive(game);
+    const enemies = game._activeEnemies();
     // Commanded warband (CommandSystem) ticks through this same canonical loop
     // so exactly one drive per frame holds for them too — they live outside
     // room.enemies by design (aggro-list removal), so they ride along here.
-    const roster = game.commandedEnemies ?? [];
+    // They stay on the surface while the player is indoors.
+    const roster = interior ? [] : (game.commandedEnemies ?? []);
     const tickedList = roster.length ? [...enemies, ...roster] : enemies;
     const player = game.player;
 
@@ -77,7 +82,7 @@ export class EnemyUpdateSystem {
     this._tickSlowTimers(deltaTime, tickedList);
     this._updatePackBehavior(tickedList);
     this._runEnemyLoop(deltaTime, player, tickedList);
-    this._checkExitDespawn(enemies);   // room-scoped: commanded units never despawn at exits
+    if (!interior) this._checkExitDespawn(enemies); // room exits only; commanded units never despawn at exits
     game.enemySpawnSystem.flush();
     this._handleEnemyItemPickup(tickedList);
   }
@@ -234,7 +239,6 @@ export class EnemyUpdateSystem {
 
   _runEnemyLoop(deltaTime, player, enemies) {
     const game = this.game;
-    if (isInteriorActive(game)) return;
 
     for (const enemy of enemies) {
       if (enemy.isDying) continue;
@@ -269,6 +273,9 @@ export class EnemyUpdateSystem {
 
   _selectTarget(enemy, player, enemies) {
     const game = this.game;
+    // Companions, tamed rats, golems, the warband and the Trine all stay on the
+    // surface while the player is indoors — the player is the only target there.
+    if (isInteriorActive(game)) { enemy.setTarget(player); return; }
     let nearestTarget = player;
     let nearestDistSq = (player.position.x - enemy.position.x) ** 2
                       + (player.position.y - enemy.position.y) ** 2;
@@ -595,7 +602,7 @@ export class EnemyUpdateSystem {
       // instant it landed, since nothing paced the retry.
       if (!enemy._decisionFrame) continue;
       if (enemy.itemPickupCooldown > 0) continue;
-      const targetItem = enemy.evaluateItemPickup(game.items);
+      const targetItem = enemy.evaluateItemPickup(game.items.filter(it => lootOnActiveLayer(game, it)));
       if (!targetItem) continue;
       enemy.targetItem = targetItem;
       const dx = targetItem.position.x - enemy.position.x;
@@ -627,7 +634,11 @@ export class EnemyUpdateSystem {
    */
   removeDeadEnemies(deltaTime) {
     const game = this.game;
-    const enemies = game.currentRoom.enemies; // layer-guard-ok: surface roster, as in the per-frame tick above
+    // Same active-layer roster as update() — the hut/dungeon floors used to run
+    // a trimmed copy of this sweep (#463) that skipped death SFX, spawn-on-death,
+    // death explosions, inventory drops and the rest.
+    const enemies = game._activeEnemies();
+    const hutPlane = isInteriorActive(game);
     // Tick dying-shake timers for enemies with deathExplosion deathDelay
     for (const enemy of enemies) {
       if (enemy.isDying) {
@@ -713,6 +724,7 @@ export class EnemyUpdateSystem {
         const enemyPlane = enemy.plane ?? 0;
         for (const item of itemDrops) {
           item.plane = enemyPlane;
+          tagInteriorPlane(game, item);
         }
         game.items.push(...itemDrops);
         for (const item of itemDrops) {
@@ -736,7 +748,7 @@ export class EnemyUpdateSystem {
 
         // Death detritus (goo blobs for slimes, gray debris otherwise);
         // inherits knockback velocity from the killing blow
-        game.worldEffectsSystem.spawnDeathDetritus(enemy);
+        game.worldEffectsSystem.spawnDeathDetritus(enemy, { hutPlane });
 
         game.physicsSystem.removeEntity(enemy);
         enemies.splice(i, 1);

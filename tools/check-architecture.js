@@ -66,7 +66,7 @@ const LAYER_GUARD_DIRS = ['src/systems', 'src/entities'];
 const LAYER_GUARD_EXEMPT_FILES = new Set([
   'src/systems/RoomGenerator.js',
   'src/systems/roomFeatures.js',
-  'src/systems/HutSystem.js',            // builds hut interiors; interior enemy loop reads its own floor
+  'src/systems/HutSystem.js',            // builds hut interiors
   'src/systems/DungeonSystem.js',        // floor-stack construction + activation
   'src/systems/DungeonFloorGenerator.js',// dungeon floor content generation
   'src/systems/MazeSystem.js',           // maze layout generation
@@ -173,6 +173,38 @@ function checkStorageGuard() {
   return guardFailed;
 }
 
+// One enemy pipeline for every layer. Hut and dungeon floors used to tick
+// their enemies in hand-copied loops, so every mechanic added to the canonical
+// loop (Bumper contact, charge contact, item use) silently did nothing indoors.
+// EnemyUpdateSystem reads game._activeEnemies(); no other file drives an enemy.
+const ENEMY_TICK_OWNER = 'src/systems/EnemyUpdateSystem.js';
+const FORBIDDEN_ENEMY_TICK = /\.update\([^)]*ENEMY_TIMER_RATE/;
+
+function checkEnemyTickGuard() {
+  let guardFailed = false;
+  (function walk(d) {
+    let entries;
+    try { entries = readdirSync(join(root, d)); } catch { return; }
+    for (const entry of entries) {
+      const full = join(d, entry);
+      let st;
+      try { st = statSync(join(root, full)); } catch { continue; }
+      if (st.isDirectory()) { walk(full); continue; }
+      if (!entry.endsWith('.js') || full.replaceAll('\\', '/') === ENEMY_TICK_OWNER) continue;
+      let src;
+      try { src = readFileSync(join(root, full), 'utf8'); } catch { continue; }
+      inBlock = false;
+      stripComments(src).split('\n').forEach((code, i) => {
+        if (FORBIDDEN_ENEMY_TICK.test(code)) {
+          guardFailed = true;
+          console.error(`  FAIL  ${full}:${i + 1}  enemy tick outside ${ENEMY_TICK_OWNER}: ${code.trim()}`);
+        }
+      });
+    }
+  })('src');
+  return guardFailed;
+}
+
 for (const [file, budget] of Object.entries(budgets)) {
   const chars = readFileSync(join(root, file), 'utf8').length;
   next[file] = Math.min(budget, chars + HEADROOM);
@@ -195,6 +227,7 @@ if (update) {
 
 const layerGuardFailed = checkLayerGuard();
 const storageGuardFailed = checkStorageGuard();
+const enemyTickGuardFailed = checkEnemyTickGuard();
 
 if (failed) {
   console.error('\nArchitecture budget exceeded.');
@@ -214,4 +247,10 @@ if (storageGuardFailed) {
   console.error('Runs never persist; only Canon Edits do, through src/systems/CanonStore.js.');
 }
 
-if (failed || layerGuardFailed || storageGuardFailed) process.exit(1);
+if (enemyTickGuardFailed) {
+  console.error('\nEnemy ticked outside the canonical pipeline.');
+  console.error('Every layer\'s enemies tick in EnemyUpdateSystem.update (game._activeEnemies());');
+  console.error('a second loop is how interior enemies lose every new mechanic.');
+}
+
+if (failed || layerGuardFailed || storageGuardFailed || enemyTickGuardFailed) process.exit(1);

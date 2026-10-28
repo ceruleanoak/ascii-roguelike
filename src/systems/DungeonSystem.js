@@ -1,4 +1,4 @@
-import { GRID, PHYSICS } from '../game/GameConfig.js';
+import { GRID } from '../game/GameConfig.js';
 import { freezeSurfaceRoom, thawSurfaceRoom, isInteriorActive } from './PlaneSystem.js';
 import { NORTH_ROW, STAIRS_COL } from '../data/dungeonFloorTemplates.js';
 import { pickRandomPuzzleTemplateName, PUZZLE_ROOM_TEMPLATES } from '../data/dungeonPuzzleTemplates.js';
@@ -599,49 +599,19 @@ export class DungeonSystem {
 
       const floor = game.activeFloor;
 
-      // Update interior enemies. Capture the return value so side-effect
-      // requests (slime trail, item attacks, Trap Goblin traps, aggro sound)
-      // flow through EnemyUpdateSystem.handleUpdateResult, the same consumer
-      // the surface loop uses — a local subset is how Trap Goblins stopped
-      // laying traps on dungeon floors.
-      for (const enemy of floor.enemies) {
-        if (!game.combatSystem.applyTargetOverrides(enemy, floor.enemies, game.player, game.activeNoiseSource)) {
-          enemy.target = game.player;
-        }
-        // Canonical interior tick (bug #92): 2× rate (enemy timing data is
-        // double-seconds), result cached for CombatSystem — which used to be
-        // the duplicate second tick and now only consumes.
-        const r = enemy.update(dt * PHYSICS.ENEMY_TIMER_RATE);
-        enemy._frameUpdateResult = r;
-        if (!r) continue;
-        // Same result consumer as the surface loop — never a local subset.
-        game.enemyUpdateSystem.handleUpdateResult(enemy, game.player, r, dt);
-      }
+      // Interior enemies tick and die through the one canonical pipeline,
+      // EnemyUpdateSystem.update / removeDeadEnemies, which read the active
+      // layer — never a floor-local copy (Bumpers stopped bumping indoors).
 
       // Dungeon boss encounter (vault floor only; no-ops elsewhere). Runs
-      // BEFORE the death sweep on purpose: the boss owns its own death beat
+      // BEFORE the death sweep (EnemyUpdateSystem.removeDeadEnemies, later
+      // in the frame) on purpose: the boss owns its own death beat
       // (authored payout, no generic destroy thud or gray debris), and it
       // removes itself from the roster once paid out.
       game.dungeonBossSystem?.update?.(dt);
 
-      // Process interior enemy deaths
-      for (let i = floor.enemies.length - 1; i >= 0; i--) {
-        const enemy = floor.enemies[i];
-        if (enemy.hp <= 0) {
-          game.audioSystem?.playSFX('destroy');
-          game.spawnLoot(enemy);
-
-          // Death detritus (goo blobs for slimes, gray debris otherwise);
-          // hutPlane so the overlay renders it. Inherits knockback velocity.
-          game.worldEffectsSystem.spawnDeathDetritus(enemy, { hutPlane: true });
-
-          game.physicsSystem.removeEntity(enemy);
-          floor.enemies.splice(i, 1);
-        }
-      }
-
-      // Spawn Vents — runs after the death sweep so a vent sees its kills
-      // gone this same tick, and before the puzzle gates so a Shutter never
+      // Spawn Vents — the death sweep ran last frame, so a vent sees its
+      // kills gone, and before the puzzle gates so a Shutter never
       // opens on a tick its vent refilled the room.
       // rest-parity: absent because Spawn Vents only exist on dungeon floors.
       this.spawnVentSystem.update(floor, dt);
