@@ -17,6 +17,8 @@ const ARENA_RADIUS = 7;      // cells around room center kept clear of terrain
 // The four sides of a Compass Rose ring, clockwise from north — the order a
 // ring's tokens are listed in and a quarter turn steps through.
 const SIDES = ['north', 'east', 'south', 'west'];
+// Unit offsets of those sides from a ring's center, same order.
+const CARDINAL_OFFSETS = [[0, -1], [1, 0], [0, 1], [-1, 0]];
 
 // Colors a color ring may carry besides gray: the four colored zones.
 const RING_COLORS = [ZONE_COLORS.green, ZONE_COLORS.yellow, ZONE_COLORS.red, ZONE_COLORS.cyan];
@@ -119,40 +121,43 @@ export class PuzzleSystem {
 
   // ── Green: the Compass Rose ───────────────────────────────────────────────
   //
-  // A ring is a square of stones at `radius` cells from the center. Each stone
-  // keeps a home index on the ring's perimeter (clockwise from the top-left
-  // corner, 8 × radius cells around) and sits `rot` quarter turns clockwise
-  // from it. A quarter turn slides every stone 2 × radius cells along the
-  // perimeter — a conveyor around the square rather than a rigid spin, so a
-  // turning ring never sweeps into the corridors between the rings.
+  // A ring is a stone circle (or, innermost, a diamond) around the center
+  // cell. Each stone keeps a home offset from the center and sits `rot`
+  // quarter turns clockwise of it; a turn spins the whole ring rigidly about
+  // the center. The player who leaned it walks the turn with it — carried
+  // round at the same offset from the stone they pushed — so a turning ring
+  // never sweeps into them, whether they lean from a corridor or from inside
+  // its own gap.
   //
-  // The four stones at the side midpoints are the ring's markers and carry its
-  // tokens, one per home side [north, east, south, west]. Tokens for the
-  // letter and color rings are read off the room's own exits the first frame
-  // the player is in the room (_bindCompassTokens), after every entry-time
-  // rewrite (the Compass's forced 'D') has landed.
+  // The four stones on the cardinals are the ring's markers, one per home
+  // side [north, east, south, west]. Only the diamond's markers show their
+  // tokens (its corners are the symbols); the letter and color rings are
+  // plain stone, and what they hold shows on the room's exits alone. Their
+  // tokens are read off those exits the first frame the player is in the
+  // room (_bindCompassTokens), after every entry-time rewrite (the Compass's
+  // forced 'D') has landed.
 
   _generateCompassRose(room, cfg) {
     const rings = cfg.rings.map(def => {
-      const perimeter = 8 * def.radius;
       const stones = [];
       const markers = [];
-      for (let home = 0; home < perimeter; home++) {
-        if (home === def.gapIndex) continue;
+      for (const { dx, dy } of this._ringCells(def)) {
+        if (dx === def.gap.dx && dy === def.gap.dy) continue;
         const obj = this._placeCompassStone(room, cfg.stoneColor);
-        stones.push({ obj, home });
-        // Side midpoints: north at radius, then every 2 × radius clockwise.
-        if (home % (2 * def.radius) === def.radius) markers[(home - def.radius) / (2 * def.radius)] = obj;
+        stones.push({ obj, dx, dy });
+        const side = CARDINAL_OFFSETS.findIndex(([cx, cy]) => cx * def.radius === dx && cy * def.radius === dy);
+        if (side >= 0) markers[side] = obj;
       }
       return {
         kind: def.kind,
         radius: def.radius,
+        turnSeconds: def.turnSeconds,
         stones,
         markers,
         tokens: def.tokens ?? null,
         // Rolled unsolved, so every ring asks for at least one turn.
         rot: 1 + Math.floor(Math.random() * 3),
-        turn: null,     // { from, dir, t } while a quarter turn plays
+        turn: null,     // { from, dir, t, rider } while a quarter turn plays
         hold: 0,        // seconds the current lean has been held
         holdSense: 0    // +1 clockwise / -1 counter-clockwise lean being held
       };
@@ -168,6 +173,23 @@ export class PuzzleSystem {
     for (const ring of rings) this._placeRing(ring, cfg, ring.rot);
   }
 
+  // A ring's cells as offsets from the center: a circle is every cell whose
+  // distance rounds to the radius, a diamond every cell `radius` steps away.
+  // Both are their own quarter turn, so a settled ring lands back on the grid.
+  _ringCells(def) {
+    const r = def.radius;
+    const cells = [];
+    for (let dy = -r - 1; dy <= r + 1; dy++) {
+      for (let dx = -r - 1; dx <= r + 1; dx++) {
+        const onRing = def.shape === 'diamond'
+          ? Math.abs(dx) + Math.abs(dy) === r
+          : Math.round(Math.hypot(dx, dy)) === r;
+        if (onRing) cells.push({ dx, dy });
+      }
+    }
+    return cells;
+  }
+
   _placeCompassStone(room, color) {
     const stone = new BackgroundObject('0', 0, 0);
     stone.data = COMPASS_STONE_DATA;
@@ -179,23 +201,25 @@ export class PuzzleSystem {
     return stone;
   }
 
-  // Cell offset from the ring's center for a (possibly fractional) perimeter
-  // position, clockwise from the top-left corner.
-  _perimeterOffset(radius, p) {
-    const side = 2 * radius;
-    const q = ((p % (4 * side)) + 4 * side) % (4 * side);
-    if (q < side)     return { dx: -radius + q,              dy: -radius };
-    if (q < 2 * side) return { dx: radius,                   dy: -radius + (q - side) };
-    if (q < 3 * side) return { dx: radius - (q - 2 * side),  dy: radius };
-    return               { dx: -radius,                  dy: radius - (q - 3 * side) };
+  // An offset turned `quarters` (possibly fractional) quarter turns clockwise.
+  _rotateOffset(dx, dy, quarters) {
+    const a = quarters * Math.PI / 2;
+    return {
+      x: dx * Math.cos(a) - dy * Math.sin(a),
+      y: dx * Math.sin(a) + dy * Math.cos(a)
+    };
   }
 
-  // Put every stone of a ring `quarters` quarter turns clockwise of home.
+  // Put every stone of a ring `quarters` quarter turns clockwise of home. A
+  // whole number of quarters is rounded, so a settled ring sits exactly on
+  // its cells.
   _placeRing(ring, cfg, quarters) {
-    for (const { obj, home } of ring.stones) {
-      const { dx, dy } = this._perimeterOffset(ring.radius, home + quarters * 2 * ring.radius);
-      obj.position.x = (cfg.centerCol + dx) * CS;
-      obj.position.y = (cfg.centerRow + dy) * CS;
+    const settled = Number.isInteger(quarters);
+    for (const { obj, dx, dy } of ring.stones) {
+      let { x, y } = this._rotateOffset(dx, dy, quarters);
+      if (settled) { x = Math.round(x); y = Math.round(y); }
+      obj.position.x = (cfg.centerCol + x) * CS;
+      obj.position.y = (cfg.centerRow + y) * CS;
     }
   }
 
@@ -236,13 +260,11 @@ export class PuzzleSystem {
     for (const ring of puzzle.rings) {
       if (ring.kind === 'letters') ring.tokens = [letters[0], letters[1], 'S', letters[2]];
       if (ring.kind === 'colors') ring.tokens = [ZONE_COLORS.gray, eastColor, southColor, westColor];
+      // The letter and color rings stay plain stone: the exits show them.
+      if (ring.kind !== 'symbols') continue;
       ring.markers.forEach((marker, home) => {
-        if (ring.kind === 'colors') {
-          marker.color = marker.animationColor = ring.tokens[home];
-        } else {
-          marker.char = marker.animationChar = ring.tokens[home];
-          marker.color = marker.animationColor = puzzle.cfg.markerColor;
-        }
+        marker.char = marker.animationChar = ring.tokens[home];
+        marker.color = marker.animationColor = puzzle.cfg.markerColor;
       });
     }
     puzzle.tokensBound = true;
@@ -329,11 +351,14 @@ export class PuzzleSystem {
     const cfg = puzzle.cfg;
     const player = this.game.player;
 
+    // One ring turns at a time: the player walking a turn leans on nothing else.
+    const turning = puzzle.rings.find(r => r.turn);
+    if (turning) {
+      this._advanceTurn(puzzle, turning, room, dt);
+      return;
+    }
+
     for (const ring of puzzle.rings) {
-      if (ring.turn) {
-        this._advanceTurn(puzzle, ring, room, dt);
-        continue;
-      }
       const sense = this._leanSense(ring, cfg, player);
       if (!sense || sense !== ring.holdSense) {
         ring.hold = 0;
@@ -343,8 +368,29 @@ export class PuzzleSystem {
       ring.hold += dt;
       if (ring.hold < cfg.pushHoldSeconds) continue;
       ring.hold = 0;
-      ring.turn = { from: ring.rot, dir: sense, t: 0 };
+      ring.turn = { from: ring.rot, dir: sense, t: 0, rider: this._riderOffset(cfg, player) };
+      return;
     }
+  }
+
+  // The player's center as an offset from the Rose's center, in cells.
+  _riderOffset(cfg, player) {
+    return {
+      dx: (player.position.x + (player.width || CS) / 2) / CS - (cfg.centerCol + 0.5),
+      dy: (player.position.y + (player.height || CS) / 2) / CS - (cfg.centerRow + 0.5)
+    };
+  }
+
+  // Carry the player round with the ring they leaned: their start offset,
+  // turned as far as the ring has turned. Their own movement is overruled
+  // until the turn settles.
+  _carryRider(cfg, rider, quarters) {
+    const player = this.game.player;
+    const { x, y } = this._rotateOffset(rider.dx, rider.dy, quarters);
+    player.position.x = (cfg.centerCol + 0.5 + x) * CS - (player.width || CS) / 2;
+    player.position.y = (cfg.centerRow + 0.5 + y) * CS - (player.height || CS) / 2;
+    player.velocity.vx = 0;
+    player.velocity.vy = 0;
   }
 
   /**
@@ -368,16 +414,16 @@ export class PuzzleSystem {
   _advanceTurn(puzzle, ring, room, dt) {
     const cfg = puzzle.cfg;
     const turn = ring.turn;
-    turn.t = Math.min(1, turn.t + dt / cfg.turnSeconds);
-    this._placeRing(ring, cfg, turn.from + turn.dir * applyEasing(turn.t, 'easeInOut'));
+    turn.t = Math.min(1, turn.t + dt / ring.turnSeconds);
+    const turned = turn.dir * applyEasing(turn.t, 'easeInOut');
+    this._placeRing(ring, cfg, turn.from + turned);
+    this._carryRider(cfg, turn.rider, turned);
     this.game.renderer?.markBackgroundDirty?.();
     if (turn.t < 1) return;
 
     ring.turn = null;
     ring.rot = ((turn.from + turn.dir) % 4 + 4) % 4;
     this._placeRing(ring, cfg, ring.rot);
-    // A player standing in the gap as the ring came round is put back outside it.
-    this.game.physicsSystem?.resolveSolidObjectOverlap(this.game.player, this.game._activeBackgroundObjects());
     this._writeCompassExits(puzzle, room);
     this.game.audioSystem?.playSFX?.('puzzle_pulse');
 

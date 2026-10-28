@@ -15,39 +15,43 @@
 
 export const PUZZLES = {
   // ── Green: "The Compass Rose" ─────────────────────────────────────────────
-  // Three square stone rings around the room's center, outer to inner. A
-  // ring turns a quarter when the player leans on one of its stones off its
-  // middle (the lean's torque picks the way); every settled turn rewrites the
-  // room's own exits, so the room teaches what an exit is made of:
-  //   letters  each visible exit shows the letter token on its side; solved
-  //            when S sits south (the side that never shows a letter)
-  //   colors   each visible exit wears the color token on its side; the gray
-  //            token turns its letter to R on the north and to N (North, the
-  //            red herring) on the east or west, but an S keeps its letter;
-  //            solved when gray is north
-  //   symbols  each direction's meaning; solved when every symbol faces its
-  //            own way
+  // Two stone circles and a diamond around the room's center, outer to inner.
+  // A ring turns a quarter when the player leans on one of its stones off its
+  // cardinal line (the lean's torque picks the way), and the player walks the
+  // turn with it. Every settled turn rewrites the room's own exits — the
+  // letter and color rings are plain stone, so the exits are the only place
+  // their turning shows:
+  //   letters  each visible exit takes the letter the ring holds on its side;
+  //            solved when S sits south (the side that never shows a letter)
+  //   colors   each visible exit takes the color the ring holds on its side;
+  //            the gray one turns its letter to R on the north and to N
+  //            (North, the red herring) on the east or west, but an S keeps
+  //            its letter; solved when gray is north
+  //   symbols  the diamond, whose corners carry each direction's meaning;
+  //            solved when every symbol faces its own way
   // All three solved → the Compass. The exits never close.
   green: {
     type: 'compass_rose',
     centerCol: 15,
     centerRow: 15,
-    clearRadius: 8,
-    // gapIndex: the one perimeter cell left open (clockwise from the ring's
-    // top-left corner) so the inner rings and the center stay reachable. It
-    // turns with its ring.
+    clearRadius: 9,
+    // shape: 'circle' is every cell whose distance from the center rounds to
+    // radius; 'diamond' is every cell `radius` steps away. gap: the one cell
+    // (offset from the center) left open so the inner rings and the center
+    // stay reachable — off every cardinal, where the markers sit. It turns
+    // with its ring. turnSeconds grows with the ring, so the player walks
+    // every quarter turn at about the same pace.
     rings: [
-      { kind: 'letters', radius: 6, gapIndex: 11 },
-      { kind: 'colors',  radius: 4, gapIndex: 23 },
-      // Tokens by home side [north, east, south, west]: the pyramid (Ridge,
+      { kind: 'letters', shape: 'circle',  radius: 8, gap: { dx: 2, dy: -8 }, turnSeconds: 1.2 },
+      { kind: 'colors',  shape: 'circle',  radius: 5, gap: { dx: -5, dy: -2 }, turnSeconds: 0.9 },
+      // Tokens by home corner [north, east, south, west]: the pyramid (Ridge,
       // toward Gray), the sea (Ocean), the flower (REST), the book (Canon,
       // the written — a placeholder glyph until West has its rule).
-      { kind: 'symbols', radius: 2, gapIndex: 3, tokens: ['^', '~', '*', '='] }
+      { kind: 'symbols', shape: 'diamond', radius: 2, gap: { dx: 1, dy: 1 }, turnSeconds: 0.6, tokens: ['^', '~', '*', '='] }
     ],
     stoneColor: '#6a8a6a',
     markerColor: '#e8e8d0',
     pushHoldSeconds: 0.35, // the Push Rock lean (PushRock.PUSH_HOLD_SECONDS)
-    turnSeconds: 0.6,
     rewardChar: '⌖'
   }
 };
