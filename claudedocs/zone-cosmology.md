@@ -324,6 +324,20 @@ there:
   first) is never only a shortcut: by rule it is a hint toward the southern
   escape ending.
 
+**The cardinal directions carry fixed meaning** (2026-10-28). The exits
+keep them everywhere, so the lesson the Compass Rose (green P) teaches is
+true across the game:
+
+| Direction | Meaning | Rule in the exits |
+|---|---|---|
+| North | the Ridge, toward Gray | `R` is only ever a north exit |
+| East | the Ocean | the third east in a row is always `O` |
+| South | REST, reflection, Choice | always REST; never shows a letter |
+| West | Canon, the written | **open**: no room rule or destination yet |
+
+`N` (North) is the red herring: a room named for a direction it doesn't
+face.
+
 Representation rules otherwise mirror canon's — never named, never itemized,
 no meta text — with the remaining signatures already live in the design:
 

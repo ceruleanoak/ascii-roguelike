@@ -312,6 +312,28 @@ identity, not standard programming terms.
 - **Not:** the north exit itself (that is a direction, written lowercase `north` in exit code); the
   Ridge (`R`), which is what the north exit leads toward.
 
+### Compass Rose
+- **Definition:** The green P (Puzzle) Room, and the Compass's source. Three square stone rings
+  around the room's center, each with one gap. A lean on a ring stone off the side's middle
+  turns that ring a quarter, and the lean's torque picks the direction. Each settled turn rewrites
+  the room's own exits. The **outer** (letter) ring sets which letter each exit shows and is
+  solved with `S` south, the side that never shows a letter. The **middle** (color) ring sets each
+  exit's color; its gray token turns its letter into `R` on the north and into `N` (North) on the
+  east or west, but an `S` keeps its letter. It is solved with gray north. The **inner** (symbol)
+  ring holds each direction's meaning: north `^` the pyramid (Ridge, toward Gray), east `~` the
+  sea (Ocean), south `*` the flower (REST), west `=` the book (Canon, a placeholder). It is solved
+  when every symbol faces its own way. With all three rings solved, the rings stop and the Compass
+  `⌖` lies at the center. No enemies, and the exits never close. P is green-only and is rolled only
+  on the zone-change beat (L3/L6/L9).
+- **In code:** `PUZZLES.green` (`type: 'compass_rose'`) in `src/data/puzzles.js`; `PuzzleSystem`
+  (`_generateCompassRose`, `_updateCompassRose`, `_writeCompassExits`), with state on
+  `room.puzzle`. It reads leans through `pushDirection` (`PushRock.js`) and rewrites exits through
+  `mutateExitLetter` / `mutateExitColor` with source `'compass_rose'`. The P gate is in
+  `ExitSystem.getLetterWeightsForZone`.
+- **Not:** the Compass itself (the item `⌖` it grants); a Push Rock (a ring stone never leaves
+  its ring); the dungeon Puzzle Rooms (`PUZZLE_ROOM_TEMPLATES`); the retired Listening Stones and
+  Three Conductors that P used to hold.
+
 ### Enemy
 - **Definition:** Any autonomous hostile actor. Behaviors are composed, not subclassed.
 - **In code:** `Enemy` base in `src/entities/`; data in `src/data/enemies.js`.
