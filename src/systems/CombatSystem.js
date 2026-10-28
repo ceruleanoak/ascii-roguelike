@@ -722,7 +722,7 @@ export class CombatSystem {
             // Apply lifesteal to player (a 'lifesteal' immunity — bloodless
             // Skeletons — lets the hit land but heals nothing)
             if (proj.lifesteal && proj.owner === 'player' && enemy.shouldApplyStatusEffect('lifesteal')) {
-              proj.owner.hp = Math.min(proj.owner.hp + proj.damage * proj.lifesteal, proj.owner.maxHp);
+              proj.owner.hp = Math.min(proj.owner.hp + Math.round(proj.damage * proj.lifesteal), proj.owner.maxHp);
             }
 
             // Chain lightning effect
@@ -1210,7 +1210,7 @@ export class CombatSystem {
 
               // Apply lifesteal ('lifesteal' immunity: the hit lands, nothing to drink)
               if (attack.lifesteal && attack.owner && enemy.shouldApplyStatusEffect('lifesteal')) {
-                attack.owner.hp = Math.min(attack.owner.hp + attack.damage * attack.lifesteal, attack.owner.maxHp);
+                attack.owner.hp = Math.min(attack.owner.hp + Math.round(attack.damage * attack.lifesteal), attack.owner.maxHp);
               }
 
               // Dagger: a confirmed hit refreshes the dodge-roll cooldown, and
