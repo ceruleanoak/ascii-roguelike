@@ -7,7 +7,12 @@ const CELL = GRID.CELL_SIZE;
 
 // A heading component below this is treated as zero when the steering heading
 // is turned into held keys, so a near-vertical heading doesn't jitter sideways.
+// A key already held lets go only once its component falls below AXIS_RELEASE:
+// a heading hovering at the deadzone (sliding along a wall, rounding a corner)
+// otherwise pressed and released the key frame by frame, and the player
+// wiggled.
 const AXIS_DEADZONE = 0.38;
+const AXIS_RELEASE = 0.2;
 
 // Lack of progress: when the player has moved less than STUCK_PX in
 // STUCK_TIME, it is eased onto the cell grid (the fine-tune). A one-cell gap
@@ -52,6 +57,8 @@ export class HeldKeySteering {
   constructor(game) {
     this.game = game;
     this.progress = { x: 0, y: 0, timer: 0 };
+    // The keys keysToward returned last (AXIS_RELEASE).
+    this.lastKeys = { ...NO_KEYS };
   }
 
   /** Start a fresh progress window (on cast). */
@@ -60,19 +67,28 @@ export class HeldKeySteering {
     this.progress = { x: pos?.x ?? 0, y: pos?.y ?? 0, timer: 0 };
   }
 
+  // Whether the key for a heading component (signed toward the key) is held:
+  // past the deadzone, or held last frame and not yet below AXIS_RELEASE.
+  _axisHeld(component, key) {
+    return component > (this.lastKeys[key] ? AXIS_RELEASE : AXIS_DEADZONE);
+  }
+
   // Held keys walking the player toward a top-left point. Only the heading:
   // the player's velocity comes from the keys through the ordinary movement
   // path (acceleration, friction, the speed cap), so a driven player walks
   // exactly as fast as the player does.
   keysToward(x, y) {
     const player = this.game.player;
-    if (this._stalled() && this._fineTune()) return { ...NO_KEYS };
+    if (this._stalled() && this._fineTune()) {
+      this.lastKeys = { ...NO_KEYS };
+      return { ...NO_KEYS };
+    }
     const { heading, next } = steerHeading(this.game, player, x, y, PHYSICS.PLAYER_SPEED);
     const keys = {
-      w: heading.y < -AXIS_DEADZONE,
-      s: heading.y > AXIS_DEADZONE,
-      a: heading.x < -AXIS_DEADZONE,
-      d: heading.x > AXIS_DEADZONE,
+      w: this._axisHeld(-heading.y, 'w'),
+      s: this._axisHeld(heading.y, 's'),
+      a: this._axisHeld(-heading.x, 'a'),
+      d: this._axisHeld(heading.x, 'd'),
     };
     // A re-center too fine for held keys: hold the one key toward the next
     // route cell instead, and PhysicsSystem's corner slip lines the player up
@@ -83,6 +99,23 @@ export class HeldKeySteering {
       if (Math.abs(dx) >= Math.abs(dy)) { keys.a = dx < 0; keys.d = dx > 0; }
       else { keys.w = dy < 0; keys.s = dy > 0; }
     }
+    // Remembered before the brake: a brake key is held against the drift, not
+    // asked for by the heading, and mustn't stay held through AXIS_RELEASE.
+    this.lastKeys = { ...keys };
+    this._brakeDrift(keys);
+    return keys;
+  }
+
+  // Held keys walking the player straight at a top-left point within a cell
+  // of it, no route: one key per axis still more than a pixel off. For a last
+  // stretch the grid can't see, as a cell over a solid object a few pixels
+  // wide is BLOCKED to the route, though the body fits beside the object.
+  // The drift brake still keeps the box off a hazard.
+  keysStraight(x, y) {
+    const pos = this.game.player.position;
+    const dx = x - pos.x, dy = y - pos.y;
+    const keys = { w: dy < -1, s: dy > 1, a: dx < -1, d: dx > 1 };
+    this.lastKeys = { ...keys };
     this._brakeDrift(keys);
     return keys;
   }

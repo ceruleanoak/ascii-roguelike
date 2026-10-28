@@ -1,5 +1,5 @@
 import { GRID, GAME_STATES, PHYSICS } from '../game/GameConfig.js';
-import { buildTerrainGrid, cellCost, BLOCKED, HAZARD } from './steeringTerrain.js';
+import { buildTerrainGrid, cellCost, planRoute, BLOCKED, HAZARD } from './steeringTerrain.js';
 import { HeldKeySteering } from './heldKeySteering.js';
 import { entityCenter } from '../game/Telegraph.js';
 import { planeOf, objectOnPlane } from './PlaneSystem.js';
@@ -13,7 +13,9 @@ const STAND_PX = CELL * 0.3;
 
 // Seconds a target may go with the player neither drawing closer nor taking
 // HP off it before it is given up on (out of reach behind water or walls, or
-// a swing that keeps missing it).
+// a swing that keeps missing it). Closer is measured along the route to the
+// stand spot, so a detour round a wall, which leads away from the target
+// before it leads back, is progress.
 const TARGET_PATIENCE = 4;
 const CLOSER_PX = 2;
 
@@ -158,6 +160,9 @@ export class HarvestSystem {
     this.skipped = new Set();
     // The target the last swing went at (a `oneSwing` material's one try).
     this.swungAt = null;
+    // The stand spot chosen for the current target ({ target, x, y, faceX,
+    // faceY }), kept until it stops being standable (see _standCell).
+    this.stand = null;
     this.steering = new HeldKeySteering(game);
   }
 
@@ -202,6 +207,7 @@ export class HarvestSystem {
     this.targetTimer = 0;
     this.skipped.clear();
     this.swungAt = null;
+    this.stand = null;
   }
 
   /**
@@ -213,6 +219,12 @@ export class HarvestSystem {
     const target = this._currentTarget();
     const stand = target && this._standCell(target);
     if (!stand || this._onStand(stand)) return { ...NO_KEYS };
+    // The last cell's walk goes straight. A spot lined up on a Rock's middle
+    // reaches into the Rock's own cell, which the route reads as solid
+    // whole: steering re-centered the player out of it, the line came clear,
+    // it stepped back in, and the player wiggled short of the spot.
+    const pos = this.game.player.position;
+    if (Math.hypot(stand.x - pos.x, stand.y - pos.y) <= CELL) return this.steering.keysStraight(stand.x, stand.y);
     return this.steering.keysToward(stand.x, stand.y);
   }
 
@@ -302,9 +314,8 @@ export class HarvestSystem {
   // Gives up on a target the player has gone TARGET_PATIENCE seconds without
   // drawing closer to or taking HP off. True when it was given up this frame.
   _outOfPatience(target) {
-    const p = entityCenter(this.game.player);
-    const t = objectCenter(target);
-    const dist = Math.hypot(t.x - p.x, t.y - p.y);
+    const stand = this._standCell(target);
+    const dist = stand ? this._routeLength(this._grid(), stand) : Infinity;
     if (target.hp !== this.targetHp || dist < this.closest - CLOSER_PX) {
       this.targetHp = target.hp;
       this.closest = Math.min(this.closest, dist);
@@ -408,9 +419,14 @@ export class HarvestSystem {
     return Math.hypot(pos.x - stand.x, pos.y - stand.y) <= STAND_PX;
   }
 
-  // Where to stand beside the target (left, right, above, below), nearest
-  // the player: a top-left and the straight facing from it to the target.
-  // Null when the target is walled in on all sides.
+  // Where to stand beside the target (left, right, above, below), the one
+  // the shortest route reaches: a top-left and the straight facing from it to
+  // the target. Null when the target is walled in on all sides.
+  //
+  // Chosen once per target and kept while it stays standable. Picked afresh
+  // every frame by straight-line distance, the side flipped as the player
+  // moved (two sides nearly as near, or the nearest one behind a wall), and
+  // the steering turned with it: the player wiggled against the wall.
   //
   // The spot lines the player's middle up with the target's, one cell back,
   // as a player lines a swing up by hand. Rocks, trees and grass are set off
@@ -421,15 +437,15 @@ export class HarvestSystem {
   // same spot squared to the target's row (column) comes next, and the cell
   // beside the target's cell last.
   _standCell(target) {
-    const game = this.game;
-    const player = game.player;
-    const map = player.collisionMap || game.activeRoom?.collisionMap || game.currentRoom?.collisionMap || null;
-    const grid = buildTerrainGrid(game, player, map);
+    const grid = this._grid();
     const t = objectCenter(target);
     const col = Math.floor(t.x / CELL), row = Math.floor(t.y / CELL);
-    const p = entityCenter(player);
+    const kept = this.stand;
+    if (kept?.target === target && this._standable(grid, kept, col, row)) return kept;
+    const p = entityCenter(this.game.player);
     let best = null;
     let bestDist = Infinity;
+    let bestLine = Infinity;
     for (const [dc, dr] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
       const lined = { x: t.x - CELL / 2 + dc * CELL, y: t.y - CELL / 2 + dr * CELL };
       // The same distance out, squared to the target's row (or column) so
@@ -438,10 +454,44 @@ export class HarvestSystem {
       const cell = { x: (col + dc) * CELL, y: (row + dr) * CELL };
       const spot = [lined, squared, cell].find(s => this._standable(grid, s, col, row));
       if (!spot) continue;
-      const d = Math.hypot(spot.x + CELL / 2 - p.x, spot.y + CELL / 2 - p.y);
-      if (d < bestDist) { bestDist = d; best = { x: spot.x, y: spot.y, faceX: -dc, faceY: -dr }; }
+      const d = this._routeLength(grid, spot);
+      const line = Math.hypot(spot.x + CELL / 2 - p.x, spot.y + CELL / 2 - p.y);
+      if (d < bestDist || (d === bestDist && line < bestLine)) {
+        bestDist = d;
+        bestLine = line;
+        best = { target, x: spot.x, y: spot.y, faceX: -dc, faceY: -dr };
+      }
     }
+    this.stand = best;
     return best;
+  }
+
+  // The player's terrain grid this frame.
+  _grid() {
+    const game = this.game;
+    const player = game.player;
+    const map = player.collisionMap || game.activeRoom?.collisionMap || game.currentRoom?.collisionMap || null;
+    return buildTerrainGrid(game, player, map);
+  }
+
+  // How far the player walks to a stand spot (top-left), in px along the
+  // route to its cell, then straight to the spot; Infinity when no route
+  // reaches the cell.
+  _routeLength(grid, spot) {
+    const p = entityCenter(this.game.player);
+    const goal = { x: spot.x + CELL / 2, y: spot.y + CELL / 2 };
+    const goalCol = Math.floor(goal.x / CELL), goalRow = Math.floor(goal.y / CELL);
+    const path = planRoute(grid, Math.floor(p.x / CELL), Math.floor(p.y / CELL), goalCol, goalRow);
+    if (!path) return Infinity;
+    const end = path.length ? path[path.length - 1] : p;
+    if (Math.floor(end.x / CELL) !== goalCol || Math.floor(end.y / CELL) !== goalRow) return Infinity;
+    let length = 0;
+    let from = p;
+    for (const step of path) {
+      length += Math.hypot(step.x - from.x, step.y - from.y);
+      from = step;
+    }
+    return length + Math.hypot(goal.x - from.x, goal.y - from.y);
   }
 
   // Whether a player-sized body with this top-left touches only open ground.
