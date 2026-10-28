@@ -9,7 +9,8 @@
     "check:data": "node tools/check-data.js",
     "check:frames": "node tools/check-frame-passes.js",
     "check:graphs": "node tools/check-dungeon-graphs.mjs",
-    "build": "npm run check:arch && npm run check:data && npm run check:frames && npm run check:graphs && NODE_ENV=production vite build",
+    "check:warps": "node tools/check-dungeon-warps.mjs",
+    "build": "npm run check:arch && npm run check:data && npm run check:frames && npm run check:graphs && npm run check:warps && NODE_ENV=production vite build",
     "preview": "vite preview",
     "deploy": "npm run build && gh-pages -d dist --no-history"
   },

@@ -364,7 +364,7 @@ export class CheatMenu {
         game.boulderSystem?.triggerBoulderRain(1);
         break;
       case 'dungeon_warp':
-        game.dungeonSystem.debugWarpTo(result.nodeId, { forceRegenerate: result.forceRegenerate, template: result.template });
+        game.dungeonSystem.debugWarpTo(result.entry.nodeId, { forceRegenerate: !!result.entry.forceRegenerate, template: result.entry.template ?? null });
         break;
       case 'teleport_zone':
         game.cheatWarpSystem.handleZoneTeleport(game, result.zone);
@@ -688,9 +688,10 @@ export class CheatMenu {
     if (selected.type === 'enemy') return { action: 'spawn_enemy', enemy: selected };
     if (selected.type === 'spawn_object') return { action: 'spawn_object', objChar: selected.objChar };
     if (selected.type === 'trigger_boulder') return { action: 'trigger_boulder' };
-    if (selected.type === 'dungeon_warp') {
-      return { action: 'dungeon_warp', destination: selected.destination, forceRegenerate: !!selected.forceRegenerate };
-    }
+    // The whole entry rides through: DungeonSystem.debugWarpItems() owns its
+    // shape, and a field-by-field copy here once dropped nodeId/template and
+    // left every dungeon warp aimed at nothing.
+    if (selected.type === 'dungeon_warp') return { action: 'dungeon_warp', entry: selected };
     return { action: 'spawn', item: selected };
   }
 
