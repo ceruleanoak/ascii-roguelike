@@ -205,7 +205,9 @@ export class FireplaceSystem {
       if (!fireplace.burning) return;
       const berry = game.inventorySystem.consumableInventory.find(it => it.char === '❋');
       if (!berry || !game.inventorySystem.removeFromConsumableInventory(berry)) return;
-      game.addIngredient('𝑚');
+      // Mana goes to the magic meter once it is active, like every other
+      // Mana source (MenuSystem._collectCraftedIngredient); the pile otherwise.
+      game.menuSystem._collectCraftedIngredient('𝑚');
       game.menuSystem.announceCrafted('𝑚');
     } else if (rawChar === '🜉') {
       if (!fireplace.burning) return;
