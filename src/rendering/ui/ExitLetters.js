@@ -1,10 +1,10 @@
 // Exit letters — the N/E/W signage on an Explore Room's border (south is a
 // REST label, RestExitLabel.js). Drawn by ExploreRenderer each frame on the
 // foreground layer: key-press flash, Fairy-dust tint, the pre-boss gate's
-// pulsing 'B', the Spectacles cipher, and the Ridge's gray border.
+// pulsing 'B', and the Spectacles cipher. Letters are never stroked or
+// outlined (no strokeText, no offset copies): a pixel font smears into a blob.
 
 import { GRID } from '../../game/GameConfig.js';
-import { ZONE_COLORS } from '../../data/zones.js';
 import { spectaclesTransform, isSpectaclesActive, CIPHER_FONT_SCALE } from '../../data/cipher.js';
 
 export function drawExitLetters(renderer, game, centerX, centerY) {
@@ -44,23 +44,7 @@ export function drawExitLetters(renderer, game, centerX, centerY) {
     const spectaclesOn = isSpectaclesActive(game);
     // drawEntityVA uses the VentureArcade font, which lacks Greek glyph
     // coverage. Route ciphered letters through drawEntity (Unifont) instead.
-    // A Ridge ('R', north only) wears its zone's color inside a gray
-    // border: the room is still this zone, but its way on leads to gray, and
-    // every Ridge the player passes says so before they cross it.
-    const RIDGE_BORDER_COLOR = ZONE_COLORS.gray;
     const drawExitLetter = (x, y, letter, color) => {
-      if (letter === 'R') {
-        const ctx = renderer.fgCtx;
-        ctx.save();
-        ctx.font = spectaclesOn
-          ? `${Math.round(GRID.CELL_SIZE * CIPHER_FONT_SCALE)}px 'Unifont', monospace`
-          : `${GRID.CELL_SIZE}px 'VentureArcade', monospace`;
-        ctx.strokeStyle = RIDGE_BORDER_COLOR;
-        ctx.lineWidth = 3;
-        ctx.lineJoin = 'miter';
-        ctx.strokeText(spectaclesOn ? spectaclesTransform(letter, true) : letter, x, y);
-        ctx.restore();
-      }
       if (spectaclesOn) {
         const ctx = renderer.fgCtx;
         ctx.save();
