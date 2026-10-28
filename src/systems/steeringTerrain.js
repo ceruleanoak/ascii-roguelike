@@ -1,5 +1,5 @@
 import { GRID } from '../game/GameConfig.js';
-import { planeOf, objectOnPlane } from './PlaneSystem.js';
+import { planeOf, objectOnPlane, isInteriorActive } from './PlaneSystem.js';
 import { isLavaTile, isLavaImmune } from './LavaContact.js';
 import { metalPlatformCovers } from './MetalPlatformSystem.js';
 import { wetPipSpeed } from './StatusEffectSystem.js';
@@ -17,8 +17,9 @@ import { wetPipSpeed } from './StatusEffectSystem.js';
 // way movement over it actually goes.
 //
 // Hazards are what the Lava-Shy Mechanic gives enemies, extended to every
-// steered body: lava (unless the body is lava-immune or floats) and deep water
-// (unless it can't drown). A route treats lava as a wall. When the target
+// steered body: lava (unless the body is lava-immune or floats), a burning
+// lava or fire trail (unless it is fire-immune) and deep water (unless it
+// can't drown). A route treats lava as a wall. When the target
 // can only be reached through it (the player standing in lava), the route
 // stops at the nearest safe cell, so a companion waits on the shore the way a
 // Lava-Shy enemy does. The start cell is never a hazard, so a body already in
@@ -67,6 +68,9 @@ function bodyProfile(entity) {
       || entity.polymorphed || entity.deepWaterImmune),
     swimsFast: !!(entity.data?.swimAffinity || entity.polymorphed),
     small: !!(entity.isSmall || entity.data?.small),
+    // TrapSystem's puddle contact: fire armor (the player's fireImmune) walks
+    // a lava or fire trail unharmed, and floating doesn't lift a body off one.
+    trailSafe: !!entity.fireImmune || isLavaImmune(entity),
   };
 }
 
@@ -160,6 +164,32 @@ export function buildTerrainGrid(game, entity, collisionMap) {
       }
     }
   }
+
+  // Burning trails: the lava and fire Puddles a fire-imbued slime or an
+  // Ember's orbit leaves (TrapSystem.updatePuddles burns whatever stands on
+  // one). They aren't Background Objects, so without this a route walked
+  // straight through a lava trail it went round as a lava tile.
+  if (!body.trailSafe) {
+    const indoors = isInteriorActive(game);
+    for (const puddle of game?.puddles ?? []) {
+      if (puddle.type !== 'lava' && puddle.type !== 'fire') continue;
+      if ((puddle.plane ?? 0) !== body.plane || !!puddle.hutPlane !== indoors) continue;
+      // isEntityOnPuddle tests the body's middle against the stamp's square.
+      const r = puddle.radius;
+      const c0 = Math.max(0, Math.floor((puddle.position.x - r) / CELL));
+      const r0 = Math.max(0, Math.floor((puddle.position.y - r) / CELL));
+      const c1 = Math.min(cols - 1, Math.floor((puddle.position.x + r) / CELL));
+      const r1 = Math.min(rows - 1, Math.floor((puddle.position.y + r) / CELL));
+      for (let row = r0; row <= r1; row++) {
+        for (let col = c0; col <= c1; col++) {
+          const i = row * cols + col;
+          cost[i] = heavier(cost[i], HAZARD);
+          otherHazard[i] = 1;
+        }
+      }
+    }
+  }
+
   const swim = new Uint8Array(cols * rows);
   for (let i = 0; i < swim.length; i++) swim[i] = deep[i] && !otherHazard[i] && cost[i] === HAZARD ? 1 : 0;
   return { cols, rows, cost, swim };
