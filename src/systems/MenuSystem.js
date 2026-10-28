@@ -652,7 +652,9 @@ export class MenuSystem {
    * Open the item picker for a crafting slot. `cs` is the station being
    * filled — the REST station by default, or the Dragon Forge's
    * (ForgeSystem). The forge passes `includeChest: false`: the REST Item
-   * Chest is out of reach in the field, so only carried items are offered.
+   * Chest is out of reach in the field, so only carried items are offered —
+   * which includes weapons swapped out of a quick slot this trip
+   * (pendingChestDeposits), as the Settlement PAWN list already does.
    */
   openCraftingMenu(slotType, cs = this.game.craftingSystem, { includeChest = true } = {}) {
     const game = this.game;
@@ -671,6 +673,11 @@ export class MenuSystem {
       if (item && !weaponsList.find(i => i.char === item.char)) {
         weaponsList.push(item);
         equippedMenuItems.add(item);
+      }
+    }
+    for (const item of game.inventorySystem.pendingChestDeposits) {
+      if (!weaponsList.find(i => i.char === item.char)) {
+        weaponsList.push(item);
       }
     }
     if (includeChest) {
@@ -1210,7 +1217,7 @@ export class MenuSystem {
         inv.equippedConsumables[consumableIdx] = null;
         game.player.equippedConsumables = [...inv.equippedConsumables];
       } else if (item.data.type === 'WEAPON' || item.data.type === 'TRAP') {
-        inv.retrieveFromChest(item);
+        inv.retrieveFromChest(item) ?? inv.retrieveFromPendingChest(item);
       } else if (item.data.type === 'ARMOR') {
         const armorIndex = inv.armorInventory.indexOf(item);
         if (armorIndex > -1) inv.armorInventory.splice(armorIndex, 1);

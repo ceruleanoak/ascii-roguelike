@@ -77,6 +77,7 @@ export class CraftSpellSystem {
     const items = new Map();
     const unequipped = [
       ...(includeChest ? inv.itemChest : []),
+      ...inv.pendingChestDeposits, // swapped out this trip — still carried
       ...inv.armorInventory,
       ...inv.consumableInventory,
     ];
