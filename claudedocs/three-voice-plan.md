@@ -246,32 +246,53 @@ reach the player through one hook each (input delay/drop at the dodge and attack
 paths, a drift vector in movement), rather than as checks scattered through
 `Player.js`.
 
-**Curse Depth** (user, 2026-10-29) = cursed rooms explored × wishes spent
-(`_roomsExplored × game.wishesUsed`). It sets how often a misfire happens (a delayed
-or dropped dodge or attack, or a wander), rolled as a rate per minute of play:
+**The Curse Clock** (user, 2026-10-29). The curse accumulates over time from the
+moment the Cursed Run begins. That moment is marked on the clock: a **second timer,
+drawn in gray**, starts beside the run timer (`RunTimerSystem`, drawn bare in the top
+right of the Tab inventory overlay). It is the same bare-digits format, no label. From
+then on, in the background, the curse tracks two counts:
+
+- **rooms explored** since the curse began (`CursedRunSystem._roomsExplored`, which
+  exists);
+- **broken slots** — every slot broken this run, of either kind. A wish is just
+  another way of breaking a slot:
+  - a Three Room slot cracked by a wrong offering or by GIVE;
+  - a quick slot destroyed by a wish (`game.wishesUsed`, including wishes spent
+    before the curse began).
+
+**Curse Depth** = rooms explored × broken slots. It sets how often a misfire happens
+(a delayed or dropped dodge or attack, or a wander), rolled as a rate per minute of
+play:
 
 - low depth: rare enough not to be noticed;
-- two wishes: noticeable very quickly;
+- two broken slots' worth of rate: noticeable very quickly;
 - the highest possible depth: more than once a minute.
 
-**Draft curve** (to tune in P5b): linear, capped at depth 48 (3 wishes × 16 rooms):
+A wrong offering alone breaks one slot, so every Cursed Run misfires eventually.
+GIVE breaks **two** (its wish destroys a quick slot and its answer cracks a Three
+Room slot), so it deepens the curse twice as fast as a wrong offering. At most six
+slots can break (three Three Room slots, three quick slots).
+
+**Draft curve** (to tune in P5b): linear, capped at depth 48:
 `misfires per minute = 1.5 × min(depth, 48) / 48`.
 
-| Wishes | Rooms | Depth | Misfires | Reads as |
+| Broken slots | Rooms | Depth | Misfires | Reads as |
 |---|---|---|---|---|
-| 1 | 2 | 2 | one per ~16 min | unnoticed |
+| 1 (a wrong offering) | 2 | 2 | one per ~16 min | unnoticed |
 | 1 | 8 | 8 | one per 4 min | a glitch? |
-| 2 | 4 | 8 | one per 4 min | |
-| 2 | 8 | 16 | one per 2 min | clearly the curse |
+| 2 (one GIVE) | 8 | 16 | one per 2 min | clearly the curse |
 | 2 | 16 | 32 | one per 60 s | |
-| 3 | 16+ | 48 | 1.5 a minute | the ceiling |
+| 4 (two GIVEs) | 12 | 48 | 1.5 a minute | the ceiling |
+| 6 (three GIVEs) | 8 | 48 | 1.5 a minute | the ceiling, reached fast |
 
-If the two-wish ramp should bite sooner, raise the ceiling rate or lower the cap,
-not the formula's shape.
+If the ramp should bite sooner, raise the ceiling rate or lower the cap, not the
+formula's shape.
 
-**Consequence to confirm:** a run cursed only by a wrong offering (no wish spent)
-has depth 0, so the player never turns on themselves. The REST/Charon effects above
-still happen, because they count rooms alone.
+**State:** the curse's start time is new run-scoped state. It belongs to
+`CursedRunSystem` (system-internal, reset by `hardReset()`, which the Reset Registry
+already calls), and the overlay reads it the way it reads `runTimerSystem.format()`.
+Broken Three Room slots are read from the room's slots while it exists; once the
+room is gone the count must live in `CursedRunSystem` too.
 
 ## 8. The wish taxonomy
 
@@ -423,7 +444,7 @@ which today reads only `game.companion`. Logged as bug #479.
 | P3 | Wish comments in the Three Room (+ GAME_OVER exception) | wish casts in the room are answered, not fired |
 | P4 | GIVE | the room's new trade |
 | P5 | Cursed Spell Sign pool | cursed runs teach wish words |
-| P5b | The player turns on themselves (§7b) | dodges/attacks delayed or dropped; wandering into hazards |
+| P5b | Curse Clock + the player turns on themselves (§7b) | dodges/attacks delayed or dropped; wandering into hazards |
 | P6+ | GAIN words, a few letters per session — XCAVATE first (closes #478's hint gap) | |
 | P7+ | INFLUENCE: PERSUADE (Master, Fisherman, Shopkeeper first), COMMAND on NPCs, the Witch's Cursed-Run offer | |
 
@@ -444,10 +465,12 @@ are out; the cost of wishing is a deepening curse (§7b).
 Settled 2026-10-29 (fourth round): CHARM and SLEEP stay; Curse Depth = cursed
 rooms × wishes spent; misfire rate from unnoticeable to more than once a minute (§7b).
 
+Settled 2026-10-29 (fifth round): the curse accumulates over time from its start,
+marked by a gray Curse Clock; Curse Depth = rooms explored × broken slots, and a wish
+is one way of breaking a slot (§7b).
+
 Still open:
-1. A curse with no wish spent (wrong offering only) has depth 0, so no misfires.
-   Intended?
-2. The draft curve's numbers (§7b), settled by playtest in P5b.
+1. The draft curve's numbers (§7b), settled by playtest in P5b.
 
 ## 12. Proposed glossary terms
 
@@ -461,5 +484,7 @@ that first puts the term into code.
 - **Persuade** — the Influence Wish Spell; an accepting NPC's transaction happens without its cost.
 - **Completion Spell** — a Gain Wish Spell tied to one room letter.
 - **Give** — the Three Room trade: a slot cracks, a Wish Spell's name is told.
-- **Curse Depth** — cursed rooms explored × wishes spent; sets the misfire rate.
+- **Curse Clock** — the gray timer that starts beside the run timer when a Cursed Run begins.
+- **Broken Slot** — a cracked Three Room slot or a quick slot destroyed by a wish.
+- **Curse Depth** — rooms explored since the curse began × broken slots; sets the misfire rate.
 - **Cursed Spell Sign** — a Spell Sign drawn from the Wish Spell pool on a Cursed Run.
