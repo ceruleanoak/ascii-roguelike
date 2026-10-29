@@ -227,6 +227,23 @@ export class InventorySystem {
       ((!twinsAllowed && s.char === item?.char) || (group && s.data?.exclusiveGroup === group)));
   }
 
+  // A consumable made in place (Fireplace bake, Press oil) goes where a
+  // pickup would: onto its stack, else into the first free slot, and only
+  // into the consumable pile when no slot can take it. Returns the merged
+  // stack, or null. Pushing straight onto the pile hid the item behind the
+  // equipment menu while slots sat empty (bug-inbox 2026-10-28, Meat Jerky).
+  stowConsumable(item, player) {
+    const stacked = this.mergeStackableConsumable(item);
+    if (stacked) return stacked;
+    this.consumableInventory.push(item);
+    const emptySlot = this.firstFreeConsumableSlot(player);
+    if (emptySlot !== -1 && this.conflictingConsumableSlot(item) === -1) {
+      this.equipConsumable(emptySlot, item);
+      this.applyEquipmentEffectsToPlayer(player);
+    }
+    return null;
+  }
+
   getItemChest() {
     return this.itemChest;
   }

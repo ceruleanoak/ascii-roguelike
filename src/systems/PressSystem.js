@@ -87,8 +87,8 @@ export class PressSystem {
       game.menuSystem.announceCrafted(outChar);
     } else {
       const oil = new Item(outChar, game.player.position.x, game.player.position.y);
-      game.inventorySystem.consumableInventory.push(oil);
-      game.menuSystem.announceCrafted(oil.char);
+      const stacked = game.inventorySystem.stowConsumable(oil, game.player);
+      game.menuSystem.announceCrafted(oil.char, stacked);
     }
     game.audioSystem?.playSFX?.('craft');
     game.closeMenu();

@@ -194,8 +194,7 @@ export class FireplaceSystem {
     } else if (FIRE_BAKES[rawChar]) {
       if (!fireplace.burning || !game.removeIngredient(rawChar)) return;
       const baked = new Item(FIRE_BAKES[rawChar], game.player.position.x, game.player.position.y);
-      const stacked = game.inventorySystem.mergeStackableConsumable(baked);
-      if (!stacked) game.inventorySystem.consumableInventory.push(baked);
+      const stacked = game.inventorySystem.stowConsumable(baked, game.player);
       game.menuSystem.announceCrafted(baked.char, stacked);
     } else if (rawChar === '2') {
       // Ore, like Sticks, opens a quantity submenu rather than smelting one
