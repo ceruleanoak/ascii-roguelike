@@ -15,6 +15,18 @@ function isGunOrBowShot(proj) {
 // shape used for the player's own ember-contact burn threshold).
 const SPARK_WINDOW = 2.0;
 
+// Campfire flame loop (C-room campfire and lit Tinder): low embers → tall
+// flame → crackle at the peak → back down, the color warming with the height.
+const CAMPFIRE_STEP_SECONDS = 0.16;
+const CAMPFIRE_FLAME = [
+  { char: 'i', color: '#ff6611' },
+  { char: '!', color: '#ff8822' },
+  { char: '^', color: '#ffaa33' },
+  { char: '*', color: '#ffcc44' },
+  { char: '^', color: '#ffaa33' },
+  { char: '!', color: '#ff8822' },
+];
+
 // Linear-interpolate between two #rrggbb colors. t in [0, 1].
 function _lerpHex(a, b, t) {
   const ar = parseInt(a.slice(1, 3), 16), ag = parseInt(a.slice(3, 5), 16), ab = parseInt(a.slice(5, 7), 16);
@@ -250,6 +262,7 @@ export class BackgroundObject {
     // undefined-vs-false ambiguity and to satisfy the constructor-completeness requirement.
     this.isCampfire = false;        // Set by RoomGenerator for campfire objects
     this._flickerTimer = 0;         // Campfire flicker countdown
+    this._flickerPhase = Math.floor(Math.random() * CAMPFIRE_FLAME.length); // Campfire's place in CAMPFIRE_FLAME
     this.fountainWater = false;     // F-room water tile — drives shimmer cycle
     this.fountainWaterfall = false; // F-room waterfall tile — drives downward char cycle
     // Attunement colour for F-room pool/waterfall tiles, set by FountainSystem when
@@ -584,15 +597,17 @@ export class BackgroundObject {
       }
     }
 
-    // Campfire flicker — cycle through flame chars + warm-color jitter
+    // Campfire flicker — steps through CAMPFIRE_FLAME in order, so the flame
+    // swells to a peak and settles back instead of jumping between glyphs.
+    // A little jitter on each step's hold keeps two fires out of lockstep.
     if (this.isCampfire) {
-      this._flickerTimer = (this._flickerTimer || 0) - deltaTime;
+      this._flickerTimer -= deltaTime;
       if (this._flickerTimer <= 0) {
-        this._flickerTimer = 0.08 + Math.random() * 0.1;
-        const chars = ['!', '*', '^', 'i'];
-        const colors = ['#ff8822', '#ffaa33', '#ffcc44', '#ff6611'];
-        this.animationChar = chars[Math.floor(Math.random() * chars.length)];
-        this.animationColor = colors[Math.floor(Math.random() * colors.length)];
+        this._flickerTimer = CAMPFIRE_STEP_SECONDS * (0.85 + Math.random() * 0.3);
+        this._flickerPhase = (this._flickerPhase + 1) % CAMPFIRE_FLAME.length;
+        const step = CAMPFIRE_FLAME[this._flickerPhase];
+        this.animationChar = step.char;
+        this.animationColor = step.color;
       }
     }
 
