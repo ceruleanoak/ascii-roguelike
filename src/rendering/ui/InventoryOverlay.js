@@ -19,6 +19,7 @@
 import { GRID, COLORS, GAME_STATES } from '../../game/GameConfig.js';
 import { spectaclesTransformString, isSpectaclesActive } from '../../data/cipher.js';
 import { getPickupCategory } from '../../data/items.js';
+import { ZONE_COLORS } from '../../data/zones.js';
 
 const TREASURE_COLOR = '#ffd700';
 const COMPONENTS_COLOR = '#ffaa00';
@@ -172,13 +173,20 @@ export class InventoryOverlay {
     // Run timer, top-right of the box on the title row. Bare digits, no label —
     // the overlay is non-instructive. Not run through the Spectacles cipher:
     // that mapping is letters-only, so digits and ':' would pass through as-is.
+    const runTimerText = game.runTimerSystem.format();
+    const runTimerRight = GRID.WIDTH - GRID.CELL_SIZE * 3;
     this.renderer.uiCtx.fillStyle = COLORS.TEXT;
     this.renderer.uiCtx.textAlign = 'right';
-    this.renderer.uiCtx.fillText(
-      game.runTimerSystem.format(),
-      GRID.WIDTH - GRID.CELL_SIZE * 3,
-      GRID.CELL_SIZE * 3
-    );
+    this.renderer.uiCtx.fillText(runTimerText, runTimerRight, GRID.CELL_SIZE * 3);
+
+    // The Curse Clock: on a Cursed Run, a second timer in gray to the run
+    // timer's left, counting from the moment the curse began. Same bare digits.
+    const curseClockText = game.cursedRunSystem.formatCurseClock(game);
+    if (curseClockText) {
+      const runTimerWidth = this.renderer.uiCtx.measureText(runTimerText).width;
+      this.renderer.uiCtx.fillStyle = ZONE_COLORS.gray;
+      this.renderer.uiCtx.fillText(curseClockText, runTimerRight - runTimerWidth - GRID.CELL_SIZE, GRID.CELL_SIZE * 3);
+    }
     this.renderer.uiCtx.textAlign = 'center';
 
     const startY = GRID.CELL_SIZE * 5;

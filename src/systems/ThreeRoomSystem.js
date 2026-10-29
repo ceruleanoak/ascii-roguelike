@@ -272,6 +272,7 @@ export class ThreeRoomSystem {
   /** A slot cracks: the frame goes gray (ThreeRoomRenderer) and the run is Cursed. */
   _crack(game, room, slot) {
     slot.threeCracked = true;
+    game.cursedRunSystem.recordCrack(); // a Broken Slot; the first starts the Curse Clock
     this._beginCurse(game, room);
   }
 

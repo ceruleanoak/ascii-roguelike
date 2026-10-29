@@ -2037,6 +2037,40 @@ identity, not standard programming terms.
   `wiseSayings` (`WiseFellow.setHint`).
 - **Not:** "cursed mode", "bad ending", "hard mode".
 
+### Curse Clock
+- **Definition:** The second timer, drawn in gray beside the run timer in the Tab inventory
+  overlay, that starts the moment a Cursed Run begins and counts how long the curse has been
+  carried. Bare digits, no label, like the run timer.
+- **In code:** `CursedRunSystem._curseStartedAt` (set by `recordCrack` on the first crack),
+  drawn from `CursedRunSystem.formatCurseClock(game)` by `InventoryOverlay`; shares
+  `formatElapsed` with `RunTimerSystem`.
+- **Not:** "curse timer", "doom clock", "second run timer".
+
+### Broken Slot
+- **Definition:** Any slot broken this run, of either kind: a Three Room slot cracked by a wrong
+  offering or by Give, or a quick slot destroyed by a Wish. A wish is just another way of
+  breaking a slot, so wishes spent before the curse began count. At most six (three of each).
+- **In code:** `CursedRunSystem.brokenSlots(game)` — `_crackedThreeSlots` (counted by
+  `recordCrack` from `ThreeRoomSystem._crack`) + `game.wishesUsed`. The quick-slot half is
+  `game.destroyedSlots`.
+- **Not:** "cracked slot" (that is only the Three Room kind — see Cracked Slot), "lost slot".
+
+### Curse Depth
+- **Definition:** Rooms explored since the curse began × Broken Slots. It sets how often a
+  Misfire happens: unnoticed at low depth, more than once a minute at the cap.
+- **In code:** `CursedRunSystem.curseDepth(game)`; the rate is `misfireRate(game)`
+  (`MISFIRES_PER_MINUTE_AT_CAP` × min(depth, `CURSE_DEPTH_CAP`) / cap). 0 on an uncursed run.
+- **Not:** "curse level", "zone depth" (a different count — see Depth).
+
+### Misfire
+- **Definition:** The player turning on themselves on a Cursed Run: the next dodge or attack is
+  dropped or goes off late, or the player wanders on their own toward lava, poisoned water or
+  deep water. Rolled per minute of play at the rate Curse Depth sets.
+- **In code:** `CursedRunSystem` — `updateCurse` rolls it (`_rollMisfire`); `gateDodge`
+  (`CharacterSystem.updateDodge`) and `gateAttack` (`CombatSystem.tryUseHeldWeapon`) take the
+  press; a wander holds the movement keys through `heldKeys` (main.js's held-keys chain).
+- **Not:** "fumble", "glitch", "confusion" (Dizzy is its own status effect).
+
 ### Undead
 - **Definition:** The risen figures a Cursed Run fills the world with — around a cracked slot,
   through the Graveyard, and finally inside REST. They shamble and crowd; they do not attack,

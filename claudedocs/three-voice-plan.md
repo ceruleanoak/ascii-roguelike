@@ -237,7 +237,7 @@ explored (`_roomsExplored`).
 - **REST gives way** after 8 cursed rooms (`isRestDecayed`): a gray border, **no
   healing** (`carryRestHp`), and the Undead walking in through the south door.
 
-**Not built — the player turns on themselves.** As the curse deepens:
+**Built 2026-10-29 (P5b) — the player turns on themselves.** As the curse deepens:
 - Dodges and attacks are **delayed**, or **don't happen at all**.
 - The player **wanders on their own** into lava, poison and deep water.
 
@@ -444,7 +444,7 @@ which today reads only `game.companion`. Logged as bug #479.
 | P3 ✅ 2026-10-29 | Wish comments in the Three Room (+ GAME_OVER exception) | wish casts in the room are answered, not fired |
 | P4 ✅ 2026-10-29 | GIVE | the room's new trade |
 | P5 ✅ 2026-10-29 | Cursed Spell Sign pool | cursed runs teach wish words |
-| P5b | Curse Clock + the player turns on themselves (§7b) | dodges/attacks delayed or dropped; wandering into hazards |
+| P5b ✅ 2026-10-29 | Curse Clock + the player turns on themselves (§7b) | dodges/attacks delayed or dropped; wandering into hazards |
 | P6+ | GAIN words, a few letters per session — XCAVATE first (closes #478's hint gap) | |
 | P7+ | INFLUENCE: PERSUADE (Master, Fisherman, Shopkeeper first), COMMAND on NPCs, the Witch's Cursed-Run offer | |
 

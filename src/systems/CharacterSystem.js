@@ -319,7 +319,9 @@ export class CharacterSystem {
     // Handle dodge rolling (continuous direction updates, supports diagonals and curving)
     // Disabled while Rusalka's charm is active or while polymorphed (frog form has no roll)
     const rusalkaActive = game.fishingSystem?.rusalka?.alive === true;
-    const dodgeDirection = (rusalkaActive || player.polymorphed || player.hookedByMimic || player.hookedByWhip) ? { x: 0, y: 0 } : game.getDodgeRollDirection();
+    // A Cursed Run's misfires may drop or delay a fresh press (CursedRunSystem.gateDodge).
+    const dodgeDirection = game.cursedRunSystem.gateDodge(game,
+      (rusalkaActive || player.polymorphed || player.hookedByMimic || player.hookedByWhip) ? { x: 0, y: 0 } : game.getDodgeRollDirection());
 
     if (game.activeCharacterType === 'green') {
       // Green ranger: hold arrow keys for a continuous slide (no individual roll timers)

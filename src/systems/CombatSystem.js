@@ -23,6 +23,7 @@ import { tagCharmedProjectile, resolveCharmedMelee, resolveCharmedProjectile, re
 import { applyExtraOnHitEffects, applyOnHitStatusEffect } from './ExtraOnHitEffects.js';
 import { applyMeleeStatusDamageBonus, getMeleeStatusBonusIndicator } from './MeleeStatusBonuses.js';
 import { applyKeenAim } from './KeenAim.js';
+import { rollCrit } from './CritRoll.js';
 import { projectileSailsOver, tagLaunchPit } from './pits.js';
 import { vaultWallBlocksReach } from './vaultWalls.js';
 import { strikeWatcherEye } from './WatcherEye.js';
@@ -645,7 +646,7 @@ export class CombatSystem {
             continue;
           }
 
-          const critRoll = this._applyCritIfLucky(adjustedDamage, proj.owner, enemy);
+          const critRoll = rollCrit(adjustedDamage, proj.owner, enemy);
           const finalDamage = critRoll.damage;
           // Told to takeDamage so its sleep-wake-on-damage rule doesn't clear
           // stacks this same hit is about to (re)apply — see Enemy.js.
@@ -1084,7 +1085,7 @@ export class CombatSystem {
               continue;
             }
 
-            const critRoll = this._applyCritIfLucky(totalDamage, attack.owner, enemy);
+            const critRoll = rollCrit(totalDamage, attack.owner, enemy);
             const finalDamage = critRoll.damage;
             // Melee hitboxes normally carry no burst id (undefined → iframes
             // block every follow-up), so only an explicitly-bursted pattern
@@ -1620,6 +1621,8 @@ export class CombatSystem {
     const game = this.game;
     const player = game.player;
 
+    // A Cursed Run's misfire may take the press (CursedRunSystem.gateAttack).
+    if (game.cursedRunSystem.gateAttack(game)) return;
     // Gem wands gate the charge on mana availability before useHeldItem starts charging.
     if (player.heldItem.data?.gemWand && !game.magicSystem.tryStartCharge(player)) {
       return;
@@ -1937,33 +1940,6 @@ export class CombatSystem {
 
   createExplosion(x, y, radius, damage, enemies, backgroundObjects = [], damageMin = 0, sourcePlane = 0) {
     return createExplosionImpl(this, x, y, radius, damage, enemies, backgroundObjects, damageMin, sourcePlane);
-  }
-
-  // Returns { damage, isCrit, isLucky }. Only player attacks roll crits, gated
-  // by player.critChance (Lucky Coin / well ritual) or weapon's own critChance.
-  // isLucky=true when the Lucky Coin/well is the crit source (shows "LUCKY CRIT");
-  // isLucky=false when the weapon alone provides the chance (shows "CRIT").
-  _applyCritIfLucky(damage, owner, enemy) {
-    if (!owner?.quickSlots) return { damage, isCrit: false };
-    let critChance = owner.critChance || 0;
-    const isLucky = critChance > 0; // Lucky Coin or well is contributing
-    const activeWeapon = owner.quickSlots[owner.activeSlotIndex];
-    if (activeWeapon?.data?.critChance) {
-      critChance = Math.max(critChance, activeWeapon.data.critChance);
-    }
-    // Post-dodge crit window: dagger-class weapons force a guaranteed crit.
-    if (activeWeapon?.data?.weaponSubtype === 'dagger' && owner.postDodgeCritTimer > 0) {
-      critChance = 1;
-    }
-    // Punishing a telegraphed swing: a hit that lands in the back half of the
-    // enemy's windup is a guaranteed crit.
-    if (enemy?.isInCritWindow?.()) {
-      critChance = 1;
-    }
-    if (!(critChance > 0)) return { damage, isCrit: false };
-    if (Math.random() >= critChance) return { damage, isCrit: false };
-    const critMult = activeWeapon?.data?.weaponSubtype === 'dagger' ? 2 : 1.5;
-    return { damage: Math.ceil(damage * critMult), isCrit: true, isLucky };
   }
 
   createDamageNumber(damage, x, y, color, scale = 1, duration = 1.0) {

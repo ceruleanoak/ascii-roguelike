@@ -1963,6 +1963,7 @@ class Game {
 
     // Dodge dispatch (green continuous roll / standard roll) lives in
     // CharacterSystem.
+    this.cursedRunSystem.updateCurse(deltaTime, this); // misfires: before the dodge they may take
     this.characterSystem.updateDodge(deltaTime);
 
     // Update player movement (locked when menu is open, during dodge roll, or continuous rolling)
@@ -1982,8 +1983,8 @@ class Game {
       const lockFacing = !!this.trapCharging || (this.keys.space && this.player.heldItem && this.player.heldItem.data.weaponType !== 'BOW') || this.fightSystem.locksFacing();
       // Lock movement for the TITLE -> REST spawn fade-in, until alpha reaches 1
       const moveLocked = fishingBlocked || windupLocked || this.player.titleSpawnMovementLocked;
-      // FIGHT and CHOP/MINE/HARVEST hold the keys while they run; Rusalka and Dizzy act on them either way.
-      const keys = this.fightSystem.heldKeys() ?? this.harvestSystem.heldKeys() ?? this.keys;
+      // A curse wander, FIGHT and CHOP/MINE/HARVEST hold the keys while they run; Rusalka and Dizzy act on them either way.
+      const keys = this.cursedRunSystem.heldKeys(this) ?? this.fightSystem.heldKeys() ?? this.harvestSystem.heldKeys() ?? this.keys;
       this.player.updateInput(PlayerInputSystem.heldMoveInput(this.player, keys, moveLocked), lockFacing);
     } else {
       // Stop player movement when menu is open or dodge rolling

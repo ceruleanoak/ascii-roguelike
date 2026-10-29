@@ -263,7 +263,7 @@ export const RESET_REGISTRY = [
     path: 'cursedRunSystem.hardReset',
     scope: 'run',
     call: (game) => game.cursedRunSystem.hardReset(),
-    why: "Curse run-state: the Graveyard count, REST decay and Charon's sealing of REST start over, read cursed recipe scrolls are forgotten, and a showing scroll reveal clears.",
+    why: "Curse run-state: the Graveyard count, REST decay and Charon's sealing of REST start over, read cursed recipe scrolls are forgotten, a showing scroll reveal clears, and the Curse Clock, the cracked-slot count and any misfire in progress go with the curse.",
   },
   {
     path: 'threeSlotGlobeSystem.hardReset',

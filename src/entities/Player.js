@@ -292,7 +292,7 @@ export class Player {
     };
 
     // Post-dodge crit window — set when dodge ends if equipped weapon has critAfterDodge.
-    // CombatSystem._applyCritIfLucky forces a guaranteed crit while >0.
+    // rollCrit (CritRoll.js) forces a guaranteed crit while >0.
     this.postDodgeCritTimer = 0;
 
     // Moss Cloak 𐤒: armed by dodge-end transition, active while no WASD input.
