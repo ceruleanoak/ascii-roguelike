@@ -244,7 +244,34 @@ explored (`_roomsExplored`).
 These are new player-control effects. They should be owned by `CursedRunSystem` and
 reach the player through one hook each (input delay/drop at the dodge and attack
 paths, a drift vector in movement), rather than as checks scattered through
-`Player.js`. The tiers and odds are *to design*.
+`Player.js`.
+
+**Curse Depth** (user, 2026-10-29) = cursed rooms explored × wishes spent
+(`_roomsExplored × game.wishesUsed`). It sets how often a misfire happens (a delayed
+or dropped dodge or attack, or a wander), rolled as a rate per minute of play:
+
+- low depth: rare enough not to be noticed;
+- two wishes: noticeable very quickly;
+- the highest possible depth: more than once a minute.
+
+**Draft curve** (to tune in P5b): linear, capped at depth 48 (3 wishes × 16 rooms):
+`misfires per minute = 1.5 × min(depth, 48) / 48`.
+
+| Wishes | Rooms | Depth | Misfires | Reads as |
+|---|---|---|---|---|
+| 1 | 2 | 2 | one per ~16 min | unnoticed |
+| 1 | 8 | 8 | one per 4 min | a glitch? |
+| 2 | 4 | 8 | one per 4 min | |
+| 2 | 8 | 16 | one per 2 min | clearly the curse |
+| 2 | 16 | 32 | one per 60 s | |
+| 3 | 16+ | 48 | 1.5 a minute | the ceiling |
+
+If the two-wish ramp should bite sooner, raise the ceiling rate or lower the cap,
+not the formula's shape.
+
+**Consequence to confirm:** a run cursed only by a wrong offering (no wish spent)
+has depth 0, so the player never turns on themselves. The REST/Charon effects above
+still happen, because they count rooms alone.
 
 ## 8. The wish taxonomy
 
@@ -355,8 +382,8 @@ author to pick from (TAUNT and CALM were turned down 2026-10-29):
 
 | Word | Effect (draft) |
 |---|---|
-| CHARM | Every enemy in the room fights for you until the room is left (a room-wide, temporary COMMAND without true names) |
-| SLEEP | Every enemy in the room falls asleep until struck |
+| CHARM *(kept)* | Every enemy in the room fights for you until the room is left (a room-wide, temporary COMMAND without true names) |
+| SLEEP *(kept)* | Every enemy in the room falls asleep until struck |
 
 #### Any companion works
 
@@ -414,11 +441,13 @@ lines.
 Settled 2026-10-29 (third round): COMMAND on an NPC costs a wish; TAUNT and CALM
 are out; the cost of wishing is a deepening curse (§7b).
 
+Settled 2026-10-29 (fourth round): CHARM and SLEEP stay; Curse Depth = cursed
+rooms × wishes spent; misfire rate from unnoticeable to more than once a minute (§7b).
+
 Still open:
-1. Keep CHARM and SLEEP?
-2. What deepens the curse for the new player effects (§7b): cursed rooms explored,
-   as REST's decay counts today, wishes spent, or both?
-3. The tiers and odds of the delayed/dropped inputs and the wandering.
+1. A curse with no wish spent (wrong offering only) has depth 0, so no misfires.
+   Intended?
+2. The draft curve's numbers (§7b), settled by playtest in P5b.
 
 ## 12. Proposed glossary terms
 
@@ -432,4 +461,5 @@ that first puts the term into code.
 - **Persuade** — the Influence Wish Spell; an accepting NPC's transaction happens without its cost.
 - **Completion Spell** — a Gain Wish Spell tied to one room letter.
 - **Give** — the Three Room trade: a slot cracks, a Wish Spell's name is told.
+- **Curse Depth** — cursed rooms explored × wishes spent; sets the misfire rate.
 - **Cursed Spell Sign** — a Spell Sign drawn from the Wish Spell pool on a Cursed Run.
