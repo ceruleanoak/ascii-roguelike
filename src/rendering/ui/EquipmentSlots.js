@@ -7,9 +7,10 @@
  * - Display armor slot (cyan) with equipped armor
  * - Display five consumable slots (slot 3 is locked/unlockable)
  *
- * Called every frame from RestRenderer (not gated by backgroundDirty), matching
- * the ArrowKeyIndicators pattern — the same cells get overdrawn each frame so
- * the blink animation can update.
+ * Called every frame from RestRenderer (not gated by backgroundDirty) so the
+ * blink animation can update. The background layer isn't cleared between
+ * frames, so every slot goes through drawSlot, which erases its three cells
+ * before drawing each glyph once (bug #472).
  */
 
 import { EQUIPMENT } from '../../game/GameConfig.js';
@@ -18,6 +19,14 @@ import { oilAppliesTo } from '../../entities/Item.js';
 export class EquipmentSlots {
   constructor(renderer) {
     this.renderer = renderer;
+  }
+
+  // One `[c]` slot centered on x: clear the cells, then draw each glyph once.
+  drawSlot(x, y, char, bracketColor, charColor = bracketColor) {
+    for (let dx = -1; dx <= 1; dx++) this.renderer.clearCell(x + dx, y);
+    this.renderer.drawCell(x - 1, y, '[', bracketColor);
+    this.renderer.drawCell(x,     y, char, charColor);
+    this.renderer.drawCell(x + 1, y, ']', bracketColor);
   }
 
   render(game) {
@@ -59,9 +68,7 @@ export class EquipmentSlots {
         ? BRIGHT_AMBER
         : DIM_AMBER;
 
-      this.renderer.drawCell(EQUIPMENT.CHEST_X - 1, y, '[', bracketColor);
-      this.renderer.drawCell(EQUIPMENT.CHEST_X,     y, char, item ? (item.color || DIM_AMBER) : bracketColor);
-      this.renderer.drawCell(EQUIPMENT.CHEST_X + 1, y, ']', bracketColor);
+      this.drawSlot(EQUIPMENT.CHEST_X, y, char, bracketColor, item ? (item.color || DIM_AMBER) : bracketColor);
     }
 
     // Draw armor slot — cyan
@@ -70,18 +77,9 @@ export class EquipmentSlots {
     const armorBlink = !armorEquipped && armorAvailable;
     const armorBracketColor = (armorBlink && blinkOn(110)) ? BRIGHT_CYAN : CYAN;
 
-    this.renderer.drawCell(EQUIPMENT.ARMOR_X - 1, EQUIPMENT.ARMOR_Y, '[', armorBracketColor);
-    this.renderer.drawCell(EQUIPMENT.ARMOR_X,     EQUIPMENT.ARMOR_Y, ' ', armorBracketColor);
-    this.renderer.drawCell(EQUIPMENT.ARMOR_X + 1, EQUIPMENT.ARMOR_Y, ']', armorBracketColor);
-
-    if (armorEquipped) {
-      this.renderer.drawCell(
-        EQUIPMENT.ARMOR_X,
-        EQUIPMENT.ARMOR_Y,
-        armorEquipped.char,
-        armorEquipped.color
-      );
-    }
+    this.drawSlot(EQUIPMENT.ARMOR_X, EQUIPMENT.ARMOR_Y,
+      armorEquipped ? armorEquipped.char : ' ', armorBracketColor,
+      armorEquipped ? armorEquipped.color : armorBracketColor);
 
     // Draw consumable slots 1-5 (slots beyond maxSlots are locked)
     const consumableXs = [
@@ -117,9 +115,7 @@ export class EquipmentSlots {
         // back slots drain first) — see MagicSystem.getSlotFill.
         const fill = game.magicSystem.getSlotFill(game.player, i);
         const fillColor = _manaColor(fill.current, fill.max);
-        this.renderer.drawCell(x - 1, y, '[', '#9966cc');
-        this.renderer.drawCell(x,     y, _manaBlock(fill.current, fill.max), fillColor);
-        this.renderer.drawCell(x + 1, y, ']', '#9966cc');
+        this.drawSlot(x, y, _manaBlock(fill.current, fill.max), '#9966cc', fillColor);
         continue;
       }
 
@@ -131,14 +127,14 @@ export class EquipmentSlots {
       const color = (shouldBlink && !blinkOn(consumableBlinkOffsets[i])) ? DARK_YELLOW : baseColor;
       const char = equipped ? equipped.char : (isLocked ? ' ' : String(i + 4));
 
-      this.renderer.drawCell(x - 1, y, '[', color);
-      this.renderer.drawCell(x,     y, char, color);
-      this.renderer.drawCell(x + 1, y, ']', color);
-
+      // The equipped glyph takes the item's own color (dimmed while inert),
+      // drawn once — not over a yellow copy of itself.
+      let charColor = color;
       if (!isLocked && equipped) {
         const dim = _isOilInert(equipped, game) || _isBombBagEmpty(equipped, game);
-        this.renderer.drawCell(x, y, equipped.char, dim ? _dimColor(equipped.color) : equipped.color);
+        charColor = dim ? _dimColor(equipped.color) : equipped.color;
       }
+      this.drawSlot(x, y, char, color, charColor);
     }
   }
 }

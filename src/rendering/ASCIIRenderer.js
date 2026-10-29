@@ -166,6 +166,13 @@ export class ASCIIRenderer {
     this.bgCtx.fillText(char, pixelX, pixelY);
   }
 
+  // Erase one grid cell (background layer). For cells redrawn every frame
+  // outside the backgroundDirty gate: fillText onto an uncleared cell stacks
+  // the glyph's anti-aliased edges into a heavier, outlined copy (bug #472).
+  clearCell(x, y) {
+    this.bgCtx.clearRect(x * GRID.CELL_SIZE, y * GRID.CELL_SIZE, GRID.CELL_SIZE, GRID.CELL_SIZE);
+  }
+
   // Draw filled cell (background layer)
   drawFilledCell(x, y, color) {
     this.bgCtx.fillStyle = color;
