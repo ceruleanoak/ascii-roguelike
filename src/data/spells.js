@@ -338,6 +338,14 @@ export const SPELLS = {
   'HEAL':    _cureSpell('NOTHING AILS YOU.'),
   'UNCURSE': _cureSpell('NO CURSE FOUND.'),
 
+  // Completion Spells (Gain): one per room letter, each completing its room
+  // through the system that owns it (three-voice-plan.md §8, GAIN table).
+  // X, the Crossroads: the χ-blade comes up without its chain (#478).
+  'XCAVATE': wishSpell('gain', {
+    refusal: (game) => (game.chiBladeSystem?.canExcavate() ? null : '...NOTHING.'),
+    effect: (game) => game.chiBladeSystem.excavate(),
+  }),
+
   'REVIVE': {
     wish: 'power',
     response: _reviveResponse,

@@ -342,7 +342,7 @@ build.
 | U | Underground | The Mage's path | CONJURE | WizardSystem | *?* |
 | V | Vault | Open the lock | UNSEAL | vaultWalls.js | cheat |
 | W | Well | Infuse the coin without a toss | INFUSE | WellSystem | *?* |
-| X | Crossroads | Extract the χ Blade (bug #478's missing hint) | XCAVATE | ChiBladeSystem | cheat |
+| X | Crossroads | Extract the χ Blade (bug #478's missing hint) | XCAVATE | ChiBladeSystem | built ✅ |
 | ? | Mystery | Hint only | — | — | hint |
 | 3 | Three | none — GIVE is its word | — | ThreeRoomSystem | — |
 
@@ -445,7 +445,7 @@ which today reads only `game.companion`. Logged as bug #479.
 | P4 ✅ 2026-10-29 | GIVE | the room's new trade |
 | P5 ✅ 2026-10-29 | Cursed Spell Sign pool | cursed runs teach wish words |
 | P5b ✅ 2026-10-29 | Curse Clock + the player turns on themselves (§7b) | dodges/attacks delayed or dropped; wandering into hazards |
-| P6+ | GAIN words, a few letters per session — XCAVATE first (closes #478's hint gap) | |
+| P6+ (XCAVATE ✅ 2026-10-29) | GAIN words, a few letters per session — XCAVATE first (closes #478's hint gap) | |
 | P7+ | INFLUENCE: PERSUADE (Master, Fisherman, Shopkeeper first), COMMAND on NPCs, the Witch's Cursed-Run offer | |
 
 ## 11. Open questions for the author

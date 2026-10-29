@@ -1503,6 +1503,17 @@ identity, not standard programming terms.
 - **In code:** the `wish` field's value: `'power'`, `'influence'` or `'gain'`.
 - **Not:** "category", "school", "type".
 
+### Completion Spell
+- **Definition:** A Gain Wish Spell tied to one room letter: cast in that room, it completes the
+  room's goal outright, skipping the chain the room normally asks for. BRIDGE builds the Ridge's
+  bridge; XCAVATE brings the χ-blade up out of the Crossroads. Outside its room it answers
+  `...NOTHING.` and asks no wish.
+- **In code:** a `wishSpell('gain', …)` entry in `SPELLS` whose `refusal` asks the owning
+  system whether the room can be completed and whose `effect` completes it there
+  (`ChiBladeSystem.canExcavate` / `excavate`; `RidgeSystem` for BRIDGE). The full per-letter
+  table is `claudedocs/three-voice-plan.md` §8.
+- **Not:** "cheat spell", "skip", "room spell".
+
 ### Beeline
 - **Definition:** An invulnerable rapid run, leaving a trail, from where the player stands to an
   open exit, cast by GO/HEAD <direction> and by ESCAPE/FLEE; ENTER (nearest door of any kind), EXIT (out of the current hut, Cavern or Maze),
