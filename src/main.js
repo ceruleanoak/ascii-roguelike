@@ -88,6 +88,7 @@ import { settlePickup } from './systems/pickupSettlement.js';
 import { PunchSystem } from './systems/PunchSystem.js';
 import { WishSystem } from './systems/WishSystem.js';
 import { ThreeVoiceSystem } from './systems/ThreeVoiceSystem.js';
+import { InfluenceSystem } from './systems/InfluenceSystem.js';
 import { RidgeSystem } from './systems/RidgeSystem.js';
 import { PolymorphSystem } from './systems/PolymorphSystem.js';
 import { TransmutationSystem } from './systems/TransmutationSystem.js';
@@ -268,6 +269,7 @@ class Game {
     this.punchSystem = new PunchSystem(this);     // unarmed SPACE
     this.wishSystem = new WishSystem();
     this.threeVoiceSystem = new ThreeVoiceSystem(this); // the Three answering for itself in its room
+    this.influenceSystem = new InfluenceSystem(this); // Influence Wish Spells on the nearest NPC
     this.ridgeSystem = new RidgeSystem(this);
     this.polymorphSystem = new PolymorphSystem();
     this.transmutationSystem = new TransmutationSystem(this);

@@ -31,6 +31,8 @@ export class JewelerSystem {
     this.rowIndex = 0;
     this.openedAt = 0;
     this.inputReadyAt = 0;
+    // PERSUADE: the next ware bought costs nothing. Ends with the wares.
+    this.freePurchase = false;
   }
 
   /** SPACE dispatch — returns true when the press was consumed. */
@@ -80,8 +82,22 @@ export class JewelerSystem {
     this.inputReadyAt = this.openedAt + 1000;
   }
 
-  /** True when the player holds every gem and coin `row` costs. */
+  // ── PERSUADE (InfluenceSystem) ──────────────────────────────────────────────
+
+  /** Parched, the Jeweler has nothing to sell. */
+  persuadeRefusal() {
+    return this.game.jewelerRefreshed ? null : 'I HAVE NOTHING.';
+  }
+
+  /** The wares open, and the one chosen is free. */
+  persuade(jeweler) {
+    this.open(jeweler);
+    if (this.jeweler) this.freePurchase = true;
+  }
+
+  /** True when the player holds every gem and coin `row` costs (or it's free). */
   canAfford(row) {
+    if (this.freePurchase) return true;
     const inv = this.game.inventorySystem;
     if (!inv.hasCoin(row.coins)) return false;
     const need = new Map();
@@ -118,6 +134,7 @@ export class JewelerSystem {
   onClose() {
     this.jeweler = null;
     this.rowIndex = 0;
+    this.freePurchase = false;
   }
 
   _buy(row) {
@@ -126,9 +143,13 @@ export class JewelerSystem {
       game.audioSystem?.playSFX?.('shop_error');
       return;
     }
-    const inv = game.inventorySystem;
-    for (const gem of row.gems) inv.removeIngredient(gem);
-    inv.removeCoin(row.coins);
+    if (this.freePurchase) {
+      this.freePurchase = false;
+    } else {
+      const inv = game.inventorySystem;
+      for (const gem of row.gems) inv.removeIngredient(gem);
+      inv.removeCoin(row.coins);
+    }
     deliverPurchase(game, row.char);
   }
 }

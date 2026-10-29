@@ -83,8 +83,7 @@ export class FishermanDemoSystem {
         const fisherman = this.coinAnim.fisherman;
         this.coinAnim = null;
         game.audioSystem?.playSFX?.('coin_plink');
-        game.dialogueSystem?.open(fisherman, ['WATCH CLOSE.']);
-        this.state = { phase: 'cast', timer: CAST_DELAY, fisherman, fish: null };
+        this._beginDemo(fisherman);
       }
       return;
     }
@@ -121,6 +120,23 @@ export class FishermanDemoSystem {
     }
     game.dialogueSystem?.open(this.state.fisherman, ['A BLADE OPENS THE CATCH.']);
     this.state = null;
+  }
+
+  _beginDemo(fisherman) {
+    this.game.dialogueSystem?.open(fisherman, ['WATCH CLOSE.']);
+    this.state = { phase: 'cast', timer: CAST_DELAY, fisherman, fish: null };
+  }
+
+  // ── PERSUADE (InfluenceSystem) ──────────────────────────────────────────────
+
+  /** He refuses only mid-demonstration; otherwise the lesson is his to give. */
+  persuadeRefusal() {
+    return this.state || this.coinAnim ? 'I HAVE NOTHING.' : null;
+  }
+
+  /** The lesson, without the coin and without hearing his tips first. */
+  persuade(fisherman) {
+    if (!this.persuadeRefusal()) this._beginDemo(fisherman);
   }
 
   /**

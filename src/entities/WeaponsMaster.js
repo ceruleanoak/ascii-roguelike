@@ -50,6 +50,7 @@ export function resolveWeaponCategory(weapon) {
 export class WeaponsMaster extends NeutralCharacter {
   constructor(x, y) {
     super('m', '#c08840', x, y);
+    this.persuadeOwner = 'weaponsMasterSystem';
   }
 
   // Weapon first, then the armor remark as his secondary topic, then the

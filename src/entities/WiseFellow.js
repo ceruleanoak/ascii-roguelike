@@ -11,6 +11,7 @@ import { NeutralCharacter } from './NeutralCharacter.js';
 export class WiseFellow extends NeutralCharacter {
   constructor(x, y) {
     super('w', '#e8c060', x, y);
+    this.persuadeRefusal = 'YOU FOOLISHLY\nSERVE.'; // he knows of the Three, and fears it
     this.hintText = null; // set by HutSystem via setHint() after construction
     this.rareHintText = null; // bought with an Artifact — see unlockRareHint()
   }

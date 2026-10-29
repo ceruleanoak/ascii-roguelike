@@ -132,6 +132,21 @@ export class CharonSystem {
     }
   }
 
+  // ── PERSUADE (InfluenceSystem) ──────────────────────────────────────────────
+
+  /** He can be talked out of a toll not yet taken; his farewell asks for none. */
+  persuadeRefusal() {
+    const charon = this.game.charon;
+    if (!charon || charon.phase !== 'waiting' || charon.npc.voice === 'farewell') return 'I HAVE NOTHING.';
+    return null;
+  }
+
+  /** He leaves without the toll, and the north exit reopens as he fades. */
+  persuade() {
+    const charon = this.game.charon;
+    if (charon?.phase === 'waiting') charon.phase = 'leaving';
+  }
+
   _afterLine(charon) {
     if (charon.npc.voice !== 'farewell') {
       this._beginToll(charon);

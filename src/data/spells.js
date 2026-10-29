@@ -346,6 +346,15 @@ export const SPELLS = {
     effect: (game) => game.chiBladeSystem.excavate(),
   }),
 
+  // Influence Spells: one word, acting differently on each NPC
+  // (InfluenceSystem; three-voice-plan.md §8, INFLUENCE).
+  // PERSUADE: the nearest NPC's transaction, without its cost.
+  'PERSUADE': wishSpell('influence', {
+    refusal: (game) => game.influenceSystem.persuadeRefusal(),
+    granted: 'AS YOU WISH.',
+    effect: (game) => game.influenceSystem.persuade(),
+  }),
+
   'REVIVE': {
     wish: 'power',
     response: _reviveResponse,

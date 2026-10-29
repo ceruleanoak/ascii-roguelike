@@ -22,6 +22,7 @@ const REFRESHED_COLOR = '#ff88ff';
 export class Jeweler extends NeutralCharacter {
   constructor(x, y, { behindCounter = false } = {}) {
     super('J', REFRESHED_COLOR, x, y);
+    this.persuadeOwner = 'jewelerSystem';
     this.range = behindCounter ? SHOP_INTERACTION_RANGE : NPC_INTERACTION_RANGE;
     this.refreshed = false; // mirrored from game.jewelerRefreshed each update
   }

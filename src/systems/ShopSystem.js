@@ -293,6 +293,29 @@ export class ShopSystem {
     return Math.max(row.coinFloor, row.baseCoins - reduction);
   }
 
+  // ── PERSUADE (InfluenceSystem) ──────────────────────────────────────────────
+
+  /** The Shopkeeper refuses only once every row is sold. */
+  persuadeRefusal(shopkeeper) {
+    shopkeeper.refreshStock(this.game.zoneDepths);
+    return shopkeeper.stock.some(row => !row.sold) ? null : 'I HAVE NOTHING.';
+  }
+
+  /**
+   * Everything unsold spills onto the shop floor around the player, free for
+   * the picking up; each of those rows is sold.
+   */
+  persuade(shopkeeper) {
+    const game = this.game;
+    const { x, y } = game.player.position;
+    for (const row of shopkeeper.stock) {
+      if (row.sold) continue;
+      row.sold = true;
+      game.lootSystem.spawnItemDrop(row.char, x, y, null, game.player);
+    }
+    game.audioSystem?.playSFX?.('coin_plink');
+  }
+
   isCostMet() {
     const treasureIdx = this.lanes.findIndex(l => l.type === 'treasure');
     const coinsIdx = this.lanes.findIndex(l => l.type === 'coins');

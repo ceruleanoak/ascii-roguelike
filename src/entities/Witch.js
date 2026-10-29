@@ -16,6 +16,7 @@ const CONTACT_RANGE = GRID.CELL_SIZE * 0.9;
 export class Witch extends NeutralCharacter {
   constructor(x, y) {
     super('W', '#9955cc', x, y);
+    this.persuadeRefusal = 'NOT FOR YOU.\nNOT FOR IT.'; // placeholder; she fears the Three too
     this.triggered = false;
     this.released = false;
     this.entryTimer = null; // starts on the first update frame after hut entry

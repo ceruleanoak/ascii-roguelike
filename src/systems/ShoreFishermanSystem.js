@@ -79,12 +79,29 @@ export class ShoreFishermanSystem {
     anim.spinPhase += dt * 12;
     if (anim.t < COIN_ARC_DURATION) return;
     this.coinAnim = null;
+    this.game.audioSystem?.playSFX?.('coin_plink');
+    this._setRodDown(anim.fisherman);
+  }
+
+  // The rod lands one cell toward the player, on his side of the bank.
+  _setRodDown(f) {
     const game = this.game;
-    game.audioSystem?.playSFX?.('coin_plink');
-    // The rod lands one cell toward the player, on his side of the bank.
-    const f = anim.fisherman;
     const side = Math.sign(game.player.position.x - f.position.x) || 1;
     game.lootSystem.spawnItemDrop(FISHING_POLE, f.position.x + side * GRID.CELL_SIZE, f.position.y, null, f);
+  }
+
+  // ── PERSUADE (InfluenceSystem) ──────────────────────────────────────────────
+
+  /** He has one rod to give; once it's gone (or on its way) he has nothing. */
+  persuadeRefusal(fisherman) {
+    return fisherman.rodSold ? 'I HAVE NOTHING.' : null;
+  }
+
+  /** The rod, without the coin and without hearing his tips first. */
+  persuade(fisherman) {
+    if (fisherman.rodSold) return;
+    fisherman.rodSold = true;
+    this._setRodDown(fisherman);
   }
 
   _updateCutting(dt, fisherman) {

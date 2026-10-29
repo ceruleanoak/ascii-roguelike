@@ -40,6 +40,9 @@ export class Fisherman extends NeutralCharacter {
     this.zoneName = FISHING_TABLES[zoneName] ? zoneName : 'green';
     this.coinDemoEnabled = coinDemo;
     this.sellsRod = sellsRod;
+    // The hut fisherman's lesson and the shore fisherman's rod are separate
+    // systems; PERSUADE goes to whichever this one offers.
+    this.persuadeOwner = coinDemo ? 'fishermanDemoSystem' : sellsRod ? 'shoreFishermanSystem' : null;
     const table = FISHING_TABLES[zoneName] || FISHING_TABLES.green;
 
     // Common catches only (weight >= 10) — rare catches stay a secret.

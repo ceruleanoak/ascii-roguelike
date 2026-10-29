@@ -17,6 +17,7 @@ const LINES = {
 export class Charon extends NeutralCharacter {
   constructor(x, y, voice = 'ferry') {
     super('C', '#9fb4c8', x, y);
+    this.persuadeOwner = 'charonSystem';
     // 'ferry' | 'cursed' | 'farewell' — which line he speaks (CharonSystem).
     this.voice = voice;
     // 1 while he stands at the exit; ticks to 0 as he leaves (CharonSystem).

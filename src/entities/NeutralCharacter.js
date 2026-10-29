@@ -25,6 +25,12 @@ export class NeutralCharacter {
     // True once DialogueSystem has opened this NPC's dialogue (gates flows
     // that should only unlock after the player has heard the NPC out).
     this.spokenOnce = false;
+
+    // PERSUADE (InfluenceSystem): `persuadeOwner` names the game system that
+    // gives this NPC's transaction away without its cost. An NPC without one
+    // refuses with `persuadeRefusal`, and no wish is spent.
+    this.persuadeOwner = null;
+    this.persuadeRefusal = 'I HAVE NOTHING.';
   }
 
   update(deltaTime) {

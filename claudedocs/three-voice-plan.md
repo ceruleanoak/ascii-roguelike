@@ -357,6 +357,8 @@ itself just finds the nearest speaker.
 
 #### PERSUADE
 
+*Built 2026-10-29 (P7a): `InfluenceSystem`; per-NPC `persuadeOwner` / `persuadeRefusal`. The Jeweler's free transaction is one free ware; Charon's is leaving without the toll.*
+
 Acts on the nearest speaker. The NPC answers **before** any wish is asked for: a
 refusing NPC gives its refusal line and **no wish is spent** (user, 2026-10-29). An
 NPC who accepts brings the usual `USE NTH WISH?`; on YES the THREE says
@@ -446,7 +448,7 @@ which today reads only `game.companion`. Logged as bug #479.
 | P5 ✅ 2026-10-29 | Cursed Spell Sign pool | cursed runs teach wish words |
 | P5b ✅ 2026-10-29 | Curse Clock + the player turns on themselves (§7b) | dodges/attacks delayed or dropped; wandering into hazards |
 | P6+ (XCAVATE ✅ 2026-10-29) | GAIN words, a few letters per session — XCAVATE first (closes #478's hint gap) | |
-| P7+ | INFLUENCE: PERSUADE (Master, Fisherman, Shopkeeper first), COMMAND on NPCs, the Witch's Cursed-Run offer | |
+| P7+ (PERSUADE ✅ 2026-10-29) | INFLUENCE: PERSUADE (Master, Fisherman, Shopkeeper first), COMMAND on NPCs, the Witch's Cursed-Run offer | |
 
 ## 11. Open questions for the author
 

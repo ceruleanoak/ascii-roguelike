@@ -50,11 +50,8 @@ export class WeaponsMasterSystem {
     // Advice must be heard before training unlocks (Fisherman pattern).
     if (!master.spokenOnce) return false;
 
-    const category = resolveWeaponCategory(player.heldItem);
+    const category = this._untrainedCategory();
     if (!category) return false;
-
-    const trained = game.inventorySystem?.characterInventories?.[game.activeCharacterType]?.trainedWeapons;
-    if (trained?.[category]) return false;
 
     if (!game.inventorySystem?.hasCoin()) return false;
 
@@ -89,7 +86,35 @@ export class WeaponsMasterSystem {
 
     const { category } = this.coinAnim;
     this.coinAnim = null;
+    this._train(master, category);
+  }
 
+  /** The held weapon's category when the active character isn't yet trained in it. */
+  _untrainedCategory() {
+    const game = this.game;
+    const category = resolveWeaponCategory(game.player?.heldItem);
+    if (!category) return null;
+    const trained = game.inventorySystem?.characterInventories?.[game.activeCharacterType]?.trainedWeapons;
+    return trained?.[category] ? null : category;
+  }
+
+  // ── PERSUADE (InfluenceSystem) ──────────────────────────────────────────────
+
+  /** He refuses only when there is nothing to train: no weapon held, or one already trained. */
+  persuadeRefusal() {
+    if (this.coinAnim || !this._untrainedCategory()) return 'I HAVE NOTHING.';
+    return null;
+  }
+
+  /** The training, without the coin and without hearing his advice first. */
+  persuade(master) {
+    const category = this._untrainedCategory();
+    if (category) this._train(master, category);
+  }
+
+  /** Permanently train `category` for the active character. */
+  _train(master, category) {
+    const game = this.game;
     const charType = game.activeCharacterType;
     const entry = game.inventorySystem.characterInventories[charType];
     if (entry) {

@@ -45,6 +45,7 @@ const STALE_VISIT_LIMIT = 3;
 export class Shopkeeper extends NeutralCharacter {
   constructor(x, y, zoneDepths = {}, zone = null) {
     super('S', '#e0c060', x, y);
+    this.persuadeOwner = 'shopSystem';
     this.zone = zone;
     this.stockSignature = progressSignature(zoneDepths);
     this.stock = rollShopStock(zoneDepths, zone);

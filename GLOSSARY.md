@@ -1514,6 +1514,20 @@ identity, not standard programming terms.
   table is `claudedocs/three-voice-plan.md` §8.
 - **Not:** "cheat spell", "skip", "room spell".
 
+### Persuade
+- **Definition:** The first Influence Wish Spell. It acts on the nearest NPC in talking range,
+  and that NPC answers before any wish is asked for. An NPC with something to sell or teach
+  accepts: on YES the THREE says `AS YOU WISH.` and the transaction happens without its cost —
+  the Weapons Master trains, the hut Fisherman gives his lesson, the shore Fisherman sets his
+  rod down, the Shopkeeper spills every unsold ware onto the floor, the Jeweler's next ware is
+  free, Charon leaves without his toll. Every other NPC refuses with a line of its own (default
+  `I HAVE NOTHING.`; the Wise Fellow and the Witch fear the Three), and no wish is spent. No
+  NPC near: `NO ONE.`.
+- **In code:** `SPELLS.PERSUADE` → `InfluenceSystem.persuadeRefusal()` / `persuade()`. Per NPC,
+  data on `NeutralCharacter`: `persuadeOwner` (the game system implementing
+  `persuadeRefusal(npc)` / `persuade(npc)`) or `persuadeRefusal` (the line).
+- **Not:** "bribe", "haggle"; not a discount — the whole cost goes.
+
 ### Beeline
 - **Definition:** An invulnerable rapid run, leaving a trail, from where the player stands to an
   open exit, cast by GO/HEAD <direction> and by ESCAPE/FLEE; ENTER (nearest door of any kind), EXIT (out of the current hut, Cavern or Maze),

@@ -19,6 +19,7 @@ const DIALOGUE_POOL = [
 export class BridgeWorker extends NeutralCharacter {
   constructor(x, y) {
     super('W', '#cc9933', x, y);
+    this.persuadeRefusal = 'NO WOOD.\nNO BRIDGE.'; // placeholder (three-voice-plan.md §8)
     this.hopCycleTimer = Math.random() * HOP_PERIOD;
     this.hopOffset = 0;
     this.playerIsClose = false;
