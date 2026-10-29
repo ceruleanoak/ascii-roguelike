@@ -878,8 +878,13 @@ export class BackgroundObject {
     this.typeId = null;
     this._variantData = null;
     this.data = BACKGROUND_OBJECTS['0'];
-    this.color = '#888888';
-    this.animationColor = '#888888';
+    // Cooled lava is obsidian: unbreakable, and it has to read that way —
+    // gray like ordinary Rock, it took pickaxe swings that silently did
+    // nothing (bug-inbox 2026-10-28). The obsidian flag also gives it the
+    // smash refusal and the Onyx Hammer roll.
+    this.obsidian = true;
+    this.color = '#333333';
+    this.animationColor = '#333333';
     this.animationChar = '0';
     this.bulletInteraction = this.data.bulletInteraction || 'interact-preserve';
     this.indestructible = true;

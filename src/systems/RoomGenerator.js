@@ -1752,9 +1752,10 @@ export class RoomGenerator {
     return newEnemies;
   }
 
-  hasObjectAt(room, x, y) {
-    // Check if there's already a background object at this pixel position
-    const threshold = GRID.CELL_SIZE / 2; // Allow objects within half a cell
+  // Is there already a background object at this pixel position? The default
+  // half-cell threshold matches grid-aligned placements; pass a full cell for
+  // off-grid ones (mineral formations), where anything closer overlaps.
+  hasObjectAt(room, x, y, threshold = GRID.CELL_SIZE / 2) {
     return room.backgroundObjects.some(obj =>
       Math.abs(obj.position.x - x) < threshold &&
       Math.abs(obj.position.y - y) < threshold
@@ -2691,7 +2692,10 @@ export class RoomGenerator {
             const x = centerX + dx;
             const y = centerY + dy;
 
-            if (this.isValidPosition(x, y, room)) {
+            // Two discs can overlap; one lava tile per cell (a doubled tile
+            // later cools into two stacked rocks).
+            if (this.isValidPosition(x, y, room) &&
+                !this.hasObjectAt(room, x * GRID.CELL_SIZE, y * GRID.CELL_SIZE)) {
               const obj = new BackgroundObject(
                 features.liquidChar,
                 x * GRID.CELL_SIZE,
@@ -2740,8 +2744,11 @@ export class RoomGenerator {
           y: centerPos.y + Math.sin(angle) * spacing
         };
 
+        // Formations are off-grid and can overlap each other or anything
+        // placed earlier — skip a rock that would land on another object.
         if (pos.x >= GRID.CELL_SIZE && pos.x < GRID.WIDTH - GRID.CELL_SIZE &&
-            pos.y >= GRID.CELL_SIZE && pos.y < GRID.HEIGHT - GRID.CELL_SIZE) {
+            pos.y >= GRID.CELL_SIZE && pos.y < GRID.HEIGHT - GRID.CELL_SIZE &&
+            !this.hasObjectAt(room, pos.x, pos.y, GRID.CELL_SIZE)) {
           // 30% of rocks generate as unbreakable obsidian variants.
           const isObsidian = rockVariant.char === '0' && Math.random() < 0.3;
           const bgObject = new BackgroundObject(rockVariant.char, pos.x, pos.y, { obsidian: isObsidian });
@@ -2767,7 +2774,7 @@ export class RoomGenerator {
       if (char === '~' && islandLavaFeatures(room, this.currentLetterTemplate)) continue;
       if (char === '~' && (room.exitLetter === 'B' || room.type === ROOM_TYPES.CAMP) && features?.liquidType !== 'lava') continue; // dry B arena / Camp (see placeRoomLiquid)
       const pos =this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos);
-      if (!pos) continue;
+      if (!pos || this.hasObjectAt(room, pos.x, pos.y, GRID.CELL_SIZE)) continue;
 
       const bgObject = new BackgroundObject(char, pos.x, pos.y);
 
