@@ -1,4 +1,4 @@
-import { GRID, BACKGROUND_OBJECT_VARIANTS, WALL_STRUCTURES } from '../game/GameConfig.js';
+import { GRID, ROOM_TYPES, BACKGROUND_OBJECT_VARIANTS, WALL_STRUCTURES } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { Fisherman } from '../entities/Fisherman.js';
 import { Enemy } from '../entities/Enemy.js';
@@ -15,6 +15,7 @@ import { Jeweler } from '../entities/Jeweler.js';
 import { HOT_WATER_CHAR } from '../data/alchemy.js';
 import { PLANE_TUNNEL } from './PlaneSystem.js';
 import { hazardStep } from './ZoneSystem.js';
+import { islandLavaFeatures } from './MetalPlatformSystem.js';
 import { createLightningSpire } from './LightningSpire.js';
 import { pickUnspawnedItem, markItemSpawned } from './spawnedItems.js';
 import { findSafeSpawnPosition } from './safeSpawn.js';
@@ -80,6 +81,58 @@ export function carveForcedRiver(gen, room, forced) {
  * active, a forced river pinned to the entry wall. The path carving itself is
  * RoomGenerator._buildPath (see the "Yellow zone: rivers" block there).
  */
+// Room liquid: the water (or a lava zone's lava) generateBackgroundObjects
+// lays down — the Stormlands' water template, the structured/organic liquid
+// everywhere else, and the rooms that stay dry (Camps, water-zone B rooms).
+export function placeRoomLiquid(gen, room, effectiveZone) {
+  const zoneHasSpecialLiquid = ZONES[effectiveZone]?.environmentalFeatures?.liquidType;
+
+  if (room.type === ROOM_TYPES.CAMP && !zoneHasSpecialLiquid) {
+    // Camps stay dry, the Stormlands included: a campfire clearing is the
+    // one room a pond or stream never splits. Lava zones keep their lava
+    // below, as B rooms do — it's the zone's hazard, not scenery.
+  } else if (effectiveZone === 'yellow') {
+    // Stormlands: every room gets one water template (stream / river / dry bed /
+    // river+river / river+2 streams / pond). Contiguous 4-adjacent water cells
+    // so a single zap conducts down the whole flow.
+    //
+    // River-follow chase active (ZoneSystem.riverChaseActive) → force a river
+    // pinned to the entry wall, flowing forward-only (never south/back out).
+    //
+    // Exempt: B rooms. The Giant Slime arena brings its own water (the Imbue
+    // Pools), and a river through the clearing would bury them.
+    if (room.exitLetter !== 'B') {
+      const forced = gen.zoneSystem?.riverChaseActive
+        ? buildForcedRiverParams(gen.zoneSystem.riverLastExitDirection)
+        : null;
+      generateYellowWaterTemplate(gen, room, forced);
+    }
+  } else if (room.exitLetter === 'B' && !zoneHasSpecialLiquid) {
+    // B rooms in a water zone stay dry: random ponds and streams split a
+    // miniboss arena (Giant Slime, Goblin Army) into swim lanes. Lava zones
+    // keep their lava below — it's the zone's hazard, not scenery.
+  } else if (!islandLavaFeatures(room, gen.currentLetterTemplate)) { // a lava Island's lake is its only lava
+    // Structured liquid (depth 3+, or always in zones with special liquids like lava)
+    if (gen.currentDepth >= 3 || zoneHasSpecialLiquid) {
+      gen.placeLiquidStructures(room, effectiveZone);
+    }
+
+    // Organic fallback liquid (shallow depths, or occasional supplement deeper)
+    // Always generate in special liquid zones (RED = lava), otherwise use random chance
+    const shouldGenerateLiquid = zoneHasSpecialLiquid ||
+                                  (gen.currentDepth < 3 && Math.random() < 0.3) ||
+                                  (gen.currentDepth >= 3 && Math.random() < 0.2);
+
+    if (shouldGenerateLiquid && !zoneHasSpecialLiquid) {
+      // Only generate fallback if we didn't already generate structured special liquid
+      gen.generateLiquidFormation(room, effectiveZone);
+    } else if (zoneHasSpecialLiquid && Math.random() < 0.5 + 0.15 * hazardStep(gen.currentDepth)) {
+      // 50% chance of additional organic lava formations, +15% per hazard step
+      gen.generateLiquidFormation(room, effectiveZone);
+    }
+  }
+}
+
 export function generateYellowWaterTemplate(gen, room, forced = null) {
   if (forced) {
     carveForcedRiver(gen, room, forced);

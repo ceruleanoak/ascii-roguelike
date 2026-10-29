@@ -12,7 +12,7 @@ import { CampNPC } from '../entities/CampNPC.js';
 import { Crow } from '../entities/Crow.js';
 import { Fairy } from '../entities/Fairy.js';
 import { spawnCellBlockedByBackground, findSafeSpawnPosition } from './safeSpawn.js';
-import { maybeSpawnPeacefulFishingRoom, maybeSpawnRoamingAlchemist, buildVaultInteriorLoot, buildVaultCoinAbundance, buildVaultUnlockExtras, getIslandPosition, protectRegion, isCellProtected, cleanupStrayBackgroundObjects, resolveLavaHazards, seedCavern, rotatePattern, darkenColor, spawnBatFlock, spawnBelfryBats, stampHutFootprint, placeWhirlpool, generateSettlementRoom as generateSettlementRoomImpl, generateJewelerRoom, buildForcedRiverParams, generateYellowWaterTemplate, cellularCaveGrid, isCaveEntranceLanding, generateCalderaRoom, seedAscentZone, seedSinkholes, injectSinkholeLake, spawnMinibossOrFallback, generateGrassSwaths, generateSnowFields, generateRedZoneDeflectors, spawnGuaranteedItems, offerL1Weapon, offerWeaponIfUnarmed, seedTunnelZone, generateOceanTerrain as generateOceanTerrainImpl, stampWaterBlobs as stampWaterBlobsImpl } from './roomFeatures.js';
+import { maybeSpawnPeacefulFishingRoom, maybeSpawnRoamingAlchemist, buildVaultInteriorLoot, buildVaultCoinAbundance, buildVaultUnlockExtras, getIslandPosition, protectRegion, isCellProtected, cleanupStrayBackgroundObjects, resolveLavaHazards, seedCavern, rotatePattern, darkenColor, spawnBatFlock, spawnBelfryBats, stampHutFootprint, placeWhirlpool, generateSettlementRoom as generateSettlementRoomImpl, generateJewelerRoom, cellularCaveGrid, isCaveEntranceLanding, generateCalderaRoom, seedAscentZone, seedSinkholes, injectSinkholeLake, spawnMinibossOrFallback, generateGrassSwaths, generateSnowFields, generateRedZoneDeflectors, spawnGuaranteedItems, offerL1Weapon, offerWeaponIfUnarmed, seedTunnelZone, generateOceanTerrain as generateOceanTerrainImpl, stampWaterBlobs as stampWaterBlobsImpl, placeRoomLiquid } from './roomFeatures.js';
 import { pickUnspawnedItem, markItemSpawned } from './spawnedItems.js';
 import { placeVaultPushRock } from './PushRockSystem.js';
 import { generateRecipeSign, generateSpellSign } from './roomSigns.js';
@@ -1995,48 +1995,7 @@ export class RoomGenerator {
 
     // Determine effective zone for feature generation (considering progression)
     const effectiveZone = this.getEffectiveZoneForFeatures(room.zone);
-    const zoneHasSpecialLiquid = ZONES[effectiveZone]?.environmentalFeatures?.liquidType;
-
-    if (effectiveZone === 'yellow') {
-      // Stormlands: every room gets one water template (stream / river / dry bed /
-      // river+river / river+2 streams / pond). Contiguous 4-adjacent water cells
-      // so a single zap conducts down the whole flow.
-      //
-      // River-follow chase active (ZoneSystem.riverChaseActive) → force a river
-      // pinned to the entry wall, flowing forward-only (never south/back out).
-      //
-      // Exempt: B rooms. The Giant Slime arena brings its own water (the Imbue
-      // Pools), and a river through the clearing would bury them.
-      if (room.exitLetter !== 'B') {
-        const forced = this.zoneSystem?.riverChaseActive
-          ? buildForcedRiverParams(this.zoneSystem.riverLastExitDirection)
-          : null;
-        generateYellowWaterTemplate(this, room, forced);
-      }
-    } else if (room.exitLetter === 'B' && !zoneHasSpecialLiquid) {
-      // B rooms in a water zone stay dry: random ponds and streams split a
-      // miniboss arena (Giant Slime, Goblin Army) into swim lanes. Lava zones
-      // keep their lava below — it's the zone's hazard, not scenery.
-    } else if (!islandLavaFeatures(room, this.currentLetterTemplate)) { // a lava Island's lake is its only lava
-      // Structured liquid (depth 3+, or always in zones with special liquids like lava)
-      if (this.currentDepth >= 3 || zoneHasSpecialLiquid) {
-        this.placeLiquidStructures(room, effectiveZone);
-      }
-
-      // Organic fallback liquid (shallow depths, or occasional supplement deeper)
-      // Always generate in special liquid zones (RED = lava), otherwise use random chance
-      const shouldGenerateLiquid = zoneHasSpecialLiquid ||
-                                    (this.currentDepth < 3 && Math.random() < 0.3) ||
-                                    (this.currentDepth >= 3 && Math.random() < 0.2);
-
-      if (shouldGenerateLiquid && !zoneHasSpecialLiquid) {
-        // Only generate fallback if we didn't already generate structured special liquid
-        this.generateLiquidFormation(room, effectiveZone);
-      } else if (zoneHasSpecialLiquid && Math.random() < 0.5 + 0.15 * hazardStep(this.currentDepth)) {
-        // 50% chance of additional organic lava formations, +15% per hazard step
-        this.generateLiquidFormation(room, effectiveZone);
-      }
-    }
+    placeRoomLiquid(this, room, effectiveZone);
 
     // Zone-specific features (mud beds in RED zone)
     const zone = ZONES[effectiveZone];
@@ -2806,7 +2765,7 @@ export class RoomGenerator {
     for (let i = 0; i < objectCount; i++) {
       const char = this.weightedRandomChoice(weights);
       if (char === '~' && islandLavaFeatures(room, this.currentLetterTemplate)) continue;
-      if (char === '~' && room.exitLetter === 'B' && features?.liquidType !== 'lava') continue; // dry B arena (see generateBackgroundObjects)
+      if (char === '~' && (room.exitLetter === 'B' || room.type === ROOM_TYPES.CAMP) && features?.liquidType !== 'lava') continue; // dry B arena / Camp (see placeRoomLiquid)
       const pos =this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos);
       if (!pos) continue;
 
