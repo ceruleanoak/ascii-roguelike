@@ -364,11 +364,15 @@ export class ExitSystem {
     // ZoneSystem.applyPreMinibossGate at depth 8), clobbering Ridge's own
     // designed north exit (which must always force a transition to gray) —
     // reads as "unable to cross ridge" with no other way forward (#284).
-    if (letter === 'R' && currentDepth != null) {
-      const nextDepth = currentDepth + 1;
-      const bossDepth = ZONES[zoneType]?.bossDepth;
-      if (bossDepth != null && nextDepth === bossDepth - 1) return true;
-      if (zoneType !== 'gray' && nextDepth === 8) return true;
+    if (letter === 'R' && currentDepth != null && this._gateHijacksDepth(currentDepth + 1, zoneType)) return true;
+
+    // 'P' (the Compass Rose) solves with 'R' on its own north
+    // (PuzzleSystem._bindCompassTokens), so it cannot land where that room's
+    // north would refuse the Ridge: one room further on from either rule
+    // above (#474).
+    if (letter === 'P') {
+      if (slot === 0 && this.game?.threeRoomSystem?.northAfterNextReachesTheThree()) return true;
+      if (currentDepth != null && this._gateHijacksDepth(currentDepth + 2, zoneType)) return true;
     }
 
     // After the Goo Dragon, every exit must wear a still-undefeated zone
@@ -379,6 +383,17 @@ export class ExitSystem {
     if (remaining && !remaining.some(z => EXIT_LETTERS[letter]?.zoneBoosts?.[z] !== 0)) return true;
 
     return false;
+  }
+
+  /**
+   * Does the pre-boss or pre-miniboss gate overwrite the north exit of the
+   * room at this depth with its forced 'B' door? A Ridge standing there would
+   * lose the north it promises (#284).
+   */
+  _gateHijacksDepth(depth, zoneType) {
+    const bossDepth = ZONES[zoneType]?.bossDepth;
+    if (bossDepth != null && depth === bossDepth - 1) return true;
+    return zoneType !== 'gray' && depth === 8;
   }
 
   /**

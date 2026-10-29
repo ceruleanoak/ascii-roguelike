@@ -190,6 +190,16 @@ export class ThreeRoomSystem {
     return this._northStreak === NORTH_STREAK_TRIGGER - 2;
   }
 
+  /**
+   * The same question one room further on: would the room reached by going
+   * north from here make the north after it the streak's second? ExitSystem
+   * asks before offering a north 'P' — the Compass Rose's solve is a Ridge on
+   * its own north, which that room could not offer.
+   */
+  northAfterNextReachesTheThree() {
+    return this._northStreak === NORTH_STREAK_TRIGGER - 3;
+  }
+
   /** Full run-scoped reset — death/title. */
   hardReset() {
     this.breakStreak();
