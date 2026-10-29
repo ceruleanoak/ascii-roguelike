@@ -1,4 +1,5 @@
 import { GAME_STATES } from '../game/GameConfig.js';
+import { SPELLS } from '../data/spells.js';
 
 /**
  * ThreeVoiceSystem — the Three answering for itself inside the Three Room
@@ -9,7 +10,12 @@ import { GAME_STATES } from '../game/GameConfig.js';
  * fires: no wish question, no wish spent, no effect. The Three names what the
  * wish is for instead, by its Wish Kind. Every other Spell acts normally.
  *
- * Stateless: one word, one answer, every time.
+ * GIVE is the one wish word the room answers by acting (§5): the Three asks
+ * which Wish Kind, the answer spends a wish, the kind's slot cracks with
+ * nothing in it, and the Three tells the name of a Wish Spell of that kind.
+ *
+ * Stateless: one word, one answer, every time. What GIVE has already taken
+ * is read off the room's slots.
  *
  * SpellSystem.detect asks answer() before running a matched Spell; a string
  * back is the whole response.
@@ -29,6 +35,35 @@ const THREE_WISH_COMMENTS = {
   gain:      'FOR GLORY.',
   influence: 'FOR CONTROL.',
 };
+
+/**
+ * Each Wish Kind's Three Room slot, in the order GIVE's question names them:
+ * POWER the apex (Instinct), INFLUENCE the right (Convention), GAIN the left
+ * (Experience). Indices are ThreeRoomSystem's slot order: apex, left, right.
+ */
+const GIVE_KINDS = [
+  { kind: 'power',     word: 'POWER',     slot: 0 },
+  { kind: 'influence', word: 'INFLUENCE', slot: 2 },
+  { kind: 'gain',      word: 'GAIN',      slot: 1 },
+];
+
+// GIVE's white flash, as the slot cracks.
+const GIVE_FLASH = { duration: 600, color: '#ffffff' };
+
+/**
+ * Every Wish Spell of a kind, one name per spell: an alias that shares its
+ * entry with another word (CLEANSE is PURGE) is told by its first name only.
+ */
+function wishSpellNames(kind) {
+  const seen = new Set();
+  const names = [];
+  for (const [word, spell] of Object.entries(SPELLS)) {
+    if (spell.wish !== kind || seen.has(spell)) continue;
+    seen.add(spell);
+    names.push(word);
+  }
+  return names;
+}
 
 export class ThreeVoiceSystem {
   constructor(game) {
@@ -58,5 +93,52 @@ export class ThreeVoiceSystem {
     if (THREE_TALK_LINES[word]) return THREE_TALK_LINES[word];
     if (spell.wish) return THREE_WISH_COMMENTS[spell.wish];
     return null;
+  }
+
+  // ── GIVE ────────────────────────────────────────────────────────────────────
+
+  /** The kinds whose slot is still empty, in question order. */
+  _openKinds() {
+    const game = this.game;
+    return GIVE_KINDS.filter(k => game.threeRoomSystem.isSlotOpen(game.currentRoom, k.slot));
+  }
+
+  /** GIVE may ask its question: in the Three Room, a wish left, a slot open. */
+  canGive() {
+    return this.isListening() &&
+      this.game.wishSystem.hasWish(this.game) &&
+      this._openKinds().length > 0;
+  }
+
+  /**
+   * GIVE's question, built from the open kinds: POWER, INFLUENCE, OR GAIN? /
+   * POWER OR GAIN? / GAIN?. NO. when there is nothing left to give for.
+   */
+  giveQuestion() {
+    if (!this.isListening()) return '...NOTHING.';
+    if (!this.canGive()) return 'NO.';
+    const words = this._openKinds().map(k => k.word);
+    if (words.length === 1) return `${words[0]}?`;
+    if (words.length === 2) return `${words[0]} OR ${words[1]}?`;
+    return `${words.slice(0, -1).join(', ')}, OR ${words[words.length - 1]}?`;
+  }
+
+  /**
+   * The answer to GIVE's question. A kind that wasn't offered gets NO.;
+   * an open one spends the wish (the question was its confirmation), flashes
+   * white, cracks the kind's slot and tells a Wish Spell of that kind.
+   * @param {'power'|'influence'|'gain'} kind
+   * @returns {string}
+   */
+  give(kind) {
+    const game = this.game;
+    const entry = this._openKinds().find(k => k.kind === kind);
+    if (!entry) return 'NO.';
+    const names = wishSpellNames(kind);
+    if (!names.length || !game.wishSystem.spend(game)) return 'NO.';
+
+    game.screenFlash = { startTime: performance.now(), ...GIVE_FLASH };
+    game.threeRoomSystem.crackSlot(game, entry.slot);
+    return `${names[Math.floor(Math.random() * names.length)]}.`;
   }
 }

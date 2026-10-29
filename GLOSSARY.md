@@ -1992,12 +1992,26 @@ identity, not standard programming terms.
 - **Not:** "the right answer", "solution", "correct combination".
 
 ### Cracked Slot
-- **Definition:** A Three Room slot whose offering was the wrong form for it. The slot goes
-  gray and cracked and keeps the wrong glyph — the mistake stays visible. Cracking is what
-  curses the run, and a cracked slot still counts as filled for opening the north door.
-- **In code:** `threeCracked` flag on the slot Background Object; `FRAME_CRACKED_COLOR`,
+- **Definition:** A Three Room slot that broke: either its offering was the wrong form for it
+  (the slot goes gray and keeps the wrong glyph — the mistake stays visible), or GIVE cracked
+  it empty. Cracking is what curses the run, and a cracked slot still counts as filled for
+  opening the north door.
+- **In code:** `threeCracked` flag on the slot Background Object, set by
+  `ThreeRoomSystem._crack` (from `placeOffering` or `crackSlot`); `FRAME_CRACKED_COLOR`,
   `CRACK_COLOR` and `_drawCracks` in `ThreeRoomRenderer`.
-- **Not:** "broken slot", "failed slot", "invalid placement".
+- **Not:** "failed slot", "invalid placement".
+
+### Give
+- **Definition:** The Three Room's trade. Typing GIVE there, the Three asks which Wish Kind,
+  naming only the kinds whose slot is still empty (`POWER, INFLUENCE, OR GAIN?`, then fewer).
+  Answering an open kind spends a Wish, flashes the screen white, cracks that kind's slot
+  (Power the apex, Gain the left, Influence the right) and the Three tells the name of a random
+  Wish Spell of that kind. A kind not offered, or no wish left, gets `NO.`. The crack curses
+  the run like any other.
+- **In code:** `GIVE` in `src/data/spells.js`; `ThreeVoiceSystem.giveQuestion` / `give`
+  (`GIVE_KINDS`); the crack is `ThreeRoomSystem.crackSlot`.
+- **Not:** an Offering (nothing is placed); not a Wish Spell itself (it carries no `wish`
+  field, so the Three Room's wish comments never swallow it).
 
 ### Cursed Run
 - **Definition:** The state a run enters the moment a slot cracks. The Three Room can no

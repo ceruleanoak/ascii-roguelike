@@ -593,6 +593,22 @@ export const SPELLS = {
     response: (game) =>
       game.currentRoom?.isThreeRoom ? 'THREE IS TOLD.' : '...NOTHING.',
   },
+  // GIVE — the Three Room's trade (ThreeVoiceSystem). The Three asks which
+  // Wish Kind; the answer spends a wish, cracks that kind's slot and is told
+  // a Wish Spell's name. GIVE itself carries no `wish` field: it is the one
+  // wish word the room answers by acting.
+  'GIVE': {
+    response: (game) => game.threeVoiceSystem.giveQuestion(),
+    followUpsActive: (game) => game.threeVoiceSystem.canGive(),
+    followUps: {
+      'POWER':     (game) => game.threeVoiceSystem.give('power'),
+      'INFLUENCE': (game) => game.threeVoiceSystem.give('influence'),
+      'GAIN':      (game) => game.threeVoiceSystem.give('gain'),
+      'NO':        '...',
+      'NAY':       '...',
+    },
+  },
+
   'WHOISONE': {
     response: (game) =>
       game.currentRoom?.isThreeRoom ? 'IT HITS BACK.' : '...NOTHING.',

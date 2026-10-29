@@ -230,7 +230,6 @@ export class ThreeRoomSystem {
     } else {
       // Refused. The offering stays where it was put, drained of its color
       // inside a cracked frame — the run has to keep looking at it.
-      slot.threeCracked = true;
       slot.char = char;
       slot.animationChar = char;
       slot.color = SLOT_CRACKED_COLOR;
@@ -239,11 +238,41 @@ export class ThreeRoomSystem {
       // The crack is the curse. It lands on the wrong placement, not on the
       // finished set — the remaining two slots can still be filled and the
       // door still opens, but the run is already owed.
-      this._beginCurse(game, room);
+      this._crack(game, room, slot);
     }
 
     this._advanceMusic(game, room);
     game.renderer.markBackgroundDirty();
+  }
+
+  /** True while slot `idx` holds nothing: no offering, no crack. */
+  isSlotOpen(room, idx) {
+    const slot = this._slots(room)[idx];
+    return !!slot && !slot.threeFilled;
+  }
+
+  /**
+   * GIVE (ThreeVoiceSystem): an empty slot cracks with nothing in it. It
+   * counts as filled for the door, curses the run and thickens the music,
+   * the same as a refused offering.
+   * @returns {boolean} false when the slot was not open
+   */
+  crackSlot(game, idx) {
+    const room = game.currentRoom;
+    if (!this.isSlotOpen(room, idx)) return false;
+    const slot = this._slots(room)[idx];
+    slot.threeFilled = true;
+    slot.threeOffering = null;
+    this._crack(game, room, slot);
+    this._advanceMusic(game, room);
+    game.renderer.markBackgroundDirty();
+    return true;
+  }
+
+  /** A slot cracks: the frame goes gray (ThreeRoomRenderer) and the run is Cursed. */
+  _crack(game, room, slot) {
+    slot.threeCracked = true;
+    this._beginCurse(game, room);
   }
 
   /**
