@@ -182,8 +182,8 @@ author's line, so it stands.
    `wish` field matches).
 
 **Edge cases.**
-- **No wishes left** (`wishesUsed >= 3`) → `NO.` This is a fallback: using all
-  three wishes will carry a cost of its own, not designed yet (user, 2026-10-29).
+- **No wishes left** (`wishesUsed >= 3`) → `NO.` A fallback; the price of wishing
+  is the curse itself, which deepens (§7b).
 - **A GIVE crack is a Cracked Slot**: grayed, framed and counted as filled (no glyph
   — draw the crack over the empty frame). So three GIVEs open the north door, and
   Death is behind it. Three GIVEs also spend all three wishes, so no REVIVE is left
@@ -222,6 +222,29 @@ today. **For the whole Cursed Run** (`game.cursedRun`) it draws only from the
 **cursed pool** instead: every Spell with a `wish` field (derived from `SPELLS`,
 never a hand list that drifts). It's still the Greek cipher and still read by the
 Spectacles. The curse teaches the words the curse made you pay for.
+
+## 7b. The Cursed Run deepens
+
+The cost of wishing is that the run becomes *more cursed* (user, 2026-10-29). All of
+it is owned by `CursedRunSystem`, whose escalation is counted in cursed rooms
+explored (`_roomsExplored`).
+
+**Built already:**
+- **The Three Room never appears again** on a Cursed Run
+  (`ThreeRoomSystem.recordNorthTraversal` returns false while `game.cursedRun`).
+- **Charon stops coming** after 4 cursed rooms (`charonVisit` → `'absent'`), returns
+  once to say goodbye when REST gives way, then REST is sealed.
+- **REST gives way** after 8 cursed rooms (`isRestDecayed`): a gray border, **no
+  healing** (`carryRestHp`), and the Undead walking in through the south door.
+
+**Not built — the player turns on themselves.** As the curse deepens:
+- Dodges and attacks are **delayed**, or **don't happen at all**.
+- The player **wanders on their own** into lava, poison and deep water.
+
+These are new player-control effects. They should be owned by `CursedRunSystem` and
+reach the player through one hook each (input delay/drop at the dodge and attack
+paths, a drift vector in movement), rather than as checks scattered through
+`Player.js`. The tiers and odds are *to design*.
 
 ## 8. The wish taxonomy
 
@@ -313,7 +336,8 @@ its follow-up (`CommandSystem.commandNearest`). Extended: **COMMAND convinces an
 NPC to join you** as a companion. Not all of them carry a weapon; the ones that don't
 still follow, and still count as a companion. **It acts on the nearest detected NPC**
 (user, 2026-10-29), so no name is typed for an NPC; the true-name follow-up stays
-for enemies. *Open:* whether COMMAND on an NPC costs a wish.
+for enemies. **COMMAND on an NPC costs a wish** (the usual `USE NTH WISH?`), so it
+is an INFLUENCE Wish Spell when its target is an NPC. On an enemy it stays free.
 
 #### The Witch on a Cursed Run
 
@@ -327,14 +351,12 @@ player. More capabilities may come later.
 
 Combat control fits the kind: bending enemies rather than NPCs. All are free of
 `SPELLS`, item and ingredient name clashes (checked 2026-10-29). Drafts for the
-author to pick from:
+author to pick from (TAUNT and CALM were turned down 2026-10-29):
 
 | Word | Effect (draft) |
 |---|---|
 | CHARM | Every enemy in the room fights for you until the room is left (a room-wide, temporary COMMAND without true names) |
 | SLEEP | Every enemy in the room falls asleep until struck |
-| TAUNT | Every enemy turns on the nearest other enemy for a span |
-| CALM | Every enemy in the room stops attacking and wanders (they can still be fought) |
 
 #### Any companion works
 
@@ -374,6 +396,7 @@ which today reads only `game.companion`. Logged as bug #479.
 | P3 | Wish comments in the Three Room (+ GAME_OVER exception) | wish casts in the room are answered, not fired |
 | P4 | GIVE | the room's new trade |
 | P5 | Cursed Spell Sign pool | cursed runs teach wish words |
+| P5b | The player turns on themselves (§7b) | dodges/attacks delayed or dropped; wandering into hazards |
 | P6+ | GAIN words, a few letters per session — XCAVATE first (closes #478's hint gap) | |
 | P7+ | INFLUENCE: PERSUADE (Master, Fisherman, Shopkeeper first), COMMAND on NPCs, the Witch's Cursed-Run offer | |
 
@@ -388,10 +411,14 @@ later); a refused PERSUADE spends nothing; COMMAND takes the nearest detected NP
 the Witch companion acts as the Hex Witch; non-payment NPCs refuse with placeholder
 lines.
 
+Settled 2026-10-29 (third round): COMMAND on an NPC costs a wish; TAUNT and CALM
+are out; the cost of wishing is a deepening curse (§7b).
+
 Still open:
-1. Does COMMAND on an NPC cost a wish?
-2. Which further INFLUENCE words to keep (CHARM, SLEEP, TAUNT, CALM, §8).
-3. The cost of using all three wishes.
+1. Keep CHARM and SLEEP?
+2. What deepens the curse for the new player effects (§7b): cursed rooms explored,
+   as REST's decay counts today, wishes spent, or both?
+3. The tiers and odds of the delayed/dropped inputs and the wandering.
 
 ## 12. Proposed glossary terms
 
