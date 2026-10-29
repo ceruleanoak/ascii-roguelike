@@ -182,8 +182,8 @@ author's line, so it stands.
    `wish` field matches).
 
 **Edge cases.**
-- **No wishes left** (`wishesUsed >= 3`) → `NO.` *(my inference from "GIVE is a
-  wish"; confirm when P4 is built.)*
+- **No wishes left** (`wishesUsed >= 3`) → `NO.` This is a fallback: using all
+  three wishes will carry a cost of its own, not designed yet (user, 2026-10-29).
 - **A GIVE crack is a Cracked Slot**: grayed, framed and counted as filled (no glyph
   — draw the crack over the empty frame). So three GIVEs open the north door, and
   Death is behind it. Three GIVEs also spend all three wishes, so no REVIVE is left
@@ -286,34 +286,55 @@ itself just finds the nearest speaker.
 
 #### PERSUADE
 
-Spends a wish (the usual `USE NTH WISH?`). On an NPC who accepts, the THREE says
+Acts on the nearest speaker. The NPC answers **before** any wish is asked for: a
+refusing NPC gives its refusal line and **no wish is spent** (user, 2026-10-29). An
+NPC who accepts brings the usual `USE NTH WISH?`; on YES the THREE says
 `AS YOU WISH.` and **any transaction that NPC offers happens without its cost.**
+
+NPCs who take no payment refuse with a **placeholder line**. Generally they have
+nothing to give, or can't give because they need something they don't have. Lines
+below marked *placeholder* are for the author to replace.
 
 | NPC | PERSUADE | Owner |
 |---|---|---|
 | Weapons Master | works — his transaction without its cost | WeaponsMaster |
 | Fisherman | works — his transaction without its cost | Fisherman |
 | Shopkeeper | works — **drops the entire inventory onto the shop floor** for pickup | Shopkeeper / ShopSystem |
-| Bridge Worker (Ridge) | **refuses** — line *to design* | BridgeWorker |
+| Bridge Worker (Ridge) | **refuses**: `NO WOOD. NO BRIDGE.` *(placeholder)* — he needs what he doesn't have | BridgeWorker |
 | Wise Fellow | **refuses**: `YOU FOOLISHLY SERVE.` — he knows of the Three and fears it | WiseFellow |
-| Witch | **refuses** — she knows of the Three and fears it, like the Wise Fellow; line *to design* | Witch |
-| Jeweler, Alchemist, Charon, Hatter, Wizard, Storyteller, Fairy King, Goblin, Camp NPC | *to design* | each NPC |
-
-Whether a refusal still spends the wish is open (§11).
+| Witch | **refuses**: `NOT FOR YOU. NOT FOR IT.` *(placeholder)* — she knows of the Three and fears it, like the Wise Fellow | Witch |
+| NPCs who sell or charge (Jeweler, Alchemist, Charon, …) | works — their transaction without its cost; exact effect per NPC at build time | each NPC |
+| NPCs who take no payment (Hatter, Storyteller, Fairy King, Goblin, Camp NPC, …) | **refuse** with a placeholder line, e.g. `I HAVE NOTHING.` | each NPC |
 
 #### COMMAND (extends the existing spell)
 
 Today `CALL` / `COMMAND` charms the nearest enemy that bears the true name typed as
 its follow-up (`CommandSystem.commandNearest`). Extended: **COMMAND convinces any
 NPC to join you** as a companion. Not all of them carry a weapon; the ones that don't
-still follow, and still count as a companion. *To design:* how the follow-up names an
-NPC, and whether COMMAND on an NPC is an INFLUENCE wish (costs a wish) or stays free.
+still follow, and still count as a companion. **It acts on the nearest detected NPC**
+(user, 2026-10-29), so no name is typed for an NPC; the true-name follow-up stays
+for enemies. *Open:* whether COMMAND on an NPC costs a wish.
 
 #### The Witch on a Cursed Run
 
 The Witch is not tied to her open errand. **On a Cursed Run she offers to join you
-as a companion** (no word needed; she fears what you've done). What she does as a
-companion is *to design*.
+as a companion** (no word needed; she fears what you've done). **As a companion she
+acts the same as the Hex Witch enemy** (`H`, `hexMechanic` in `enemies.js`),
+including turning enemies into frogs, with the hex aimed at enemies instead of the
+player. More capabilities may come later.
+
+#### More INFLUENCE words (suggestions)
+
+Combat control fits the kind: bending enemies rather than NPCs. All are free of
+`SPELLS`, item and ingredient name clashes (checked 2026-10-29). Drafts for the
+author to pick from:
+
+| Word | Effect (draft) |
+|---|---|
+| CHARM | Every enemy in the room fights for you until the room is left (a room-wide, temporary COMMAND without true names) |
+| SLEEP | Every enemy in the room falls asleep until struck |
+| TAUNT | Every enemy turns on the nearest other enemy for a span |
+| CALM | Every enemy in the room stops attacking and wanders (they can still be fought) |
 
 #### Any companion works
 
@@ -362,14 +383,15 @@ Settled 2026-10-29: slot mapping, repeat kinds (`NO.`), GIVE's cost (one wish),
 Cursed Signs (replace), INFLUENCE shape (per-NPC behavior; PERSUADE), the Witch
 (no errand tie), HI/HEY (no), the Spectacles (cyan; Maze moved), credits (none).
 
+Settled 2026-10-29 (second round): no wishes left → `NO.` (a real cost comes
+later); a refused PERSUADE spends nothing; COMMAND takes the nearest detected NPC;
+the Witch companion acts as the Hex Witch; non-payment NPCs refuse with placeholder
+lines.
+
 Still open:
-1. GIVE with no wishes left: `NO.` (§5, my inference)?
-2. Does a refused PERSUADE (Wise Fellow, Witch, Bridge Worker) still spend the wish?
-3. COMMAND on an NPC: how is the NPC named, and does it cost a wish?
-4. What the Witch does as a companion.
-5. PERSUADE refusal lines for the Witch and the Bridge Worker; the remaining NPCs'
-   PERSUADE behavior.
-6. The other INFLUENCE words beyond PERSUADE and COMMAND, if any.
+1. Does COMMAND on an NPC cost a wish?
+2. Which further INFLUENCE words to keep (CHARM, SLEEP, TAUNT, CALM, §8).
+3. The cost of using all three wishes.
 
 ## 12. Proposed glossary terms
 
