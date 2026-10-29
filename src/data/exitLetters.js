@@ -115,13 +115,14 @@ export const EXIT_LETTERS = {
   'M': {
     name: 'Maze',
     roomType: 'MAZE',
-    // Green and yellow only; yellow is the maze's home zone (resolved 2026-08-08).
+    // Green and cyan only; cyan is the maze's home zone, because the Maze holds
+    // the Spectacles and the THREE names them cyan (moved from yellow 2026-10-29).
     weight: 0.06,
     zoneBoosts: {
       green: 1.0,
-      yellow: 3.0,
+      yellow: 0,
       red: 0,
-      cyan: 0,
+      cyan: 3.0,
       gray: 0
     },
     spellDescription: 'THE SEEKER PATH.'

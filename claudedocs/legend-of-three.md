@@ -33,7 +33,7 @@ table yet. Treat this file as the design source, not an implementation.
 | Register | Item | Status | Why |
 |---|---|---|---|
 | **Justice** | Haunted Clock | **NEW**, effect TBD | A literal time object — no reframing needed, Cyan's own spine (Anticipate = "before," the slow tempo you set) speaks for itself. Name is settled; mechanic isn't. |
-| **Truth** | Spectacles `⊙` | existing | "SEE THE WORLD RELABELED" — decodes what's hidden in plain sight. *Caveat: currently obtained via Maze, which isn't mechanically exclusive to Cyan today — thematic fit, not a hard gate.* |
+| **Truth** | Spectacles `⊙` | existing | "SEE THE WORLD RELABELED" — decodes what's hidden in plain sight. Obtained in the Maze, whose home zone is Cyan (moved from Yellow 2026-10-29); it also spawns in Green. |
 | **Help** | Prayer Beads | **NEW** | Equips as **armor**; effect deliberately **unknown** — no stat readout on pickup or equip. *Author's inference, confirm before building: this takes Cyan's "reward for stillness is seeing what the hurried miss" and extends it to the game's own UI — you wear it and observe, same as the rabbit.* |
 
 ## Yellow (Storm · Channel)
@@ -66,6 +66,6 @@ table yet. Treat this file as the design source, not an implementation.
 
 - **Green Truth vs. Path Amulet** — resolved 2026-08-24: not a reskin. See table row above — both dungeon and Explore-mode Compass behavior are now built.
 - **Cyan Justice (Haunted Clock)** — name only; effect undefined. Design it before it's anything more than a placeholder.
-- **Cyan Truth (Spectacles) zone-exclusivity** — not enforced today; decide if it should be.
+- **Cyan Truth (Spectacles) zone-exclusivity** — resolved 2026-10-29: the Maze moved to Cyan (and Green), off Yellow.
 - **Gray Justice (Bone Dust)** — the one pick nobody should treat as settled. It is a consumable, so it now breaks the Justice-is-a-weapon rule; the Haunted Clock (Cyan Justice) must be a weapon too.
 - **Gray Help** — interacts with the True Ending trigger; design it deliberately, not casually.
