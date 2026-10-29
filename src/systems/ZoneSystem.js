@@ -61,6 +61,7 @@ export class ZoneSystem {
     this.leshyChaseActive = false;
     this.leshyChaseCount = 0;
     this.leshyLastExitDirection = null; // 'north', 'east', 'west'
+    this.leshyChaseNoCredit = false; // Leshy fled a burning bush: following doesn't tick
 
     // River-follow chase tracking (yellow zone only) — independent of Leshy's
     // fields above; tracks a distinct trigger (matching a room's river flow
@@ -629,10 +630,13 @@ export class ZoneSystem {
   /**
    * Start tracking a Leshy chase event
    * @param {string} exitDirection - 'north', 'east', or 'west'
+   * @param {{credit?: boolean}} [opts] - credit false: the Leshy was burned
+   *   out of hiding, so following it this room doesn't tick the count
    */
-  startLeshyChase(exitDirection) {
+  startLeshyChase(exitDirection, { credit = true } = {}) {
     this.leshyChaseActive = true;
     this.leshyLastExitDirection = exitDirection;
+    this.leshyChaseNoCredit = !credit;
   }
 
   /**
@@ -646,6 +650,12 @@ export class ZoneSystem {
     }
 
     if (playerFollowed) {
+      // Burned out of its bush, the Leshy fled rather than led — the chase
+      // carries on, but this room is not a tick.
+      if (this.leshyChaseNoCredit) {
+        this.leshyChaseNoCredit = false;
+        return 'continue';
+      }
       this.leshyChaseCount++;
 
       if (this.leshyChaseCount >= 3) {
@@ -670,6 +680,7 @@ export class ZoneSystem {
     this.leshyChaseActive = false;
     this.leshyChaseCount = 0;
     this.leshyLastExitDirection = null;
+    this.leshyChaseNoCredit = false;
   }
 
   // ===== River-Follow Chase System (Yellow Zone Secret) =====

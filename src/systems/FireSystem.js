@@ -139,6 +139,12 @@ export class FireSystem {
       }
     }
     for (const obj of objects) {
+      // A Leshy's bush that catches fire flushes it out at once, from any
+      // ignition source — burnout destroys the bush without the interaction
+      // or destroyObject paths that otherwise spawn it. No follow credit.
+      if (obj.onFire && !obj.destroyed && obj.leshyBush) {
+        this.game.interactionSystem.spawnLeshy(obj, { credit: false });
+      }
       if (obj.onFire && !obj.destroyed && !this._burning.has(obj)) {
         this._burning.add(obj);
         dirty = true;

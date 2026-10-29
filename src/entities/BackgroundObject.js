@@ -226,6 +226,7 @@ export class BackgroundObject {
     // Leshy chase event flags (set by RoomGenerator for secret events)
     this.isShaking = false;
     this.leshyBush = false;
+    this.leshySpawned = false;
     this.fairyGrass = false;
     this.shakeTimer = 0;
 

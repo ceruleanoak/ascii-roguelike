@@ -552,7 +552,7 @@ export class InteractionSystem {
               color: game.currentRoom.exits[exitDirection].color || '#00ff00'
             };
           }
-          game.zoneSystem.startLeshyChase(exitDirection);
+          game.zoneSystem.startLeshyChase(exitDirection, { credit: !char.noCredit });
         }
         game.neutralCharacters.splice(i, 1);
         continue;
@@ -779,6 +779,22 @@ export class InteractionSystem {
     this.game.renderer.markBackgroundDirty();
   }
 
+  // Flush the Leshy out of its shaking bush (once per bush). Every discovery
+  // path routes here: interaction, destruction by an attack, and the bush
+  // catching fire (FireSystem). `credit: false` is the fire case — the Leshy
+  // leaves at once, but following it doesn't tick the follow count.
+  spawnLeshy(obj, { credit = true } = {}) {
+    const game = this.game;
+    if (!obj.leshyBush || obj.leshySpawned) return;
+    obj.leshySpawned = true;
+    const leshy = new Leshy(obj.position.x, obj.position.y, game.currentRoom.exits);
+    leshy.noCredit = !credit;
+    leshy.startFleeing();
+    game.neutralCharacters.push(leshy);
+    game.zoneSystem.startLeshyChase(leshy.targetExit, { credit });
+    console.log(`[Secret] Leshy discovered! Fleeing to ${leshy.targetExit} exit`);
+  }
+
   interactWithObject(obj) {
     const game = this.game;
     const heldItemChar = game.player.heldItem ? game.player.heldItem.char : null;
@@ -786,14 +802,7 @@ export class InteractionSystem {
     const result = obj.interact(heldItemChar);
 
     // Leshy spawn event: trigger on ANY interaction with shaking bush (not just destruction)
-    if (obj.leshyBush && !obj.leshySpawned) {
-      obj.leshySpawned = true; // Mark to prevent multiple spawns
-      const leshy = new Leshy(obj.position.x, obj.position.y, game.currentRoom.exits);
-      leshy.startFleeing();
-      game.neutralCharacters.push(leshy);
-      game.zoneSystem.startLeshyChase(leshy.targetExit);
-      console.log(`[Secret] Leshy discovered! Fleeing to ${leshy.targetExit} exit`);
-    }
+    this.spawnLeshy(obj);
 
     if (result.effect) {
       this.handleObjectEffect(result.effect, obj);

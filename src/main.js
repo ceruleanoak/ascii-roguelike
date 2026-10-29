@@ -144,7 +144,6 @@ import { GooBlob } from './entities/GooBlob.js';
 import { Crow } from './entities/Crow.js';
 import { NPCRat } from './entities/NPCRat.js';
 import { Particle, createExplosion, createDodgeTrail } from './entities/Particle.js';
-import { Leshy } from './entities/Leshy.js';
 import { CharacterNPC } from './entities/CharacterNPC.js';
 import { WiseFellow } from './entities/WiseFellow.js';
 import { ITEM_TYPES, INGREDIENTS, ITEMS, getItemData } from './data/items.js';
@@ -2355,14 +2354,7 @@ class Game {
         obj.hasDropped = true;
 
         // Leshy spawn event (fallback for destruction before interaction, e.g., ranged attacks)
-        if (obj.leshyBush && !obj.leshySpawned && effect && effect.startsWith('destroyObject')) {
-          obj.leshySpawned = true; // Mark to prevent multiple spawns
-          const leshy = new Leshy(obj.position.x, obj.position.y, this.currentRoom.exits);
-          leshy.startFleeing();
-          this.neutralCharacters.push(leshy);
-          this.zoneSystem.startLeshyChase(leshy.targetExit);
-          console.log(`[Secret] Leshy discovered! Fleeing to ${leshy.targetExit} exit`);
-        }
+        if (effect && effect.startsWith('destroyObject')) this.interactionSystem.spawnLeshy(obj);
 
         // Key droppers and guaranteed drops bypass the roll (passesDropRoll).
         if (obj.passesDropRoll()) {
