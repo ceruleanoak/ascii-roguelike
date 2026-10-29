@@ -439,7 +439,7 @@ which today reads only `game.companion`. Logged as bug #479.
 
 | Phase | Scope | Behavior change |
 |---|---|---|
-| P1 | `WishSystem.spend` + `wishSpell` factory + `wish` field on existing wishes + CLEANSE→PURGE (alias kept) | rename only; BRIDGE's wish now destroys a slot like the rest |
+| P1 ✅ 2026-10-29 | `WishSystem.spend` + `wishSpell` factory + `wish` field on existing wishes + CLEANSE→PURGE (alias kept) | rename only; BRIDGE's wish now destroys a slot like the rest |
 | P2 | Talk family (HELLO/GREET/SPEAK) + Three Room talk lines + WHO-IS riddles | new lines |
 | P3 | Wish comments in the Three Room (+ GAME_OVER exception) | wish casts in the room are answered, not fired |
 | P4 | GIVE | the room's new trade |

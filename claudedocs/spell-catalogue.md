@@ -88,7 +88,7 @@ Refusal lines are drafts to tune:
 | SCORE | The THREE's answer about the run (no numbers shown that the UI doesn't already show) | `spells.js` | queued |
 | PRAY | The THREE's answer, possibly zone-flavored | `spells.js` | queued |
 
-Already shipped utility Spells that stay as they are: CLEANSE, HEAL, UNCURSE, REVIVE, CONTINUE, BRIDGE, SIT/SITDOWN, CALL/COMMAND, HEX (learned), FROG (learned), CHEAT, CLOSE/CLOSEGAME/EXITGAME (renamed from EXIT 2026-10-25).
+Already shipped utility Spells that stay as they are: PURGE (alias CLEANSE), HEAL, UNCURSE, REVIVE, CONTINUE, BRIDGE, SIT/SITDOWN, CALL/COMMAND, HEX (learned), FROG (learned), CHEAT, CLOSE/CLOSEGAME/EXITGAME (renamed from EXIT 2026-10-25).
 
 Wish words (CLEANSE → PURGE, the Power / Influence / Gain kinds, GIVE, and the per-room completion Spells) are planned in `three-voice-plan.md`.
 

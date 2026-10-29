@@ -1,49 +1,72 @@
 import { GAME_STATES } from '../game/GameConfig.js';
 import { captureDeath } from './DeathLedgerSystem.js';
 
+/** A run holds three wishes; each one spent breaks a quick slot. */
+export const MAX_WISHES = 3;
+
 /**
- * WishSystem — executes the three-wish economy's outcomes.
+ * WishSystem — the three-wish economy: spending a wish, and the outcomes of
+ * the wishes it owns (PURGE, REVIVE).
  *
- * A wish is spent by typing CLEANSE or REVIVE/CONTINUE (and by HEAL/UNCURSE
- * curing the frog polymorph, which mirrors the slot destruction in
- * PolymorphSystem.cureViaWish). Each wish permanently destroys one quick
- * slot — wish 1 takes slot 0, wish 2 slot 1, wish 3 slot 2 — the "give up"
- * layer's core trade: holding-power converted into power.
+ * Every Wish Spell spends through spend(), the one place a wish is consumed
+ * (claudedocs/three-voice-plan.md §9). Each wish permanently destroys one
+ * quick slot — wish 1 takes slot 0, wish 2 slot 1, wish 3 slot 2 — the "give
+ * up" layer's core trade: holding-power converted into power.
  *
  * Extracted from main.js (flagged twice in claudedocs/review) so the
  * orchestrator stays dispatch-only.
  */
 export class WishSystem {
-  /**
-   * Execute a CLEANSE wish — destroys all non-player, non-background entities,
-   * consumes one wish, and permanently destroys the highest available quick slot.
-   */
-  executeCleanse(game) {
-    if (game.wishesUsed >= 3) return;
+  /** True while the run still holds an unspent wish. */
+  hasWish(game) {
+    return game.wishesUsed < MAX_WISHES;
+  }
 
-    // Consume one wish and destroy the corresponding quick slot (0→1→2 as wishes used)
+  /**
+   * Spend one wish: bump the count and destroy the matching quick slot. Its
+   * item moves to an empty slot when one exists; the active slot steps off the
+   * destroyed one; the REST-saved copy of the slot is cleared so
+   * enterRestState() can't restore an item into it.
+   * @returns {boolean} false when no wish was left to spend
+   */
+  spend(game) {
+    if (!this.hasWish(game)) return false;
     const slotIdx = game.wishesUsed; // wish 1 → slot 0, wish 2 → slot 1, wish 3 → slot 2
     game.wishesUsed++;
-
     game._savedDestroyedSlots[slotIdx] = true;
-    if (game.player) {
-      // Move item to an empty slot before destroying this one
-      const item = game.player.quickSlots[slotIdx];
+
+    const player = game.player;
+    if (player) {
+      const item = player.quickSlots[slotIdx];
       if (item) {
-        const emptySlot = game.player.quickSlots.findIndex(
-          (s, i) => i !== slotIdx && s === null && !game.player.destroyedSlots[i]
+        const emptySlot = player.quickSlots.findIndex(
+          (s, i) => i !== slotIdx && s === null && !player.destroyedSlots[i]
         );
-        if (emptySlot !== -1) game.player.quickSlots[emptySlot] = item;
+        if (emptySlot !== -1) player.quickSlots[emptySlot] = item;
       }
-      game.player.quickSlots[slotIdx] = null;
-      game.player.destroyedSlots[slotIdx] = true;
-      // Shift active slot away from any destroyed slot
-      if (game.player.destroyedSlots[game.player.activeSlotIndex]) {
-        const next = game.player.quickSlots.findIndex((_, i) => !game.player.destroyedSlots[i]);
-        if (next !== -1) game.player.activeSlotIndex = next;
+      player.quickSlots[slotIdx] = null;
+      player.destroyedSlots[slotIdx] = true;
+      if (player.destroyedSlots[player.activeSlotIndex]) {
+        const next = player.quickSlots.findIndex((_, i) => !player.destroyedSlots[i]);
+        if (next !== -1) player.activeSlotIndex = next;
       }
     }
 
+    const inv = game.inventorySystem;
+    if (inv?.restQuickSlots) inv.restQuickSlots[slotIdx] = null;
+    if (inv && game._savedDestroyedSlots[inv.restActiveSlotIndex ?? 0]) {
+      const next = game._savedDestroyedSlots.findIndex(d => !d);
+      inv.restActiveSlotIndex = next !== -1 ? next : 0;
+    }
+    game.updateUI?.();
+    return true;
+  }
+
+  /**
+   * Execute a PURGE wish — destroys all non-player, non-background entities.
+   * The wish itself was already spent by the Wish Spell (wishSpell, spells.js).
+   */
+  executePurge(game) {
     // Clear all non-player, non-background entities — interior-aware via
     // activeRoom, so a cleanse inside a hut/dungeon clears that floor rather
     // than leaking onto the frozen surface room.
@@ -69,7 +92,7 @@ export class WishSystem {
    * living enemies are preserved.
    */
   executeRevive(game) {
-    if (game.wishesUsed >= 3) return;
+    if (!this.hasWish(game)) return;
     if (game.stateMachine.getCurrentState() !== GAME_STATES.GAME_OVER) return;
 
     // Ledger: the preceding 'death' record shares this runId — a 'revive'
@@ -77,37 +100,7 @@ export class WishSystem {
     // deaths from run-ending ones. Snapshot before slots are destroyed.
     captureDeath(game, { event: 'revive', revivedBy: 'wish' });
 
-    // Consume a wish and destroy a slot (same order as CLEANSE: 0→1→2)
-    const slotIdx = game.wishesUsed;
-    game.wishesUsed++;
-
-    game._savedDestroyedSlots[slotIdx] = true;
-    if (game.player) {
-      // Move item to an empty slot before destroying this one
-      const item = game.player.quickSlots[slotIdx];
-      if (item) {
-        const emptySlot = game.player.quickSlots.findIndex(
-          (s, i) => i !== slotIdx && s === null && !game.player.destroyedSlots[i]
-        );
-        if (emptySlot !== -1) game.player.quickSlots[emptySlot] = item;
-      }
-      game.player.quickSlots[slotIdx] = null;
-      game.player.destroyedSlots[slotIdx] = true;
-      // Shift active slot away from any destroyed slot
-      if (game.player.destroyedSlots[game.player.activeSlotIndex]) {
-        const next = game.player.quickSlots.findIndex((_, i) => !game.player.destroyedSlots[i]);
-        if (next !== -1) game.player.activeSlotIndex = next;
-      }
-    }
-    // Clear the REST-saved slot so enterRestState() won't restore an item into it
-    if (game.inventorySystem.restQuickSlots) {
-      game.inventorySystem.restQuickSlots[slotIdx] = null;
-    }
-    // Sanitize restActiveSlotIndex so enterRestState() doesn't restore a destroyed slot as active
-    if (game._savedDestroyedSlots[game.inventorySystem.restActiveSlotIndex ?? 0]) {
-      const next = game._savedDestroyedSlots.findIndex(d => !d);
-      game.inventorySystem.restActiveSlotIndex = next !== -1 ? next : 0;
-    }
+    this.spend(game);
 
     // If a character-death swap was pending, undo it — the revived run continues with this character
     if (game.characterDeathPending) {

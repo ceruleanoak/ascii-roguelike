@@ -124,26 +124,70 @@ function _wishOrdinal(n) {
   return ['1ST', '2ND', '3RD'][n] ?? `${n + 1}TH`;
 }
 
-/** Dynamic response for CLEANSE — shows which wish would be used. */
-function _cleanseResponse(game) {
-  if (game.wishesUsed >= 3) return 'NO WISHES LEFT.';
+/** The question every confirmed wish asks: which wish this would spend. */
+function _wishQuestion(game) {
+  if (!game.wishSystem?.hasWish(game)) return 'NO WISHES LEFT.';
   return `USE ${_wishOrdinal(game.wishesUsed)} WISH?`;
 }
 
-/** Action fired when player confirms a CLEANSE wish. */
-function _grantWish(game) {
-  if (game.wishesUsed < 3) game.wishSystem?.executeCleanse(game);
+const WISH_YES = ['YES', 'Y', 'AYE', 'SURE', 'DO'];
+const WISH_NO  = ['NO', 'NAY', 'CANCEL', 'STOP'];
+
+/**
+ * Builds a Wish Spell: a word whose cast spends a wish
+ * (claudedocs/three-voice-plan.md §8–9).
+ *
+ *   kind     — 'power' | 'influence' | 'gain' (the Wish Kind; stamped as `wish`)
+ *   refusal  — optional (game) => string|null. A string answers instead of the
+ *              wish question and asks nothing (no wish is spent).
+ *   granted  — the THREE's line when the wish is confirmed
+ *   effect   — (game) => void, run after WishSystem.spend took the wish
+ *
+ * The cast asks `USE NTH WISH?`; YES/Y/AYE/SURE/DO spends the wish and runs the
+ * effect, NO/NAY/CANCEL/STOP cancels.
+ */
+function wishSpell(kind, { refusal = null, granted = 'WISH GRANTED.', effect }) {
+  const grant = {
+    text: granted,
+    action: (game) => { if (game.wishSystem?.spend(game)) effect(game); },
+  };
+  return {
+    wish: kind,
+    response: (game) => refusal?.(game) || _wishQuestion(game),
+    followUpsActive: (game) => !refusal?.(game) && game.wishSystem?.hasWish(game),
+    followUps: {
+      ...Object.fromEntries(WISH_YES.map(w => [w, grant])),
+      ...Object.fromEntries(WISH_NO.map(w => [w, 'SPELL CANCELLED.'])),
+    },
+  };
+}
+
+// PURGE (and its old name, CLEANSE) — clears the room of every enemy and
+// projectile. EXPLORE only.
+const PURGE_SPELL = wishSpell('power', {
+  refusal: (game) =>
+    game.stateMachine?.getCurrentState() === GAME_STATES.EXPLORE ? null : '...NOTHING.',
+  effect: (game) => game.wishSystem.executePurge(game),
+});
+
+// HEAL / UNCURSE — lift the frog polymorph.
+function _cureSpell(healthyLine) {
+  return wishSpell('power', {
+    refusal: (game) => (game.player?.polymorphed ? null : healthyLine),
+    granted: 'THE CURSE LIFTS.',
+    effect: (game) => game.polymorphSystem?.cureViaWish(game),
+  });
 }
 
 /** Response for REVIVE — fires immediately without confirmation. */
 function _reviveResponse(game) {
-  if (game.wishesUsed >= 3) return 'NO WISHES LEFT.';
+  if (!game.wishSystem?.hasWish(game)) return 'NO WISHES LEFT.';
   return 'WISH GRANTED.';
 }
 
 /** Action fired immediately on REVIVE. */
 function _grantRevive(game) {
-  if (game.wishesUsed < 3) game.wishSystem?.executeRevive(game);
+  game.wishSystem?.executeRevive(game);
 }
 
 /** SIT/SITDOWN — lowers a raised witch hut so the player can enter. */
@@ -163,16 +207,14 @@ function _bridgeResponse(game) {
   if (game.currentRoom?.type !== ROOM_TYPES.RIDGE) return 'NOT HERE.';
   if (game.currentRoom?.bridgeBuilt) return 'BRIDGE EXISTS.';
   if (game.ridgeSystem?._checkMaterials().sufficient) return 'BUILD THE BRIDGE?';
-  if (game.wishesUsed >= 3) return 'NO WISHES LEFT.';
-  return `USE ${_wishOrdinal(game.wishesUsed)} WISH?`;
+  return _wishQuestion(game);
 }
 
 function _buildBridgeAction(game) {
   if (!game.ridgeSystem?.canBuild()) return;
   if (game.ridgeSystem._checkMaterials().sufficient) {
     game.ridgeSystem.buildBridgeViaSpell();
-  } else if (game.wishesUsed < 3) {
-    game.wishesUsed++;
+  } else if (game.wishSystem?.spend(game)) {
     game.ridgeSystem.buildBridgeViaSpell();
   }
 }
@@ -271,12 +313,15 @@ export const SPELLS = {
     action: _sitAction,
   },
 
+  // BRIDGE — the Ridge's Completion Spell. Free when the materials are on
+  // hand; otherwise it costs a wish.
   'BRIDGE': {
+    wish: 'gain',
     response: _bridgeResponse,
     followUpsActive: (game) =>
       game.currentRoom?.type === ROOM_TYPES.RIDGE &&
       !game.currentRoom?.bridgeBuilt &&
-      (game.ridgeSystem?._checkMaterials().sufficient || game.wishesUsed < 3),
+      (game.ridgeSystem?._checkMaterials().sufficient || game.wishSystem?.hasWish(game)),
     followUps: {
       'YES':    { action: _buildBridgeAction },
       'Y':      { action: _buildBridgeAction },
@@ -287,61 +332,14 @@ export const SPELLS = {
     },
   },
 
-  'CLEANSE': {
-    response: _cleanseResponse,
-    followUpsActive: (game) => game.wishesUsed < 3 &&
-      game.stateMachine?.getCurrentState() === GAME_STATES.EXPLORE,
-    followUps: {
-      'YES':    { text: 'WISH GRANTED.',     action: _grantWish },
-      'Y':      { text: 'WISH GRANTED.',     action: _grantWish },
-      'AYE':    { text: 'WISH GRANTED.',     action: _grantWish },
-      'SURE':   { text: 'WISH GRANTED.',     action: _grantWish },
-      'DO':     { text: 'WISH GRANTED.',     action: _grantWish },
-      'NO':     'SPELL CANCELLED.',
-      'NAY':    'SPELL CANCELLED.',
-      'CANCEL': 'SPELL CANCELLED.',
-      'STOP':   'SPELL CANCELLED.',
-    },
-  },
-
-
-  'HEAL': {
-    response: (game) => {
-      if (!game.player?.polymorphed) return 'NOTHING AILS YOU.';
-      if (game.wishesUsed >= 3) return 'NO WISHES LEFT.';
-      return `USE ${_wishOrdinal(game.wishesUsed)} WISH?`;
-    },
-    followUpsActive: (game) => game.player?.polymorphed === true && game.wishesUsed < 3,
-    followUps: {
-      'YES':    { text: 'THE CURSE LIFTS.',   action: (game) => game.polymorphSystem?.cureViaWish(game) },
-      'Y':      { text: 'THE CURSE LIFTS.',   action: (game) => game.polymorphSystem?.cureViaWish(game) },
-      'AYE':    { text: 'THE CURSE LIFTS.',   action: (game) => game.polymorphSystem?.cureViaWish(game) },
-      'SURE':   { text: 'THE CURSE LIFTS.',   action: (game) => game.polymorphSystem?.cureViaWish(game) },
-      'NO':     'SPELL CANCELLED.',
-      'NAY':    'SPELL CANCELLED.',
-      'CANCEL': 'SPELL CANCELLED.',
-    },
-  },
-
-  'UNCURSE': {
-    response: (game) => {
-      if (!game.player?.polymorphed) return 'NO CURSE FOUND.';
-      if (game.wishesUsed >= 3) return 'NO WISHES LEFT.';
-      return `USE ${_wishOrdinal(game.wishesUsed)} WISH?`;
-    },
-    followUpsActive: (game) => game.player?.polymorphed === true && game.wishesUsed < 3,
-    followUps: {
-      'YES':    { text: 'THE CURSE LIFTS.',   action: (game) => game.polymorphSystem?.cureViaWish(game) },
-      'Y':      { text: 'THE CURSE LIFTS.',   action: (game) => game.polymorphSystem?.cureViaWish(game) },
-      'AYE':    { text: 'THE CURSE LIFTS.',   action: (game) => game.polymorphSystem?.cureViaWish(game) },
-      'SURE':   { text: 'THE CURSE LIFTS.',   action: (game) => game.polymorphSystem?.cureViaWish(game) },
-      'NO':     'SPELL CANCELLED.',
-      'NAY':    'SPELL CANCELLED.',
-      'CANCEL': 'SPELL CANCELLED.',
-    },
-  },
+  // Wish Spells (wishSpell above; claudedocs/three-voice-plan.md §8).
+  'PURGE':   PURGE_SPELL,
+  'CLEANSE': PURGE_SPELL,
+  'HEAL':    _cureSpell('NOTHING AILS YOU.'),
+  'UNCURSE': _cureSpell('NO CURSE FOUND.'),
 
   'REVIVE': {
+    wish: 'power',
     response: _reviveResponse,
     action: (game) => {
       if (game.stateMachine?.getCurrentState() === GAME_STATES.GAME_OVER) _grantRevive(game);
@@ -349,6 +347,7 @@ export const SPELLS = {
   },
 
   'CONTINUE': {
+    wish: 'power',
     response: _reviveResponse,
     action: (game) => {
       if (game.stateMachine?.getCurrentState() === GAME_STATES.GAME_OVER) _grantRevive(game);

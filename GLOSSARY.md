@@ -1469,6 +1469,30 @@ identity, not standard programming terms.
 - **Not:** a maze cover (one ciphered ingredient letter). Never holds EXITGAME, CLOSEGAME or
   CLOSE.
 
+### Wish
+- **Definition:** The run's currency of three. Spending one permanently destroys a quick slot
+  (the first wish slot 0, then 1, then 2) — holding-power traded for power. Knowing a Wish
+  Spell is free; casting it spends a Wish.
+- **In code:** `game.wishesUsed` (0–3, run-scoped); `WishSystem.spend(game)` is the one place a
+  Wish is consumed (bumps the count, destroys the slot, moves its item, clears the REST-saved
+  copy). `MAX_WISHES` in `src/systems/WishSystem.js`.
+- **Not:** "charge", "token", "life".
+
+### Wish Spell
+- **Definition:** A Spell whose cast spends a Wish. Each has one Wish Kind. Most ask
+  `USE NTH WISH?` and act on YES; REVIVE / CONTINUE act at once on the death screen.
+- **In code:** a `SPELLS` entry with a `wish` field, built by `wishSpell(kind, { refusal,
+  granted, effect })` in `src/data/spells.js` (PURGE / CLEANSE, HEAL / UNCURSE); REVIVE,
+  CONTINUE and BRIDGE carry the field by hand. `npm run check:data` fails an unknown kind.
+  Design: `claudedocs/three-voice-plan.md`.
+- **Not:** an ordinary Spell (no cost); not gem-wand magic.
+
+### Wish Kind
+- **Definition:** What a Wish Spell is for — **Power** (combat: PURGE, REVIVE, HEAL),
+  **Influence** (bending NPCs and enemies), **Gain** (completing a room, e.g. BRIDGE).
+- **In code:** the `wish` field's value: `'power'`, `'influence'` or `'gain'`.
+- **Not:** "category", "school", "type".
+
 ### Beeline
 - **Definition:** An invulnerable rapid run, leaving a trail, from where the player stands to an
   open exit, cast by GO/HEAD <direction> and by ESCAPE/FLEE; ENTER (nearest door of any kind), EXIT (out of the current hut, Cavern or Maze),

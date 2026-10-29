@@ -317,6 +317,16 @@ for (const key of Object.keys(SPELLS)) {
   if (lootNames.has(key)) fail(`Spell '${key}' is the name of '${lootNames.get(key)}' — item and ingredient names are never Spells`);
 }
 
+// ── Wish Spells carry a known Wish Kind ────────────────────────────────────
+// claudedocs/three-voice-plan.md §8: every Wish Spell is POWER, INFLUENCE or
+// GAIN; the Three's comments, GIVE and the Cursed Spell Sign pool all read it.
+const WISH_KINDS = new Set(['power', 'influence', 'gain']);
+for (const [key, spell] of Object.entries(SPELLS)) {
+  if (spell.wish !== undefined && !WISH_KINDS.has(spell.wish)) {
+    fail(`Spell '${key}' has unknown wish kind '${spell.wish}' — use power, influence or gain`);
+  }
+}
+
 // ── LOOKHERE line limit ────────────────────────────────────────────────────
 // Every authored LOOKHERE line keeps LOOK_HERE_LINE_LIMIT letters (spaces are
 // free); enemy lines are built to the limit at runtime (lookHere.js).

@@ -145,32 +145,9 @@ export class PolymorphSystem {
 
   // ── Cure via HEAL / UNCURSE spell ──────────────────────────────────────────
 
+  // The wish itself was already spent by the Wish Spell (wishSpell, spells.js).
   cureViaWish(game) {
-    const player = game.player;
-    if (!player?.polymorphed || game.wishesUsed >= 3) return;
-
-    // Mirror executeCleanse slot-destruction logic exactly
-    const slotIdx = game.wishesUsed; // wish 1 → slot 0, wish 2 → slot 1, wish 3 → slot 2
-    game.wishesUsed++;
-    game._savedDestroyedSlots[slotIdx] = true;
-
-    if (player) {
-      const item = player.quickSlots[slotIdx];
-      if (item) {
-        const emptySlot = player.quickSlots.findIndex(
-          (s, i) => i !== slotIdx && s === null && !player.destroyedSlots[i]
-        );
-        if (emptySlot !== -1) player.quickSlots[emptySlot] = item;
-      }
-      player.quickSlots[slotIdx] = null;
-      if (player.destroyedSlots) player.destroyedSlots[slotIdx] = true;
-      if (player.activeSlotIndex === slotIdx) {
-        player.activeSlotIndex = player.quickSlots.findIndex(
-          (s, i) => s !== null && !player.destroyedSlots[i]
-        );
-        if (player.activeSlotIndex === -1) player.activeSlotIndex = 0;
-      }
-    }
+    if (!game.player?.polymorphed) return;
 
     this.deactivatePolymorph(game, true);
     game.updateUI?.();
