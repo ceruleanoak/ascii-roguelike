@@ -95,8 +95,7 @@ export class DungeonPuzzleSystem {
   // (secret-reveal beep + directional arrow) lives in CompassSystem.js.
   updateCompassBeep(floor, dt) {
     const { game } = this;
-    const holding = (game.player?.quickSlots || []).some(it => it?.char === '⌖');
-    if (!holding) { this._compassBeepTimer = 0; return; }
+    if (!game.compassSystem?.isWorn()) { this._compassBeepTimer = 0; return; }
 
     // Skull key: pending only while unfound. hasKeyItem alone can't tell
     // "not yet found" apart from "already spent" (both read false once the
@@ -112,7 +111,7 @@ export class DungeonPuzzleSystem {
     this._compassBeepTimer += dt;
     if (this._compassBeepTimer >= SFX_BEEP_INTERVAL) {
       this._compassBeepTimer = 0;
-      game.audioSystem?.playSFX?.('compass_beep');
+      game.compassSystem.announceFind();
     }
   }
 
@@ -446,9 +445,9 @@ export class DungeonPuzzleSystem {
 
   // Pyramid — "walk up + offer" verb (WellSystem/FountainSystem precedent).
   // Each slot takes its item from wherever that item's type lives: a
-  // consumable (green: Lucky Coin, Bread) from the equipped consumables, any
-  // other type (green: Compass) from the quick slots, where Item exposes
-  // .char directly. One deposit per SPACE press.
+  // consumable (green: Bread) from the equipped consumables, armor (green:
+  // Compass) off the player, a weapon (green: Fortune Dagger) from the quick
+  // slots, where Item exposes .char directly. One deposit per SPACE press.
   _tryDepositPyramid(floor) {
     const { game } = this;
     const player = game.player;
@@ -462,6 +461,11 @@ export class DungeonPuzzleSystem {
         const idx = slots.findIndex(it => it?.char === slot.requiredChar || it?.data?.char === slot.requiredChar);
         if (idx < 0) continue;
         slots[idx] = null;
+      } else if (slot.itemType === ITEM_TYPES.ARMOR) {
+        const inv = game.inventorySystem;
+        if (inv?.equippedArmor?.char !== slot.requiredChar) continue;
+        inv.equippedArmor = null;
+        inv.applyEquipmentEffectsToPlayer(player);
       } else {
         const qs = player.quickSlots || [];
         const idx = qs.findIndex(it => it?.char === slot.requiredChar);

@@ -8,6 +8,8 @@ Each zone marries its word/verb to all three registers of Canon (**Justice**,
 (`src/data/items.js`) already carries the meaning, it's used as-is. Where
 nothing fits, a new item is proposed and marked **NEW** — not yet built.
 
+**Justice is always a weapon** (2026-10-28).
+
 **Display rule carries over unchanged:** nothing on screen ever spells out
 "Justice," "Truth," or "Help." The item and how it was earned *is* the
 statement — same discipline as every other non-instructive system in the game.
@@ -22,9 +24,9 @@ table yet. Treat this file as the design source, not an implementation.
 
 | Register | Item | Status | Why |
 |---|---|---|---|
-| **Justice** | Lucky Coin `★` | existing | Passive luck/crit/dodge — fate literally returning what's deserved; the cosmic ledger expressed as a stat. |
-| **Truth** | Compass `⌖` | built | **Source: the green P room, the Compass Rose** (2026-10-28), which teaches what exits are made of (letters, colors, fixed cardinal meanings) and grants the Compass when solved. Confirmed **not** a Path Amulet reskin — Path Amulet is a passive retrospective route *record* (order of letters taken), Compass is an active real-time *sensor/guide*. Dungeon (`DungeonPuzzleSystem`): beeps only for the skull key and Branch's switch puzzle, not generic floor loot. Explore (`CompassSystem`/`CompassIndicator`): one-shot beep the instant a room's `SecretEventSystem` secret goes live (`key_glitter`/K-room key rock, `leshy_chase`/hidden Leshy, `chi_grass`/χ Blade — fires at room-clear, when the secret is actually marked, not on entry; `fairy_grass` excluded), plus a marked room exit shown on a persistent bottom-right HUD dial. 3 *consecutive* marked-exit follows (any deviation resets the streak to 0) force a guaranteed 'D' (Dungeon) exit into the room reached on the 3rd follow, via `mutateExitLetter`. |
-| **Help** | Bread `⌬` | existing | Un-transactional generosity — feeding it away is what earns crow/rat companionship. |
+| **Justice** | Fortune Dagger `↥` | built | **Source: a Lucky Coin `★` in a green Well** (2026-10-28) — the well gives the coin back as a weapon. Held, it carries the green well's luck blessing (loot + lucky exits) and raises every kill's Coin chance (10% → 25%): fate returning what's deserved, now in hand. |
+| **Truth** | Compass `⌖` | built | **Armor** (2026-10-28) — it works only while worn, and its Passive Indicator `FIND IT` floats over the player with every beep. **Source: the green P room, the Compass Rose** (2026-10-28), which teaches what exits are made of (letters, colors, fixed cardinal meanings) and grants the Compass when solved. Confirmed **not** a Path Amulet reskin — Path Amulet is a passive retrospective route *record* (order of letters taken), Compass is an active real-time *sensor/guide*. Dungeon (`DungeonPuzzleSystem`): beeps only for the skull key and Branch's switch puzzle, not generic floor loot. Explore (`CompassSystem`/`CompassIndicator`): one-shot beep the instant a room's `SecretEventSystem` secret goes live (`key_glitter`/K-room key rock, `leshy_chase`/hidden Leshy, `chi_grass`/χ Blade — fires at room-clear, when the secret is actually marked, not on entry; `fairy_grass` excluded), plus a marked room exit shown on a persistent bottom-right HUD dial. 3 *consecutive* marked-exit follows (any deviation resets the streak to 0) force a guaranteed 'D' (Dungeon) exit into the room reached on the 3rd follow, via `mutateExitLetter`. |
+| **Help** | Bread `⌬` | existing | A consumable. Un-transactional generosity — feeding it away is what earns crow/rat companionship. |
 
 ## Cyan (Stillness · Anticipate)
 
@@ -65,5 +67,5 @@ table yet. Treat this file as the design source, not an implementation.
 - **Green Truth vs. Path Amulet** — resolved 2026-08-24: not a reskin. See table row above — both dungeon and Explore-mode Compass behavior are now built.
 - **Cyan Justice (Haunted Clock)** — name only; effect undefined. Design it before it's anything more than a placeholder.
 - **Cyan Truth (Spectacles) zone-exclusivity** — not enforced today; decide if it should be.
-- **Gray Justice (Bone Dust)** — the one pick nobody should treat as settled.
+- **Gray Justice (Bone Dust)** — the one pick nobody should treat as settled. It is a consumable, so it now breaks the Justice-is-a-weapon rule; the Haunted Clock (Cyan Justice) must be a weapon too.
 - **Gray Help** — interacts with the True Ending trigger; design it deliberately, not casually.

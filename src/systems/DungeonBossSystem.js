@@ -424,12 +424,12 @@ export class DungeonBossSystem {
     const game = this.game;
     const spec = this.spec;
 
-    // Truth ⌖ — carried Compass brightens while the Vulnerable Window is
+    // Truth ⌖ — worn Compass brightens while the Vulnerable Window is
     // open. Glint hunting is gone, but the feature it taught (a carried item
     // reveals hidden timing) survives, now pointed at the mouth rather than a
     // migrating cell. Rendered by the composite renderer reading this flag.
     this.compassTruthActive = maw.bossPhase === 2 && maw.enduranceState === 'vulnerable'
-      && (game.player?.quickSlots || []).some(it => it?.char === spec.truthItemChar);
+      && game.inventorySystem?.equippedArmor?.char === spec.truthItemChar;
 
     // Help ⌬ — ground bread within lunge reach redirects a live tongue while
     // it is still sweeping toward the player (not once it has already

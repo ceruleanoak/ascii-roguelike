@@ -1329,6 +1329,26 @@ export const ITEMS = {
     patternSpeed: 0.05,
     color: '#cccccc'
   },
+  // Fortune Dagger: the green well's answer to a Lucky Coin (WellSystem), and
+  // green's Justice (legendOfThree.js). A Dagger that, while held in the quick
+  // slots, carries the luck blessing a raw coin in a green well grants, and
+  // raises every kill's Coin chance (luck.js).
+  '↥': {
+    char: '↥',
+    tier: 2,
+    name: 'Fortune Dagger',
+    type: ITEM_TYPES.WEAPON,
+    weaponType: WEAPON_TYPES.MELEE,
+    weaponSubtype: 'dagger',
+    luckBlessing: true,
+    coinDropChance: 0.25,
+    damage: 1,
+    windup: 0.1,
+    recovery: 0.6,
+    range: 20,
+    patternSpeed: 0.05,
+    color: '#ffd700'
+  },
   // Keen Dagger (Dagger + Eye; the Cyan Rogue's Starter Weapon): the eye
   // finds the stab. While the windup runs, facing turns to the nearest live
   // enemy within keenAimCells (KeenAim.updateKeenStrike); with none in reach
@@ -2800,10 +2820,11 @@ export const ITEMS = {
     color: '#d2a060'
   },
 
-  // Compass: equippable utility weapon, passive (no activation, no oneShot —
-  // contrast Bread above). Legend of Three green-zone "Truth" item
-  // (claudedocs/legend-of-three.md), pyramid slot in the Floor-4 dungeon
-  // puzzle. Two behavior surfaces, both built (2026-08-25):
+  // Compass: armor, worn for what it finds rather than for defense (none).
+  // Legend of Three green-zone "Truth" item (claudedocs/legend-of-three.md),
+  // granted by the green P room (the Compass Rose), and the Pyramid's Truth
+  // slot. Its Passive Indicator is "FIND IT" (CompassSystem.announceFind),
+  // floated over the player with every beep. Two behavior surfaces:
   // - Dungeon (DungeonPuzzleSystem.updateCompassBeep): beeps only for the
   //   skull key (whichever floor interiorState.keySkullNode rolled) and
   //   Branch's companion-switch puzzle — not generic floor loot.
@@ -2821,10 +2842,9 @@ export const ITEMS = {
   '⌖': {
     char: '⌖',
     name: 'Compass',
-    type: ITEM_TYPES.WEAPON,
-    weaponType: 'UTILITY',
-    effect: 'compassBeep',
+    type: ITEM_TYPES.ARMOR,
     passive: true,
+    passiveIndicator: 'FIND IT',
     color: '#66ccff'
   },
 

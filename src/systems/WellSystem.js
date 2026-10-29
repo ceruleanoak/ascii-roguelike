@@ -5,12 +5,13 @@
  * well at its center. The well accepts three offerings:
  *
  *   ¤  Infused Coin (consumable slot)  → activates the magic meter
- *   ★  Lucky Coin   (consumable slot)  → permanent half-power luck blessing
+ *   ★  Lucky Coin   (consumable slot)  → the well gives back a Fortune Dagger
  *   ⊚  Frog Coin    (consumable slot)  → the Witch's frog curse (PolymorphSystem)
  *   c  Coin         (raw ingredient)    → zone-specific blessing, well stays usable
  *
  * Raw-coin rewards depend on the current zone:
- *   green  → luckBlessed (same half-power luck blessing as ★ vesting)
+ *   green  → luckBlessed (the half-power luck blessing the Fortune Dagger
+ *            also carries while held — luck.js)
  *   yellow → scatters 2–3 Mana ingredients (𝑚) from the well
  *   red    → wellDamageBlessed (+1 damage on all attacks) — on the
  *            RED_WELL_COST-th coin into the same well; the coins before it
@@ -98,7 +99,6 @@ export class WellSystem {
 
     // Skip if this offering is redundant for the current state.
     if (offering.type === 'infused' && player.magicMeter?.active) return false;
-    if (offering.type === 'lucky'   && player.luckBlessed)        return false;
     if (offering.type === 'frog'    && player.polymorphed)        return false;
 
     game.wellCoinAnim = {
@@ -290,13 +290,14 @@ export class WellSystem {
       // HEAL/UNCURSE wish. activatePolymorph plays the transform SFX.
       game.polymorphSystem?.activatePolymorph(game, true);
     } else if (anim.offeringType === 'lucky') {
-      // Permanent half-power luck blessing for the rest of the run. Loot/exit
-      // hooks read player.luckBlessed; the next applyEquipmentEffectsToPlayer
-      // pass will leave the flag intact since it lives outside the recompute.
-      player.luckBlessed = true;
+      // The well gives back a Fortune Dagger, which carries the luck blessing
+      // only while held (luck.js). It drops where the coin was thrown from,
+      // thrown away from the well (the ring round the well is solid), and its
+      // pickup announces it.
+      const away = Math.atan2(anim.startY - anim.endY, anim.startX - anim.endX);
+      game.lootSystem?.spawnItemDrop('↥', anim.startX - GRID.CELL_SIZE / 2, anim.startY - GRID.CELL_SIZE / 2, away);
       // Placeholder fanfare — reusing boss_defeat until a dedicated lucky cue exists.
       game.audioSystem?.playSFX?.('boss_defeat');
-      game.menuSystem?.showPickupMessage?.('FEELING LUCKY.');
     } else {
       // Activate the magic meter on the slot we just cleared.
       game.magicSystem?.activateMagicMeter(player, slotIndex);
@@ -316,7 +317,6 @@ export class WellSystem {
     if (next) {
       const redundant =
         (next.type === 'infused' && player.magicMeter?.active) ||
-        (next.type === 'lucky'   && player.luckBlessed) ||
         (next.type === 'frog'    && player.polymorphed);
       if (!redundant) anim.room.well.consumed = false;
     }

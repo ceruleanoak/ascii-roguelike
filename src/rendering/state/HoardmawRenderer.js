@@ -428,7 +428,7 @@ export class HoardmawRenderer {
   }
 
   /**
-   * Truth register: a carried Compass brightens near the mouth while the
+   * Truth register: a worn Compass brightens near the mouth while the
    * Vulnerable Window is open. Preserves the feature glint hunting taught (a
    * carried item reveals hidden timing) without depending on the removed
    * migrating weak-point cell.

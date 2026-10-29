@@ -129,6 +129,8 @@ All modes share CombatSystem, PhysicsSystem, and entity classes.
 
 **Popup/modal UIs are non-instructive — compliance rule.** No key-hint footers, no explanatory headers/questions, no "X → Y" pickup messages. Content is limited to glyphs, the selection cursor, and bare option labels (e.g. STORE IN CHEST) — the visuals speak for themselves. Applies to every new popup; SlotReplacementOverlay is the reference implementation.
 
+**Every passive has a unique Passive Indicator — hard rule.** Each time an item's passive acts, a word of its own floats over the player (`passiveIndicator` on its ITEMS entry, drawn with `combatSystem.createDamageNumber` the way an Armor Flavor word is). No two passives share a word. The Compass's `FIND IT` (`CompassSystem.announceFind`) is the reference; a new passive ships with its word.
+
 ## Font Rules
 
 - **VentureArcade**: UI labels only (`HP:`, `L`, `Q`, zone exit letters, "GAME OVER"). Limited glyph coverage — never use for item/enemy chars or slot placeholders.

@@ -32,8 +32,7 @@ export class CompassIndicator {
     const player = game.player;
     if (!compass || !player) return;
 
-    const holding = (player.quickSlots || []).some(it => it?.char === '⌖');
-    if (!holding) return;
+    if (!compass.isWorn()) return;
 
     const target = compass.getMarkedTargetPosition();
     if (!target) return;

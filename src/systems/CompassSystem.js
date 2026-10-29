@@ -1,5 +1,8 @@
 import { GRID } from '../game/GameConfig.js';
 import { getExitSlotPosition, mutateExitLetter } from './ExitSystem.js';
+import { ITEMS } from '../data/items.js';
+
+const COMPASS_CHAR = '⌖';
 
 // Compass (⌖) — dungeon behavior lives in DungeonPuzzleSystem.updateCompassBeep;
 // this system owns the two Explore-mode behaviors (Legend of Three green-zone
@@ -35,8 +38,23 @@ export class CompassSystem {
     this._pendingForceD = false;
   }
 
-  _isHolding() {
-    return (this.game.player?.quickSlots || []).some(it => it?.char === '⌖');
+  // The Compass is armor: it works only while worn.
+  isWorn() {
+    return this.game.inventorySystem?.equippedArmor?.char === COMPASS_CHAR;
+  }
+
+  // Every Compass beep, here and in the dungeon (DungeonPuzzleSystem
+  // .updateCompassBeep): the beep, and the Compass's Passive Indicator
+  // floated over the player the way an Armor Flavor word floats.
+  announceFind() {
+    const game = this.game;
+    game.audioSystem?.playSFX?.('compass_beep');
+    const player = game.player;
+    if (!player) return;
+    const data = ITEMS[COMPASS_CHAR];
+    game.combatSystem?.createDamageNumber?.(
+      data.passiveIndicator, player.position.x, player.position.y - GRID.CELL_SIZE, data.color, 1, 1.2
+    );
   }
 
   // Called once per Explore room generation (enterExploreState), after the
@@ -44,7 +62,7 @@ export class CompassSystem {
   // marked exit for this room and, if a guaranteed-D contract is pending
   // from the previous room's 3rd consecutive follow, consumes it here.
   onRoomEntered(room) {
-    if (!this._isHolding()) { this.markedDirection = null; return; }
+    if (!this.isWorn()) { this.markedDirection = null; return; }
 
     const candidates = MARKABLE_DIRECTIONS.filter(dir => room?.exits?.[dir]?.letter);
     if (candidates.length === 0) { this.markedDirection = null; return; }
@@ -64,7 +82,7 @@ export class CompassSystem {
   // Called at the moment the player commits to a direction (north/east/west
   // exit branches in main.js), before the destination room is generated.
   onExitTaken(direction) {
-    if (!this._isHolding()) { this._streak = 0; return; }
+    if (!this.isWorn()) { this._streak = 0; return; }
 
     if (this.markedDirection && direction === this.markedDirection) {
       this._streak++;
@@ -81,8 +99,8 @@ export class CompassSystem {
   // the moment a room's single secret event (if any) actually gets marked.
   onSecretRevealed(room) {
     if (!SECRET_BEEP_EVENTS.has(room?.activeSecretEvent)) return;
-    if (!this._isHolding()) return;
-    this.game.audioSystem?.playSFX?.('compass_beep');
+    if (!this.isWorn()) return;
+    this.announceFind();
   }
 
   // World-pixel position of the currently marked exit's slot, for the HUD

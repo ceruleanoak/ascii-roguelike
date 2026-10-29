@@ -6,6 +6,7 @@ import { GRID, GAME_STATES } from '../game/GameConfig.js';
 import { STARTER_POTION_CHARS, starterPotionIngredientsFor } from '../data/alchemy.js';
 import { INGREDIENT_STACK_CAP } from './ingredientPile.js';
 import { slideLootOffRestSlots } from './restSlotClearance.js';
+import { hasLuckBlessing, coinDropChance } from './luck.js';
 
 // Chance each Coin an enemy drops becomes a Frog Coin while the player is in frog form.
 const FROG_COIN_SWAP_CHANCE = 0.25;
@@ -147,15 +148,17 @@ export class LootSystem {
     }
 
     // Luck has two tiers: full-power while Lucky Coin (★) is equipped, half-power
-    // permanently after the coin is vested in a well. The flags are independent
-    // (vested coin frees the slot) but luckActive takes priority on the math.
+    // under the luck blessing (a green well's raw coin, a fountain, or a held
+    // Fortune Dagger — luck.js). The two are independent, but luckActive takes
+    // priority on the math.
     // Standing inside Emerald Staff grass (MagicSystem._updateStaffGrassEffects)
     // doubles whatever luck tier is currently active — including the 1.0
     // baseline with no Lucky Coin at all, a standalone loot buff from the grass.
     const player = game.player;
     const grassLuckBoost = player?.inStaffGrass ? 2 : 1;
-    const luckMult    = (player?.luckActive ? 1.75 : (player?.luckBlessed ? 1.375 : 1.0)) * grassLuckBoost;
-    const bonusChance = (player?.luckActive ? 0.40 : (player?.luckBlessed ? 0.20 : 0)) * grassLuckBoost;
+    const blessed = hasLuckBlessing(player);
+    const luckMult    = (player?.luckActive ? 1.75 : (blessed ? 1.375 : 1.0)) * grassLuckBoost;
+    const bonusChance = (player?.luckActive ? 0.40 : (blessed ? 0.20 : 0)) * grassLuckBoost;
 
     let drops = [];
     const affinities = enemy.data.affinities || (enemy.data.dropTable ? [enemy.data.dropTable] : null);
@@ -215,11 +218,12 @@ export class LootSystem {
     game.errandSystem.rollSlainDrops(game, enemy);
 
     // Universal coin chance (bug-inbox 2026-09-18): every enemy has an
-    // independent 10% chance to drop 1 Coin, on top of whatever the
-    // affinity/tier or legacy `drops` tooling above already rolled — not
-    // scaled by luckMult/bonusChance, since it's deliberately separate from
-    // those systems rather than folded into them.
-    if (Math.random() < 0.10) {
+    // independent chance (10%, more with a held Fortune Dagger — luck.js) to
+    // drop 1 Coin, on top of whatever the affinity/tier or legacy `drops`
+    // tooling above already rolled — not scaled by luckMult/bonusChance,
+    // since it's deliberately separate from those systems rather than folded
+    // into them.
+    if (Math.random() < coinDropChance(player)) {
       drops.push('c');
     }
 

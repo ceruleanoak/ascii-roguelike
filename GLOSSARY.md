@@ -337,6 +337,25 @@ identity, not standard programming terms.
   its ring); the dungeon Puzzle Rooms (`PUZZLE_ROOM_TEMPLATES`); the retired Listening Stones and
   Three Conductors that P used to hold.
 
+### Fortune Dagger
+- **Definition:** The Dagger `↥` that a green-zone Well gives back for a Lucky Coin (`★`), and
+  green's Justice item in the Legend of Three. While held in the quick slots it carries the luck
+  blessing a raw coin in a green Well grants (more and extra drops, lucky exit weighting), and it
+  raises every kill's Coin chance from 10% to 25%. It is a weapon, as every Justice item is.
+- **In code:** `ITEMS['↥']` (`luckBlessing: true`, `coinDropChance`) in `src/data/items.js`;
+  `hasLuckBlessing` / `coinDropChance` in `src/systems/luck.js`, read by `LootSystem` and
+  `ExitSystem`; given by `WellSystem._completeRitual`.
+- **Not:** the Lucky Coin (the full-power passive it is traded for); the well's raw-coin blessing
+  (`player.luckBlessed`, a run flag that needs nothing held).
+
+### Passive Indicator
+- **Definition:** The floating word unique to one passive item, shown over the player each time
+  that passive acts. No two passives share one. The Compass's is `FIND IT`, with every beep.
+- **In code:** `passiveIndicator` on the item's `ITEMS` entry, drawn with
+  `combatSystem.createDamageNumber` (Compass: `CompassSystem.announceFind`).
+- **Not:** an Armor Flavor word (said once, on equip, for an armor family); a pickup message;
+  narrator text.
+
 ### Enemy
 - **Definition:** Any autonomous hostile actor. Behaviors are composed, not subclassed.
 - **In code:** `Enemy` base in `src/entities/`; data in `src/data/enemies.js`.

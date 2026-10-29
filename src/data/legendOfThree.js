@@ -12,9 +12,9 @@
 
 export const LEGEND_OF_THREE = {
   green: {
-    justice: '★', // Lucky Coin — consumable slot
-    truth:   '⌖', // Compass — weapon slot
-    help:    '⌬', // Bread — consumable slot
+    justice: '↥', // Fortune Dagger — a weapon (Justice always is)
+    truth:   '⌖', // Compass — armor
+    help:    '⌬', // Bread — a consumable
   },
 };
 

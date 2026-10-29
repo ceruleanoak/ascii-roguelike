@@ -23,7 +23,7 @@ export const GREEN_HOARDMAW_SPEC = {
   // Help register: ground bread within lunge reach redirects a lunge beat.
   helpDecoyChar: '⌬',
 
-  // Truth register: carried Compass brightens while the Vulnerable Window is
+  // Truth register: worn Compass brightens while the Vulnerable Window is
   // open (extends the Compass's existing dungeon-beep scope; ADR-backlog
   // 2026-08-13).
   truthItemChar: '⌖',

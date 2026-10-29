@@ -3,6 +3,7 @@ import { LETTER_TEMPLATES } from '../data/letterTemplates.js';
 import { ZONES, ZONE_COLORS } from '../data/zones.js';
 import { GRID } from '../game/GameConfig.js';
 import { isInteriorActive } from './PlaneSystem.js';
+import { hasLuckBlessing } from './luck.js';
 
 // Letters whose weights get boosted when the player has the well-vested luck
 // blessing. V (Vault), ? (Mystery), C (Camp) — all desirable stops that make
@@ -840,7 +841,7 @@ export class ExitSystem {
 
   getLetterWeightsForZone(zoneType, depth) {
     const weights = {};
-    const blessed = !!this.game?.player?.luckBlessed;
+    const blessed = hasLuckBlessing(this.game?.player);
 
     // Build weights from EXIT_LETTERS
     for (const [letter, data] of Object.entries(EXIT_LETTERS)) {
