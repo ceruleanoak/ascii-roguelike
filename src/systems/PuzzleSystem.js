@@ -5,10 +5,9 @@ import { Item } from '../entities/Item.js';
 import { Particle } from '../entities/Particle.js';
 import { getZoneRandomEnemy } from '../data/enemies.js';
 import { PUZZLES, DORMANT_PUZZLE } from '../data/puzzles.js';
-import { ZONE_COLORS } from '../data/zones.js';
 import { applyEasing } from './AnimationSystem.js';
 import { pushDirection } from './PushRock.js';
-import { letterRefusesSide, mutateExitLetter, mutateExitColor } from './ExitSystem.js';
+import { letterRefusesSide, mutateExitLetter } from './ExitSystem.js';
 import { tagLootLayer } from './PlaneSystem.js';
 
 const CS = GRID.CELL_SIZE;
@@ -20,10 +19,7 @@ const SIDES = ['north', 'east', 'south', 'west'];
 // Unit offsets of those sides from a ring's center, same order.
 const CARDINAL_OFFSETS = [[0, -1], [1, 0], [0, 1], [-1, 0]];
 
-// The four colors a color ring turns: the colored zones. Gray is never one.
-const RING_COLORS = [ZONE_COLORS.green, ZONE_COLORS.yellow, ZONE_COLORS.red, ZONE_COLORS.cyan];
-
-// Letters a letter ring never borrows to fill an empty side: the ones bound to
+// Letters the Rose never borrows to fill a side or a cycle: the ones bound to
 // a direction (R, O), the ones the exit rules place on purpose (B, D, S), the
 // red herring, and the room itself.
 const RING_FILLER_EXCLUDED = new Set(['R', 'O', 'B', 'D', 'S', 'N', 'P']);
@@ -131,7 +127,7 @@ export class PuzzleSystem {
   //
   // The four stones on the cardinals are the ring's markers, one per home
   // side [north, east, south, west]. Only the diamond's markers show their
-  // tokens (its corners are the symbols); the letter and color rings are
+  // tokens (its corners are the symbols); the letter and cycle rings are
   // plain stone, and what they hold shows on the room's exits alone. Their
   // tokens are read off those exits the first frame the player is in the
   // room (_bindCompassTokens), after every entry-time rewrite (the Compass's
@@ -224,20 +220,26 @@ export class PuzzleSystem {
   }
 
   /**
-   * Read the letter and color rings' tokens off the room's exits, home side
-   * [north, east, south, west], so the solved Rose leaves the exits much as
-   * they were rolled: S south (out of sight), a gray R north, the rolled east
-   * and west letters and colors back on their own sides. The color ring holds
-   * the four zone colors; gray is never one of them (see _writeCompassExits).
+   * Read the letter ring's tokens off the room's exits, home side
+   * [north, east, south, west], and give each non-S token its four-letter
+   * cycle, which the cycle ring steps through. The solved Rose leaves the
+   * exits much as they were rolled: S south (out of sight), R north, the
+   * rolled east and west letters back on their own sides.
    */
   _bindCompassTokens(puzzle, room) {
     const exits = room.exits || {};
     const letterAt = side => exits[side]?.letter ?? null;
-    const colorAt = side => exits[side]?.color ?? null;
 
     let letters = ['north', 'east', 'west'].map(letterAt);
     const used = new Set(letters.filter(Boolean));
-    letters = letters.map(l => (!l || l === 'R' || l === 'S' || l === 'N') ? this._ringFillerLetter(room, used) : l);
+    // A side that held nothing, R, S, N, or a letter already met (each token
+    // keys its own cycle) takes a filler.
+    const seen = new Set();
+    letters = letters.map(l => {
+      const own = l && l !== 'R' && l !== 'S' && l !== 'N' && !seen.has(l) ? l : this._ringFillerLetter(room, used);
+      seen.add(own);
+      return own;
+    });
     // The solved north reads R, so a letter the exit rules placed on purpose
     // (the forced 'B', a guaranteed 'D') moves off north. An Ocean owed east
     // stays put.
@@ -247,22 +249,24 @@ export class PuzzleSystem {
       if (swap > 0) [letters[0], letters[swap]] = [letters[swap], letters[0]];
     }
 
-    const usedColors = new Set();
-    const zoneColor = ZONE_COLORS[room.zone] ?? ZONE_COLORS.green;
-    const takeColor = (...prefs) => {
-      const c = [...prefs, ...RING_COLORS].find(x => RING_COLORS.includes(x) && !usedColors.has(x));
-      usedColors.add(c);
-      return c;
+    // Index 0 of each cycle is what that token shows with the cycle ring
+    // solved. The token opposite S cycles R (its solve), its rolled letter,
+    // N (North, the red herring: it never becomes R) and a filler; east's and
+    // west's keep their rolled letter first, then three fillers. No letter
+    // repeats across the three cycles. Where the Ridge refuses the north
+    // (the Three Room approach, gate depths), the solve is the rolled letter.
+    const filler = () => this._ringFillerLetter(room, used);
+    const ridgeRefused = !!this.game.exitSystem?._slotRefuses(0, 'R', room.depth, room.zone);
+    const cycles = {
+      [letters[0]]: ridgeRefused ? [letters[0], filler(), 'N', filler()] : ['R', letters[0], 'N', filler()],
+      [letters[1]]: [letters[1], filler(), filler(), filler()],
+      [letters[2]]: [letters[2], filler(), filler(), filler()]
     };
-    const eastColor = takeColor(colorAt('east'), zoneColor);
-    const westColor = takeColor(colorAt('west'), zoneColor);
-    const northColor = takeColor(colorAt('north'), zoneColor);
-    const southColor = takeColor();
 
     for (const ring of puzzle.rings) {
       if (ring.kind === 'letters') ring.tokens = [letters[0], letters[1], 'S', letters[2]];
-      if (ring.kind === 'colors') ring.tokens = [northColor, eastColor, southColor, westColor];
-      // The letter and color rings stay plain stone: the exits show them.
+      if (ring.kind === 'cycles') ring.cycles = cycles;
+      // The letter and cycle rings stay plain stone: the exits show them.
       if (ring.kind !== 'symbols') continue;
       ring.markers.forEach((marker, home) => {
         marker.char = marker.animationChar = ring.tokens[home];
@@ -296,33 +300,28 @@ export class PuzzleSystem {
   }
 
   /**
-   * Rewrite each visible exit from what the letter and color rings show on its
-   * side. The color ring turns its four colors round the exits, and carries N
-   * (North) with its home-north color: on the east or west, N replaces that
-   * exit's letter; brought round to the north, the north exit becomes a gray
-   * R — the ring's solve, and the change meant to be noticed. R is never
-   * offered off north, and an S keeps its letter wherever N lands. A letter
-   * that refuses its side (O on the west) reads N too.
+   * Rewrite each visible exit's letter: the letter ring sets which token
+   * faces its side, and the cycle ring's rotation picks which of that token's
+   * four letters it shows. S has no cycle and always reads S. R is never
+   * offered off north (nor where the Ridge's own refusals hold), and a letter
+   * that refuses its side (O on the west) reads N. Exit colors are left as
+   * rolled.
    */
   _writeCompassExits(puzzle, room) {
     const letterRing = puzzle.rings.find(r => r.kind === 'letters');
-    const colorRing = puzzle.rings.find(r => r.kind === 'colors');
+    const cycleRing = puzzle.rings.find(r => r.kind === 'cycles');
     const exitSystem = this.game.exitSystem;
     SIDES.forEach((side, i) => {
       const exit = room.exits?.[side];
       if (!exit?.letter) return; // south is REST's boolean; a closed side stays closed
-      let letter = this._tokenOnSide(letterRing, i);
-      let color = this._tokenOnSide(colorRing, i);
-      const northHere = ((i - colorRing.rot) % 4 + 4) % 4 === 0;
-      if (northHere && letter !== 'S') {
-        // The Ridge's own refusals (the Three Room approach, gate depths) hold here too.
+      const token = this._tokenOnSide(letterRing, i);
+      let letter = cycleRing.cycles[token]?.[cycleRing.rot] ?? token;
+      if (letter === 'R') {
         const ridgeOffered = side === 'north' && !exitSystem?._slotRefuses(0, 'R', room.depth, room.zone);
-        letter = ridgeOffered ? 'R' : 'N';
-        if (side === 'north') color = ZONE_COLORS.gray;
+        if (!ridgeOffered) letter = 'N';
       }
       if (letterRefusesSide(letter, side)) letter = 'N';
       mutateExitLetter(exit, letter, { source: 'compass_rose' });
-      mutateExitColor(exit, color, { source: 'compass_rose' });
     });
   }
 

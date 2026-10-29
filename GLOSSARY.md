@@ -304,9 +304,9 @@ identity, not standard programming terms.
 
 ### North (N)
 - **Definition:** The exit letter `N`, a Room named for a direction it does not face. The Compass
-  Rose's red herring: its gray color token writes `N` onto an east or west exit, while only the
-  north exit can read `R` (Ridge). Never rolled (weight 0). Its Room is undesigned and borrows the
-  Crossroads (`X`) layout, without X's crow flock.
+  Rose's red herring: one of the four letters its cycle ring turns the north letter through (it
+  never becomes `R`), and what an `R` reads on any side but north. Never rolled (weight 0). Its
+  Room is undesigned and borrows the Crossroads (`X`) layout, without X's crow flock.
 - **In code:** `EXIT_LETTERS.N` (`src/data/exitLetters.js`); `LETTER_TEMPLATES.N`, spread from
   `LETTER_TEMPLATES.X` (`src/data/letterTemplates.js`).
 - **Not:** the north exit itself (that is a direction, written lowercase `north` in exit code); the
@@ -316,24 +316,23 @@ identity, not standard programming terms.
 - **Definition:** The green P (Puzzle) Room, and the Compass's source. Two stone circles and a
   diamond around the room's center, each with one gap. A lean on a ring stone off its cardinal line
   turns that ring a quarter (the lean's torque picks the direction), and the player walks the turn
-  with it. Each settled turn rewrites the room's own exits. The circles are plain stone: what they
-  hold shows only on the exits. The **outer** (letter) circle sets which letter each exit shows and
-  is solved with `S` south, the side that never shows a letter. The **middle** (color) circle turns
-  the four zone colors (cyan, yellow, green, red) round the exits, each exit taking the color on its
-  side. It also carries `N` (North), which replaces the letter of an east or west exit. Brought
-  round to the north, it turns the north exit into a gray `R`: that change is the ring's solve. Gray
-  is never one of the turning colors, and an `S` keeps its letter wherever `N` lands. The **inner**
-  (symbol) diamond is the only ring with glyphs: its corners hold each direction's meaning, north
-  `▲` the pyramid (Ridge, toward Gray), east `~` the sea (Ocean), south `❀` the flower (REST), west
-  `◫` the open book (Canon, its meaning still open). It is solved when every symbol faces its own
-  way. With all three rings solved, the rings stop, every stone turns yellow, and the Compass `⌖`
-  lies at the center. No enemies, and the exits never close. P is green-only and is rolled only on
-  the zone-change beat (L3/L6/L9).
+  with it. Each settled turn rewrites the letters of the room's own exits; their colors stay as
+  rolled. The circles are plain stone: what they hold shows only on the exits. The **outer**
+  (letter) circle sets which letter each exit shows and is solved with `S` south, the side that
+  never shows a letter. The **middle** (cycle) circle gives every letter but `S` four letters to
+  cycle through, and each turn changes all of them at once. The letter opposite `S` cycles `R` (the
+  solve), its rolled letter, `N` (North, the red herring: it never becomes `R`) and one more; `R`
+  reads `N` anywhere but north. The **inner** (symbol) diamond is the only ring with glyphs: its
+  corners hold each direction's meaning, north `▲` the pyramid (Ridge, toward Gray), east `~` the
+  sea (Ocean), south `❀` the flower (REST), west `◫` the open book (Canon, its meaning still open).
+  It is solved when every symbol faces its own way. With all three rings solved, the rings stop,
+  every stone turns yellow, and the Compass `⌖` lies at the center. No enemies, and the exits never
+  close. P is green-only.
 - **In code:** `PUZZLES.green` (`type: 'compass_rose'`) in `src/data/puzzles.js`; `PuzzleSystem`
   (`_generateCompassRose`, `_updateCompassRose`, `_writeCompassExits`), with state on
   `room.puzzle`. It reads leans through `pushDirection` (`PushRock.js`) and rewrites exits through
-  `mutateExitLetter` / `mutateExitColor` with source `'compass_rose'`. The P gate is in
-  `ExitSystem.getLetterWeightsForZone`.
+  `mutateExitLetter` with source `'compass_rose'`. P's green-only gate is its `zoneBoosts` in
+  `src/data/exitLetters.js`.
 - **Not:** the Compass itself (the item `⌖` it grants); a Push Rock (a ring stone never leaves
   its ring); the dungeon Puzzle Rooms (`PUZZLE_ROOM_TEMPLATES`); the retired Listening Stones and
   Three Conductors that P used to hold.

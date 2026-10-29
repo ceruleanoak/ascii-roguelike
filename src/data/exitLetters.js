@@ -127,7 +127,8 @@ export const EXIT_LETTERS = {
     spellDescription: 'THE SEEKER PATH.'
   },
   // Weight is zero — only the Compass Rose offers 'N', as its red herring
-  // (a gray exit on east or west). Its room is a copy of X for now.
+  // (one of the letters its cycle ring turns through, and what an R reads
+  // anywhere but north). Its room is a copy of X for now.
   'N': {
     name: 'North',
     roomType: 'COMBAT',
@@ -144,9 +145,7 @@ export const EXIT_LETTERS = {
   'P': {
     name: 'Puzzle',
     roomType: 'PUZZLE',
-    // The Compass Rose: green-only, and only on the L3/L6/L9 beat (see
-    // ExitSystem.getLetterWeightsForZone) — its color ring is a lesson in the
-    // zone-change exits that beat offers.
+    // The Compass Rose: green-only.
     weight: 0.05,
     zoneBoosts: {
       green: 1.5,

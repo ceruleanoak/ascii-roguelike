@@ -2,10 +2,10 @@
  * Per-zone P-room puzzle definitions.
  *
  * Each zone with an entry here gets its own puzzle in its P room
- * (PuzzleSystem owns generation and per-frame logic). P is green-only and
- * offered on the L3/L6/L9 beat (ExitSystem.getLetterWeightsForZone), so in
- * play only the green entry is ever met; a P reached any other way (a cheat
- * warp) falls back to a dormant stone circle.
+ * (PuzzleSystem owns generation and per-frame logic). P is green-only
+ * (its zoneBoosts in exitLetters.js), so in play only the green entry is ever
+ * met; a P reached any other way (a cheat warp) falls back to a dormant stone
+ * circle.
  *
  * The green Listening Stones and the yellow Three Conductors lived here until
  * the Compass Rose replaced them; both are in git history.
@@ -18,16 +18,15 @@ export const PUZZLES = {
   // Two stone circles and a diamond around the room's center, outer to inner.
   // A ring turns a quarter when the player leans on one of its stones off its
   // cardinal line (the lean's torque picks the way), and the player walks the
-  // turn with it. Every settled turn rewrites the room's own exits — the
-  // letter and color rings are plain stone, so the exits are the only place
-  // their turning shows:
+  // turn with it. Every settled turn rewrites the room's own exit letters —
+  // the letter and cycle rings are plain stone, so the exits are the only
+  // place their turning shows (exit colors are never touched):
   //   letters  each visible exit takes the letter the ring holds on its side;
   //            solved when S sits south (the side that never shows a letter)
-  //   colors   the four zone colors turn round the exits, each visible exit
-  //            taking the one on its side; the ring also carries N (North,
-  //            the red herring), which replaces the letter on the east or
-  //            west; brought north, it makes the north exit a gray R — the
-  //            solve. An S keeps its letter wherever N lands
+  //   cycles   every letter but S has four to cycle through, and each turn
+  //            changes all of them at once. The one opposite S cycles R (the
+  //            solve), its rolled letter, N (North, the red herring) and
+  //            another; R reads N anywhere but north
   //   symbols  the diamond, whose corners carry each direction's meaning;
   //            solved when every symbol faces its own way
   // All three solved → the Compass. The exits never close.
@@ -44,7 +43,7 @@ export const PUZZLES = {
     // every quarter turn at about the same pace.
     rings: [
       { kind: 'letters', shape: 'circle',  radius: 8, gap: { dx: 2, dy: -8 }, turnSeconds: 1.2 },
-      { kind: 'colors',  shape: 'circle',  radius: 5, gap: { dx: -5, dy: -2 }, turnSeconds: 0.9 },
+      { kind: 'cycles',  shape: 'circle',  radius: 5, gap: { dx: -5, dy: -2 }, turnSeconds: 0.9 },
       // Tokens by home corner [north, east, south, west]: the pyramid ▲
       // (Ridge, toward Gray), the sea ~ (Ocean), the flower ❀ (REST), the open
       // book ◫ (Canon, the written — its meaning waits on West's rule).
