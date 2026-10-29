@@ -1,6 +1,7 @@
 import { inSamePlane } from './PlaneSystem.js';
 import { NeutralCharacter } from '../entities/NeutralCharacter.js';
 import { CAMP_NPC_STATE } from '../entities/CampNPC.js';
+import { MAX_PIPS, clearStatusEffect } from './StatusEffects.js';
 
 /** What an NPC without its own refusal line says to PERSUADE. */
 const DEFAULT_REFUSAL = 'I HAVE NOTHING.';
@@ -24,11 +25,27 @@ const DEFAULT_REFUSAL = 'I HAVE NOTHING.';
  * charms an enemy for free (CommandSystem). Charon at his post can't be
  * commanded; a companion already following refuses the word before any wish.
  *
- * Stateless: the speaker is found again on every call.
+ * CHARM: every enemy in the room fights the others until the room is left
+ * (`Enemy.wishCharmed` keeps the player out of its reach, as for a commanded
+ * unit). SLEEP: every enemy in the room falls fully asleep until struck — the
+ * sleep status's own wake-on-damage ends it. Both refuse with no enemy near.
+ *
+ * The speaker is found again on every call; the only state is the charmed
+ * roster, which reset() hands back when the room is left.
  */
 export class InfluenceSystem {
   constructor(game) {
     this.game = game;
+    /** Enemies the CHARM wish turned, released on room exit. */
+    this.charmed = [];
+  }
+
+  reset() {
+    for (const enemy of this.charmed) {
+      enemy.wishCharmed = false;
+      clearStatusEffect(enemy, 'charm');
+    }
+    this.charmed = [];
   }
 
   /**
@@ -103,5 +120,32 @@ export class InfluenceSystem {
     if (game.dialogueSystem?.getState?.()?.npc === npc) game.dialogueSystem.close?.();
     game.campNPCSystem.hireFollower(npc);
     return 'AS YOU WISH.';
+  }
+
+  // ── CHARM / SLEEP ────────────────────────────────────────────────────────────
+
+  /** The room's (or floor's) living enemies. */
+  _roomEnemies() {
+    return (this.game._activeEnemies() ?? []).filter(e => !e.isDying && e.hp > 0);
+  }
+
+  /** CHARM and SLEEP's refusal: nothing to bend. */
+  roomRefusal() {
+    return this._roomEnemies().length ? null : '...NOTHING.';
+  }
+
+  /** The wish was spent: every enemy in the room turns on the others. */
+  charmRoom() {
+    for (const enemy of this._roomEnemies()) {
+      enemy.applyStatusEffect?.('charm', Infinity, MAX_PIPS);
+      if (!enemy.isCharmed?.()) continue; // charm-immune
+      enemy.wishCharmed = true;
+      this.charmed.push(enemy);
+    }
+  }
+
+  /** The wish was spent: every enemy in the room falls asleep until struck. */
+  sleepRoom() {
+    for (const enemy of this._roomEnemies()) enemy.applyStatusEffect?.('sleep', Infinity, MAX_PIPS);
   }
 }

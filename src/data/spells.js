@@ -376,6 +376,16 @@ export const SPELLS = {
     effect: (game) => game.influenceSystem.persuade(),
   }),
 
+  // CHARM / SLEEP: every enemy in the room, until the room is left / until struck.
+  'CHARM': wishSpell('influence', {
+    refusal: (game) => game.influenceSystem.roomRefusal(),
+    effect: (game) => game.influenceSystem.charmRoom(),
+  }),
+  'SLEEP': wishSpell('influence', {
+    refusal: (game) => game.influenceSystem.roomRefusal(),
+    effect: (game) => game.influenceSystem.sleepRoom(),
+  }),
+
   'REVIVE': {
     wish: 'power',
     response: _reviveResponse,

@@ -410,6 +410,10 @@ author to pick from (TAUNT and CALM were turned down 2026-10-29):
 | CHARM *(kept)* | Every enemy in the room fights for you until the room is left (a room-wide, temporary COMMAND without true names) |
 | SLEEP *(kept)* | Every enemy in the room falls asleep until struck |
 
+*Built 2026-10-29 (P7c): `InfluenceSystem.charmRoom` / `sleepRoom`. A wish-charmed enemy
+(`Enemy.wishCharmed`) never turns on the player, even as the last one standing. With no enemy
+near, both answer `...NOTHING.` and no wish is spent.*
+
 #### Any companion works
 
 **Every kind of companion counts wherever a companion is needed**, starting with the
@@ -450,7 +454,7 @@ which today reads only `game.companion`. Logged as bug #479.
 | P5 ✅ 2026-10-29 | Cursed Spell Sign pool | cursed runs teach wish words |
 | P5b ✅ 2026-10-29 | Curse Clock + the player turns on themselves (§7b) | dodges/attacks delayed or dropped; wandering into hazards |
 | P6+ (XCAVATE ✅ 2026-10-29) | GAIN words, a few letters per session — XCAVATE first (closes #478's hint gap) | |
-| P7+ (PERSUADE, COMMAND ✅ 2026-10-29) | INFLUENCE: PERSUADE (Master, Fisherman, Shopkeeper first), COMMAND on NPCs, the Witch's Cursed-Run offer | |
+| P7+ (PERSUADE, COMMAND, CHARM, SLEEP ✅ 2026-10-29) | INFLUENCE: PERSUADE (Master, Fisherman, Shopkeeper first), COMMAND on NPCs, the Witch's Cursed-Run offer | |
 
 ## 11. Open questions for the author
 

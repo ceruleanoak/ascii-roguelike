@@ -53,6 +53,14 @@ export function applyTargetOverrides(enemy, enemies, player, noiseSource = null)
     // target can't produce detection, pursuit, or attacks — it just keeps
     // the full per-frame pipeline (status ticks, blending) alive between
     // fights. CommandSystem steers those idle bodies into its follow ring.
+    // A wish-charmed enemy (CHARM, InfluenceSystem) answers for the whole
+    // room, not just a cluster: its aggro memory is pulled to its foe the way
+    // a noise source pulls an enemy, so it hunts one out of aggro range.
+    if (enemy.wishCharmed && nearestEnemy) {
+      if (!enemy.aggroMemoryActive) enemy.memoryMoveDelayTimer = 0;
+      enemy.lastKnownPosition = { x: nearestEnemy.position.x, y: nearestEnemy.position.y };
+      enemy.aggroMemoryActive = true;
+    }
     enemy.setTarget(nearestEnemy ?? player);
     return true;
   }
@@ -70,4 +78,26 @@ export function applyTargetOverrides(enemy, enemies, player, noiseSource = null)
     }
   }
   return false;
+}
+
+/**
+ * The distance an Enemy's detection and range checks see to its target.
+ *
+ * Gate all detection and range conditions on plane membership.
+ * If the player is on a different plane and this enemy isn't already in pursuit
+ * (enraged or memory-active), treat the player as infinitely far away so that
+ * no new aggro, memory marks, or movement toward the player can occur cross-plane.
+ * Commanded units are unconditionally infinitely far from the player — that is
+ * what "removed from the aggro list" means mechanically (CommandSystem): no
+ * detection, windup, leap/charge-at-player, or memory mark can ever resolve.
+ * A wish-charmed enemy is the same toward the player only — it still has
+ * to close on the enemy it fights. (Every enemy-like target answers
+ * isCharmed(); the player doesn't.)
+ */
+export function effectiveTargetDistance(enemy, distance) {
+  const wishSparesPlayer = enemy.wishCharmed && typeof enemy.target?.isCharmed !== 'function';
+  if (enemy.commanded || wishSparesPlayer) return Infinity;
+  return (inSamePlane(enemy, enemy.target) || enemy.enraged || enemy.aggroMemoryActive)
+    ? distance
+    : Infinity;
 }

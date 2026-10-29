@@ -538,6 +538,13 @@ export const RESET_REGISTRY = [
     why: 'A Beeline is a run to one room\'s exit; nothing of it survives the room it was cast in.',
   },
   {
+    path: 'influenceSystem.reset',
+    scope: 'room',
+    call: (game) => game.influenceSystem.reset(),
+    covers: [],
+    why: 'A CHARM turns one room\'s enemies; leaving the room releases them.',
+  },
+  {
     path: 'fightSystem.reset',
     scope: 'room',
     call: (game) => game.fightSystem.reset(),

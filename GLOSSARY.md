@@ -1542,6 +1542,27 @@ identity, not standard programming terms.
   (an unarmed Camp NPC wearing the NPC's glyph and color, as `game.companion`).
 - **Not:** "recruit", "hire" (hiring is the Camp NPC's coin trade); not a charm status (CHARM).
 
+### Charm (spell)
+- **Definition:** The Influence Wish Spell that turns a room against itself. After the wish
+  question, YES and every enemy in the room (or floor) is charmed: each fights the nearest other
+  enemy, and none turns on the player even once no foe is left. Leaving the room releases them.
+  With no enemy near, the THREE answers `...NOTHING.` and no wish is spent. Charm-immune enemies
+  stay hostile.
+- **In code:** `SPELLS.CHARM` (`src/data/spells.js`) → `InfluenceSystem.charmRoom` (the `charm`
+  status at full pips, `Infinity` duration, plus `Enemy.wishCharmed`, which spares the player in
+  `effectiveTargetDistance` and pulls the enemy's aggro memory to its foe in `applyTargetOverrides`,
+  both `src/systems/enemyTargeting.js`); `InfluenceSystem.reset` (room scope, Reset Registry)
+  clears both.
+- **Not:** COMMAND (one enemy, by true name, for good); the Garnet Staff / Charm Lure's timed charm.
+
+### Sleep (spell)
+- **Definition:** The Influence Wish Spell that puts a room to sleep. After the wish question, YES
+  and every enemy in the room (or floor) falls fully asleep until struck. With no enemy near, the
+  THREE answers `...NOTHING.` and no wish is spent. Sleep-immune enemies stay awake.
+- **In code:** `SPELLS.SLEEP` (`src/data/spells.js`) → `InfluenceSystem.sleepRoom` (the `sleep`
+  status at full pips, `Infinity` duration; `Enemy.takeDamage` wakes it).
+- **Not:** the Sleep Bomb, or Drowse tiers 1–2 (a slow, not sleep).
+
 ### Beeline
 - **Definition:** An invulnerable rapid run, leaving a trail, from where the player stands to an
   open exit, cast by GO/HEAD <direction> and by ESCAPE/FLEE; ENTER (nearest door of any kind), EXIT (out of the current hut, Cavern or Maze),

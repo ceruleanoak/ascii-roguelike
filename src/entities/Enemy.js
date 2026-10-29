@@ -4,6 +4,7 @@ import { isImmuneToEffect, getElementalModifierFor } from './elementalAffinity.j
 import { Item } from './Item.js';
 import { attachTelegraph, meleeAimOffset } from '../game/Telegraph.js';
 import { inSamePlane, planeOf, objectOnPlane } from '../systems/PlaneSystem.js';
+import { effectiveTargetDistance } from '../systems/enemyTargeting.js';
 import { hasLineOfSight, getVisionObstructionPoint, hasVision, spineCanSee, initSenses } from './enemyVision.js';
 import { LureMechanic } from './enemyMechanics/LureMechanic.js';
 import { ParryMechanic } from './enemyMechanics/ParryMechanic.js';
@@ -166,6 +167,10 @@ export class Enemy {
     // (see update()'s effectiveDistance) and routes targeting through the
     // shared charm machinery.
     this.commanded = false;
+    // Charmed by the CHARM wish (InfluenceSystem): fights the room's other
+    // enemies until the room is left, and like a commanded unit never turns
+    // on the player once no foe is left.
+    this.wishCharmed = false;
 
     // Wandering behavior when idle
     this.wanderTimer = Math.random() * 3; // Random initial delay
@@ -733,17 +738,7 @@ export class Enemy {
     const dy = this.target.position.y - this.position.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
 
-    // Gate all detection and range conditions on plane membership.
-    // If the player is on a different plane and this enemy isn't already in pursuit
-    // (enraged or memory-active), treat the player as infinitely far away so that
-    // no new aggro, memory marks, or movement toward the player can occur cross-plane.
-    // Commanded units are unconditionally infinitely far from the player — that is
-    // what "removed from the aggro list" means mechanically (CommandSystem): no
-    // detection, windup, leap/charge-at-player, or memory mark can ever resolve.
-    const effectiveDistance = this.commanded ? Infinity
-      : (inSamePlane(this, this.target) || this.enraged || this.aggroMemoryActive)
-      ? distance
-      : Infinity;
+    const effectiveDistance = effectiveTargetDistance(this, distance);
     // Cyan well blessing shrinks the aggro radius (boss parts use Infinity aggro — unaffected)
     const effectiveAggroRange = this.target?.stealthBlessed ? this.aggroRange * 0.65 : this.aggroRange;
 
