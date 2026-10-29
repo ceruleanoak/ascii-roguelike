@@ -604,6 +604,23 @@ export const BACKGROUND_OBJECTS = {
       default: { animation: 'flicker', message: null }
     }
   },
+  // Stick Bundle: three Sticks tied together on a hut floor (HutSystem). SPACE
+  // beside it bursts it and the Sticks fly out (InteractionSystem.openContainer
+  // → spawnMultiple); weapons and bullets leave it alone, so it is always
+  // opened by hand.
+  '/': {
+    name: 'Stick Bundle',
+    color: '#8b4513',
+    indestructible: true,
+    acceptsInteractions: ['spacebar'],
+    dropEffect: 'spawnMultiple:|:3',
+    bulletInteraction: 'pass-through',
+    flammability: 'none',
+    conductivity: 'none',
+    interactions: {
+      default: { animation: 'shake', message: null }
+    }
+  },
   // Tinder: a Stick split by a blade (TinderSystem). Catching fire turns it
   // into a campfire ('!', always lit) instead of burning it away.
   // Indestructible so a torch swing lights it rather than smashing it.

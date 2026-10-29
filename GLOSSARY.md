@@ -913,6 +913,14 @@ identity, not standard programming terms.
   lit, the object becomes `'!'` with `isCampfire` + `burning`, which `FireplaceSystem` reads.
 - **Not:** the Stick ingredient (`|`) itself; a Fire Trap; kindling fed to a Fireplace.
 
+### Stick Bundle
+- **Definition:** Three Sticks tied together (`/`) lying on the floor of most Huts. SPACE beside
+  it bursts it and the three Sticks fly out; weapons and shots leave it alone.
+- **In code:** `BACKGROUND_OBJECTS['/']` (`acceptsInteractions: ['spacebar']`,
+  `dropEffect: 'spawnMultiple:|:3'`), opened by `InteractionSystem.openContainer`; placed by
+  `HutSystem.generateHutInterior` (`STICK_BUNDLE_CHANCE`, not in shopkeeper Huts or Sheds).
+- **Not:** the Satchel (REST's starter bundle, `ට`); Tinder; loose Sticks.
+
 ### Lantern
 - **Definition:** A Torch in a metal cage (`♁`, Torch + Metal). It does everything a Torch does
   (its swing lights Maze torches and dungeon torch triggers, as any fire attack does — see

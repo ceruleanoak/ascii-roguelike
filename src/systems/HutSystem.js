@@ -2,7 +2,6 @@ import { GRID } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { Enemy } from '../entities/Enemy.js';
 import { Item } from '../entities/Item.js';
-import { Ingredient } from '../entities/Ingredient.js';
 import { getZoneRandomEnemy } from '../data/enemies.js';
 import { applyZoneCombatModifiers } from '../data/zones.js';
 import { WiseFellow } from '../entities/WiseFellow.js';
@@ -17,10 +16,10 @@ import { isInteriorActive } from './PlaneSystem.js';
 import { HOT_WATER_CHAR } from '../data/alchemy.js';
 import { hasKeyItem } from './keyItems.js';
 
-// A bundle of Sticks — three laid side by side on the floor — turns up in
-// most huts, so a run that needs firewood or a handle knows where to look.
-const STICK_CHAR = '|';
-const STICK_BUNDLE_SIZE = 3;
+// A Stick Bundle turns up in most huts, so a run that needs firewood or a
+// handle knows where to look. It is a SPACE-opened container (the '/' entry
+// in BACKGROUND_OBJECTS): the Sticks come out only once it is burst.
+const STICK_BUNDLE_CHAR = '/';
 const STICK_BUNDLE_CHANCE = 0.6;
 // A paid shop doesn't leave goods on its floor; the shed is the Frog Coin's.
 const NO_STICK_BUNDLE_KINDS = new Set(['shopkeeper', 'shed']);
@@ -416,19 +415,14 @@ export class HutSystem {
       }
     }
 
-    // Stick bundle: a row of three Sticks, kept clear of everything placed
-    // above. Seeded like the bread (floor.ingredients, handed to
-    // game.ingredients by InteriorManager.enterFloor).
-    const floorIngredients = [];
+    // Stick Bundle: one cell, kept clear of everything placed above. Opening
+    // it is InteractionSystem.openContainer's (SPACE beside it), like a barrel.
     if (!NO_STICK_BUNDLE_KINDS.has(hutKind) && Math.random() < STICK_BUNDLE_CHANCE) {
       for (let attempt = 0; attempt < 16; attempt++) {
-        const col = 2 + Math.floor(Math.random() * (cols - 4 - (STICK_BUNDLE_SIZE - 1)));
+        const col = 2 + Math.floor(Math.random() * (cols - 4));
         const row = 2 + Math.floor(Math.random() * (rows - 5));
-        const cells = Array.from({ length: STICK_BUNDLE_SIZE }, (_, i) => col + i);
-        if (cells.some(c => cellOccupied(c, row, breadItems))) continue;
-        for (const c of cells) {
-          floorIngredients.push(new Ingredient(STICK_CHAR, c * GRID.CELL_SIZE, row * GRID.CELL_SIZE));
-        }
+        if (cellOccupied(col, row, breadItems)) continue;
+        backgroundObjects.push(new BackgroundObject(STICK_BUNDLE_CHAR, col * GRID.CELL_SIZE, row * GRID.CELL_SIZE));
         break;
       }
     }
@@ -469,7 +463,7 @@ export class HutSystem {
       enemies,
       npcs,
       items: breadItems,
-      ingredients: floorIngredients,
+      ingredients: [],
       doors: [{ col: exitCol, row: exitRow, leadsTo: null }],
       hutKind,
       spawnPoint,
