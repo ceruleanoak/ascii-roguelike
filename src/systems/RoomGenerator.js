@@ -1989,7 +1989,7 @@ export class RoomGenerator {
 
     // Recipe Sign and Spell Sign - hidden within grass clusters (roomSigns.js)
     generateRecipeSign(room, grassClusters);
-    generateSpellSign(room, grassClusters);
+    generateSpellSign(room, grassClusters, { cursed: !!this.game?.cursedRun });
 
     // Generate organic clusters (trees, bushes, brambles)
     this.generateOrganicClusters(room);

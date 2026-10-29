@@ -1466,8 +1466,18 @@ identity, not standard programming terms.
   (`src/data/spells.js`: LOOKHERE, TAKEALL, GOREST, HARVEST, FIGHT). `ExploreRenderer` decodes
   it through `spectaclesTransform` and repaints the background when the Spectacles go on or
   off.
+  On a Cursed Run every Spell Sign is a Cursed Spell Sign instead.
 - **Not:** a maze cover (one ciphered ingredient letter). Never holds EXITGAME, CLOSEGAME or
   CLOSE.
+
+### Cursed Spell Sign
+- **Definition:** A Spell Sign on a Cursed Run: it writes a Wish Spell's name in place of the
+  standard pool, for the whole run. Same cipher, same Spectacles. The curse teaches the words
+  the curse made the player pay for.
+- **In code:** `generateSpellSign(room, grassClusters, { cursed })` (`src/systems/roomSigns.js`),
+  passed `game.cursedRun` by `RoomGenerator`; the pool is `wishSpellNames()`
+  (`src/data/spells.js`), derived from `SPELLS`.
+- **Not:** a separate sign kind on the room — still `room.spellSign`.
 
 ### Wish
 - **Definition:** The run's currency of three. Spending one permanently destroys a quick slot

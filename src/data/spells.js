@@ -250,7 +250,7 @@ const EXIT_GAME_SPELL = {
 
 // Spell Sign pool — the spell words a Spell Sign may write in the earth
 // (roomSigns.js). No-unlock spells only; EXITGAME / CLOSEGAME / CLOSE never
-// belong here.
+// belong here. A Cursed Run writes Wish Spells instead (wishSpellNames below).
 export const SPELL_SIGN_SPELLS = ['LOOKHERE', 'TAKEALL', 'GOREST', 'HARVEST', 'FIGHT'];
 
 export const SPELLS = {
@@ -622,3 +622,22 @@ export const SPELLS = {
       game.currentRoom?.isThreeRoom ? 'IT FILLS.' : '...NOTHING.',
   },
 };
+
+/**
+ * Every Wish Spell's name, one per spell — an alias that shares its entry with
+ * another word (CLEANSE is PURGE) is listed by its first name only. With a
+ * kind, only that Wish Kind's. Derived from SPELLS, so a new Wish Spell joins
+ * GIVE's answers and the Cursed Spell Sign pool by existing.
+ * @param {'power'|'influence'|'gain'} [kind]
+ * @returns {string[]}
+ */
+export function wishSpellNames(kind) {
+  const seen = new Set();
+  const names = [];
+  for (const [word, spell] of Object.entries(SPELLS)) {
+    if (!spell.wish || (kind && spell.wish !== kind) || seen.has(spell)) continue;
+    seen.add(spell);
+    names.push(word);
+  }
+  return names;
+}

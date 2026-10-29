@@ -1,5 +1,5 @@
 import { GAME_STATES } from '../game/GameConfig.js';
-import { SPELLS } from '../data/spells.js';
+import { wishSpellNames } from '../data/spells.js';
 
 /**
  * ThreeVoiceSystem — the Three answering for itself inside the Three Room
@@ -49,21 +49,6 @@ const GIVE_KINDS = [
 
 // GIVE's white flash, as the slot cracks.
 const GIVE_FLASH = { duration: 600, color: '#ffffff' };
-
-/**
- * Every Wish Spell of a kind, one name per spell: an alias that shares its
- * entry with another word (CLEANSE is PURGE) is told by its first name only.
- */
-function wishSpellNames(kind) {
-  const seen = new Set();
-  const names = [];
-  for (const [word, spell] of Object.entries(SPELLS)) {
-    if (spell.wish !== kind || seen.has(spell)) continue;
-    seen.add(spell);
-    names.push(word);
-  }
-  return names;
-}
 
 export class ThreeVoiceSystem {
   constructor(game) {

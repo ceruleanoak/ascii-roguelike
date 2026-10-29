@@ -1,6 +1,6 @@
 import { GRID } from '../game/GameConfig.js';
 import { RECIPES } from '../data/recipes.js';
-import { SPELL_SIGN_SPELLS } from '../data/spells.js';
+import { SPELL_SIGN_SPELLS, wishSpellNames } from '../data/spells.js';
 import { applyCipher } from '../data/cipher.js';
 
 // Room signs — secret writing in the earth, hidden inside a grass cluster and
@@ -9,7 +9,9 @@ import { applyCipher } from '../data/cipher.js';
 //
 //   Recipe Sign — a Recipe written out as `X + Y = Z`, plain glyphs.
 //   Spell Sign  — a no-unlock spell word in the Greek cipher; the Spectacles
-//                 (⊙) read it as English.
+//                 (⊙) read it as English. On a Cursed Run it is a Cursed
+//                 Spell Sign: a Wish Spell's name instead — the curse teaches
+//                 the words the curse made you pay for.
 //
 // Each sign rolls independently, so a Spell Sign never changes how often a
 // Recipe Sign appears. When both land in one room they never share a cell.
@@ -38,9 +40,10 @@ export function generateRecipeSign(room, grassClusters) {
   };
 }
 
-export function generateSpellSign(room, grassClusters) {
+export function generateSpellSign(room, grassClusters, { cursed = false } = {}) {
   if (Math.random() >= SPELL_SIGN_CHANCE) return;
-  const spell = SPELL_SIGN_SPELLS[Math.floor(Math.random() * SPELL_SIGN_SPELLS.length)];
+  const pool = cursed ? wishSpellNames() : SPELL_SIGN_SPELLS;
+  const spell = pool[Math.floor(Math.random() * pool.length)];
   const spot = findSignSpot(room, grassClusters, spell.length);
   if (!spot) return;
 
