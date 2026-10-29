@@ -1,4 +1,6 @@
 import { inSamePlane } from './PlaneSystem.js';
+import { NeutralCharacter } from '../entities/NeutralCharacter.js';
+import { CAMP_NPC_STATE } from '../entities/CampNPC.js';
 
 /** What an NPC without its own refusal line says to PERSUADE. */
 const DEFAULT_REFUSAL = 'I HAVE NOTHING.';
@@ -17,6 +19,11 @@ const DEFAULT_REFUSAL = 'I HAVE NOTHING.';
  * A refusal spends nothing. Accepted, the wish question follows; YES spends
  * the wish and runs persuade().
  *
+ * COMMAND, near an NPC: the NPC joins as the companion (CampNPCSystem
+ * .hireFollower) for a wish. Away from NPCs COMMAND asks for a true name and
+ * charms an enemy for free (CommandSystem). Charon at his post can't be
+ * commanded; a companion already following refuses the word before any wish.
+ *
  * Stateless: the speaker is found again on every call.
  */
 export class InfluenceSystem {
@@ -28,12 +35,12 @@ export class InfluenceSystem {
    * The nearest NPC in talking range on the player's plane — the room's or
    * floor's NPCs, and Charon at REST's north exit.
    */
-  nearestNpc() {
+  nearestNpc({ withCharon = true } = {}) {
     const game = this.game;
     const player = game.player;
     if (!player) return null;
     const npcs = [...game.interiorManager.activeNpcs()];
-    if (game.charon?.npc) npcs.push(game.charon.npc);
+    if (withCharon && game.charon?.npc) npcs.push(game.charon.npc);
 
     let nearest = null;
     let nearestDist = Infinity;
@@ -66,5 +73,35 @@ export class InfluenceSystem {
     const npc = this.nearestNpc();
     const owner = this._persuadeOwner(npc);
     if (owner && !owner.persuadeRefusal(npc)) owner.persuade(npc);
+  }
+
+  // ── COMMAND ──────────────────────────────────────────────────────────────────
+
+  /** The NPC COMMAND would take: the nearest one in range, Charon excepted. */
+  commandTarget() {
+    const npc = this.nearestNpc({ withCharon: false });
+    return npc instanceof NeutralCharacter ? npc : null;
+  }
+
+  /** COMMAND's refusal near an NPC, or null when the NPC would join. */
+  commandRefusal() {
+    const companion = this.game.companion;
+    return companion && companion.state !== CAMP_NPC_STATE.FLEEING ? 'ONE FOLLOWS.' : null;
+  }
+
+  /**
+   * COMMAND's YES: spend the wish and take the nearest NPC off its room or
+   * floor as the companion. The return value is the THREE's line.
+   */
+  command() {
+    const game = this.game;
+    const npc = this.commandTarget();
+    if (!npc || this.commandRefusal() || !game.wishSystem.spend(game)) return '...NOTHING.';
+
+    const npcs = game.interiorManager.activeNpcs();
+    npcs.splice(npcs.indexOf(npc), 1);
+    if (game.dialogueSystem?.getState?.()?.npc === npc) game.dialogueSystem.close?.();
+    game.campNPCSystem.hireFollower(npc);
+    return 'AS YOU WISH.';
   }
 }

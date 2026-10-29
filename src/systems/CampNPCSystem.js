@@ -755,6 +755,27 @@ export class CampNPCSystem {
   }
 
   /**
+   * COMMAND on an NPC (InfluenceSystem.command): `npc` follows as the
+   * companion — an unarmed Camp NPC wearing its glyph and color, which still
+   * picks up and fights like any hired one. Replaces any current companion.
+   */
+  hireFollower(npc) {
+    const game = this.game;
+    if (game.companion) game.physicsSystem.removeEntity(game.companion);
+    const { x, y } = npc.position;
+    const follower = new CampNPC(x, y, { x, y });
+    follower.char = npc.char;
+    follower.color = npc.color;
+    follower.plane = game.player?.plane ?? 0;
+    this._promoteToCompanion(follower);
+    // registerWithPhysics read the surface room's map; inside an Interior the
+    // follower walks the floor's (InteriorManager's entry resync).
+    const floor = activeInteriorFloor(game);
+    if (floor) follower.collisionMap = floor.collisionMap;
+    return follower;
+  }
+
+  /**
    * CheatMenu COMPANIONS: a Camp NPC already hired, holding `weaponChar`,
    * beside the player. Replaces any current companion. Surface EXPLORE only —
    * registerWithPhysics reads the current room's collision map.

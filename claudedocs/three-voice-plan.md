@@ -381,6 +381,8 @@ below marked *placeholder* are for the author to replace.
 
 #### COMMAND (extends the existing spell)
 
+*Built 2026-10-29 (P7b): the NPC becomes `game.companion`, an unarmed Camp NPC wearing its glyph and color (`CampNPCSystem.hireFollower`). One companion at a time: with one following, the answer is `ONE FOLLOWS.` and no wish is spent. Charon can't be commanded.*
+
 Today `CALL` / `COMMAND` charms the nearest enemy that bears the true name typed as
 its follow-up (`CommandSystem.commandNearest`). Extended: **COMMAND convinces any
 NPC to join you** as a companion. Not all of them carry a weapon; the ones that don't
@@ -448,7 +450,7 @@ which today reads only `game.companion`. Logged as bug #479.
 | P5 ✅ 2026-10-29 | Cursed Spell Sign pool | cursed runs teach wish words |
 | P5b ✅ 2026-10-29 | Curse Clock + the player turns on themselves (§7b) | dodges/attacks delayed or dropped; wandering into hazards |
 | P6+ (XCAVATE ✅ 2026-10-29) | GAIN words, a few letters per session — XCAVATE first (closes #478's hint gap) | |
-| P7+ (PERSUADE ✅ 2026-10-29) | INFLUENCE: PERSUADE (Master, Fisherman, Shopkeeper first), COMMAND on NPCs, the Witch's Cursed-Run offer | |
+| P7+ (PERSUADE, COMMAND ✅ 2026-10-29) | INFLUENCE: PERSUADE (Master, Fisherman, Shopkeeper first), COMMAND on NPCs, the Witch's Cursed-Run offer | |
 
 ## 11. Open questions for the author
 

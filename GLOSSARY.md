@@ -1410,6 +1410,7 @@ identity, not standard programming terms.
 - **Definition:** A persistent non-player character that follows the player across rooms and
   states. Companions offer passive support and interact with the environment.
 - **In code:** managed by `CompanionSystem`; currently crows (`companionCrows`, `followerCrows`);
+  also the hired Camp NPC or a commanded NPC (`game.companion`, `CampNPCSystem`);
   also tamed rats (`tamedRats`, fed via Feed); also golems (`golems`, summoned by
   combining an ingredient with Mana at the REST Combine Station — see `src/data/golems.js`).
   State lives on `game`; logic in `src/systems/CompanionSystem.js`.
@@ -1527,6 +1528,19 @@ identity, not standard programming terms.
   data on `NeutralCharacter`: `persuadeOwner` (the game system implementing
   `persuadeRefusal(npc)` / `persuade(npc)`) or `persuadeRefusal` (the line).
 - **Not:** "bribe", "haggle"; not a discount — the whole cost goes.
+
+### Command
+- **Definition:** The word that makes something serve. Typed away from NPCs, COMMAND (or CALL)
+  asks `COMMAND WHOM?` and the true name typed next permanently charms the nearest enemy that
+  bears it, for free. Typed beside an NPC, COMMAND is an Influence Wish Spell: the wish question,
+  then YES and the NPC leaves its room or floor to follow as the Companion. With a Companion
+  already following, the NPC answers `ONE FOLLOWS.` and no wish is spent. Charon can't be
+  commanded.
+- **In code:** `SPELLS.COMMAND` (`COMMAND_SPELL`, `src/data/spells.js`); the enemy path is
+  `CommandSystem.commandNearest` (`game.commandedEnemies`), the NPC path
+  `InfluenceSystem.commandTarget` / `commandRefusal` / `command` → `CampNPCSystem.hireFollower`
+  (an unarmed Camp NPC wearing the NPC's glyph and color, as `game.companion`).
+- **Not:** "recruit", "hire" (hiring is the Camp NPC's coin trade); not a charm status (CHARM).
 
 ### Beeline
 - **Definition:** An invulnerable rapid run, leaving a trail, from where the player stands to an

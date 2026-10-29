@@ -155,10 +155,15 @@ function wishSpell(kind, { refusal = null, granted = 'WISH GRANTED.', effect }) 
     wish: kind,
     response: (game) => refusal?.(game) || _wishQuestion(game),
     followUpsActive: (game) => !refusal?.(game) && game.wishSystem?.hasWish(game),
-    followUps: {
-      ...Object.fromEntries(WISH_YES.map(w => [w, grant])),
-      ...Object.fromEntries(WISH_NO.map(w => [w, 'SPELL CANCELLED.'])),
-    },
+    followUps: _wishAnswers(grant),
+  };
+}
+
+/** The wish question's answers: every YES word grants, every NO word cancels. */
+function _wishAnswers(grant) {
+  return {
+    ...Object.fromEntries(WISH_YES.map(w => [w, grant])),
+    ...Object.fromEntries(WISH_NO.map(w => [w, 'SPELL CANCELLED.'])),
   };
 }
 
@@ -232,6 +237,22 @@ const COMMAND_FOLLOWUPS = Object.fromEntries(
     .filter(d => d.trueName)
     .map(d => [d.trueName, (game) => game.commandSystem?.commandNearest(d.trueName) ?? '...NOTHING.'])
 );
+
+// COMMAND near an NPC is an Influence Wish Spell instead (InfluenceSystem):
+// the wish question, then YES takes the NPC as the companion. Away from NPCs
+// it asks for a true name, as CALL does. The true names stay answerable after
+// the wish question; YES/NO never collide with one.
+const COMMAND_SPELL = {
+  wish: 'influence',
+  response: (game) => {
+    if (!game.influenceSystem.commandTarget()) return 'COMMAND WHOM?';
+    return game.influenceSystem.commandRefusal() || _wishQuestion(game);
+  },
+  followUps: {
+    ...COMMAND_FOLLOWUPS,
+    ..._wishAnswers((game) => game.influenceSystem.command()),
+  },
+};
 
 
 // CLOSE, CLOSEGAME and EXITGAME are one spell under three names.
@@ -385,16 +406,14 @@ export const SPELLS = {
   },
 
   // Command by true name — both words share one grammar and one warband
-  // (CommandSystem: permanent charm, max three, boss-tier refuses).
+  // (CommandSystem: permanent charm, max three, boss-tier refuses). COMMAND
+  // also takes an NPC, for a wish (COMMAND_SPELL above).
   'CALL': {
     response: 'CALL WHOM?',
     followUps: COMMAND_FOLLOWUPS,
   },
 
-  'COMMAND': {
-    response: 'COMMAND WHOM?',
-    followUps: COMMAND_FOLLOWUPS,
-  },
+  'COMMAND': COMMAND_SPELL,
 
   'LOOKENEMY': { response: (game) => _lookEnemy(game) },
   'LOOKNORTH': { response: _lookDirection('north') },
