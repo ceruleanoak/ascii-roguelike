@@ -1615,6 +1615,14 @@ identity, not standard programming terms.
 - **Not:** "bread" as a category (Bread is one Feed item); "bait" or "lure" (Lure is the
   Charm Lure trap, and LureMechanic is an enemy behavior).
 
+### Lembas
+- **Definition:** The green bread (⏣) a burning fireplace or campfire bakes from Slurry. It is
+  Feed, heals 2 when eaten, and auto-eats at low HP. Slurry is Goo + Fur, both of which the
+  Satchel can hold, so Lembas is the heal a run can cook from its starting ingredients.
+- **In code:** `ITEMS['⏣']` (`effect: 'heal'`, `feed: true`); baked through `FIRE_BAKES` in
+  `FireplaceSystem` (Slurry `⚗` → `⏣`).
+- **Not:** Bread (⌬, baked from Grain, no SPACE effect); "green bread" as a category.
+
 ### Water Balloon
 - **Definition:** A thrown consumable (◒, Bottle of Water + Goo) that bursts over the Bomb's
   radius without a blast: every enemy in the burst gets wet (pip 1, burn put out) and slimes

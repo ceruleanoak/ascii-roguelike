@@ -2819,6 +2819,22 @@ export const ITEMS = {
     feed: true,
     color: '#d2a060'
   },
+  // Lembas: the green bread a burning fireplace bakes from Slurry
+  // (FireplaceSystem) — Slurry's Goo + Fur both come out of the Satchel, so
+  // a run can cook its first heal before it fights. Feed like Bread; SPACE
+  // eats it, and it auto-eats at low HP the way Meat Jerky does.
+  '⏣': {
+    char: '⏣',
+    name: 'Lembas',
+    type: ITEM_TYPES.CONSUMABLE,
+    effect: 'heal',
+    amount: 2,
+    oneShot: true,
+    stackable: true,
+    autoTriggerHP: 0.18,
+    feed: true,
+    color: '#7fbf3f'
+  },
 
   // Compass: armor, worn for what it finds rather than for defense (none).
   // Legend of Three green-zone "Truth" item (claudedocs/legend-of-three.md),

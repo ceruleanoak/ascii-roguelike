@@ -8,7 +8,7 @@ import { Item } from '../entities/Item.js';
  * same station but always lit) and hit SPACE. An unlit fireplace only
  * accepts a Stick, which ignites it (recolors the instance, no state machine
  * beyond the one `burning` flag). Once burning, the menu opens up to Meat
- * (100% → Meat Jerky), Grain (100% → Bread), a held Fire Berry (100% → Mana), an equipped Bottle of
+ * (100% → Meat Jerky), Grain (100% → Bread), Slurry (100% → Lembas), a held Fire Berry (100% → Mana), an equipped Bottle of
  * Water (100% → Bottle of Hot Water — a fourth parallel path to hot water
  * alongside the Caldera fill, the Fire Essence recipe, and the Fire Berry
  * recipe in recipes.js), Sand (100% → Empty Bottle), and Ore and Sticks,
@@ -40,7 +40,16 @@ const INTERACT_RADIUS = GRID.CELL_SIZE * 1.2;
 const SAND_CHAR = 'D';
 const EMPTY_BOTTLE_CHAR = 'B';
 const GRAIN_CHAR = 'ψ';
-const BREAD_CHAR = '⌬';
+const SLURRY_CHAR = '⚗';
+
+// One ingredient in, one stackable consumable out, every time — the
+// fireplace's plain bakes (no roll, no quantity submenu).
+const FIRE_BAKES = {
+  'm': 'ᒧ',          // Meat   → Meat Jerky
+  [GRAIN_CHAR]: '⌬', // Grain  → Bread
+  [SAND_CHAR]: EMPTY_BOTTLE_CHAR, // Sand → Empty Bottle
+  [SLURRY_CHAR]: '⏣' // Slurry → Lembas
+};
 
 export class FireplaceSystem {
   constructor(game) {
@@ -131,6 +140,11 @@ export class FireplaceSystem {
         counts.set(SAND_CHAR, sandCount);
         items.push(SAND_CHAR);
       }
+      const slurryCount = game.inventorySystem.countIngredient(SLURRY_CHAR);
+      if (slurryCount > 0) {
+        counts.set(SLURRY_CHAR, slurryCount);
+        items.push(SLURRY_CHAR);
+      }
       const berryCount = game.inventorySystem.consumableInventory.filter(it => it.char === '❋').length;
       if (berryCount > 0) {
         counts.set('❋', berryCount);
@@ -177,24 +191,12 @@ export class FireplaceSystem {
         this.openStickQuantityMenu(fireplace);
         return;
       }
-    } else if (rawChar === 'm') {
-      if (!fireplace.burning || !game.removeIngredient('m')) return;
-      const jerky = new Item('ᒧ', game.player.position.x, game.player.position.y);
-      const stacked = game.inventorySystem.mergeStackableConsumable(jerky);
-      if (!stacked) game.inventorySystem.consumableInventory.push(jerky);
-      game.menuSystem.announceCrafted(jerky.char, stacked);
-    } else if (rawChar === GRAIN_CHAR) {
-      if (!fireplace.burning || !game.removeIngredient(GRAIN_CHAR)) return;
-      const bread = new Item(BREAD_CHAR, game.player.position.x, game.player.position.y);
-      const stacked = game.inventorySystem.mergeStackableConsumable(bread);
-      if (!stacked) game.inventorySystem.consumableInventory.push(bread);
-      game.menuSystem.announceCrafted(bread.char, stacked);
-    } else if (rawChar === SAND_CHAR) {
-      if (!fireplace.burning || !game.removeIngredient(SAND_CHAR)) return;
-      const bottle = new Item(EMPTY_BOTTLE_CHAR, game.player.position.x, game.player.position.y);
-      const stacked = game.inventorySystem.mergeStackableConsumable(bottle);
-      if (!stacked) game.inventorySystem.consumableInventory.push(bottle);
-      game.menuSystem.announceCrafted(bottle.char, stacked);
+    } else if (FIRE_BAKES[rawChar]) {
+      if (!fireplace.burning || !game.removeIngredient(rawChar)) return;
+      const baked = new Item(FIRE_BAKES[rawChar], game.player.position.x, game.player.position.y);
+      const stacked = game.inventorySystem.mergeStackableConsumable(baked);
+      if (!stacked) game.inventorySystem.consumableInventory.push(baked);
+      game.menuSystem.announceCrafted(baked.char, stacked);
     } else if (rawChar === '2') {
       // Ore, like Sticks, opens a quantity submenu rather than smelting one
       // implicit unit — see openOreQuantityMenu.
