@@ -2317,11 +2317,6 @@ class Game {
       this.errandSystem.closeMenu();
     }
 
-    // Close bridge menu when player walks out of interaction range
-    if (explore && this.bridgeMenuOpen && this.ridgeSystem.getWorkerDistance() > this.ridgeSystem.CLOSE_RANGE * 1.5) {
-      this.ridgeSystem.closeMenu();
-    }
-
     this.interactionSystem.updateNeutralCharacters(deltaTime);
 
     // Update combat — redirect to interior enemies/objects when inside a hut or maze.
@@ -3403,9 +3398,6 @@ class Game {
         this.errandSystem.closeMenu();
         return;
       }
-
-      // Close bridge menu on SHIFT (no donation) — delegated to RidgeSystem.
-      if (this.ridgeSystem.handleShiftPress()) return;
 
       // Interior SHIFT actions (dungeon item-slot sacrifice → unlock stairs) via InteriorManager.
       if (this.interiorManager.isActive && this.interiorManager.handleShiftPress()) return;

@@ -33,7 +33,6 @@ import { renderIceGolem, renderSmallEnemyUnderSnow, renderYetiFrenzyPip } from '
 import { renderFishingPasses } from '../effects/FishingRenderEffects.js';
 import { drawStatusPips } from '../effects/StatusPipEffects.js';
 import { drawTamedRats, drawGolems } from '../ui/CompanionRenderers.js';
-import { BRIDGE_MATERIALS } from '../../systems/RidgeSystem.js';
 import { PixelatedDissolve, SplitReveal } from '../effects/TextEffects.js';
 import { drawPlayerMeleeAttacks, drawEnemyMelee } from '../effects/MeleeAttackDraw.js';
 import {
@@ -477,11 +476,6 @@ export class ExploreRenderer {
     // Draw camp NPC (idle/interested in current room) and companion (cross-room).
     // Inside any Interior the PiP draws the companion that followed the player in.
     if (ownsSurface) this._renderCampNPCs(game);
-
-    // ── Bridge donation panel ─────────────────────────────────────────────────
-    if (game.bridgeMenuOpen && game.currentRoom?.type === ROOM_TYPES.RIDGE) {
-      this._renderBridgePanel(game);
-    }
 
     // ── Bridge donation arc ───────────────────────────────────────────────────
     const donAnim = game.ridgeSystem?.getDonationArc?.();
@@ -1382,88 +1376,6 @@ export class ExploreRenderer {
   // plane — the rule lives in PlaneSystem.objectVisibleToPlayer.
   shouldRenderBackgroundObject(obj, player, room) {
     return objectVisibleToPlayer(obj, player, room);
-  }
-
-  _renderBridgePanel(game) {
-    const ctx = this.renderer.fgCtx;
-    const room = game.currentRoom;
-    const donated = room.bridgeDonated ?? { stick: 0, metal: 0, rock: 0 };
-    const have = game.ridgeSystem.getHaveCounts();
-
-    const PAN_W = 208;
-    const ROW_H = 18;
-    const ROWS  = BRIDGE_MATERIALS.length;
-    const PAN_H = 14 + ROWS * ROW_H + 22; // top-pad + rows + prompt
-    const panX  = Math.round((GRID.WIDTH  - PAN_W) / 2);
-    const panY  = Math.round((GRID.HEIGHT - PAN_H) / 2) + 32; // nudge below center
-
-    ctx.save();
-
-    // Panel background + border
-    ctx.fillStyle = 'rgba(8, 8, 12, 0.92)';
-    ctx.fillRect(panX, panY, PAN_W, PAN_H);
-    ctx.strokeStyle = '#cc9933';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(panX + 0.5, panY + 0.5, PAN_W - 1, PAN_H - 1);
-
-    ctx.font = `${GRID.CELL_SIZE}px Unifont, monospace`;
-    ctx.textBaseline = 'top';
-
-    // One material row per line: [icon]  [have]  →  [donated/need]
-    const colIcon    = panX + 12;
-    const colHave    = panX + 36;
-    const colArrow   = panX + 78;
-    const colDonated = panX + 106;
-    const colCheck   = panX + 180;
-
-    for (let i = 0; i < BRIDGE_MATERIALS.length; i++) {
-      const mat  = BRIDGE_MATERIALS[i];
-      const don  = donated[mat.key] ?? 0;
-      const done = don >= mat.need;
-      const rowY = panY + 10 + i * ROW_H;
-
-      // Icon
-      const iconColors = { stick: '#8b6533', metal: '#aaaaaa', rock: '#777777' };
-      ctx.fillStyle = done ? '#557755' : iconColors[mat.key];
-      ctx.textAlign = 'left';
-      ctx.fillText(mat.char, colIcon, rowY);
-
-      // Player have count
-      ctx.fillStyle = done ? '#557755' : (have[mat.key] > 0 ? '#dddddd' : '#555555');
-      ctx.textAlign = 'right';
-      ctx.fillText(String(have[mat.key]), colHave, rowY);
-
-      // Arrow
-      ctx.fillStyle = '#555555';
-      ctx.textAlign = 'left';
-      ctx.fillText('\u2192', colArrow, rowY);
-
-      // Donated / need
-      ctx.fillStyle = done ? '#44bb66' : '#aaaaaa';
-      ctx.textAlign = 'left';
-      ctx.fillText(`${don}\u2009/\u2009${mat.need}`, colDonated, rowY);
-
-      // Checkmark when complete
-      if (done) {
-        ctx.fillStyle = '#44bb66';
-        ctx.textAlign = 'left';
-        ctx.fillText('\u2713', colCheck, rowY);
-      }
-    }
-
-    // Prompt
-    const anyLeft = BRIDGE_MATERIALS.some(m => (donated[m.key] ?? 0) < m.need);
-    const canDonate = anyLeft && BRIDGE_MATERIALS.some(m => have[m.key] > 0 && (donated[m.key] ?? 0) < m.need);
-    ctx.textAlign = 'center';
-    ctx.font = `12px Unifont, monospace`;
-    ctx.fillStyle = canDonate ? '#ffff44' : (anyLeft ? '#444444' : '#44bb66');
-    ctx.fillText(
-      anyLeft ? (canDonate ? '[SPACE] donate' : 'need more materials') : 'bridge complete',
-      panX + PAN_W / 2,
-      panY + PAN_H - 14
-    );
-
-    ctx.restore();
   }
 
   /**

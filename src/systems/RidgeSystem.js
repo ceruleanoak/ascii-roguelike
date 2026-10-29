@@ -2,6 +2,8 @@ import { GRID, ROOM_TYPES, NPC_INTERACTION_RANGE } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { BridgeWorker } from '../entities/BridgeWorker.js';
 import { protectRegion } from './roomFeatures.js';
+import { menuIntent } from './MenuInput.js';
+import { BridgeOverlay } from '../rendering/ui/BridgeOverlay.js';
 
 export const BRIDGE_MATERIALS = [
   { key: 'stick', char: '|', need: 15 },
@@ -153,6 +155,10 @@ export class RidgeSystem {
     this._animRow      = BRIDGE_ROW_MAX; // next row to place (counts down)
     this._animTimer    = 0;
     this._arcAnim      = null; // donation arc overlay
+    // Donation popup — a PauseSystem modal, as the Shop is (BridgeOverlay)
+    this.overlay      = new BridgeOverlay();
+    this.openedAt     = 0;
+    this.inputReadyAt = 0;
   }
 
   getDonationArc() { return this._arcAnim; }
@@ -377,11 +383,42 @@ export class RidgeSystem {
     this.buildBridge();
   }
 
+  // The donation popup is a PauseSystem modal: the world freezes beneath
+  // it, and game.bridgeMenuOpen mirrors whether it is up.
   openMenu() {
+    if (!this.game.pauseSystem.openModal(this)) return;
     this.game.bridgeMenuOpen = true;
+    this.openedAt = performance.now();
+    // Same input lockout as ShopSystem: the SPACE that opened the popup
+    // can't also register as DONATE.
+    this.inputReadyAt = this.openedAt + 1000;
   }
 
   closeMenu() {
+    if (this.game.pauseSystem.activeModal === this) this.game.pauseSystem.closeModal();
+    else this.game.bridgeMenuOpen = false;
+  }
+
+  // ── PauseSystem modal contract ───────────────────────────────────────────
+
+  // DONATE gives what the pile holds and closes; SHIFT closes without giving.
+  handleKey(key, event) {
+    if (event?.repeat) return;
+    if (performance.now() < this.inputReadyAt) return;
+    const intent = menuIntent(event);
+    if (intent === 'confirm') {
+      this.donateAvailable();
+      this.closeMenu();
+    } else if (intent === 'shift') {
+      this.closeMenu();
+    }
+  }
+
+  render(renderer, game) {
+    this.overlay.render(renderer, game, this);
+  }
+
+  onClose() {
     this.game.bridgeMenuOpen = false;
   }
 
@@ -391,12 +428,6 @@ export class RidgeSystem {
   handleSpacePress() {
     const room = this.game.currentRoom;
     if (room?.type === ROOM_TYPES.RIDGE && !room?.bridgeBuilt && !room?.bridgeAnimating) {
-      if (this.game.bridgeMenuOpen) {
-        // SPACE while menu open: donate then close
-        this.donateAvailable();
-        this.closeMenu();
-        return true;
-      }
       const worker = this.getWorker();
       if (worker && this.getWorkerDistance() < this.CLOSE_RANGE) {
         // Dialogue gates the trade: a fresh approach must be greeted first.
@@ -409,21 +440,6 @@ export class RidgeSystem {
         this.openMenu();
         return true;
       }
-    }
-    // Safety: close bridge menu if somehow still open outside RIDGE context
-    if (this.game.bridgeMenuOpen) {
-      this.closeMenu();
-      return true;
-    }
-    return false;
-  }
-
-  // SHIFT closes the bridge menu without donating. Mirrors handleSpacePress()
-  // above for the same reason.
-  handleShiftPress() {
-    if (this.game.bridgeMenuOpen) {
-      this.closeMenu();
-      return true;
     }
     return false;
   }
