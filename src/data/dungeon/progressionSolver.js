@@ -44,7 +44,7 @@ const BASE_STRIKE_CELLS = 1.5;      // a held melee weapon reaches the 8 neighbo
 const HOOK_MIN_CELLS = 4;           // hook posts only count a crack segment this far out (placeTemplateFixtures)
 const NOMINAL_WHIP_CELLS = 5;       // a floor supplies no whip; judge its hook posts by the default reach (toolKitForItem)
 const BOMB_BLAST_CELLS = 40 / CELL_PX;
-const TORCH_IGNITE_CELLS = 1.2;     // TORCH_INTERACT_RADIUS
+const TORCH_IGNITE_CELLS = BASE_STRIKE_CELLS; // lit by the Torch's own swing (torchIgnition.js)
 const LOCK_REACH_CELLS = 1.5;       // LOCK_BLOCK_REACH (DungeonPuzzleSystem)
 // Exploring every order of every trigger is exponential; past this many
 // states the proof is abandoned with a warning rather than hanging the editor.

@@ -1,3 +1,4 @@
+import { fireStrikesTorch } from './torchIgnition.js';
 import { GRID } from '../game/GameConfig.js';
 import { Ingredient } from '../entities/Ingredient.js';
 import { Item } from '../entities/Item.js';
@@ -36,7 +37,7 @@ import { freezeSurfaceRoom, thawSurfaceRoom, isInteriorActive } from './PlaneSys
  *   - Pac-man style pathing toward the player; always blocked by walls.
  *
  * Maze Torches (5 per maze, distributed at non-dead-end cells):
- *   - Lit by walking near one while wielding the Torch item — permanent once lit.
+ *   - Lit by striking one with a fire attack (torchIgnition.js) — permanent once lit.
  *   - A lit torch's light radius fully shields nearby tombs from ever spawning
  *     a ghost (never selected as blink candidate, immune even in doom mode).
  *   - Once all 5 are lit, every tomb's blink persists 3x as long (same
@@ -70,8 +71,6 @@ const DOOM_THRESHOLD  = 2;   // ghosts spawned before all-remaining-blink mode
 
 export const TORCH_COUNT           = 5;
 export const TORCH_LIGHT_RADIUS    = CS * 3.5;   // "decent sized radius" of a lit torch's glow
-export const TORCH_INTERACT_RADIUS = CS * 1.2;   // proximity needed to ignite — also reused by
-                                                  // DungeonPuzzleSystem for maze-parity Puzzle Room torches
 const GHOST_TORCH_DESTROY_RADIUS = CS * 1.0; // ghost proximity that destroys a torch
 export const TORCH_ALPHA_HIGH      = 0.3;
 export const TORCH_ALPHA_LOW       = 0.1;
@@ -463,15 +462,12 @@ export class MazeSystem {
       if (obj.hitCooldown > 0) obj.hitCooldown -= dt;
     }
 
-    // Maze Torches: pulse while lit; ignite on proximity while wielding Torch
+    // Maze Torches: pulse while lit; ignite when a fire attack strikes one
     for (const torch of mi.torches) {
       if (torch.destroyed) continue;
       torch.pulseTimer += dt;
       if (torch.lit) continue;
-      if (game.player.heldItem?.data?.weaponSubtype !== 'torch') continue; // Torch or Lantern
-      if (this._within(game.player.position, torch.position, TORCH_INTERACT_RADIUS)) {
-        torch.lit = true;
-      }
+      if (fireStrikesTorch(game.combatSystem, torch)) torch.lit = true;
     }
 
     // Ghosts destroy any torch they touch — snuffs it out and removes its

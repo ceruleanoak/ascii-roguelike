@@ -20,7 +20,7 @@ import { createPushRock } from './PushRock.js';
  */
 
 // Puzzle Room torch fixture — maze-parity ignite behavior (unlit until the
-// player approaches while wielding the Torch item, permanent once lit,
+// player strikes it with a fire attack, permanent once lit,
 // pulsing glow while lit), minus the ghost-shielding half of MazeSystem's
 // own MazeTorch (Puzzle Rooms have no ghosts — Tomb Ghosts, the dungeon's
 // only ghost type, spawn from Tombs and never come near a torch's light by
@@ -177,8 +177,8 @@ export function placeTemplateFixtures(data, { backgroundObjects, items, reserved
     hookPosts.push(obj);
   }
 
-  // Torches — maze-parity fixture: unlit until the player approaches while
-  // wielding the Torch item, permanent once lit, pulsing glow while lit.
+  // Torches — maze-parity fixture: unlit until a fire attack strikes it
+  // (torchIgnition.js), permanent once lit, pulsing glow while lit.
   // Purely decorative — never gates anything (contrast the 'torch'-kind
   // trigger above, a separate mechanic for a torch that DOES gate). `lit`
   // is an optional per-entry starting flag (author can place a torch

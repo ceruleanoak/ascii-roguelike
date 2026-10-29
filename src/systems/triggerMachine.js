@@ -1,5 +1,4 @@
 import { GRID } from '../game/GameConfig.js';
-import { TORCH_INTERACT_RADIUS } from './MazeSystem.js';
 import { readPushRock } from './PushRock.js';
 import { readWatcherEye } from './WatcherEye.js';
 
@@ -32,9 +31,10 @@ import { readWatcherEye } from './WatcherEye.js';
 //           BackgroundObject.takeDamage (HP preserved, glitterHit pulses true).
 //           The pulse is consumed here so one strike reads as one activation.
 // 'panel'   occupancy — the player or the companion standing on the cell.
-// 'torch'   proximity while wielding the Torch item. Authored activation is
-//           always 'permanent' since a lit torch never reverts, so the
-//           !trigger.active guard keeps it a one-shot.
+// 'torch'   struck by a fire attack (torchIgnition.js). Which attacks are
+//           live is combat state only the caller's `world.fireStrikes` can
+//           read. Authored activation is always 'permanent' since a lit torch
+//           never reverts, so the !trigger.active guard keeps it a one-shot.
 // 'push'    a Push Rock leaned on until it slides a cell (PushRock.js). It
 //           needs to know what the destination cell holds, which only the
 //           caller's `world` can say; always 'permanent'.
@@ -58,9 +58,7 @@ export function readTrigger(trigger, dt, player, companion = null, world = null)
   }
 
   trigger.pulseTimer += dt;
-  return !trigger.active
-    && player?.heldItem?.data?.weaponSubtype === 'torch' // Torch or Lantern
-    && within(player.position, trigger.position, TORCH_INTERACT_RADIUS);
+  return !trigger.active && !!world?.fireStrikes?.(trigger);
 }
 
 // The activation state machine itself. `isTriggeredNow` is the caller's
@@ -120,14 +118,6 @@ export function tickTriggers(triggers, dt, player, companion = null, world = nul
     }
   }
   return triggers.length > 0 && triggers.every(t => t.active);
-}
-
-// Straight-line proximity between two {x,y} positions — used by the torch
-// ignite check (mirrors MazeSystem's own private _within; distance here is
-// between two positions directly, not entity-vs-cell).
-export function within(a, b, radius) {
-  const dx = a.x - b.x, dy = a.y - b.y;
-  return dx * dx + dy * dy <= radius * radius;
 }
 
 // Whether an entity's cell-sized box overlaps the cell at these pixel coords.

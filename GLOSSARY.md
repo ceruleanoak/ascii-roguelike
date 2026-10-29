@@ -915,7 +915,8 @@ identity, not standard programming terms.
 
 ### Lantern
 - **Definition:** A Torch in a metal cage (`♁`, Torch + Metal). It does everything a Torch does
-  (lights Maze torches and dungeon torch triggers, burns on hit, glows while carried, counts at a
+  (its swing lights Maze torches and dungeon torch triggers, as any fire attack does — see
+  `torchIgnition.js`; burns on hit, glows while carried, counts at a
   Fireplace) and one thing more: it stays lit underwater, where a Torch goes out. Carried in any
   quick slot, it widens an underwater Room's dark from about one cell to five.
 - **In code:** `ITEMS['♁']` (`weaponSubtype: 'torch'`, `lightsUnderwater: true`); every torch

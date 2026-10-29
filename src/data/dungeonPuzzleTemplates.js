@@ -32,7 +32,7 @@
 //         triggered — same contract as Branch's own switches, just
 //         renamed/generalized so it can coexist with 'switch' as a visually
 //         distinct element in the same room), or 'torch' (ignite-triggered
-//         — same proximity + held-Torch-item contract as a decorative torch
+//         — same fire-strike contract (torchIgnition.js) as a decorative torch
 //         fixture below, but this one counts toward the exit-unlock check).
 //         A torch-kind trigger is always activation: 'permanent' (a lit
 //         torch never reverts) — 'timed' is rejected for this kind.
@@ -57,8 +57,8 @@
 //
 // torches: [{ row, col, lit }] — DECORATIVE maze-parity ignite fixtures,
 //   unrelated to the trigger system above (contrast kind:'torch' triggers,
-//   which look identical but do gate the exit). Unlit until the player
-//   approaches while wielding the Torch item, permanent once lit, pulsing
+//   which look identical but do gate the exit). Unlit until a fire
+//   attack strikes it (torchIgnition.js), permanent once lit, pulsing
 //   glow. `lit` is optional (defaults false) — set true to author a torch
 //   that starts already burning. Visual/lighting only — no ghost-shielding,
 //   since dungeons have no ghosts (contrast MazeSystem's own MazeTorch).

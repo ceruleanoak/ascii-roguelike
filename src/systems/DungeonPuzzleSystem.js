@@ -3,8 +3,8 @@ import { Particle } from '../entities/Particle.js';
 import { Ingredient } from '../entities/Ingredient.js';
 import { ITEMS, ITEM_TYPES } from '../data/items.js';
 import { paintDescentVisual, paintStairsUpVisual } from '../data/dungeonFloorTemplates.js';
-import { TORCH_INTERACT_RADIUS } from './MazeSystem.js';
-import { tickTriggers, within, overlapsCell, setTriggerVisual } from './triggerMachine.js';
+import { fireStrikesTorch } from './torchIgnition.js';
+import { tickTriggers, overlapsCell, setTriggerVisual } from './triggerMachine.js';
 import { tagInteriorPlane } from './PlaneSystem.js';
 import { Item } from '../entities/Item.js';
 import { BOMB_CHAR } from './BombBagSystem.js';
@@ -217,17 +217,14 @@ export class DungeonPuzzleSystem {
       }
     }
 
-    // Torches — maze-parity ignite: unlit until the player approaches while
-    // wielding the Torch item, permanent once lit (see PuzzleTorch in
+    // Torches — maze-parity ignite: unlit until a fire attack strikes the
+    // cell (torchIgnition.js), permanent once lit (see PuzzleTorch in
     // dungeonFixtures.js / MazeSystem's own MazeTorch for the fuller
     // maze mechanic this mirrors).
     for (const torch of floor.torches ?? []) {
       torch.pulseTimer += dt;
       if (torch.lit) continue;
-      if (player.heldItem?.data?.weaponSubtype !== 'torch') continue; // Torch or Lantern
-      if (within(player.position, torch.position, TORCH_INTERACT_RADIUS)) {
-        torch.lit = true;
-      }
+      if (fireStrikesTorch(this.game.combatSystem, torch)) torch.lit = true;
     }
   }
 
@@ -277,6 +274,7 @@ export class DungeonPuzzleSystem {
       collisionMap: floor.collisionMap,
       backgroundObjects: floor.backgroundObjects,
       isReserved: (col, row) => anchorCells.has(`${row},${col}`),
+      fireStrikes: (torch) => fireStrikesTorch(this.game.combatSystem, torch),
     };
   }
 
@@ -284,7 +282,7 @@ export class DungeonPuzzleSystem {
   // DungeonFloorGenerator.generatePuzzleRoom). Every trigger in room.triggers
   // (a 'switch', strike-triggered via the puzzleSignal/glitterHit contract;
   // a 'panel', occupancy-triggered like Branch's own panels; a 'torch',
-  // ignited by the same proximity + held-Torch-item contract as a decorative
+  // ignited by the same fire-strike contract (torchIgnition.js) as a decorative
   // PuzzleTorch (dungeonFixtures.js); or a 'push', a Push Rock shoved one cell) runs through the shared triggerMachine state
   // machine; the exit unlocks once every trigger is active at once — the
   // generalized form of both Branch's own "all at once" solve rule and the
@@ -309,7 +307,8 @@ export class DungeonPuzzleSystem {
     const world = {
       collisionMap: room.collisionMap,
       backgroundObjects: room.backgroundObjects,
-      isReserved: (col, row) => col === room.stairsUpCol && row === room.stairsUpRow
+      isReserved: (col, row) => col === room.stairsUpCol && row === room.stairsUpRow,
+      fireStrikes: (torch) => fireStrikesTorch(game.combatSystem, torch)
     };
     if (tickTriggers(room.triggers, dt, player, companion, world)) {
       room.puzzleSolved = true;
