@@ -72,9 +72,9 @@ Hard representation rules:
   is never given a slot.
 - **The one near-direct appearance: the credits.** The authors' names — and
   they roll only at the true ending, after the player's agency has fully
-  drained out of the game. *(Open since 2026-10-09: this was written when the
-  Mist Battle was called the true ending; which ending now carries the
-  credits is undecided.)*
+  drained out of the game. *(Decided 2026-10-29: **no credits.** This bullet, and the
+  "Choice" passage where the designer appears in the credits, predate that
+  decision and are the author's to restate.)*
 
 ### The Legend of Three — Canon speaking
 
@@ -158,7 +158,7 @@ are the THREE room — see "Endings" and "Path to Canon" below.)*
      Primary hands off to a living Flank.
   2. **Act 2 — the yield.** After Act 1 is complete, a brief delay, then the
      three characters fight each other. **The player has no input.**
-     Auto-battle, last one standing → credits roll.
+     Auto-battle, last one standing. (No credits — 2026-10-29.)
 - **The player authors but does not control** (Act 2). *Which* three characters
   you lost, with *what* gear, decides the field — then canon resolves it. The
   battle should be deterministic (seeded — the mulberry32/DemoSystem seam

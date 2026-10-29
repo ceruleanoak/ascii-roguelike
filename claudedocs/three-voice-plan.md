@@ -61,6 +61,26 @@ Cracked Slot, Cursed Run, Spell, Spell Sign).
    place of the standard pool (TAKEALL, FIGHT…).
 9. **Talk words are one family.** HELLO = TALK, the way WEST = LOOKWEST already.
 
+### Second round (user, 2026-10-29)
+
+10. **GIVE's slot mapping as proposed**: POWER → apex, GAIN → left, INFLUENCE →
+    right. GIVE's question is **built from the kinds whose slots are still open**,
+    so it changes with every crack (§5).
+11. **A kind already given isn't offered**; typing it anyway gets `NO.`
+12. **GIVE is a wish.** The kind question *is* its confirmation, so the answer
+    spends one wish (no separate `USE NTH WISH?`).
+13. **Cursed Spell Signs replace the standard pool** for the whole Cursed Run.
+14. **INFLUENCE words act differently per NPC.** PERSUADE is the first one:
+    `AS YOU WISH.` and any transaction the NPC offers happens without its cost.
+    The Witch and the Wise Fellow know of the Three and fear it (§8).
+15. **The Witch joins on a Cursed Run.** She offers to come along as a companion.
+    **COMMAND convinces any NPC to join** (not all of them carry a weapon), and
+    **any companion counts for the green Dungeon's panel puzzle**.
+16. **No HI / HEY.** Grammar rule 4 stands.
+17. **The Spectacles are cyan.** The Maze moves from yellow to cyan, and the Wise
+    Fellow's sayings follow it (done 2026-10-29).
+18. **No credits.**
+
 ## 3. How a player learns things (the reveal map)
 
 Stateless, so "revelation" is entirely *where a word can be learned*:
@@ -70,7 +90,7 @@ Stateless, so "revelation" is entirely *where a word can be learned*:
 | The Three can be talked to | Typing any talk word in the Three Room | none |
 | Where/what the True 3 are | Riddle lines (§4), Wise Fellow, slot colors | none |
 | That wishes exist / their kinds | The Three's comments when a wish word is cast in its room (§6); `GIVE`'s question | none / a crack |
-| A specific wish word | `GIVE` (§5) | a cracked slot + the Cursed Run — the True 3 is lost this run |
+| A specific wish word | `GIVE` (§5) | a wish + a cracked slot + the Cursed Run — the True 3 is lost this run |
 | A specific wish word | Cursed Spell Signs (§7), read with Spectacles | already Cursed |
 | A specific wish word | Memory from a past run | nothing — the mental save file |
 
@@ -83,8 +103,8 @@ word forever, and spends it later on a clean run for the price of one wish.
 ### Talk words (global aliases)
 
 `HELLO`, `GREET`, `SPEAK` join `TALK` (`BeelineSystem.talk`) everywhere. `HI` / `HEY`
-are 2–3 letter words; under grammar rule 4 they can't be whole Spells (they'd fire on
-any buffer ending in HI). **Open:** allow them as Three-Room-only words (§10).
+are not Spells, not even in the Three Room (grammar rule 4: they'd fire on any
+buffer ending in HI).
 
 ### In the Three Room
 
@@ -113,40 +133,61 @@ lines kept; new rows are drafts. Keys are the 9-letter buffer tails.
 | WHAT IS THREE? | `TISTHREE` | Three Room | `THREE IS TOLD.` (exists) | the potion the Wise Fellow talks about |
 | WHO IS THREE? | `HOISTHREE` | Three Room | `IT FILLS.` *(draft)* | the Mana Potion filling the meter |
 
-**Mismatch to settle:** `LOST MY SPECTACLES...` is a *yellow* Wise Fellow line, but
-`HEREISTWO` answers CYAN, and the Spectacles come from the Maze (not zone-exclusive;
-`legend-of-three.md` already flags this). Either move the saying to cyan, or accept
-it as a red herring.
+**Spectacles are cyan (settled 2026-10-29).** The mismatch was real: the Maze's home
+was yellow and so was `LOST MY SPECTACLES...`, while `HEREISTWO` answers CYAN. The
+Maze now spawns in green and cyan (cyan is its home), and the saying moved to the
+cyan Wise Fellow.
 
 ## 5. GIVE
 
-**Gate.** Three Room only. Elsewhere `...NOTHING.`.
+**Gate.** Three Room only; elsewhere `...NOTHING.`.
+
+**GIVE is a wish.** The kind question is its confirmation, the way `USE NTH WISH?`
+is for the others, so answering it spends one wish through `WishSystem.spend` (a
+quick slot is destroyed). It is all one wish: no second confirmation.
+
+**Slots (ratified 2026-10-29).** A kind is *open* while its slot is empty: not
+filled by an offering and not cracked.
+
+| Kind | Slot | Register |
+|---|---|---|
+| POWER | apex | Instinct |
+| GAIN | left | Experience |
+| INFLUENCE | right | Convention |
+
+**The question is built from the open kinds**, in the order Power, Influence, Gain,
+and is rebuilt every time GIVE is typed:
+
+| Open kinds | Question |
+|---|---|
+| all three | `POWER, INFLUENCE, OR GAIN?` |
+| two | `POWER OR GAIN?` (any pair) |
+| one | `GAIN?` (whichever is left) |
+| none | `NO.` (no question asked) |
+
+The full question is longer than the voice's usual ≤18 characters. It is the
+author's line, so it stands.
 
 **Flow.**
-1. `GIVE` → `POWER, INFLUENCE, OR GAIN?` (follow-ups: `POWER`, `INFLUENCE`, `GAIN`;
-   anything else → `...` and the awaiting state clears, as with EXITGAME's NO).
-2. On a kind: white flash (reuse the `game.cleanseWave` render path in
-   `RenderController`, or a ScreenFadeSystem stepped white — never a smooth ramp; see
-   retro alpha quantization) → the kind's slot cracks → the THREE says the revealed
-   spell's name, e.g. `XCAVATE.` → `ThreeRoomSystem._beginCurse` runs.
-3. The revealed name is **random within the kind** (uniform over every Spell whose
+1. `GIVE` → the question. All three kind words are follow-ups.
+2. Answering an **open** kind: spend the wish → white flash (reuse the
+   `game.cleanseWave` render path in `RenderController`, or a ScreenFadeSystem
+   stepped white, never a smooth ramp; see retro alpha quantization) → the kind's
+   slot cracks → the THREE says the revealed spell's name, e.g. `XCAVATE.` →
+   `ThreeRoomSystem._beginCurse` runs.
+3. Answering a kind that **wasn't offered** (its slot is filled or cracked) →
+   `NO.` No wish, no crack. Any other word → `...` and the awaiting state clears,
+   as with EXITGAME's NO.
+4. The revealed name is **random within the kind** (uniform over every Spell whose
    `wish` field matches).
 
-**Which slot cracks — proposed, author to ratify:**
-
-| Kind | Slot | Register | Why |
-|---|---|---|---|
-| POWER | apex | Instinct | combat advantage = reflex |
-| GAIN | left | Experience | room-completion = route knowledge, the speedrunner's power |
-| INFLUENCE | right | Convention | social conventions, NPCs |
-
 **Edge cases.**
-- **That kind's slot is already filled or cracked** → `NOTHING LEFT TO GIVE.`
-  *(draft)*; no flash, no curse. (Alternative: crack the next unfilled slot. Pick
-  one in P4.)
+- **No wishes left** (`wishesUsed >= 3`) → `NO.` *(my inference from "GIVE is a
+  wish"; confirm when P4 is built.)*
 - **A GIVE crack is a Cracked Slot**: grayed, framed and counted as filled (no glyph
   — draw the crack over the empty frame). So three GIVEs open the north door, and
-  Death is behind it.
+  Death is behind it. Three GIVEs also spend all three wishes, so no REVIVE is left
+  for Death's touch.
 - **Already Cursed** (an earlier wrong offering or GIVE): the flag isn't set twice,
   but the Undead still rise per crack — the existing `_beginCurse` behavior.
 - **Music** advances per crack (`_advanceMusic`), the same as an offering.
@@ -165,7 +206,8 @@ answers:
 | GAIN | `FOR GLORY.` |
 | INFLUENCE | `FOR CONTROL.` |
 
-Non-wish spells (LOOKWEST, TAKEALL, …) act normally.
+Non-wish spells (LOOKWEST, TAKEALL, …) act normally. GIVE is the one wish word the
+room answers by acting.
 
 **Required exception — REVIVE / CONTINUE at GAME_OVER.** Death's touch happens *in*
 the Three Room, so `currentRoom.isThreeRoom` is still true at the game-over screen.
@@ -176,13 +218,10 @@ The intercept must skip when the state is `GAME_OVER`, or the wish-revive that
 ## 7. Cursed Spell Signs
 
 `generateSpellSign` (`src/systems/roomSigns.js`) draws from `SPELL_SIGN_SPELLS`
-today. On `game.cursedRun` it draws from a **cursed pool** instead: every Spell
-with a `wish` field (derived from `SPELLS`, never a hand list that drifts). It's
-still the Greek cipher and still read by the Spectacles. The curse teaches the words
-the curse made you pay for.
-
-Open: replace the standard pool outright, or mix (e.g. 50/50)? The user's wording
-("can appear instead of") reads as replace-per-sign; P5 decides.
+today. **For the whole Cursed Run** (`game.cursedRun`) it draws only from the
+**cursed pool** instead: every Spell with a `wish` field (derived from `SPELLS`,
+never a hand list that drifts). It's still the Greek cipher and still read by the
+Spectacles. The curse teaches the words the curse made you pay for.
 
 ## 8. The wish taxonomy
 
@@ -241,25 +280,46 @@ stays earned (proof-item rule, `zone-cosmology.md`).
 
 ### INFLUENCE — for control
 
-One per NPC. Each extracts something the NPC would otherwise charge for, withhold or
-gate. The values are drafts.
+**One word acts differently on each NPC** (ratified 2026-10-29). What a word does
+to an NPC is data on that NPC, carried out by the NPC's owning system; the word
+itself just finds the nearest speaker.
 
-| NPC | Value extracted (draft) | Word (draft) | Owner |
-|---|---|---|---|
-| Witch | Her brew/hex without the price — ties to the open Witch's errand? | BARGAIN | Witch / HutSystem |
-| Wise Fellow | A rare saying without an Artifact | CONFIDE | WiseFellow |
-| Jeweler | The next piece free | APPRAISE | JewelerSystem |
-| Shopkeeper | Price cut to one coin | HAGGLE | ShopSystem |
-| Weapons Master | Training without the coin | EMULATE | WeaponsMasterSystem |
-| Alchemist | Brews without the ingredients | DISTILL | AlchemySystem |
-| Fisherman | The catch handed over | BAIT | FishingSystem |
-| Charon | Passage without the fare | BRIBE | CharonSystem |
-| Others (Hatter, Wizard, Storyteller, Fairy King, Goblin, Camp NPC) | *to design* | — | — |
+#### PERSUADE
 
-**Alternative to decide in P7:** one generic word (`PERSUADE`) that acts on the
-nearest speaker, with per-NPC effects as data on the NPC. That's fewer words to
-remember (see the mental-load rule for recipes) at the cost of the "every NPC has a
-word" fantasy.
+Spends a wish (the usual `USE NTH WISH?`). On an NPC who accepts, the THREE says
+`AS YOU WISH.` and **any transaction that NPC offers happens without its cost.**
+
+| NPC | PERSUADE | Owner |
+|---|---|---|
+| Weapons Master | works — his transaction without its cost | WeaponsMaster |
+| Fisherman | works — his transaction without its cost | Fisherman |
+| Shopkeeper | works — **drops the entire inventory onto the shop floor** for pickup | Shopkeeper / ShopSystem |
+| Bridge Worker (Ridge) | **refuses** — line *to design* | BridgeWorker |
+| Wise Fellow | **refuses**: `YOU FOOLISHLY SERVE.` — he knows of the Three and fears it | WiseFellow |
+| Witch | **refuses** — she knows of the Three and fears it, like the Wise Fellow; line *to design* | Witch |
+| Jeweler, Alchemist, Charon, Hatter, Wizard, Storyteller, Fairy King, Goblin, Camp NPC | *to design* | each NPC |
+
+Whether a refusal still spends the wish is open (§11).
+
+#### COMMAND (extends the existing spell)
+
+Today `CALL` / `COMMAND` charms the nearest enemy that bears the true name typed as
+its follow-up (`CommandSystem.commandNearest`). Extended: **COMMAND convinces any
+NPC to join you** as a companion. Not all of them carry a weapon; the ones that don't
+still follow, and still count as a companion. *To design:* how the follow-up names an
+NPC, and whether COMMAND on an NPC is an INFLUENCE wish (costs a wish) or stays free.
+
+#### The Witch on a Cursed Run
+
+The Witch is not tied to her open errand. **On a Cursed Run she offers to join you
+as a companion** (no word needed; she fears what you've done). What she does as a
+companion is *to design*.
+
+#### Any companion works
+
+**Every kind of companion counts wherever a companion is needed**, starting with the
+green Dungeon's Branch panel puzzle (`DungeonPuzzleSystem._updateBranchPanels`),
+which today reads only `game.companion`. Logged as bug #479.
 
 ## 9. Code shape (for the build sessions)
 
@@ -294,20 +354,22 @@ word" fantasy.
 | P4 | GIVE | the room's new trade |
 | P5 | Cursed Spell Sign pool | cursed runs teach wish words |
 | P6+ | GAIN words, a few letters per session — XCAVATE first (closes #478's hint gap) | |
-| P7+ | INFLUENCE words, NPC by NPC (or the generic-word alternative) | |
+| P7+ | INFLUENCE: PERSUADE (Master, Fisherman, Shopkeeper first), COMMAND on NPCs, the Witch's Cursed-Run offer | |
 
 ## 11. Open questions for the author
 
-1. Kind → slot mapping for GIVE (§5).
-2. GIVE on an already-cracked/filled kind slot: refuse, or crack the next free slot?
-3. Does GIVE *also* spend a wish, or are the crack and the curse the whole price?
-4. Cursed Spell Signs: replace the standard pool, or mix?
-5. INFLUENCE: one word per NPC, or one generic word (§8)?
-6. Does the Witch's INFLUENCE word tie into the open Witch's errand (planning inbox)?
-7. HI / HEY as Three-Room-only words (an exception to grammar rule 4)?
-8. The Spectacles' color: cyan (HEREISTWO) vs. the yellow Wise Fellow line (§4).
-9. Carried over from `zone-cosmology.md`: which ending carries the credits now that
-   the True ending is the Three Room.
+Settled 2026-10-29: slot mapping, repeat kinds (`NO.`), GIVE's cost (one wish),
+Cursed Signs (replace), INFLUENCE shape (per-NPC behavior; PERSUADE), the Witch
+(no errand tie), HI/HEY (no), the Spectacles (cyan; Maze moved), credits (none).
+
+Still open:
+1. GIVE with no wishes left: `NO.` (§5, my inference)?
+2. Does a refused PERSUADE (Wise Fellow, Witch, Bridge Worker) still spend the wish?
+3. COMMAND on an NPC: how is the NPC named, and does it cost a wish?
+4. What the Witch does as a companion.
+5. PERSUADE refusal lines for the Witch and the Bridge Worker; the remaining NPCs'
+   PERSUADE behavior.
+6. The other INFLUENCE words beyond PERSUADE and COMMAND, if any.
 
 ## 12. Proposed glossary terms
 
@@ -318,6 +380,7 @@ that first puts the term into code.
   (`game.wishesUsed`, `WishSystem.spend`).
 - **Wish Spell** — a Spell whose cast spends a Wish; carries a `wish` kind.
 - **Wish Kind** — Power / Influence / Gain.
+- **Persuade** — the Influence Wish Spell; an accepting NPC's transaction happens without its cost.
 - **Completion Spell** — a Gain Wish Spell tied to one room letter.
 - **Give** — the Three Room trade: a slot cracks, a Wish Spell's name is told.
 - **Cursed Spell Sign** — a Spell Sign drawn from the Wish Spell pool on a Cursed Run.

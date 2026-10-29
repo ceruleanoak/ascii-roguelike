@@ -973,10 +973,10 @@ identity, not standard programming terms.
 - **Not:** surfaced in-world text (the hidden canon is never spoken in-game).
 
 ### Mist Battle
-- **Definition:** The true ending, triggered when the third character is lost to the gray
+- **Definition:** The false ending, triggered when the third character is lost to the gray
   mist. Two acts: Act 1 is a controlled final battle in which the player fights mixed waves
   with all three lost characters at once as the Trine; after a brief delay, Act 2 has the three
-  fight each other with no player input, last one standing → credits.
+  fight each other with no player input, last one standing. There are no credits.
 - **In code:** `MistBattleSystem` (Act 1 only, reachable today from the CheatMenu BOSSES entry
   via `CheatWarpSystem.handleMistBattleTest`). Fed by `game.graySnapshots` /
   `game.lostCharacters` from `GrayZoneSystem`; the mist-out → Mist Battle wiring and Act 2 are
