@@ -347,18 +347,11 @@ export class ExitSystem {
     // Direction-bound letters: 'R' north only, 'O' never west.
     if (letterRefusesSide(letter, SLOT_DIRECTIONS[slot])) return true;
 
-    // 'R' (Ridge) cannot be the north exit when the room behind it would stand
-    // on the run's second consecutive north. Crossing a Ridge is a promise:
-    // its north always climbs into the gray zone (generateRidgeRoomImpl forces
-    // it). A Ridge reached on the second north has its own north answered by
-    // the Three Room instead, so the bridge the player paid an errand for would
-    // deliver them somewhere the room said it never went. Offering it on the
-    // third north is harmless — that traversal is intercepted before any room
-    // is built, so the Ridge is never stood in.
-    if (slot === 0 && letter === 'R' &&
-        this.game?.threeRoomSystem?.nextRoomsNorthReachesTheThree()) return true;
-
-    // 'R' (Ridge) also cannot land at the depth the pre-boss or pre-miniboss
+    // A Ridge on the run's second consecutive north is allowed: its north is
+    // the third, and the Three Room answering it instead of the gray zone is
+    // fine (user, 2026-10-28).
+    //
+    // 'R' (Ridge) cannot land at the depth the pre-boss or pre-miniboss
     // gate hijacks: both gates overwrite the CLEARED room's own north exit
     // with a forced 'B' door (ExitSystem's pre-boss gate at bossDepth - 1,
     // ZoneSystem.applyPreMinibossGate at depth 8), clobbering Ridge's own
@@ -368,12 +361,9 @@ export class ExitSystem {
 
     // 'P' (the Compass Rose) solves with 'R' on its own north
     // (PuzzleSystem._bindCompassTokens), so it cannot land where that room's
-    // north would refuse the Ridge: one room further on from either rule
-    // above (#474).
-    if (letter === 'P') {
-      if (slot === 0 && this.game?.threeRoomSystem?.northAfterNextReachesTheThree()) return true;
-      if (currentDepth != null && this._gateHijacksDepth(currentDepth + 2, zoneType)) return true;
-    }
+    // north would refuse the Ridge: one room before the gate depth above
+    // (#474).
+    if (letter === 'P' && currentDepth != null && this._gateHijacksDepth(currentDepth + 2, zoneType)) return true;
 
     // After the Goo Dragon, every exit must wear a still-undefeated zone
     // Boss's color (assignPostDragonColors). A letter hard-gated against

@@ -254,7 +254,8 @@ export class PuzzleSystem {
     // N (North, the red herring: it never becomes R) and a filler; east's and
     // west's keep their rolled letter first, then three fillers. No letter
     // repeats across the three cycles. Where the Ridge refuses the north
-    // (the Three Room approach, gate depths), the solve is the rolled letter.
+    // (one room before a gate depth, met only by a warp), the solve is the
+    // rolled letter.
     const filler = () => this._ringFillerLetter(room, used);
     const ridgeRefused = !!this.game.exitSystem?._slotRefuses(0, 'R', room.depth, room.zone);
     const cycles = {

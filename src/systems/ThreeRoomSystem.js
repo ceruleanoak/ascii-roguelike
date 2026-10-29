@@ -176,30 +176,6 @@ export class ThreeRoomSystem {
     this._northStreak = 0;
   }
 
-  /**
-   * Would a room reached by going north from here have its OWN north answered
-   * by the source room instead of by the world? True at exactly one point in a
-   * streak — this room stands on the first north, so the next one stands on the
-   * second and the north after that is the third.
-   *
-   * ExitSystem asks before offering a north letter whose room makes a promise
-   * about where its north goes; a Ridge, which always climbs into the gray
-   * zone, cannot keep that promise from the second north.
-   */
-  nextRoomsNorthReachesTheThree() {
-    return this._northStreak === NORTH_STREAK_TRIGGER - 2;
-  }
-
-  /**
-   * The same question one room further on: would the room reached by going
-   * north from here make the north after it the streak's second? ExitSystem
-   * asks before offering a north 'P' — the Compass Rose's solve is a Ridge on
-   * its own north, which that room could not offer.
-   */
-  northAfterNextReachesTheThree() {
-    return this._northStreak === NORTH_STREAK_TRIGGER - 3;
-  }
-
   /** Full run-scoped reset — death/title. */
   hardReset() {
     this.breakStreak();
