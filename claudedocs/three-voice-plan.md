@@ -399,6 +399,11 @@ acts the same as the Hex Witch enemy** (`H`, `hexMechanic` in `enemies.js`),
 including turning enemies into frogs, with the hex aimed at enemies instead of the
 player. More capabilities may come later.
 
+*Built 2026-10-29 (P7e): on a Cursed Run she never curses; the first talk is her offer, the
+second takes her on (`CampNPCSystem.takeFollower`), unless another companion already follows.
+`HexSystem` turns the nearest non-boss enemy within the Hex Witch's curse range into a Frog
+once per Hex Witch attack cycle (~1.9 s). Her lines are placeholders.*
+
 #### More INFLUENCE words (suggestions)
 
 Combat control fits the kind: bending enemies rather than NPCs. All are free of
@@ -459,7 +464,7 @@ Maze still park it outside.*
 | P5 ✅ 2026-10-29 | Cursed Spell Sign pool | cursed runs teach wish words |
 | P5b ✅ 2026-10-29 | Curse Clock + the player turns on themselves (§7b) | dodges/attacks delayed or dropped; wandering into hazards |
 | P6+ (XCAVATE ✅ 2026-10-29) | GAIN words, a few letters per session — XCAVATE first (closes #478's hint gap) | |
-| P7+ (PERSUADE, COMMAND, CHARM, SLEEP ✅ 2026-10-29) | INFLUENCE: PERSUADE (Master, Fisherman, Shopkeeper first), COMMAND on NPCs, the Witch's Cursed-Run offer | |
+| P7+ (PERSUADE, COMMAND, CHARM, SLEEP, the Witch ✅ 2026-10-29) | INFLUENCE: PERSUADE (Master, Fisherman, Shopkeeper first), COMMAND on NPCs, the Witch's Cursed-Run offer | |
 
 ## 11. Open questions for the author
 

@@ -215,6 +215,8 @@ export class CampNPCSystem {
     // while the player was already in the cave (bug #313).
     npc.plane = player.plane ?? 0;
 
+    game.hexSystem.update(dt, npc);
+
     // Find nearest enemy within aggro range (in same plane).
     // Inside an Interior the active enemies are on its floor, not currentRoom.
     const enemies = activeInteriorFloor(game)?.enemies ?? game.currentRoom?.enemies ?? [];
@@ -759,6 +761,19 @@ export class CampNPCSystem {
    * companion — an unarmed Camp NPC wearing its glyph and color, which still
    * picks up and fights like any hired one. Replaces any current companion.
    */
+  /**
+   * `npc` leaves its room or floor and follows as the companion
+   * (hireFollower) — COMMAND's YES and the Witch joining a Cursed Run.
+   */
+  takeFollower(npc) {
+    const game = this.game;
+    const npcs = game.interiorManager.activeNpcs();
+    const index = npcs.indexOf(npc);
+    if (index !== -1) npcs.splice(index, 1);
+    if (game.dialogueSystem?.getState?.()?.npc === npc) game.dialogueSystem.close?.();
+    return this.hireFollower(npc);
+  }
+
   hireFollower(npc) {
     const game = this.game;
     if (game.companion) game.physicsSystem.removeEntity(game.companion);
@@ -766,6 +781,7 @@ export class CampNPCSystem {
     const follower = new CampNPC(x, y, { x, y });
     follower.char = npc.char;
     follower.color = npc.color;
+    follower.hexes = !!npc.hexesAsCompanion;
     follower.plane = game.player?.plane ?? 0;
     this._promoteToCompanion(follower);
     // registerWithPhysics read the surface room's map; inside an Interior the

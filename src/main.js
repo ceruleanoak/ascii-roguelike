@@ -89,6 +89,7 @@ import { PunchSystem } from './systems/PunchSystem.js';
 import { WishSystem } from './systems/WishSystem.js';
 import { ThreeVoiceSystem } from './systems/ThreeVoiceSystem.js';
 import { InfluenceSystem } from './systems/InfluenceSystem.js';
+import { HexSystem } from './systems/HexSystem.js';
 import { RidgeSystem } from './systems/RidgeSystem.js';
 import { PolymorphSystem } from './systems/PolymorphSystem.js';
 import { TransmutationSystem } from './systems/TransmutationSystem.js';
@@ -270,6 +271,7 @@ class Game {
     this.wishSystem = new WishSystem();
     this.threeVoiceSystem = new ThreeVoiceSystem(this); // the Three answering for itself in its room
     this.influenceSystem = new InfluenceSystem(this); // Influence Wish Spells on the nearest NPC
+    this.hexSystem = new HexSystem(this); // the Witch companion's Hex: enemies near her become Frogs
     this.ridgeSystem = new RidgeSystem(this);
     this.polymorphSystem = new PolymorphSystem();
     this.transmutationSystem = new TransmutationSystem(this);

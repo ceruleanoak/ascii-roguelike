@@ -115,10 +115,7 @@ export class InfluenceSystem {
     const npc = this.commandTarget();
     if (!npc || this.commandRefusal() || !game.wishSystem.spend(game)) return '...NOTHING.';
 
-    const npcs = game.interiorManager.activeNpcs();
-    npcs.splice(npcs.indexOf(npc), 1);
-    if (game.dialogueSystem?.getState?.()?.npc === npc) game.dialogueSystem.close?.();
-    game.campNPCSystem.hireFollower(npc);
+    game.campNPCSystem.takeFollower(npc);
     return 'AS YOU WISH.';
   }
 

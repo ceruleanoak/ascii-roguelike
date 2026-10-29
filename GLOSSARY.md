@@ -1569,6 +1569,21 @@ identity, not standard programming terms.
   status at full pips, `Infinity` duration; `Enemy.takeDamage` wakes it).
 - **Not:** the Sleep Bomb, or Drowse tiers 1–2 (a slow, not sleep).
 
+### Hex (Witch companion)
+- **Definition:** What the hut Witch does as a companion. On a Cursed Run she doesn't curse the
+  player; talking to her once is her offer (`YOU CARRY IT. LET ME COME.`), and talking to her again
+  takes her up on it, unless another companion already follows. Following, she casts the Hex
+  Witch's curse at enemies instead of the player: the nearest enemy within the Hex Witch's curse
+  range becomes a Frog, once per Hex Witch attack cycle. Bosses, Frogs, and enemies commanded or
+  charmed to the player's side are never hexed.
+- **In code:** `Witch.getDialogueLines` → `CampNPCSystem.takeFollower`, which carries the Witch's
+  `hexesAsCompanion` onto the follower's `CampNPC.hexes`; `HexSystem.update` (called from the
+  companion's tick, `hexCooldown` on the companion) → `HexSystem.frog`. Range and interval read
+  from `ENEMIES.H`.
+- **Not:** the HEX spell (`SPELLS.HEX`, the Hex Witch's dropped spell, which dims and inverts one
+  enemy); not Polymorph (the player's own frog curse); not Transmutation (the wand's random
+  outcome).
+
 ### Beeline
 - **Definition:** An invulnerable rapid run, leaving a trail, from where the player stands to an
   open exit, cast by GO/HEAD <direction> and by ESCAPE/FLEE; ENTER (nearest door of any kind), EXIT (out of the current hut, Cavern or Maze),

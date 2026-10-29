@@ -80,6 +80,11 @@ export class CampNPC extends NeutralCharacter {
     // Equipped weapon (Item instance — borrows player attack pipeline)
     this.weapon = null;
 
+    // The Witch companion's Hex (HexSystem): `hexes` while she follows,
+    // `hexCooldown` the seconds until her next.
+    this.hexes = false;
+    this.hexCooldown = 0;
+
     // Tether anchor — fixed at campfire position
     this.campfirePos = { x: campfirePos.x, y: campfirePos.y };
     this.tetherRadius = TETHER_RADIUS;
