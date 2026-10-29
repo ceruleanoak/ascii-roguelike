@@ -312,6 +312,19 @@ identity, not standard programming terms.
 - **Not:** the north exit itself (that is a direction, written lowercase `north` in exit code); the
   Ridge (`R`), which is what the north exit leads toward.
 
+### Ridge (R)
+- **Definition:** The exit letter `R` and its Room, a ravine crossed by a bridge the player pays
+  an errand to build; the bridge's far side, the Ridge's own north, climbs into the gray zone.
+  `R` is always north and always reads Gray: the letter is drawn gray wherever it shows. A Ridge
+  may stand on any north of a north streak, so the third north can carry its bridge to the Three
+  Room instead. It is refused only where a pre-boss or pre-miniboss gate would overwrite its north
+  with a forced `B` (#284).
+- **In code:** `EXIT_LETTERS.R`; `ROOM_TYPES.RIDGE`; `RidgeSystem` (the bridge, the gray north's
+  `forceZone`); the gray letter in `ExitLetters.js`; the refusals in `ExitSystem._slotRefuses`.
+  The `R` exit's own `color` stays the zone it is in. Only its signage is gray, because
+  `recordExit` counts that color toward the color streaks.
+- **Not:** the Ridge's north exit (that is the gray-colored crossing itself); North (`N`).
+
 ### Compass Rose
 - **Definition:** The green P (Puzzle) Room, and the Compass's source. Two stone circles and a
   diamond around the room's center, each with one gap. A lean on a ring stone off its cardinal line

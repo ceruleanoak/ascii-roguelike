@@ -1,10 +1,11 @@
 // Exit letters — the N/E/W signage on an Explore Room's border (south is a
 // REST label, RestExitLabel.js). Drawn by ExploreRenderer each frame on the
 // foreground layer: key-press flash, Fairy-dust tint, the pre-boss gate's
-// pulsing 'B', and the Spectacles cipher. Letters are never stroked or
+// pulsing 'B', the Ridge's gray 'R', and the Spectacles cipher. Letters are never stroked or
 // outlined (no strokeText, no offset copies): a pixel font smears into a blob.
 
 import { GRID } from '../../game/GameConfig.js';
+import { ZONE_COLORS } from '../../data/zones.js';
 import { spectaclesTransform, isSpectaclesActive, CIPHER_FONT_SCALE } from '../../data/cipher.js';
 
 export function drawExitLetters(renderer, game, centerX, centerY) {
@@ -60,7 +61,12 @@ export function drawExitLetters(renderer, game, centerX, centerY) {
     // North exit
     if (game.currentRoom.exits.north && game.currentRoom.exits.north.letter) {
       const ex = game.currentRoom.exits.north;
-      const { letter, color: baseColor } = ex;
+      const { letter } = ex;
+      // 'R' is always north and always reads Gray: the Ridge is the way to
+      // the gray zone. Only the signage is gray: ex.color stays the Ridge
+      // room's own zone, since ZoneSystem.recordExit counts it toward the
+      // color streaks, and the Ridge's own north is what crosses into gray.
+      const baseColor = letter === 'R' ? ZONE_COLORS.gray : ex.color;
       let displayColor;
       if ((game.preBossGateActive || game.preMinibossGateActive) && letter === 'B') {
         // Sinusoidal orange-to-red pulse (~3s period)
