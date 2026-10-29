@@ -56,6 +56,7 @@ const WEAPON_PICKUP_RANGE = GRID.CELL_SIZE * 3;
 
 const FOLLOW_RADIUS = GRID.CELL_SIZE * 3;
 const FOLLOW_SPEED_MULT = 0.75;
+const HOLD_RADIUS = GRID.CELL_SIZE * 0.25; // close enough to stand on a commandTarget cell
 
 export class GolemCompanion {
   constructor(type, x, y) {
@@ -86,6 +87,9 @@ export class GolemCompanion {
     this.attackDamage = ATTACK_DAMAGE;
     this.attackRange = ATTACK_RANGE;
     this.equippedWeaponChar = null;
+    // A point it is sent to and holds (a Branch panel, DungeonPuzzleSystem);
+    // null = follow the player. Enemies still come first.
+    this.commandTarget = null;
 
     this.state = 'idle';
     this.target = null;
@@ -142,6 +146,7 @@ export class GolemCompanion {
       this.state = 'idle';
     }
     this.target = null;
+    this.commandTarget = null;
     if (game) {
       this.game = game;
       this.room = game.currentRoom;
@@ -203,6 +208,9 @@ export class GolemCompanion {
         this.state = 'chase';
         result = this._chaseAndAttack(deltaTime);
       }
+    } else if (this.commandTarget) {
+      this.state = 'idle';
+      this._holdAt(this.commandTarget);
     } else {
       this.state = 'idle';
       this._driftTowardPlayer(deltaTime, player);
@@ -347,6 +355,13 @@ export class GolemCompanion {
     steerToward(this.game, this, x, y, speed);
     this.targetVelocity.vx = this.velocity.vx;
     this.targetVelocity.vy = this.velocity.vy;
+  }
+
+  // Sent to a point (commandTarget): walk there, then stand on it.
+  _holdAt(point) {
+    const d = Math.hypot(point.x - this.position.x, point.y - this.position.y);
+    if (d > HOLD_RADIUS) this._steer(point.x, point.y, SPEED * FOLLOW_SPEED_MULT);
+    else this._halt();
   }
 
   _halt() {

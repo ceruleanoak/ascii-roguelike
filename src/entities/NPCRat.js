@@ -49,6 +49,7 @@ const AGGRO_RANGE = GRID.CELL_SIZE * 9;    // slightly broader than wild rat
 
 const FOLLOW_RADIUS = GRID.CELL_SIZE * 3;  // idle drift target around player
 const FOLLOW_SPEED_MULT = 0.6;
+const HOLD_RADIUS = GRID.CELL_SIZE * 0.25; // close enough to stand on a commandTarget cell
 const FLEE_SPEED_MULT = 1.4;
 const FLEE_REACH = GRID.CELL_SIZE * 4;     // how far ahead a retreat steers for
 const PERMA_FLEE_SPEED = 140;
@@ -88,6 +89,9 @@ export class NPCRat {
     // gold-tinted render, combat-elevated. Flipped only by CompanionSystem
     // (setPetsGilded); initialized here, never lazy-assigned.
     this.gilded = false;
+    // A point it is sent to and holds (a Branch panel, DungeonPuzzleSystem);
+    // null = follow the player. Enemies still come first.
+    this.commandTarget = null;
 
     this.state = 'idle';
     this.target = null;
@@ -145,6 +149,7 @@ export class NPCRat {
     this.attackTimer = 0;
     this.state = 'idle';
     this.target = null;
+    this.commandTarget = null;
     this.fleeTimer = 0;
     this.fleeFromPos = null;
     this.fleeTargetPos = null;
@@ -197,6 +202,10 @@ export class NPCRat {
       this._clearDig();
       this.state = 'chase';
       result = this._chaseAndAttack(deltaTime);
+    } else if (this.commandTarget) {
+      this._clearDig();
+      this.state = 'idle';
+      this._holdAt(this.commandTarget);
     } else {
       const dig = this._updateDig(deltaTime, player, siblings);
       if (dig) {
@@ -342,6 +351,13 @@ export class NPCRat {
     steerToward(this.game, this, x, y, speed);
     this.targetVelocity.vx = this.velocity.vx;
     this.targetVelocity.vy = this.velocity.vy;
+  }
+
+  // Sent to a point (commandTarget): walk there, then stand on it.
+  _holdAt(point) {
+    const d = Math.hypot(point.x - this.position.x, point.y - this.position.y);
+    if (d > HOLD_RADIUS) this._steer(point.x, point.y, SPEED * FOLLOW_SPEED_MULT);
+    else this._halt();
   }
 
   _halt() {

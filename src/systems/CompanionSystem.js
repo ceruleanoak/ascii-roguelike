@@ -4,6 +4,7 @@ import { NPCRat } from '../entities/NPCRat.js';
 import { Ingredient } from '../entities/Ingredient.js';
 import { planeOf, PLANE_SURFACE, tagInteriorPlane, isInteriorActive, canReachLoot, lootOnActiveLayer, lootOnSurface } from './PlaneSystem.js';
 import { GolemCompanion } from '../entities/GolemCompanion.js';
+import { CAMP_NPC_STATE } from '../entities/CampNPC.js';
 import { GOLEM_TYPES, GOLEM_CAP } from '../data/golems.js';
 
 // Grace period before a wild crow may loot-seek a piece of ground loot,
@@ -487,6 +488,34 @@ export class CompanionSystem {
       golem.setCollisionMap(floor.collisionMap);
       golem.setBackgroundObjects(floor.backgroundObjects); // layer-guard-ok: router-injected
     }
+  }
+
+  /**
+   * Every Companion walking with the player: the hired or commanded-NPC
+   * companion, tamed rats, golems and the commanded warband — any of them
+   * holds a Branch panel (bug #479). Crows fly, so they weigh on nothing.
+   * The fled, the downed and the dead are left out.
+   */
+  companions() {
+    const game = this.game;
+    const roster = [];
+    const companion = game.companion;
+    if (companion && companion.hp > 0 && companion.state !== CAMP_NPC_STATE.FLEEING) roster.push(companion);
+    for (const rat of game.tamedRats ?? []) if (rat.state !== 'permaFlee') roster.push(rat);
+    for (const golem of game.golems ?? []) if (golem.state !== 'dead') roster.push(golem);
+    if (game.commandSystem.followsHere()) {
+      for (const enemy of game.commandedEnemies ?? []) if (!enemy.isDying) roster.push(enemy);
+    }
+    return roster;
+  }
+
+  /** Forget every Companion's sent-to point: each goes back to following. */
+  clearCommandTargets() {
+    const game = this.game;
+    if (game.companion) game.companion.commandTarget = null;
+    for (const rat of game.tamedRats ?? []) rat.commandTarget = null;
+    for (const golem of game.golems ?? []) golem.commandTarget = null;
+    for (const enemy of game.commandedEnemies ?? []) enemy.commandTarget = null;
   }
 
   // Dungeon exit: bring pets back to surface coordinates beside the player,

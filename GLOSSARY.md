@@ -1414,6 +1414,12 @@ identity, not standard programming terms.
   also tamed rats (`tamedRats`, fed via Feed); also golems (`golems`, summoned by
   combining an ingredient with Mana at the REST Combine Station — see `src/data/golems.js`).
   State lives on `game`; logic in `src/systems/CompanionSystem.js`.
+  `CompanionSystem.companions()` is the one roster of walking companions — the Camp NPC,
+  tamed rats, golems and the commanded warband (`commandedEnemies`, on the surface and
+  Dungeon floors) — read wherever "a companion" is needed, e.g. pressing trigger panels.
+  Crows fly, so they never press. A companion sent somewhere carries a `commandTarget`
+  point (the Branch panel puzzle sends one to the free panel); it holds there until the
+  room is left or the puzzle solves (`clearCommandTargets()`), enemies still first.
 - **Not:** an Enemy; not an NPC (Companions don't initiate dialogue).
 
 ### Steering

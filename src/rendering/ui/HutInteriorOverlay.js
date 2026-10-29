@@ -221,7 +221,12 @@ export class HutInteriorOverlay {
 
     // ── 8. Interior enemies (full indicator rendering) ─────────────────────────
     // Use the shared non-sapping pass, then redraw sapping ones on top of player below.
-    this.renderController.exploreRenderer.drawNonSappingEnemies(game, game.activeFloor.enemies);
+    // A commanded warband follows into a Dungeon (CommandSystem.followsHere) and
+    // draws through the same pass, as it does on the surface.
+    const commanded = game.player?.inDungeon ? (game.commandedEnemies ?? []) : [];
+    this.renderController.exploreRenderer.drawNonSappingEnemies(game, commanded.length
+      ? [...game.activeFloor.enemies, ...commanded]
+      : game.activeFloor.enemies);
 
     // ── 8b. Interior NPCs (WiseFellow, Witch, ErrandCharacter) ────────────────
     // Delegate to each NPC's own render() so ErrandCharacter draws its hop

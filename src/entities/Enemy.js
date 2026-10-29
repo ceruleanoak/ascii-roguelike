@@ -171,6 +171,9 @@ export class Enemy {
     // enemies until the room is left, and like a commanded unit never turns
     // on the player once no foe is left.
     this.wishCharmed = false;
+    // Where CommandSystem walks an idle commanded unit to and holds it (a
+    // Branch panel, DungeonPuzzleSystem); null = the follow ring.
+    this.commandTarget = null;
 
     // Wandering behavior when idle
     this.wanderTimer = Math.random() * 3; // Random initial delay

@@ -418,7 +418,12 @@ near, both answer `...NOTHING.` and no wish is spent.*
 
 **Every kind of companion counts wherever a companion is needed**, starting with the
 green Dungeon's Branch panel puzzle (`DungeonPuzzleSystem._updateBranchPanels`),
-which today reads only `game.companion`. Logged as bug #479.
+which reads `CompanionSystem.companions()`.
+
+*Built 2026-10-29 (P7d, bug #479): the Camp NPC, tamed rats, golems and the commanded
+warband all press panels, and any of them is sent to the free one. The warband now follows
+onto Dungeon floors (`CommandSystem.snapIntoFloor` / `restoreFromFloor`); huts and the
+Maze still park it outside.*
 
 ## 9. Code shape (for the build sessions)
 

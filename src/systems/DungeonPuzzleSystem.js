@@ -139,7 +139,9 @@ export class DungeonPuzzleSystem {
   _updateBranchPanels(floor) {
     const { game } = this;
     const player = game.player;
-    const companion = game.companion;
+    // Any Companion holds a panel — the camp companion, a tamed rat, a golem,
+    // a commanded enemy (bug #479).
+    const companions = game.companionSystem.companions();
     const a = floor.panelAObj;
     const b = floor.panelBObj;
     if (!a || !b) return;
@@ -149,8 +151,8 @@ export class DungeonPuzzleSystem {
 
     const playerOnA = overlapsCell(player, aPx, aPy);
     const playerOnB = overlapsCell(player, bPx, bPy);
-    const compOnA = companion ? overlapsCell(companion, aPx, aPy) : false;
-    const compOnB = companion ? overlapsCell(companion, bPx, bPy) : false;
+    const compOnA = companions.some(c => overlapsCell(c, aPx, aPy));
+    const compOnB = companions.some(c => overlapsCell(c, bPx, bPy));
 
     const aPressed = playerOnA || compOnA;
     const bPressed = playerOnB || compOnB;
@@ -163,11 +165,11 @@ export class DungeonPuzzleSystem {
     if (!floor.puzzleSolved && aPressed && bPressed) {
       floor.puzzleSolved = true;
       this.revealEdges(floor, 'panels');
-      if (companion) companion.commandTarget = null;
+      game.companionSystem.clearCommandTargets();
       return;
     }
 
-    // Dispatch companion to the unoccupied panel while player stands on one.
+    // Dispatch a companion to the unoccupied panel while player stands on one.
     // Sticky once committed: the companion's crossing is a straight-line walk
     // with no pathfinding, so it takes real time (the two panels are 10
     // cols apart) — requiring the player to keep standing on their panel for
@@ -177,22 +179,20 @@ export class DungeonPuzzleSystem {
     // the `else` branch below, nulled commandTarget mid-walk, and permanently
     // stranded the companion partway across the room — the puzzle could
     // never solve for the rest of the run (bug #205). Re-deriving the target
-    // only while the companion isn't yet holding either panel (not on every
+    // only while no companion is yet holding either panel (not on every
     // tick) lets it keep walking — and then hold — once dispatched.
-    if (!floor.puzzleSolved && companion) {
+    if (!floor.puzzleSolved && companions.length) {
       if (!compOnA && !compOnB) {
-        if (playerOnA) {
-          companion.commandTarget = { x: bPx, y: bPy };
-        } else if (playerOnB) {
-          companion.commandTarget = { x: aPx, y: aPy };
-        }
-        // else: no assignment yet — leave commandTarget as-is (null before
-        // the first dispatch), companion just follows the player normally.
+        const goal = playerOnA ? { x: bPx, y: bPy } : playerOnB ? { x: aPx, y: aPy } : null;
+        // One companion goes: the one already sent, else the nearest to the
+        // free panel. With no assignment yet (player on neither panel) every
+        // companion just follows the player normally.
+        if (goal) (companions.find(c => c.commandTarget) ?? nearestTo(companions, goal)).commandTarget = goal;
       }
-      // else: companion is already holding a panel — leave commandTarget
+      // else: a companion is already holding a panel — leave commandTarget
       // alone so it stays put regardless of where the player wanders.
-    } else if (companion) {
-      companion.commandTarget = null;
+    } else if (floor.puzzleSolved) {
+      game.companionSystem.clearCommandTargets();
     }
   }
 
@@ -237,7 +237,7 @@ export class DungeonPuzzleSystem {
   _updateFloorTriggers(floor, dt) {
     if (!floor.triggers?.length || floor.triggersSolved) return;
     const { game } = this;
-    if (!tickTriggers(floor.triggers, dt, game.player, game.companion, this._pushWorld(floor))) return;
+    if (!tickTriggers(floor.triggers, dt, game.player, game.companionSystem.companions(), this._pushWorld(floor))) return;
     floor.triggersSolved = true;
     for (const block of floor.backgroundObjects.filter(obj => obj.typeId === 'trigger_block' && !obj.destroyed)) {
       floor.backgroundObjects.splice(floor.backgroundObjects.indexOf(block), 1);
@@ -259,7 +259,7 @@ export class DungeonPuzzleSystem {
     if (!floor.gateRock || floor.gateRock.active) return;
     const { game } = this;
     // The 'push' descent is hidden, so revealEdges sounds the chime itself.
-    if (tickTriggers([floor.gateRock], dt, game.player, game.companion, this._pushWorld(floor))) {
+    if (tickTriggers([floor.gateRock], dt, game.player, game.companionSystem.companions(), this._pushWorld(floor))) {
       this.revealEdges(floor, 'push');
     }
   }
@@ -296,7 +296,6 @@ export class DungeonPuzzleSystem {
   _updatePuzzleRoom(room, dt) {
     const { game } = this;
     const player = game.player;
-    const companion = game.companion;
     if (room.puzzleSolved) return;
 
     this._restockBomb(room);
@@ -310,7 +309,7 @@ export class DungeonPuzzleSystem {
       isReserved: (col, row) => col === room.stairsUpCol && row === room.stairsUpRow,
       fireStrikes: (torch) => fireStrikesTorch(game.combatSystem, torch)
     };
-    if (tickTriggers(room.triggers, dt, player, companion, world)) {
+    if (tickTriggers(room.triggers, dt, player, game.companionSystem.companions(), world)) {
       room.puzzleSolved = true;
       room.stairsUpLocked = false;
       paintStairsUpVisual(room.stairsUpObj, false);
@@ -557,4 +556,15 @@ export class DungeonPuzzleSystem {
     const dx = px - cx, dy = py - cy;
     return Math.sqrt(dx * dx + dy * dy) < radius;
   }
+}
+
+/** The member of `bodies` standing nearest to `point`. */
+function nearestTo(bodies, point) {
+  let nearest = null;
+  let nearestDist = Infinity;
+  for (const body of bodies) {
+    const dist = Math.hypot(body.position.x - point.x, body.position.y - point.y);
+    if (dist < nearestDist) { nearest = body; nearestDist = dist; }
+  }
+  return nearest;
 }

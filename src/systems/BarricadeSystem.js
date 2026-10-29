@@ -489,7 +489,7 @@ export class BarricadeSystem {
         isReserved: isExitLetterTile,
         onMove: () => this.game.renderer?.markBackgroundDirty?.()
       };
-      if (tickTriggers(barricade.triggers, deltaTime, this.game.player, this.game.companion, world)) {
+      if (tickTriggers(barricade.triggers, deltaTime, this.game.player, this.game.companionSystem.companions(), world)) {
         this._lift(room, barricade);
       }
       return;

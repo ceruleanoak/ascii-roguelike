@@ -25,11 +25,15 @@ import { isInteriorActive } from './PlaneSystem.js';
  *     aggro SFX, windups, leaps, charges-at-player, and memory marks can
  *     never resolve against them — they are, mechanically, not part of the
  *     fight against you.
- *   - Follow scope: EXPLORE surface rooms only. On room swap the roster
- *     teleports in around the player (RoomGenerator.findSpawnPosition search)
- *     and re-registers with physics; while an interior (hut/dungeon/maze) or
- *     a non-EXPLORE state owns the screen the roster simply parks — not
- *     ticked, not rendered, roster intact.
+ *   - Follow scope: EXPLORE surface rooms and Dungeon floors. On room swap
+ *     the roster teleports in around the player (RoomGenerator.findSpawnPosition
+ *     search) and re-registers with physics; each Dungeon floor takes it in
+ *     beside the player (snapIntoFloor), and leaving the Dungeon brings it
+ *     back out (restoreFromFloor), as for the pets (bug #479). While a hut,
+ *     the Maze or a non-EXPLORE state owns the screen the roster simply
+ *     parks — not ticked, not rendered, roster intact.
+ *   - Any companion holds a Branch panel: an idle member with a
+ *     `commandTarget` walks there and holds instead of taking the ring.
  *   - Cap: three commanded at once (MAX_COMMANDS). Boss-tier refuses command
  *     (its true name is knowable but does not bend). A commanded unit that
  *     dies frees its slot on the next update pass.
@@ -43,6 +47,8 @@ const MAX_COMMANDS = 3;
 // then stand. Just over a weapon's reach band — close enough to look sworn,
 // far enough not to bodyblock doorways.
 const FOLLOW_DISTANCE = GRID.CELL_SIZE * 2.5;
+// Close enough to stand on a commandTarget cell.
+const HOLD_DISTANCE = GRID.CELL_SIZE * 0.25;
 
 export class CommandSystem {
   constructor(game) {
@@ -157,7 +163,7 @@ export class CommandSystem {
   update() {
     const game = this.game;
     const roster = game.commandedEnemies;
-    if (!roster.length) return;
+    if (!roster.length || !this.followsHere()) return;
     this._pruneDead();
 
     const player = game.player;
@@ -167,11 +173,12 @@ export class CommandSystem {
       // machine owns the body — never fight the AI for the velocity.
       if (enemy.target && enemy.target !== player) continue;
 
-      const dx = player.position.x - enemy.position.x;
-      const dy = player.position.y - enemy.position.y;
-      const dist = Math.hypot(dx, dy);
-      if (dist > FOLLOW_DISTANCE) {
-        steerToward(game, enemy, player.position.x, player.position.y, enemy.speed);
+      // Sent to a point: walk there and stand on it; otherwise take the ring.
+      const goal = enemy.commandTarget ?? player.position;
+      const holdDistance = enemy.commandTarget ? HOLD_DISTANCE : FOLLOW_DISTANCE;
+      const dist = Math.hypot(goal.x - enemy.position.x, goal.y - enemy.position.y);
+      if (dist > holdDistance) {
+        steerToward(game, enemy, goal.x, goal.y, enemy.speed);
         // Mirror the steer into targetVelocity so the canonical tick's
         // _blendVelocity converges on the same heading instead of dragging
         // the body back toward its pre-command momentum.
@@ -186,6 +193,52 @@ export class CommandSystem {
         enemy.targetVelocity.vx = 0;
         enemy.targetVelocity.vy = 0;
       }
+    }
+  }
+
+  /**
+   * Whether the warband is with the player: on the surface, or on a Dungeon
+   * floor. A hut or the Maze leaves it parked outside.
+   */
+  followsHere() {
+    return !isInteriorActive(this.game) || !!this.game.player?.inDungeon;
+  }
+
+  /**
+   * Dungeon floor activation (DungeonSystem._activateFloor): the warband comes
+   * down beside the player and walks the floor's grid.
+   */
+  snapIntoFloor(floor) {
+    this._arriveBeside(floor);
+  }
+
+  /** Leaving the Dungeon: the warband comes back out to the surface room. */
+  restoreFromFloor() {
+    const room = this.game.currentRoom;
+    if (room) this._arriveBeside(room);
+  }
+
+  /**
+   * Re-wire every member to `place` (a surface room or a Dungeon floor) and
+   * set it down by the player, its sent-to point forgotten.
+   */
+  _arriveBeside(place) {
+    const game = this.game;
+    const roster = game.commandedEnemies;
+    if (!game.player) return;
+    for (let i = 0; i < roster.length; i++) {
+      const enemy = roster[i];
+      enemy.setCollisionMap(place.collisionMap);
+      enemy.setBackgroundObjects(place.backgroundObjects);
+      enemy.setRoom(place);
+      enemy.commandTarget = null;
+      const angle = -Math.PI / 2 + i * ((Math.PI * 2) / Math.max(roster.length, 3));
+      enemy.position.x = game.player.position.x + Math.cos(angle) * GRID.CELL_SIZE * 1.5;
+      enemy.position.y = game.player.position.y + Math.sin(angle) * GRID.CELL_SIZE * 1.5;
+      enemy.velocity.vx = 0;
+      enemy.velocity.vy = 0;
+      enemy.pathNodes = [];
+      enemy.currentDirection = { x: 0, y: 0 };
     }
   }
 
@@ -221,6 +274,7 @@ export class CommandSystem {
       enemy.setGame(game);
       enemy.setRoom(room);
       enemy.plane = 0;
+      enemy.commandTarget = null;
 
       // Arrive beside the player, spread by index so a full retinue doesn't
       // stack into one cell. Search honors walls; fall back to a raw offset

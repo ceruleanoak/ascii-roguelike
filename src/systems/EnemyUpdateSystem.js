@@ -72,8 +72,9 @@ export class EnemyUpdateSystem {
     // Commanded warband (CommandSystem) ticks through this same canonical loop
     // so exactly one drive per frame holds for them too — they live outside
     // room.enemies by design (aggro-list removal), so they ride along here.
-    // They stay on the surface while the player is indoors.
-    const roster = interior ? [] : (game.commandedEnemies ?? []);
+    // They follow the player down into a Dungeon, but stay on the surface
+    // while a hut or the Maze owns the frame (CommandSystem.followsHere).
+    const roster = game.commandSystem.followsHere() ? (game.commandedEnemies ?? []) : [];
     const tickedList = roster.length ? [...enemies, ...roster] : enemies;
     const player = game.player;
 

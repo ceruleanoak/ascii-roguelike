@@ -30,7 +30,8 @@ import { readWatcherEye } from './WatcherEye.js';
 // 'switch'  strike-triggered, via the puzzleSignal/glitterHit contract in
 //           BackgroundObject.takeDamage (HP preserved, glitterHit pulses true).
 //           The pulse is consumed here so one strike reads as one activation.
-// 'panel'   occupancy — the player or the companion standing on the cell.
+// 'panel'   occupancy — the player or any Companion standing on the cell
+//           (CompanionSystem.companions, bug #479).
 // 'torch'   struck by a fire attack (torchIgnition.js). Which attacks are
 //           live is combat state only the caller's `world.fireStrikes` can
 //           read. Authored activation is always 'permanent' since a lit torch
@@ -41,7 +42,7 @@ import { readWatcherEye } from './WatcherEye.js';
 // 'eye'     a Watcher Eye (WatcherEye.js) struck by a melee blow while open.
 //           It watches the player to decide when it is open; always
 //           'permanent'.
-export function readTrigger(trigger, dt, player, companion = null, world = null) {
+export function readTrigger(trigger, dt, player, companions = [], world = null) {
   if (trigger.kind === 'push') return readPushRock(trigger, dt, player, world);
   if (trigger.kind === 'eye') return readWatcherEye(trigger, dt, player);
 
@@ -54,7 +55,7 @@ export function readTrigger(trigger, dt, player, companion = null, world = null)
   if (trigger.kind === 'panel') {
     const px = trigger.position.x, py = trigger.position.y;
     return overlapsCell(player, px, py)
-      || (companion ? overlapsCell(companion, px, py) : false);
+      || companions.some(c => overlapsCell(c, px, py));
   }
 
   trigger.pulseTimer += dt;
@@ -108,10 +109,10 @@ export function setTriggerVisual(trigger, active) {
  *
  * `world` is passed through to the 'push' read only (see readPushRock).
  */
-export function tickTriggers(triggers, dt, player, companion = null, world = null) {
+export function tickTriggers(triggers, dt, player, companions = [], world = null) {
   for (const trigger of triggers) {
     const wasActive = trigger.active;
-    advanceTrigger(trigger, dt, readTrigger(trigger, dt, player, companion, world));
+    advanceTrigger(trigger, dt, readTrigger(trigger, dt, player, companions, world));
     if (trigger.active !== wasActive && trigger.kind !== 'torch' && trigger.kind !== 'push' &&
         trigger.kind !== 'eye') {
       setTriggerVisual(trigger, trigger.active);

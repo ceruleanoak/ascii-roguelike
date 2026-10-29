@@ -167,7 +167,7 @@ export class PushRockSystem {
       onMove: () => game.renderer?.markBackgroundDirty?.()
     };
     for (const entry of live) {
-      if (tickTriggers([entry.rock], deltaTime, game.player, game.companion, world)) {
+      if (tickTriggers([entry.rock], deltaTime, game.player, game.companionSystem.companions(), world)) {
         this._answer(entry);
       }
     }

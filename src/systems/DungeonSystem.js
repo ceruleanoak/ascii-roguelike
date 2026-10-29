@@ -315,8 +315,8 @@ export class DungeonSystem {
 
     // Bring camp companion (if any) into the dungeon floor
     game.campNPCSystem?.snapCompanionToPlayer?.();
+    game.companionSystem.clearCommandTargets();
     if (game.companion) {
-      game.companion.commandTarget = null;
       // New floor = fresh room → fully sanitize the companion's weapon state.
       game.campNPCSystem?._sanitizeWeaponForCarrier?.(game.companion.weapon);
       game.companion._attackCooldown = 0;
@@ -328,6 +328,8 @@ export class DungeonSystem {
     // Pet companions (crows + tamed rats) descend with the player — mortal,
     // no heal on floor swap. CompanionSystem owns the roster logic.
     game.companionSystem?.snapPetsIntoFloor?.(floor);
+    // The commanded warband comes down too (bug #479).
+    game.commandSystem.snapIntoFloor(floor);
 
     // Vault arrival gilds the pets that survived the descent — the dungeon
     // boss layer's Game Changer (claudedocs/dungeon-boss-green.md). The
@@ -468,8 +470,8 @@ export class DungeonSystem {
 
     // Bring the companion back outside beside the player
     game.campNPCSystem?.snapCompanionToPlayer?.();
+    game.companionSystem.clearCommandTargets();
     if (game.companion) {
-      game.companion.commandTarget = null;
       // Restore the surface collision map — the floor-synced map from
       // _activateFloor has different geometry, and carrying it outside makes
       // the companion collide with walls that no longer exist (#141;
@@ -481,6 +483,7 @@ export class DungeonSystem {
 
     // Pet companions: surface coordinates, surface maps, gilded cleared.
     game.companionSystem?.restorePetsFromFloor?.();
+    game.commandSystem.restoreFromFloor();
 
     // Dungeon boss layer: tear down any live encounter (no payout on retreat).
     game.dungeonBossSystem?.reset?.();
