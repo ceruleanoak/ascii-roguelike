@@ -90,8 +90,10 @@ Refusal lines are drafts to tune:
 
 Already shipped utility Spells that stay as they are: CLEANSE, HEAL, UNCURSE, REVIVE, CONTINUE, BRIDGE, SIT/SITDOWN, CALL/COMMAND, HEX (learned), FROG (learned), CHEAT, CLOSE/CLOSEGAME/EXITGAME (renamed from EXIT 2026-10-25).
 
+Wish words (CLEANSE → PURGE, the Power / Influence / Gain kinds, GIVE, and the per-room completion Spells) are planned in `three-voice-plan.md`.
+
 ## Excluded
 
 - **Inventory verbs** (USE, DROP, SWAP…). A word costs more keystrokes than the key it replaces. That's no use to the player. EQUIP is the exception: it dresses a whole loadout at once, which no single key does.
 - **Item and ingredient names.** No Spell is named for an item or ingredient (`check:data` fails one).
-- **The Three Room meta layer** (HEREISONE … TISTHREE, WHATIS…). This is hidden canon and stays outside the release catalogue.
+- **The Three Room meta layer** (HEREISONE … TISTHREE, WHATIS…, the Three's talk answers, GIVE). This is hidden canon and stays outside the release catalogue; it is planned in `three-voice-plan.md`.

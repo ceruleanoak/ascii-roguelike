@@ -189,6 +189,10 @@ way south, which gives the EXIT command in puzzle form."*
 Still open from the old list: whether "all 3 zone bosses in one run" gets an
 end beat at all.
 
+The Three's voice in its room (talk words, the True 3 riddles, wishes and **GIVE**,
+which trades a Three Room slot for a wish word and begins a Cursed Run) is planned
+in `three-voice-plan.md`.
+
 ### Path to Canon — the CLI
 
 *(Stated 2026-10-09.)* The true point of the game is to **exit** to a CLI,
