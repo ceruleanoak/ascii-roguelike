@@ -6,6 +6,7 @@ import { CHARACTER_TYPES } from '../data/characters.js';
 import { sessionDeaths, downloadSessionLedger } from './DeathLedgerSystem.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { Enemy } from '../entities/Enemy.js';
+import { isInteriorActive } from './PlaneSystem.js';
 
 const GRID_COLS = 4;
 const TILE_COLS = 5;   // cell-widths per tile
@@ -93,6 +94,11 @@ export class CheatMenu {
     // Dungeon Graph, plus one per named Puzzle Room template aimed at the
     // Trial node. See DungeonSystem.debugWarpItems.
     const dungeonWarpItems = this.game?.currentRoom?.dungeon ? this.game.dungeonSystem.debugWarpItems() : [];
+
+    // COMPANIONS — a Camp NPC already hired and armed (CampNPCSystem).
+    const companionItems = [
+      { char: '☺', name: 'CAMP NPC (SWORD)', type: 'camp_companion', weaponChar: '†', color: '#ff8866' }
+    ];
 
     const characterItems = Object.entries(CHARACTER_TYPES).map(([type, data]) => {
       const isActive = this.game && this.game.activeCharacterType === type;
@@ -210,6 +216,7 @@ export class CheatMenu {
     if (boulderTestItems.length) children.push({ name: 'BOULDER TEST', items: boulderTestItems });
     if (dungeonWarpItems.length) children.push({ name: 'DUNGEON WARP', items: dungeonWarpItems });
     if (characterItems.length) children.push({ name: 'CHARACTERS', items: characterItems });
+    children.push({ name: 'COMPANIONS', items: companionItems });
     if (weaponChildren.length) children.push({ name: 'WEAPONS', children: weaponChildren });
     if (keyItems.length) children.push({ name: 'KEY ITEMS', items: keyItems });
     if (armorItems.length) children.push({ name: 'ARMOR', items: armorItems });
@@ -354,6 +361,13 @@ export class CheatMenu {
         return null;
       case 'spawn_enemy':
         this.spawnEnemyAtPlayer(result.enemy);
+        return null;
+      case 'spawn_companion':
+        if (game.stateMachine.getCurrentState() !== GAME_STATES.EXPLORE || isInteriorActive(game)) {
+          console.log('[CHEAT] ⚠ Companion spawn only works on the EXPLORE surface.');
+          return null;
+        }
+        game.campNPCSystem.spawnCheatCompanion(result.weaponChar);
         return null;
       case 'spawn_object': {
         const objects = this.spawnObjectAtPlayer(result.objChar);
@@ -686,6 +700,7 @@ export class CheatMenu {
       return { action: 'change_character', characterType: selected.characterType };
     }
     if (selected.type === 'enemy') return { action: 'spawn_enemy', enemy: selected };
+    if (selected.type === 'camp_companion') return { action: 'spawn_companion', weaponChar: selected.weaponChar };
     if (selected.type === 'spawn_object') return { action: 'spawn_object', objChar: selected.objChar };
     if (selected.type === 'trigger_boulder') return { action: 'trigger_boulder' };
     // The whole entry rides through: DungeonSystem.debugWarpItems() owns its

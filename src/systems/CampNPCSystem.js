@@ -3,6 +3,7 @@ import { steerToward } from './npcSteering.js';
 import { buildTerrainGrid, lineWithin, DRY_GROUND } from './steeringTerrain.js';
 import { ZONES } from '../data/zones.js';
 import { CampNPC, CAMP_NPC_STATE } from '../entities/CampNPC.js';
+import { Item } from '../entities/Item.js';
 import { isInteriorActive, activeInteriorFloor } from './PlaneSystem.js';
 
 /**
@@ -717,20 +718,7 @@ export class CampNPCSystem {
       npc.hp = npc.maxHp;
       game.menuSystem?.showPickupMessage?.('HEALED.');
     } else if (anim.intent === 'hire') {
-      // Promote to companion. Move from room.campNPC to game.companion.
-      if (game.currentRoom && game.currentRoom.campNPC === npc) {
-        game.currentRoom.campNPC = null;
-      }
-      game.companion = npc;
-      npc.setCompanion();
-      // Promoting to companion is the first moment the bow/gun fire pipeline
-      // becomes active — make sure nothing carried over from the INTERESTED
-      // phase or a previous owner.
-      if (npc.weapon) this._sanitizeWeaponForCarrier(npc.weapon);
-      npc._attackCooldown = 0;
-      // The room.campNPC was never added to physicsSystem (only game.companion
-      // gets registered). Register now so the companion can move immediately.
-      this.registerWithPhysics(game.physicsSystem);
+      this._promoteToCompanion(npc);
       game.menuSystem?.showPickupMessage?.('AT YOUR SIDE.');
     } else {
       // Hint — the NPC speaks a zone wise-saying through the dialogue box.
@@ -742,6 +730,45 @@ export class CampNPCSystem {
       game.dialogueSystem?.open(npc, [text]);
     }
     game.menuSystem?.updateUI?.();
+  }
+
+  /**
+   * Make `npc` the active companion: off the room (room.campNPC → game.companion),
+   * its weapon made ready, registered with physics. The coin hire and the
+   * CheatMenu's COMPANIONS spawn both land here.
+   */
+  _promoteToCompanion(npc) {
+    const game = this.game;
+    if (game.currentRoom && game.currentRoom.campNPC === npc) {
+      game.currentRoom.campNPC = null;
+    }
+    game.companion = npc;
+    npc.setCompanion();
+    // Promoting to companion is the first moment the bow/gun fire pipeline
+    // becomes active — make sure nothing carried over from the INTERESTED
+    // phase or a previous owner.
+    if (npc.weapon) this._sanitizeWeaponForCarrier(npc.weapon);
+    npc._attackCooldown = 0;
+    // The room.campNPC was never added to physicsSystem (only game.companion
+    // gets registered). Register now so the companion can move immediately.
+    this.registerWithPhysics(game.physicsSystem);
+  }
+
+  /**
+   * CheatMenu COMPANIONS: a Camp NPC already hired, holding `weaponChar`,
+   * beside the player. Replaces any current companion. Surface EXPLORE only —
+   * registerWithPhysics reads the current room's collision map.
+   */
+  spawnCheatCompanion(weaponChar) {
+    const game = this.game;
+    const room = game.currentRoom;
+    const origin = game.player.position;
+    const pos = game.findSpawnPosition(origin, GRID.CELL_SIZE * 2, room.collisionMap, room.enemies) ?? origin;
+    if (game.companion) game.physicsSystem.removeEntity(game.companion);
+    const npc = new CampNPC(pos.x, pos.y, { x: pos.x, y: pos.y });
+    npc.weapon = new Item(weaponChar, pos.x, pos.y);
+    this._promoteToCompanion(npc);
+    return npc;
   }
 
   // ─── Damage from enemies ────────────────────────────────────────────────
