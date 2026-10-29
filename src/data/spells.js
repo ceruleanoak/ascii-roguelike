@@ -449,7 +449,12 @@ export const SPELLS = {
 
   // TALK — run to the nearest person who speaks and hear their next line
   // (BeelineSystem.talk, DialogueSystem). Silent when it starts.
-  'TALK': { response: (game) => game.beelineSystem.talk() },
+  // HELLO / GREET / SPEAK are TALK under other names. In the Three Room, where
+  // no one stands to run to, the Three answers each itself (ThreeVoiceSystem).
+  'TALK':  { response: (game) => game.beelineSystem.talk() },
+  'SPEAK': { response: (game) => game.beelineSystem.talk() },
+  'HELLO': { response: (game) => game.beelineSystem.talk() },
+  'GREET': { response: (game) => game.beelineSystem.talk() },
 
   // EQUIP — in REST, dress the player from everything stored: three diverse
   // weapons (higher tiers preferred), armor and consumables. Chance is part
@@ -558,8 +563,11 @@ export const SPELLS = {
   //   WHERE IS ONE?   → HEREISONE      WHAT IS TWO?    → WHATISTWO (exact)
   //   WHERE IS TWO?   → HEREISTWO      WHAT IS THREE?  → ...TISTHREE
   //   WHERE IS THREE? → ...REISTHREE   HOW TO ESCAPE   → ...ESCAPE
+  //   WHO IS ONE?     → WHOISONE       WHO IS TWO?     → WHOISTWO
+  //   WHO IS THREE?   → ...HOISTHREE
   //
-  // The WHAT IS entries answer only inside the 3 room (room.isThreeRoom —
+  // Each sacred item is pinned by register → color → provenance, never named
+  // (claudedocs/three-voice-plan.md §4). The WHAT IS and WHO IS entries answer only inside the 3 room (room.isThreeRoom —
   // stamped when the room is built); anywhere else they say nothing happened,
   // matching the registry's existing '...NOTHING.' idiom.
 
@@ -584,5 +592,17 @@ export const SPELLS = {
   'TISTHREE': {
     response: (game) =>
       game.currentRoom?.isThreeRoom ? 'THREE IS TOLD.' : '...NOTHING.',
+  },
+  'WHOISONE': {
+    response: (game) =>
+      game.currentRoom?.isThreeRoom ? 'IT HITS BACK.' : '...NOTHING.',
+  },
+  'WHOISTWO': {
+    response: (game) =>
+      game.currentRoom?.isThreeRoom ? 'IT READS.' : '...NOTHING.',
+  },
+  'HOISTHREE': {
+    response: (game) =>
+      game.currentRoom?.isThreeRoom ? 'IT FILLS.' : '...NOTHING.',
   },
 };

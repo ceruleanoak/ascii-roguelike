@@ -77,6 +77,13 @@ export class SpellSystem {
       const word = keyBuffer.slice(keyBuffer.length - len).join('');
       const spell = SPELLS[word];
       if (spell) {
+        // Inside the Three Room the Three may answer for itself instead
+        // (talk words, Wish Spells — ThreeVoiceSystem).
+        const voiced = this.game.threeVoiceSystem?.answer(word, spell);
+        if (voiced) {
+          this.game.spellResponse = { text: voiced, startTime: performance.now() };
+          return;
+        }
         if (spell.followUps) {
           const active = spell.followUpsActive ? spell.followUpsActive(this.game) : true;
           if (active) {

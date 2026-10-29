@@ -1955,6 +1955,9 @@ identity, not standard programming terms.
   `ThreeRoomSystem` owns the offerings, the music and the door; `ThreeRoomRenderer` draws the
   frames and the Death cinematic. Carrying torch light (`hasTorchLight`) colors each frame
   with its slot's REST role color — apex red, left cyan, right yellow (`FRAME_TORCHLIT_COLORS`).
+  Inside it the Three answers for itself (`ThreeVoiceSystem`): talk words (TALK, SPEAK,
+  HELLO, GREET) get its own line, and a Wish Spell is not granted but named by its Wish Kind
+  (`FOR ENEMIES.` / `FOR GLORY.` / `FOR CONTROL.`), except REVIVE on the death screen.
 - **Not:** "Triangle Room" (the superseded cosmology name), "puzzle room" (reserved — that is
   the dungeon side-room authoring pathway), "altar", "shrine".
 
