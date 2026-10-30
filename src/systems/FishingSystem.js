@@ -101,7 +101,11 @@ export class FishingSystem {
     // A frozen room (player inside a hut/dungeon/maze) has its enemies parked
     // on _frozenEnemies, not actually defeated — don't read it as cleared.
     if (game.currentRoom?._frozenEnemies) return false;
-    return game.currentRoom?.enemies?.length === 0;
+    // Same count the exits unlock on (_countedEnemies): a Moose or Rabbit
+    // that HuntingSystem brings in while the angler stands still is pacifist
+    // and never clears by fighting, so it must not freeze the fish (#480).
+    const enemies = game.currentRoom?.enemies;
+    return !!enemies && game._countedEnemies(enemies).length === 0;
   }
 
   holdingFishingRod(game) {
