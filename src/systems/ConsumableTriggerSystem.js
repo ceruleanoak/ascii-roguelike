@@ -20,13 +20,13 @@ const JOLT_FACING_THROW_DISTANCE = 100;
 const SELF_ONLY_EFFECTS = new Set([
   'heal', 'fairyHeal', 'manaSlot', 'speed', 'block', 'cleanse', 'invuln',
   'stoneskin', 'regen',
-  'damageBuff', 'arrowRefill',
+  'damageBuff',
 ]);
 
 // Evaluates and dispatches consumable trigger conditions (auto and manual),
 // and owns the keys-4-8-select / SPACE-fires manual consumable flow.
 // Auto-trigger = emergency gate; manual (SPACE) trigger = tactics, bypasses
-// HP/proximity/count gates but not physical preconditions (empty bow slot).
+// HP/proximity/count gates but not physical preconditions.
 export class ConsumableTriggerSystem {
   constructor(game) {
     this.game = game;
@@ -101,8 +101,7 @@ export class ConsumableTriggerSystem {
   }
 
   // `manual` bypasses HP/proximity/count emergency gates (manual trigger =
-  // tactics), but NOT physical preconditions like an empty bow slot — those
-  // stay absolute.
+  // tactics), but NOT physical preconditions — those stay absolute.
   checkTriggerCondition(cd, player, currentRoom, consumable, manual = false) {
     const enemies = this.game._activeEnemies();
 
@@ -292,13 +291,6 @@ export class ConsumableTriggerSystem {
         }
         return false;
       }
-      case 'arrowRefill': {
-        // Fletch of Arrows: only makes sense with an empty bow slot — a
-        // physical precondition, stays absolute even under manual.
-        const emptyBow = player.quickSlots.find(s => s?.data?.weaponType === 'BOW' && s.maxUses !== null && s.usesRemaining <= 0);
-        if (!emptyBow) return false;
-        return { windup: THROW_DURATION, effectType: 'arrowRefill' };
-      }
       case 'panic_blind': {
         // Bone Dust: blinds nearby enemies at critical HP (emergency); the
         // nearbyEnemies auto-trigger branch was stripped (tactical, not
@@ -400,11 +392,6 @@ export class ConsumableTriggerSystem {
       case 'damageBuff': {
         const p = params();
         player.applyDamageBuff(cd.duration, p?.damageBonus ?? cd.damageBonus ?? 2);
-        break;
-      }
-      case 'arrowRefill': {
-        const emptyBow = player.quickSlots.find(s => s?.data?.weaponType === 'BOW' && s.maxUses !== null && s.usesRemaining <= 0);
-        if (emptyBow) emptyBow.usesRemaining = Math.min(emptyBow.usesRemaining + (cd.amount || 5), emptyBow.maxUses ?? Infinity);
         break;
       }
       case 'panic_blind': {

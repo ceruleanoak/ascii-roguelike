@@ -159,6 +159,7 @@ import{DiagonalInputSystem as DIS}from'./systems/DiagonalInputSystem.js';
 import * as ingredientPile from './systems/IngredientPile.js';
 import { breakOnDeathPassives } from './systems/ConsumableSlotBreaks.js';
 import { tryDeathSave } from './systems/DeathSaveSystem.js';
+import { refillQuiversForNewRoom, announceQuiverFull } from './systems/QuiverRefill.js';
 import { PlayerParry } from './entities/enemyMechanics/ParryMechanic.js';
 import { updateKeenStrike } from './systems/KeenAim.js';
 
@@ -1642,12 +1643,8 @@ class Game {
       this.bombBagSystem.refillForNewRoom();
     }
 
-    // Reset bow uses for all equipped weapons (new room = fresh arrows)
-    for (const item of this.player.quickSlots) {
-      if (item && item.resetUses) {
-        item.resetUses();
-      }
-    }
+    // New room = fresh arrows (plus a worn Fletch of Arrows' bonus)
+    const fletch = refillQuiversForNewRoom(this.player);
 
     // Bottle of Hot Water reverts to a regular Bottle of Water after 3 room
     // exits (caldera capture — see AlchemySystem.fillHotWaterBottle).
@@ -1666,6 +1663,8 @@ class Game {
     // errand), enemy wiring, entry grace, physics/combat reset. Shared with
     // every warp path — see applyRoomSwap.
     this.applyRoomSwap(this.currentRoom, { resetEntities: !shouldRestoreExploreRoom });
+    // After the swap: its combat reset clears floating words.
+    if (fletch) announceQuiverFull(this, fletch);
 
     // Leshy chase rooms will get shaking bush AFTER clearing (same as first encounter)
 

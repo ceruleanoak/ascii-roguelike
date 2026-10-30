@@ -2538,13 +2538,16 @@ export const ITEMS = {
   },
 
   // ── Utility ───────────────────────────────────────────────────────────────
+  // Fletch of Arrows: a slot-holding passive, never fired. While equipped,
+  // every room entry fills each quick-slot bow 3 arrows past its quiver
+  // (QuiverRefill.refillQuiversForNewRoom).
   '⇈': {
     char: '⇈',
     name: 'Fletch of Arrows',
     type: ITEM_TYPES.CONSUMABLE,
-    effect: 'arrowRefill',
-    amount: 5,
-    oneShot: true,
+    passive: true,
+    bonusArrows: 3,
+    passiveIndicator: 'QUIVER FULL',
     color: '#8b4513'
   },
   'T': {
