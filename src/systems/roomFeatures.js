@@ -81,6 +81,11 @@ export function carveForcedRiver(gen, room, forced) {
  * active, a forced river pinned to the entry wall. The path carving itself is
  * RoomGenerator._buildPath (see the "Yellow zone: rivers" block there).
  */
+// Rooms the Stormlands' water template never runs through (see placeRoomLiquid).
+const RIVERLESS_ROOM_TYPES = new Set([
+  ROOM_TYPES.JEWELER, ROOM_TYPES.FOUNTAIN, ROOM_TYPES.SETTLEMENT, ROOM_TYPES.WELL,
+]);
+
 // Room liquid: the water (or a lava zone's lava) generateBackgroundObjects
 // lays down — the Stormlands' water template, the structured/organic liquid
 // everywhere else, and the rooms that stay dry (Camps, water-zone B rooms).
@@ -100,8 +105,11 @@ export function placeRoomLiquid(gen, room, effectiveZone) {
     // pinned to the entry wall, flowing forward-only (never south/back out).
     //
     // Exempt: B rooms. The Giant Slime arena brings its own water (the Imbue
-    // Pools), and a river through the clearing would bury them.
-    if (room.exitLetter !== 'B') {
+    // Pools), and a river through the clearing would bury them. Also exempt:
+    // the enemy-free rooms built around a centrepiece (the Jeweler, the
+    // Fountain's pool, the Settlement's huts, the Well) — a river would cut
+    // through the very thing the room is for.
+    if (room.exitLetter !== 'B' && !RIVERLESS_ROOM_TYPES.has(room.type)) {
       const forced = gen.zoneSystem?.riverChaseActive
         ? buildForcedRiverParams(gen.zoneSystem.riverLastExitDirection)
         : null;
