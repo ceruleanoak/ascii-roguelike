@@ -817,13 +817,16 @@ export class CombatSystem {
 
           if (this.checkMeleeCollisionWithObject(attack, obj)) {
             if (attack.owner && vaultWallBlocksReach(room, attack.owner, obj)) continue;
-            // Glittering rocks require a pickaxe — other weapons bounce off
+            // Glittering rocks answer to the pickaxe, and to a hammer heavy
+            // enough to beat their hammerResist — other weapons bounce off
+            // (InteractionSystem.resolveGlitteringRockDamage).
             if (obj.data?.glitteringRock) {
-              if (!attack.isPickaxe) {
+              const damage = this.game.interactionSystem.resolveGlitteringRockDamage(attack, obj);
+              if (damage <= 0) {
                 this.createDamageNumber('!', obj.position.x, obj.position.y, '#aaaaaa');
                 continue;
               }
-              const result = obj.takeDamage(attack.damage);
+              const result = obj.takeDamage(damage);
               if (result.effect) {
                 this.objectDestroyEvents.push({ obj, effect: result.effect });
               }
@@ -880,9 +883,9 @@ export class CombatSystem {
 
             // Blunt weapons can't damage objects, but still rustle grass; Brush
             // yields to anything, and allWeaponsDamage-flagged instances yield to anything too.
-            // Rocks (0) are the standing exception (bug #10): smashing stone is
-            // what a blunt weapon is for, and resolveSmashRefusal already let
-            // the swing through — without this the payload below would eat it.
+            // Rocks (0) are the standing exception (bug #10): the Glaive is
+            // blunt and breaks rock, and resolveSmashRefusal already let the
+            // swing through — without this the payload below would eat it.
             if (!attack.isBlunt || obj.data.kind === 'brush' || obj.char === '0' || obj.allWeaponsDamage) {
               const smashDamage = this.game.interactionSystem.resolveSmashDamage(attack, obj);
               const result = obj.takeDamage(smashDamage, attack.isBlade);
@@ -891,15 +894,6 @@ export class CombatSystem {
               // 'cutGrass' need to reach handleObjectEffect to roll pollen / fairy spawns).
               if (result.effect) {
                 this.objectDestroyEvents.push({ obj, effect: result.effect, attack });
-              }
-
-              // Bat: rare chance the weapon itself shatters on a rock hit.
-              if (attack.weapon && this.game.interactionSystem.resolveSmashWeaponBreak(attack, obj)) {
-                if (attack.owner?.destroyHeldItem?.(attack.weapon)) {
-                  this.createDamageNumber('BREAK', obj.position.x, obj.position.y, '#ff6644');
-                  this.game.audioSystem?.playSFX?.('bat_break');
-                  this.game.menuSystem?.updateUI?.();
-                }
               }
 
               // Fire weapons ignite flammable objects — spread outward if object is destroyed.

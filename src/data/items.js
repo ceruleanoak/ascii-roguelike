@@ -1082,7 +1082,8 @@ export const ITEMS = {
   },
   // Glaive (Dagger + Staff): a blade lashed to the staff's head. Still a
   // staff — same block stance and bare-staff missile — with the heaviest
-  // swing of the line and a touch more reach.
+  // swing of the line and a touch more reach. The one staff that breaks Rock
+  // (breaksRock — InteractionSystem.resolveSmashRefusal).
   '⍋': {
     char: '⍋',
     tier: 2,
@@ -1090,6 +1091,7 @@ export const ITEMS = {
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
     weaponSubtype: 'staff',
+    breaksRock: true,
     damage: 3,
     windup: 0.35,
     recovery: 0.75,

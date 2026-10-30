@@ -917,6 +917,8 @@ export class Item {
       if (this.data.isBlunt) props.isBlunt = this.data.isBlunt;
       if (this.data.canSmash) props.canSmash = this.data.canSmash;
       if (this.data.isPickaxe) props.isPickaxe = this.data.isPickaxe;
+      // Glaive: the one non-hammer that breaks Rock (resolveSmashRefusal).
+      if (this.data.breaksRock) props.breaksRock = true;
       // Onyx Hammer: knocks an unbreakable rock loose (BoulderSystem.rollFromRest).
       if (this.data.rollsRock) props.rollsRock = true;
       if (this.data.weaponLevel) props.weaponLevel = this.data.weaponLevel;

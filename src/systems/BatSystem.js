@@ -132,7 +132,6 @@ export class BatSystem {
         launchForce,
         weaponSubtype: 'bat',
         isBlunt: true,
-        weapon,               // identity ref for InteractionSystem.resolveSmashWeaponBreak
         owner: player,
         shooterPlane: player.plane
       });

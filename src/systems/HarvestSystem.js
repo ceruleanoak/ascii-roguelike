@@ -53,11 +53,10 @@ function inExitLane(spot) {
 
 // What each Spell farms, and the tool it takes (`tool(item, obj)`; `obj` is
 // left out when the question is whether the player carries a tool for the
-// material at all). Trees fall only to an axe; rocks to the pickaxe or a
-// hammer (InteractionSystem.resolveSmashRefusal lets other blunt weapons
-// through too, but they are not tools for the job). A Glittering Rock is a
-// rock too, but only the pickaxe breaks it (CombatSystem's glitteringRock
-// gate): a hammer is not a tool for that one.
+// material at all). Trees fall only to an axe; rocks to the pickaxe, a
+// hammer or the Glaive (InteractionSystem.resolveSmashRefusal). A Glittering
+// Rock is a rock too, but takes only the pickaxe or a hammer heavier than its
+// hammerResist (InteractionSystem.resolveGlitteringRockDamage).
 // HARVEST works them in `stage` order: containers first, then trees, rocks and
 // Brush together, then grass (any blade, richest cell first), then sand (any
 // melee weapon a blunt one excepted: CombatSystem lets a blunt swing rustle
@@ -84,9 +83,20 @@ const MATERIALS = {
     // disguised as ordinary stone, and MINE must not give the secret away.
     is: obj => obj.data?.dropEffect === 'destroyObject:rockHarvest'
       || !!(obj.data?.glitteringRock && obj.data.showsGlitter),
-    tool: (item, obj) => obj?.data?.glitteringRock
-      ? !!item?.data?.isPickaxe
-      : !!item?.data?.isPickaxe || item?.data?.weaponSubtype === 'hammer',
+    // Mirrors the strike rules: a pickaxe mines anything; a Glittering Rock
+    // takes only a hammer heavier than its hammerResist
+    // (InteractionSystem.resolveGlitteringRockDamage); plain Rock takes any
+    // hammer or the Glaive (breaksRock).
+    tool: (item, obj) => {
+      const data = item?.data;
+      if (data?.isPickaxe) return true;
+      const isHammer = data?.weaponSubtype === 'hammer';
+      if (obj?.data?.glitteringRock) {
+        const resist = obj.data.hammerResist;
+        return isHammer && resist !== undefined && (data.damage ?? 0) > resist;
+      }
+      return isHammer || !!data?.breaksRock;
+    },
     stage: 0,
   },
   // Shrubs and Brambles (Brush) yield to any melee swing, blunt ones too

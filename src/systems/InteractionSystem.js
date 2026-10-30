@@ -20,6 +20,13 @@ import { consumeKeyItem, hasKeyItem } from './keyItems.js';
 const SMASH_REFUSED = Object.freeze({ fireBypass: false });
 const SMASH_REFUSED_UNLESS_BURNED = Object.freeze({ fireBypass: true });
 
+// The pickaxe's trade: 1 damage to anything, double that to stone — two swings
+// a Rock or Glittering Rock. Rock, Fractured Rock and Boulder are the stone
+// chars; Glittering Rocks are recognized by their data flag.
+const PICKAXE_ROCK_MULT = 2;
+const ROCK_CHARS = new Set(['0', '9', 'Q']);
+const isRock = obj => ROCK_CHARS.has(obj.char) || !!obj.data?.glitteringRock;
+
 // Reach for the armed-Bottle fairy catch (InteractionSystem.tryBottleFairy).
 // Wider than AlchemySystem's one-cell liquid radius: a liquid tile sits still
 // and a fluttering fairy does not, so the catch gets a cell and a half.
@@ -76,24 +83,21 @@ export class InteractionSystem {
       if (attack.weaponSubtype === 'hammer') return 0;
       if (attack.weaponSubtype === 'axe') return Math.max(1, Math.floor(attack.damage * 0.5));
     }
-    // Bat: a swinging slugger cracks rock but was never built for it —
-    // half damage, same as an axe's clumsy grass trim.
-    if (obj.char === '0' && attack.weaponSubtype === 'bat') {
-      return Math.max(1, Math.floor(attack.damage * 0.5));
-    }
+    if (attack.isPickaxe && isRock(obj)) return attack.damage * PICKAXE_ROCK_MULT;
     return attack.canSmash ? attack.damage * 2 : attack.damage;
   }
 
-  // Whether this melee hit shatters the swung weapon — currently only the Bat
-  // family against rock, since a bat is built for a ball, not stone. Rolled
-  // per landed hit (caller only reaches this once resolveSmashRefusal has
-  // already let the swing through), independent of resolveSmashDamage's
-  // amount so a 0-damage tap can still crack the bat.
-  resolveSmashWeaponBreak(attack, obj) {
-    if (obj.char === '0' && attack.weaponSubtype === 'bat') {
-      return Math.random() < 0.08;
-    }
-    return false;
+  // Melee damage to a Glittering Rock (the U room's gem rocks and the Secret
+  // Vein Rock), or 0 when the swing bounces off. The pickaxe always mines it,
+  // at its stone bonus. A rock that declares `hammerResist` also gives to a
+  // hammer, less that much per blow — so a base Hammer (3) bounces and any
+  // heavier one breaks through. The Vein Rock declares none: its secret stays
+  // the pickaxe's.
+  resolveGlitteringRockDamage(attack, obj) {
+    if (attack.isPickaxe) return attack.damage * PICKAXE_ROCK_MULT;
+    const resist = obj.data?.hammerResist;
+    if (attack.canSmash && resist !== undefined) return Math.max(0, attack.damage - resist);
+    return 0;
   }
 
   // Whether a melee swing may damage this background object at all — the
@@ -113,12 +117,12 @@ export class InteractionSystem {
   resolveSmashRefusal(attack, obj) {
     if (obj.obsidian) return SMASH_REFUSED;
 
-    // Rock yields to anything that hits rather than cuts: the pickaxe, a hammer
-    // (canSmash), or any blunt weapon — flail, staff, bat, baton. Blades and
-    // axes clink off. Hammers carry canSmash but not isBlunt, so both flags are
-    // load-bearing here.
+    // Rock yields to the pickaxe, a hammer (canSmash), and the one weapon that
+    // declares `breaksRock` (the Glaive). Everything else clinks off — blades,
+    // axes, and the other blunt weapons (flail, plain staffs, bats, baton,
+    // a bare fist) alike.
     if (obj.char === '0') {
-      const strikes = attack.isPickaxe || attack.canSmash || attack.isBlunt || obj.allWeaponsDamage;
+      const strikes = attack.isPickaxe || attack.canSmash || attack.breaksRock || obj.allWeaponsDamage;
       return strikes ? null : SMASH_REFUSED;
     }
 
