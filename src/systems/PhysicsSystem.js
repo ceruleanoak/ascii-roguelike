@@ -48,6 +48,9 @@ const CORNER_SLIP_PX = GRID.CELL_SIZE * 0.45;
 // a ricocheting enemy takes one slam per iframe window rather than one per bounce.
 const IMPACT_HIT_ID = 'impact';
 
+// A slam that hurts also adds a dizzy pip.
+const SLAM_DIZZY_SECONDS = 4.0;
+
 // True when an enemy is moving fast enough for a speed collision (wall
 // ricochet or enemy-enemy bump) to hurt it. A jumper's own leap is excluded:
 // a Frog's water jump (190) clears the threshold, so every swim into a rock
@@ -388,6 +391,7 @@ export class PhysicsSystem {
     let inGrass = false;
     let inMud = false; // Wet mud — heavier than water, dodge roll bypasses
     let slowingMultiplier = 1.0; // For numeric slowing values (trees, stumps)
+    let hitTrunk = false; // moving into a slamsAtSpeed object this frame
     let damagingLiquid = null; // Track lava damage
     let healingLiquid = null; // Track hot spring heal
     let onSlopeDirection = null; // Ascent room slope push direction
@@ -534,6 +538,13 @@ export class PhysicsSystem {
           if (obj.data && typeof obj.data.slowing === 'number') {
             // Use the numeric value as speed multiplier (0.1 = 10% speed)
             slowingMultiplier = Math.min(slowingMultiplier, obj.data.slowing);
+            // Only heading in counts: the rebound, and an enemy launched from
+            // a tree it stood at, are leaving the trunk rather than hitting it.
+            if (obj.data.slamsAtSpeed) {
+              const toTrunkX = objBox.x + objBox.width / 2 - (entityBox.x + entityBox.width / 2);
+              const toTrunkY = objBox.y + objBox.height / 2 - (entityBox.y + entityBox.height / 2);
+              if (toTrunkX * entity.velocity.vx + toTrunkY * entity.velocity.vy > 0) hitTrunk = true;
+            }
           }
           // Check for tall grass (boolean slowing)
           else if (obj.data && obj.data.slowing === true) {
@@ -717,7 +728,11 @@ export class PhysicsSystem {
       } else {
         entity.velocity.vy = 0;
       }
-      if (highSpeed && (collision.x || collision.y)) {
+      if (highSpeed && hitTrunk && !collision.x && !collision.y) {
+        entity.velocity.vx *= -0.5;
+        entity.velocity.vy *= -0.5;
+      }
+      if (highSpeed && (collision.x || collision.y || hitTrunk)) {
         // The slam is tagged as an impact so it lands through the iframes of
         // the hit that launched this enemy. A Bat/Rubber Bat swing starts those
         // iframes, and at launch speed the enemy reaches anything within ~7
@@ -731,6 +746,7 @@ export class PhysicsSystem {
         const damaged = entity.takeDamage(1, null, { impact: IMPACT_HIT_ID });
         if (damaged !== false) {
           combatSystem?.createDamageNumber(1, entity.position.x, entity.position.y, '#ff4444');
+          if (entity.shouldApplyStatusEffect('dizzy')) entity.applyStatusEffect('dizzy', SLAM_DIZZY_SECONDS);
         }
       }
       if (entity.pinOnWallContact && (collision.x || collision.y)) {

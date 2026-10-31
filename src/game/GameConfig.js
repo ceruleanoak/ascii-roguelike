@@ -302,6 +302,7 @@ export const BACKGROUND_OBJECTS = {
     name: 'Tree',
     color: '#336633',
     hp: 3,
+    slamsAtSpeed: true, // walkable, but a launched enemy hits the trunk (PhysicsSystem)
     // Stick on 30% of harvests. harvestDropChance, not dropChance: it gates
     // only the Stick, so the sap bonus roll stays independent (see
     // InteractionSystem spawnIngredient tree branch).
