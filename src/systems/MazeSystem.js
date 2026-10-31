@@ -281,6 +281,12 @@ export class MazeSystem {
       mazeObjects,
       torches,
       ghosts: [],
+      // Shared-pipeline lists: deep-water tiles and other BackgroundObjects,
+      // and standard Enemies (Maze Rats). InteriorManager.activeBackgroundObjects()
+      // / activeEnemies() return these while the player is in the Maze, so
+      // physics, drowning, combat and EnemyUpdateSystem run on them as on any layer.
+      backgroundObjects: [],
+      enemies: [],
       spawnCount: 0,        // cumulative ghosts spawned via blink expiry
       blinkCooldown: 0,     // s before the next single candidate may blink
       disturbed: false,     // true once the first object is broken open — arms the blink system
@@ -423,6 +429,13 @@ export class MazeSystem {
     game.campNPCSystem?.snapCompanionToPlayer?.(0);
     if (game.companion && game.currentRoom?.collisionMap) {
       game.companion.collisionMap = game.currentRoom.collisionMap;
+    }
+
+    // Maze enemies leave the physics roster with the Maze (as exitFloor does
+    // for a floor's), and drop their unconsumed tick cache (bug #92).
+    for (const enemy of game.mazeInterior?.enemies ?? []) {
+      game.physicsSystem.removeEntity(enemy);
+      enemy._frameUpdateResult = null;
     }
 
     // Drop maze-plane loot (abandoned on exit)

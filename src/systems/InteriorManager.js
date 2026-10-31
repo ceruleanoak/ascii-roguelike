@@ -264,9 +264,9 @@ export class InteriorManager {
 
   // ── Active-layer source accessors ───────────────────────────────────────────
   // The room/objects/enemies/bounds the player currently interacts with: the
-  // interior overlay takes priority over the surface room. Maze carries no
-  // background objects or standard enemies (its content is mazeObjects/ghosts),
-  // so it reports empty for those — matching the legacy main.js behavior exactly.
+  // interior overlay takes priority over the surface room. The Maze reports its
+  // own shared lists (mazeInterior.backgroundObjects / .enemies); its tombs,
+  // Ghosts and fixtures stay in their own arrays.
 
   get activeRoom() {
     const g = this.game, p = g.player;
@@ -274,11 +274,9 @@ export class InteriorManager {
     return activeInteriorFloor(g) ?? g.currentRoom;
   }
 
-  // Maze carries no standard room enemies/background objects (its content is its
-  // own object arrays), so it reports empty for those.
   activeBackgroundObjects() {
     const g = this.game, p = g.player;
-    if (p?.inMaze && g.mazeInterior) return [];
+    if (p?.inMaze && g.mazeInterior) return g.mazeInterior.backgroundObjects;
     const floor = activeInteriorFloor(g);
     if (floor) return floor.backgroundObjects;
     return g.currentRoom ? g.currentRoom.backgroundObjects : [];
@@ -286,7 +284,7 @@ export class InteriorManager {
 
   activeEnemies() {
     const g = this.game, p = g.player;
-    if (p?.inMaze && g.mazeInterior) return [];
+    if (p?.inMaze && g.mazeInterior) return g.mazeInterior.enemies;
     const floor = activeInteriorFloor(g);
     if (floor) return floor.enemies;
     return g.currentRoom ? g.currentRoom.enemies : [];
@@ -307,7 +305,7 @@ export class InteriorManager {
   }
 
   // Strips destroyed entries from the surface room's background-object list
-  // (and the active interior floor's, when one is loaded) — both, not just
+  // (and the active interior floor's or Maze's, when one is loaded) — all, not just
   // whichever layer is active, since a stray destroyed object on the inactive
   // layer needs cleanup too. In place, NOT `list = list.filter(...)`: enemies
   // cache their room's array by reference once at spawn (Enemy.setBackgroundObjects,
@@ -320,6 +318,7 @@ export class InteriorManager {
     const g = this.game;
     this._pruneDestroyed(g.currentRoom.backgroundObjects);
     if (g.activeFloor) this._pruneDestroyed(g.activeFloor.backgroundObjects);
+    if (g.mazeInterior) this._pruneDestroyed(g.mazeInterior.backgroundObjects);
   }
 
   _pruneDestroyed(list) {
@@ -330,7 +329,8 @@ export class InteriorManager {
 
   activeGridBounds() {
     const g = this.game;
-    const f = activeInteriorFloor(g);
+    const mi = g.player?.inMaze ? g.mazeInterior : null;
+    const f = mi ?? activeInteriorFloor(g);
     if (f) {
       return { cols: f.gridCols, rows: f.gridRows, collisionMap: f.collisionMap };
     }

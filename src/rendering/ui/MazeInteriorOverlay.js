@@ -123,6 +123,14 @@ export class MazeInteriorOverlay {
       }
     }
 
+    // ── 4b. Maze background objects (deep-water tiles) ───────────────────
+    for (const obj of mi.backgroundObjects) {
+      if (obj.destroyed) continue;
+      const renderData = obj.getRenderPosition();
+      ctx.fillStyle = renderData.color;
+      ctx.fillText(renderData.char, renderData.x + CS / 2, renderData.y + CS / 2);
+    }
+
     // ── 5. Shared ground Frame Passes ────────────────────────────────────
     drawFramePasses(this.renderController, game, 'maze', 'ground');
 
@@ -132,9 +140,14 @@ export class MazeInteriorOverlay {
       ctx.fillText(ghost.char, ghost.position.x + CS / 2, ghost.position.y + CS / 2);
     }
 
+    // ── 6b. Maze enemies (shared pass; sapping ones redraw over the player) ─
+    this.renderController.exploreRenderer.drawNonSappingEnemies(game, mi.enemies);
+
     // ── 7-8. Shared combat + player Frame Passes ─────────────────────────
     drawFramePasses(this.renderController, game, 'maze', 'combat');
     drawFramePasses(this.renderController, game, 'maze', 'player');
+
+    this.renderController.exploreRenderer.drawSappingEnemies(game, mi.enemies);
 
     // ── 9. Camp companion (followed the player in; maze coords) ───────────
     if (game.companion) {

@@ -165,7 +165,7 @@ export class CameraZoomSystem {
   _resolveActiveLayer(game, player) {
     if (player.inMaze && game.mazeInterior) {
       return {
-        entities: game.mazeInterior.ghosts,
+        entities: [...game.mazeInterior.ghosts, ...game.mazeInterior.enemies],
         gridCols: game.mazeInterior.gridCols,
         gridRows: game.mazeInterior.gridRows
       };
