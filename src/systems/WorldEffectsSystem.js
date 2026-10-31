@@ -2,7 +2,7 @@ import { GRID } from '../game/GameConfig.js';
 import { GooBlob } from '../entities/GooBlob.js';
 import { Puddle } from '../entities/Puddle.js';
 import { createDebris } from '../entities/Debris.js';
-import { createFootstep, createWetDrop, createSteamPuff, createChaff, WET_DROP_COLOR } from '../entities/Particle.js';
+import { Particle, createFootstep, createWetDrop, createSteamPuff, createChaff, WET_DROP_COLOR } from '../entities/Particle.js';
 import { statusEffectColor } from './StatusEffectVisuals.js';
 import { inSamePlane, tagInteriorPlane } from './PlaneSystem.js';
 
@@ -231,12 +231,74 @@ export function createSparkBurst(game, particles, x, y) {
 // themselves (game.particles, game.puddles, game.gooBlobs, game.debris,
 // game.enemyShockwaves) stay on game — renderers and spawn sites read/write
 // them directly, same documented compromise as trap/companion state.
+// Spawn glitter particles off glittering objects every 3 seconds.
+const GLITTER_SPAWN_INTERVAL = 3.0;
+
 export class WorldEffectsSystem {
   constructor(game) {
     this.game = game;
     // Per-enemy wet footprint timer + alternating foot, for enemies whose data
     // sets `wetFootprints` (updateEntityTrails). Kept here, not on the enemy.
     this._wetFootprints = new WeakMap();
+    // Secret event particle timer — glitter rises off glittering objects
+    // every GLITTER_SPAWN_INTERVAL seconds (updateSecretEventEffects).
+    this._glitterTimer = 0;
+  }
+
+  /**
+   * Secret event visual effects: periodic glitter particles off every
+   * `isGlittering` object on the active layer. EXPLORE-only (main.js
+   * updateExploreState).
+   */
+  updateSecretEventEffects(deltaTime) {
+    const game = this.game;
+    if (!game.currentRoom) return;
+
+    // Update glitter timer
+    this._glitterTimer += deltaTime;
+
+    // Spawn glitter particles periodically
+    if (this._glitterTimer >= GLITTER_SPAWN_INTERVAL) {
+      this._glitterTimer = 0;
+
+      // Find all glittering objects on the layer the player occupies — the
+      // particles are tagged to that layer below, so they must come from it.
+      const glitteringObjects = game._activeBackgroundObjects().filter(obj => obj.isGlittering);
+
+      for (const obj of glitteringObjects) {
+        // Spawn 1-2 glitter particles around the object
+        const particleCount = Math.random() < 0.5 ? 1 : 2;
+
+        for (let i = 0; i < particleCount; i++) {
+          // Random position around object (within 1 cell radius)
+          const angle = Math.random() * Math.PI * 2;
+          const distance = Math.random() * GRID.CELL_SIZE * 0.5;
+          const offsetX = Math.cos(angle) * distance;
+          const offsetY = Math.sin(angle) * distance;
+
+          // Upward float with slight horizontal drift
+          const vx = (Math.random() - 0.5) * 20; // Small horizontal drift
+          const vy = -30 - Math.random() * 20;   // Upward float
+
+          const glitter = new Particle(
+            obj.position.x + offsetX,
+            obj.position.y + offsetY,
+            '*',                        // char
+            obj.glitterColor || '#ffaa00', // color
+            { vx, vy },                 // velocity object
+            0.8 + Math.random() * 0.4   // lifetime
+          );
+
+          tagInteriorPlane(game, glitter);
+          game.particles.push(glitter);
+        }
+      }
+    }
+
+    // TODO: Add other secret event effects here
+    // - Shaking animation for leshy bushes
+    // - Pulsing glow for treasure
+    // - etc.
   }
 
   update(deltaTime) {

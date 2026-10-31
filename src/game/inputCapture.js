@@ -9,6 +9,7 @@ export function isInputCaptured(game) {
     game?.cheatMenu?.isOpen ||
     game?.menuOpen ||
     game?.pauseSystem?.isPaused() ||
+    game?.scriptedEventSystem?.isRunning() || // a Scripted Event locks the player
     game?.stateMachine?.getCurrentState() === 'CLI' // GAME_STATES.CLI — the CLI owns the keyboard
   );
 }

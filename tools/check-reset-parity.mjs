@@ -209,7 +209,6 @@ const UNREGISTERED_ALLOWLIST = [
   /^previewBlinkTimer$/,
   /^previewBlinkState$/,
   /^waveSfxTimer$/,
-  /^glitterTimer$/,
   /^inactivityTimer$/,
   /^wasdBlinkTimer$/,
   /^wasdBlinkState$/,

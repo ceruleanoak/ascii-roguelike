@@ -82,6 +82,19 @@ export class BottlesSystem {
     return item;
   }
 
+  /**
+   * Take the Bottle at `ref` out of the player's hands entirely (an NPC
+   * takes it) and return it, or null when it's gone. An armed Bottle
+   * disarms itself (ConsumableTriggerSystem.armed reads an empty source).
+   */
+  takeAt(ref) {
+    const item = this.itemAt(ref);
+    if (!item) return null;
+    if (ref.source === 'slot') this.putAt(ref, null);
+    else this.game.inventorySystem.removeUnequipped(item);
+    return item;
+  }
+
   /** A Ref to every Bottle carried — Bottles first, then equipped slot Bottles. */
   allRefs() {
     const inv = this.game.inventorySystem;

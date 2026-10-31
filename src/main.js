@@ -121,6 +121,7 @@ import { FountainSystem } from './systems/FountainSystem.js';
 import { CampNPCSystem } from './systems/CampNPCSystem.js';
 import { DialogueSystem } from './systems/DialogueSystem.js';
 import { FishermanDemoSystem } from './systems/FishermanDemoSystem.js';
+import { ScriptedEventSystem } from './systems/ScriptedEventSystem.js';
 import { ShoreFishermanSystem } from './systems/ShoreFishermanSystem.js';
 import { WeaponsMasterSystem } from './systems/WeaponsMasterSystem.js';
 import { CharonSystem } from './systems/CharonSystem.js';
@@ -148,7 +149,7 @@ import { BackgroundObject } from './entities/BackgroundObject.js';
 import { GooBlob } from './entities/GooBlob.js';
 import { Crow } from './entities/Crow.js';
 import { NPCRat } from './entities/NPCRat.js';
-import { Particle, createExplosion, createDodgeTrail } from './entities/Particle.js';
+import { createExplosion, createDodgeTrail } from './entities/Particle.js';
 import { CharacterNPC } from './entities/CharacterNPC.js';
 import { WiseFellow } from './entities/WiseFellow.js';
 import { ITEM_TYPES, INGREDIENTS, ITEMS, getItemData } from './data/items.js';
@@ -317,6 +318,7 @@ class Game {
     this.enemyUpdateSystem = new EnemyUpdateSystem(this);
     this.dialogueSystem = new DialogueSystem(this);
     this.fishermanDemoSystem = new FishermanDemoSystem(this);
+    this.scriptedEventSystem = new ScriptedEventSystem(this);
     this.shoreFishermanSystem = new ShoreFishermanSystem(this);
     this.weaponsMasterSystem = new WeaponsMasterSystem(this);
     this.charonSystem = new CharonSystem(this);
@@ -377,10 +379,6 @@ class Game {
 
     // Ocean (O room) ambient wave SFX timer — counts down to next play.
     this.waveSfxTimer = 0;
-
-    // Secret event particle timers
-    this.glitterTimer = 0;
-    this.GLITTER_SPAWN_INTERVAL = 3.0; // Spawn glitter particles every 3 seconds
 
     // WASD inactivity blinking
     this.inactivityTimer = 0;
@@ -494,6 +492,8 @@ class Game {
         e.preventDefault();
         return;
       }
+      // A running Scripted Event owns every key (SPACE closes its dialogue).
+      if (this.scriptedEventSystem.handleKeydown(e)) return;
 
       // Arcade demo: any keypress aborts playback back to the pre-intro title.
       if (this.stateMachine.getCurrentState() === GAME_STATES.ARCADE_DEMO) {
@@ -1055,55 +1055,6 @@ class Game {
 
   applyEquipmentEffects() {
     this.inventorySystem.applyEquipmentEffectsToPlayer(this.player);
-  }
-
-  updateSecretEventEffects(deltaTime) {
-    if (!this.currentRoom) return;
-
-    // Update glitter timer
-    this.glitterTimer += deltaTime;
-
-    // Spawn glitter particles periodically
-    if (this.glitterTimer >= this.GLITTER_SPAWN_INTERVAL) {
-      this.glitterTimer = 0;
-
-      // Find all glittering objects
-      const glitteringObjects = this.currentRoom.backgroundObjects.filter(obj => obj.isGlittering);
-
-      for (const obj of glitteringObjects) {
-        // Spawn 1-2 glitter particles around the object
-        const particleCount = Math.random() < 0.5 ? 1 : 2;
-
-        for (let i = 0; i < particleCount; i++) {
-          // Random position around object (within 1 cell radius)
-          const angle = Math.random() * Math.PI * 2;
-          const distance = Math.random() * GRID.CELL_SIZE * 0.5;
-          const offsetX = Math.cos(angle) * distance;
-          const offsetY = Math.sin(angle) * distance;
-
-          // Upward float with slight horizontal drift
-          const vx = (Math.random() - 0.5) * 20; // Small horizontal drift
-          const vy = -30 - Math.random() * 20;   // Upward float
-
-          const glitter = new Particle(
-            obj.position.x + offsetX,
-            obj.position.y + offsetY,
-            '*',                        // char
-            obj.glitterColor || '#ffaa00', // color
-            { vx, vy },                 // velocity object
-            0.8 + Math.random() * 0.4   // lifetime
-          );
-
-          tagInteriorPlane(this, glitter);
-          this.particles.push(glitter);
-        }
-      }
-    }
-
-    // TODO: Add other secret event effects here
-    // - Shaking animation for leshy bushes
-    // - Pulsing glow for treasure
-    // - etc.
   }
 
 // Character system methods
@@ -2648,6 +2599,7 @@ class Game {
     // Auto-close the dialogue box when the player walks away from the speaker
     this.dialogueSystem.update();
     this.fishermanDemoSystem.update(deltaTime);
+    this.scriptedEventSystem.update(deltaTime);
     this.shoreFishermanSystem.update(deltaTime);
     this.weaponsMasterSystem.update(deltaTime);
 
@@ -2721,7 +2673,7 @@ class Game {
     // Vault unlocking is now triggered by SPACE press in handleSpacePress()
 
     // Update secret event visual effects (glitter, shaking, etc.)
-    this.updateSecretEventEffects(deltaTime);
+    this.worldEffectsSystem.updateSecretEventEffects(deltaTime);
 
     // Drive bridge build animation in RIDGE rooms
     if (this.currentRoom?.type === 'RIDGE') {
@@ -2994,6 +2946,9 @@ class Game {
         return;
       }
     }
+
+    // SPACE beside a Scripted Event's actor starts it (ScriptedEventSystem).
+    if (this.scriptedEventSystem.handleSpacePress()) return;
 
     // Armed Bottle near trough/spring — precedes fireSelected() (AlchemySystem.tryFillArmedBottle).
     if (this.alchemySystem?.tryFillArmedBottle()) return;

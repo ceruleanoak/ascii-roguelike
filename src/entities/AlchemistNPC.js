@@ -18,9 +18,12 @@ import { NeutralCharacter } from './NeutralCharacter.js';
  *   3. Once lessonGiven, HutSystem only places him in the hut while the
  *      player currently carries Hot Water (🜊) — otherwise he roams
  *      red-L/yellow-O/cyan-T (see setLocation()).
- *   4. Hut, carrying Hot Water, first time after the lesson — unlocks "the
- *      Alchemist's Path" (purified potions are devoid of color but still
- *      condenser-detectable). Sets pathUnlocked.
+ *   4. Hut, carrying Hot Water, first time after the lesson — SPACE starts
+ *      the Scripted Event `alchemist_hot_water_demo` (data/scriptedEvents.js)
+ *      ahead of his dialogue: he takes the Hot Water, brews a Purified Potion,
+ *      reads it at the condenser, hands it over and unlocks "the Alchemist's
+ *      Path" (purified potions are devoid of color but still
+ *      condenser-detectable). The event sets pathUnlocked.
  */
 export class AlchemistNPC extends NeutralCharacter {
   constructor(x, y) {
@@ -102,18 +105,12 @@ export class AlchemistNPC extends NeutralCharacter {
       ];
     }
 
-    // 3. Hut, carrying Hot Water, after the lesson — unlock the Path. He
-    //    stays in the hut for the rest of the visit the lesson was given in,
-    //    so being here is not proof of the Hot Water: check the inventory.
+    // 3. Hut, after the lesson, Path still locked. He stays in the hut for
+    //    the rest of the visit the lesson was given in, so being here is not
+    //    proof of the Hot Water. Carrying it, SPACE runs his Hot Water demo
+    //    (a Scripted Event, which unlocks the Path) instead of reaching here.
     if (this.placement === 'hut' && this.lessonGiven && !this.pathUnlocked) {
-      if (!game?.hutSystem?.playerCarriesHotWater()) return ['BRING HOT WATER.'];
-      this.pathUnlocked = true;
-      return [
-        'YOU BROUGHT IT. LET\'S SEE.',
-        "HOT WATER PURIFIES THE BASE, YET NOTE THE CONDENSER",
-        "LIQUID. BASE. SUPPLEMENT.",
-        "THIS IS THE ALCHEMIST'S PATH.",
-      ];
+      return ['BRING HOT WATER.'];
     }
 
     // 4. Hut, repeat visits after the Path is unlocked.

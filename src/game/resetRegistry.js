@@ -309,6 +309,12 @@ export const RESET_REGISTRY = [
     why: "The Spawned Items list (spawnedItems.js): items the C room, ? room, depth-1 weapon offer and dungeon Trap Room have already placed this run, so they don't place them again. A new run starts with nothing seen.",
   },
   {
+    path: 'eventFlags',
+    scope: 'run',
+    fresh: () => new Set(),
+    why: 'Event Flags (ScriptedEventSystem) are what Scripted Events have done this run; a new run has seen none of them.',
+  },
+  {
     path: 'restBundle',
     scope: 'run',
     value: null,
@@ -557,6 +563,13 @@ export const RESET_REGISTRY = [
     call: (game) => game.harvestSystem.reset(),
     covers: [],
     why: 'CHOP/MINE/HARVEST farm one room\'s objects; leaving the room hands control back.',
+  },
+  {
+    path: 'scriptedEventSystem.cancel',
+    scope: 'room',
+    call: (game) => game.scriptedEventSystem.cancel(),
+    covers: [],
+    why: 'A Scripted Event plays out in the room its actor stands in; a room change ends it where it stands and hands the player back.',
   },
   {
     path: 'takeAllSystem.reset',

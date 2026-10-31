@@ -1339,6 +1339,39 @@ identity, not standard programming terms.
   `drawArmedGlyph` (`src/rendering/effects/ArmedGlyphDraw.js`).
 - **Not:** a HUD slot highlight (the blinking slot box still marks an armed slot).
 
+### Scripted Event
+- **Definition:** A short scene an NPC plays out in front of the player — RPG Maker style. An
+  actor, a condition, and a list of Event Commands run one after another, started by SPACE
+  beside the actor while the condition holds. While it runs the player is locked: SPACE only
+  closes the dialogue box so the next line can be told. It ends where it stands if the actor
+  leaves the room or interior. The first is the Alchemist's Hot Water demo
+  (`alchemist_hot_water_demo`).
+- **In code:** `SCRIPTED_EVENTS` (`src/data/scriptedEvents.js`) — `{ id, actor, when,
+  commands }`; run by `ScriptedEventSystem` (`src/systems/ScriptedEventSystem.js`), the
+  running one is `scriptedEventSystem.run`. The lock is `isInputCaptured` +
+  `ScriptedEventSystem.handleKeydown`; a room change cancels it (Reset Registry, `room`).
+- **Not:** dialogue (an event's `say` is told through DialogueSystem, by its rules); not
+  the arcade demo (DemoSystem's recorded attract mode); not the Fisherman's paid lesson
+  (FishermanDemoSystem, bespoke).
+
+### Event Command
+- **Definition:** One step of a Scripted Event: `say` (the actor speaks, one line per SPACE),
+  `moveTo` (walk to a cell, or beside the player), `wait`, `take` (a carried Bottle leaves the
+  player), `give` (an item dropped at the player's feet), `call` (anything a system owns),
+  `setFlag`. Commands only sequence; rules stay in their systems.
+- **In code:** `{ type, ... }` objects in an event's `commands`; executed by
+  `ScriptedEventSystem._execute`.
+- **Not:** an AnimationSystem step (`moveTo` compiles onto one).
+
+### Event Flag
+- **Definition:** A named switch a Scripted Event sets — something that has happened this run,
+  for events (and anything else) to read. Run-scoped: death clears them.
+- **In code:** `game.eventFlags` (a Set; Reset Registry `run`) via
+  `scriptedEventSystem.setFlag` / `hasFlag`. `alchemistPath` = the Alchemist's Hot Water demo
+  paid.
+- **Not:** a Canon Edit (never persists); not per-NPC state fields (`AlchemistNPC.pathUnlocked`
+  stays the Alchemist's own).
+
 ### Gold Breath
 - **Definition:** The Hoardmaw's one-shot curse, exhaled at the Scaled→Glinting transition and
   lasting until the kill. Every consumable quick slot renders `c` wired to the coin tally —

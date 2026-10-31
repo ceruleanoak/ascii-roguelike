@@ -55,6 +55,8 @@ const LIQUID_SOURCE_RADIUS = GRID.CELL_SIZE;
 // (electrified water, magma, mud) — every BREW result INFUSE can finish.
 const STARTER_POTION_CHARS = new Set(['🜄', '🜅', '🜆', '!', '«', '¿']);
 const LIQUID_BOTTLE_CHARS = new Set(['🜉', 'ε', '◆', '◐']);  // Water, Electrified, Magma, Mud
+const PURIFIED_POTION_CHAR = '🜅';
+const DEMO_SUPPLIED_BASE = 'h'; // Herb — the Alchemist's own, when the player carries no base
 
 // Map liquid tile states to liquid bottle types
 const LIQUID_TILE_TO_BOTTLE = {
@@ -529,13 +531,32 @@ export class AlchemySystem {
     }
 
     if (potionsWithData.length === 1) {
-      this._revealSinglePotion(potionsWithData[0]);
+      this.revealPotion(potionsWithData[0]);
     } else {
       this._openCondenserMenu(potionsWithData);
     }
   }
 
-  _revealSinglePotion(potion) {
+  /**
+   * The Alchemist's brew in his Hot Water demo (scriptedEvents.js): Hot Water
+   * purifies any base, so the result is always a Purified Potion carrying the
+   * base it was brewed from. The base is the first starter ingredient the
+   * player carries (spent), or Herb from his own stock. Returns the Item,
+   * unplaced — the event hands it over.
+   */
+  brewForDemo() {
+    const game = this.game;
+    const base = game.getIngredients().find(ch => ALL_STARTER_INGREDIENTS.has(ch)) ?? null;
+    if (base) game.removeIngredient(base);
+    const potion = new Item(PURIFIED_POTION_CHAR, 0, 0);
+    potion.baseIngredient = base ?? DEMO_SUPPLIED_BASE;
+    potion.hiddenIngredient = potion.baseIngredient;
+    game.audioSystem?.playSFX?.('craft');
+    return potion;
+  }
+
+  /** Float `potion`'s base ingredient, as its Greek letter, up off the Condenser. */
+  revealPotion(potion) {
     const game = this.game;
 
     // Show the base ingredient (stored in baseIngredient for true potions, hiddenIngredient for starters)
@@ -571,7 +592,7 @@ export class AlchemySystem {
   }
 
   commitCondenserSelection(selectedPotion) {
-    this._revealSinglePotion(selectedPotion);
+    this.revealPotion(selectedPotion);
   }
 
   /**
