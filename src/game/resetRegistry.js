@@ -235,6 +235,12 @@ export const RESET_REGISTRY = [
     why: 'Reset learned spells for new run.',
   },
   {
+    path: 'castSpells',
+    scope: 'run',
+    fresh: () => new Set(),
+    why: 'The known Spells already cast this run; each one prompts over the player until it is in here. Dies with knownSpells.',
+  },
+  {
     path: 'commandSystem.clearRunState',
     scope: 'run',
     call: (game) => game.commandSystem.clearRunState(),

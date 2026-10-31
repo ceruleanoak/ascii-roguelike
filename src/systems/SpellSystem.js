@@ -93,6 +93,7 @@ export class SpellSystem {
           this.game.spellResponse = { text: voiced, startTime: performance.now() };
           return;
         }
+        if (this.game.knownSpells?.has(word)) this.game.castSpells.add(word);
         if (spell.followUps) {
           const active = spell.followUpsActive ? spell.followUpsActive(this.game) : true;
           if (active) {

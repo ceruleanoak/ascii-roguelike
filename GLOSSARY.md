@@ -1610,7 +1610,8 @@ identity, not standard programming terms.
   THREE answers or acts on. Adventure-style verbs are compound words with no spaces (GOWEST,
   LOOKHERE), at most 9 letters; when one typed word ends in several Spells, the longest wins.
   A Spell either answers in the THREE's voice, acts silently, or refuses with a terse line.
-  Some are discovered through gameplay (`knownSpells`); most are always available. Release
+  Some are discovered through gameplay (`knownSpells`; each prompts over the player until its
+  first cast, tracked in `castSpells`); most are always available. Release
   scope and grammar (including glyph targets such as LOOKR): `claudedocs/spell-catalogue.md`.
 - **In code:** `SPELLS` registry in `src/data/spells.js` (`response` string/fn/`null` for a
   silent cast, optional `action`, `followUps`, `followUpsActive`); matched by `SpellSystem`

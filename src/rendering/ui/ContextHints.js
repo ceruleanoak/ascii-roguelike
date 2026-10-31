@@ -19,13 +19,18 @@ const HINT_ROW_H = GRID.CELL_SIZE * 0.82;
 const HINT_BASE_OFFSET = GRID.CELL_SIZE * 0.9;
 
 /**
- * Renders each known spell word above the player, one row per word, with the
+ * Renders each uncast known spell word above the player, one row per word, with the
  * leading letters the player has already typed lit green and the rest dim —
  * so a half-typed spell shows its own progress without a progress bar.
  */
+// A known word prompts only until its first cast.
+function uncastKnownSpells(game) {
+  return [...(game.knownSpells ?? [])].filter(word => !game.castSpells?.has(word));
+}
+
 export function drawKnownSpellHints(renderer, game) {
-  const knownSpells = game.knownSpells;
-  if (!knownSpells?.size) return;
+  const hints = uncastKnownSpells(game);
+  if (!hints.length) return;
 
   const C = GRID.CELL_SIZE;
   const keyBuffer = game.keyBuffer ?? [];
@@ -42,7 +47,7 @@ export function drawKnownSpellHints(renderer, game) {
   const baseY = game.player.position.y - HINT_BASE_OFFSET;
 
   let row = 0;
-  for (const word of knownSpells) {
+  for (const word of hints) {
     const totalW = spacing * (word.length - 1);
     const startX = cx - totalW / 2;
     const cy = baseY - row * HINT_ROW_H;
@@ -82,8 +87,8 @@ export function drawWellCoinHint(renderer, game) {
   const ctx = renderer.fgCtx;
   const cx = game.player.position.x + C / 2;
   // Sit above any existing spell hints by a row.
-  const knownCount = game.knownSpells?.size || 0;
-  const cy = game.player.position.y - HINT_BASE_OFFSET - knownCount * HINT_ROW_H;
+  const hintCount = uncastKnownSpells(game).length;
+  const cy = game.player.position.y - HINT_BASE_OFFSET - hintCount * HINT_ROW_H;
 
   ctx.save();
   ctx.font = `${Math.round(C * 0.65)}px 'Unifont', monospace`;
