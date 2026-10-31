@@ -55,8 +55,8 @@ function inExitLane(spot) {
 // left out when the question is whether the player carries a tool for the
 // material at all). Trees fall only to an axe; rocks to the pickaxe, a
 // hammer or the Glaive (InteractionSystem.resolveSmashRefusal). A Glittering
-// Rock is a rock too, but takes only the pickaxe or a hammer heavier than its
-// hammerResist (InteractionSystem.resolveGlitteringRockDamage).
+// Rock is a rock too, but takes only the pickaxe or a hammer of its
+// minHammerLevel (InteractionSystem.resolveGlitteringRockDamage).
 // HARVEST works them in `stage` order: containers first, then trees, rocks and
 // Brush together, then grass (any blade, richest cell first), then sand (any
 // melee weapon a blunt one excepted: CombatSystem lets a blunt swing rustle
@@ -84,7 +84,7 @@ const MATERIALS = {
     is: obj => obj.data?.dropEffect === 'destroyObject:rockHarvest'
       || !!(obj.data?.glitteringRock && obj.data.showsGlitter),
     // Mirrors the strike rules: a pickaxe mines anything; a Glittering Rock
-    // takes only a hammer heavier than its hammerResist
+    // takes only a hammer of its minHammerLevel
     // (InteractionSystem.resolveGlitteringRockDamage); plain Rock takes any
     // hammer or the Glaive (breaksRock).
     tool: (item, obj) => {
@@ -92,8 +92,8 @@ const MATERIALS = {
       if (data?.isPickaxe) return true;
       const isHammer = data?.weaponSubtype === 'hammer';
       if (obj?.data?.glitteringRock) {
-        const resist = obj.data.hammerResist;
-        return isHammer && resist !== undefined && (data.damage ?? 0) > resist;
+        const minLevel = obj.data.minHammerLevel;
+        return isHammer && minLevel !== undefined && (data.weaponLevel ?? 0) >= minLevel;
       }
       return isHammer || !!data?.breaksRock;
     },

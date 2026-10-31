@@ -1032,10 +1032,10 @@ export const BACKGROUND_OBJECTS = {
     // Vein Rock below shares glitteringRock but deliberately omits this — it
     // is disguised as ordinary stone, and a glint would give the secret away.
     showsGlitter: true,
-    // A hammer blow loses this much against it (InteractionSystem
-    // .resolveGlitteringRockDamage): the base Hammer's 3 bounces off, any
-    // heavier hammer breaks through. The pickaxe ignores it.
-    hammerResist: 3,
+    // The weapon level a hammer needs to break it (InteractionSystem
+    // .resolveGlitteringRockDamage): the base Hammer bounces off, any heavier
+    // hammer breaks through. The pickaxe ignores it.
+    minHammerLevel: 2,
     solid: true,
     tunnelWall: false,
     renderOnlyOnPlane: 1,
@@ -1045,7 +1045,7 @@ export const BACKGROUND_OBJECTS = {
     }
   },
   // Secret vein rock — surface (plane 0). Same grid position as a '⊙' underground marker.
-  // Requires a pickaxe to mine (glitteringRock with no hammerResist — see
+  // Requires a pickaxe to mine (glitteringRock with no minHammerLevel — see
   // InteractionSystem.resolveGlitteringRockDamage).
   // Drops a Crystal Maul (T4 weapon) when destroyed.
   '@': {

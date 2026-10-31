@@ -818,7 +818,7 @@ export class CombatSystem {
           if (this.checkMeleeCollisionWithObject(attack, obj)) {
             if (attack.owner && vaultWallBlocksReach(room, attack.owner, obj)) continue;
             // Glittering rocks answer to the pickaxe, and to a hammer heavy
-            // enough to beat their hammerResist — other weapons bounce off
+            // of their minHammerLevel — other weapons bounce off
             // (InteractionSystem.resolveGlitteringRockDamage).
             if (obj.data?.glitteringRock) {
               const damage = this.game.interactionSystem.resolveGlitteringRockDamage(attack, obj);

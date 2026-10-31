@@ -89,14 +89,14 @@ export class InteractionSystem {
 
   // Melee damage to a Glittering Rock (the U room's gem rocks and the Secret
   // Vein Rock), or 0 when the swing bounces off. The pickaxe always mines it,
-  // at its stone bonus. A rock that declares `hammerResist` also gives to a
-  // hammer, less that much per blow — so a base Hammer (3) bounces and any
-  // heavier one breaks through. The Vein Rock declares none: its secret stays
-  // the pickaxe's.
+  // at its stone bonus. A rock that declares `minHammerLevel` also gives to a
+  // hammer of that weapon level or better, the same way a Boulder does: heft is
+  // the level, not the damage, which is 3 on the base Hammer and most of its
+  // upgrades alike. The Vein Rock declares none: its secret stays the pickaxe's.
   resolveGlitteringRockDamage(attack, obj) {
     if (attack.isPickaxe) return attack.damage * PICKAXE_ROCK_MULT;
-    const resist = obj.data?.hammerResist;
-    if (attack.canSmash && resist !== undefined) return Math.max(0, attack.damage - resist);
+    const minLevel = obj.data?.minHammerLevel;
+    if (attack.canSmash && minLevel !== undefined && attack.weaponLevel >= minLevel) return attack.damage;
     return 0;
   }
 
