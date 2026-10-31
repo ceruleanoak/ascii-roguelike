@@ -332,6 +332,21 @@ function obstructsPoint(enemy, checkX, checkY, gridX, gridY, distanceFromStart) 
 }
 
 /**
+ * Moss Cloak 𐤒 — whether this Enemy's target is a bush to it. Non-aggro
+ * enemies cannot see a cloaked player at any range, nor sense it by proximity.
+ * `enraged` alone gates this, not `aggroMemoryActive`: Search sets the latter
+ * on proximity alone (alert.js's "door three" needs no sight at all to arm
+ * it), so treating it as aggro let a merely-searching enemy spot a cloaked
+ * player through the cloak the instant it got in range. `enraged` is the
+ * codebase's real aggro flag — set only by taking a hit, waking from Dormant,
+ * or an always-hostile Mechanic — so only a genuinely engaged enemy sees
+ * through the cloak; a searching one stays blind no matter how close it gets.
+ */
+export function isTargetCloaked(enemy) {
+  return !!enemy.target?.mossCloakActive && !enemy.enraged;
+}
+
+/**
  * Check if enemy can see the target (vision check)
  * More restrictive than hasLineOfSight - includes background objects
  * Used for aggro/memory system, NOT navigation
@@ -343,16 +358,7 @@ export function hasVision(enemy, start, end, maxLength, { ignoreCone = false } =
     return false;
   }
 
-  // Moss Cloak 𐤒 — non-aggro enemies cannot see the player at any range.
-  // `enraged` alone gates this, not `aggroMemoryActive`: Search sets the
-  // latter on proximity alone (alert.js's "door two" needs no sight at all
-  // to arm it), so treating it as aggro let a merely-searching enemy spot a
-  // cloaked player through the cloak the instant it got in range. `enraged`
-  // is the codebase's real aggro flag — set only by taking a hit, waking
-  // from Dormant, or an always-hostile Mechanic — so only a genuinely
-  // engaged enemy sees through the cloak; a searching one stays blind no
-  // matter how close it gets.
-  if (enemy.target && enemy.target.mossCloakActive && !enemy.enraged) {
+  if (isTargetCloaked(enemy)) {
     return false;
   }
 

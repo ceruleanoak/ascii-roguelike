@@ -8,7 +8,7 @@
 // of being a free-floating timer (`detectionIndicatorTimer`).
 import { GRID } from '../../game/GameConfig.js';
 import { applyStateMovement, moveStill } from '../enemyMovement.js';
-import { isTargetInTallGrass } from '../enemyVision.js';
+import { isTargetCloaked, isTargetInTallGrass } from '../enemyVision.js';
 import { armPursuitGate, isPursuing } from '../enemyPursuit.js';
 
 // How close the target has to be before tall grass stops concealing it. You
@@ -65,8 +65,14 @@ export default {
     // pursues) would hold forever facing wherever it stopped, its cone never
     // sweeping toward a target it could see by turning — so it keeps
     // wandering instead.
+    //
+    // A cloaked target (Moss Cloak) is a bush to this Enemy — there is nothing
+    // to listen for, so it wanders like an Enemy with no one near. Holding
+    // here froze every searcher that gave up beside a cloaked player for as
+    // long as the player stayed still, which never read as returning to idle.
     const canActOnHearing = machine.resolve('search') !== 'alert';
-    if (!cfg.requirePursuit && canActOnHearing && ctx.effectiveDistance <= ctx.effectiveAggroRange) {
+    if (!cfg.requirePursuit && canActOnHearing && !isTargetCloaked(enemy)
+        && ctx.effectiveDistance <= ctx.effectiveAggroRange) {
       moveStill(enemy);
       return;
     }
@@ -161,7 +167,12 @@ export default {
     // target even once, and that guard is load-bearing: without it an enemy that
     // reaches a stale mark immediately senses the target again, marks its current
     // position, and oscillates forever.
-    if (pursuing && inRange && ctx.samePlane && !enemy.lastKnownPosition && !enemy.hadVisualContact) {
+    //
+    // The Moss Cloak closes this door too: a bush sensed by proximity would
+    // send Search straight onto the player's tile, then back here on arrival,
+    // and round again for as long as the cloak held.
+    if (pursuing && inRange && ctx.samePlane && !enemy.lastKnownPosition && !enemy.hadVisualContact
+        && !isTargetCloaked(enemy)) {
       const concealed = isTargetInTallGrass(enemy) && ctx.effectiveDistance > CLOSE_RANGE;
       // Deciding is all this does — the mark, the flags and the hesitation
       // before setting off are Search's to arm, and arming them here as well

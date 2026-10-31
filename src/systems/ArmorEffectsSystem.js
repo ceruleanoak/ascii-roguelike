@@ -18,6 +18,9 @@ import { GRID } from '../game/GameConfig.js';
 import { makeAuraParticle } from './WorldEffectsSystem.js';
 import { tagInteriorPlane } from './PlaneSystem.js';
 
+// How far from a Moss-Cloaked player any memory mark is kept.
+const MOSS_MARK_CLEARANCE = GRID.CELL_SIZE * 2.5;
+
 export class ArmorEffectsSystem {
   constructor(game) {
     this.game = game;
@@ -144,11 +147,40 @@ export class ArmorEffectsSystem {
         player.mossCloakActive = false;
       } else if (player.mossCloakArmed) {
         player.mossCloakActive = true;
+        this._clearMemoryMarksFromCloak(player);
       }
     } else {
       player.mossCloakArmed = false;
       player.mossCloakActive = false;
       player._lastDodgeActive = player.dodgeRoll.active;
+    }
+  }
+
+  // While the cloak holds, no memory mark may sit on the bush. A mark is laid
+  // where sight last put the player — and Search leads it by the target's
+  // velocity, so a mark made mid-roll lands where the roll ends — which sent
+  // every searcher walking straight into the shrub it could not see. Any mark
+  // inside MOSS_MARK_CLEARANCE is pushed out along the line from the player
+  // toward its enemy, so the searcher arrives short of the player on its own
+  // side instead of bumping into it. Run every active frame, not only on the
+  // roll's end, because a mark can still be laid after it: Alert resolves a
+  // sighting stamped during the roll on its next decision frame.
+  _clearMemoryMarksFromCloak(player) {
+    for (const enemy of this.game._activeEnemies()) {
+      const mark = enemy.lastKnownPosition;
+      if (!mark || enemy.target !== player) continue;
+      const mdx = mark.x - player.position.x;
+      const mdy = mark.y - player.position.y;
+      if (mdx * mdx + mdy * mdy >= MOSS_MARK_CLEARANCE * MOSS_MARK_CLEARANCE) continue;
+      let ux = enemy.position.x - player.position.x;
+      let uy = enemy.position.y - player.position.y;
+      let len = Math.sqrt(ux * ux + uy * uy);
+      if (len < 1) { ux = mdx; uy = mdy; len = Math.sqrt(ux * ux + uy * uy); }
+      if (len < 1) { ux = 1; uy = 0; len = 1; }
+      enemy.lastKnownPosition = {
+        x: player.position.x + (ux / len) * MOSS_MARK_CLEARANCE,
+        y: player.position.y + (uy / len) * MOSS_MARK_CLEARANCE,
+      };
     }
   }
 }
