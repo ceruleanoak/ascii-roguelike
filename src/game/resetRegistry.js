@@ -719,10 +719,11 @@ export const RESET_REGISTRY = [
     why: 'Same death-output family as gameOverDeathTimer above — see that entry\'s reasoning.',
   },
   {
-    path: 'spellResponse',
+    path: 'spellSystem.reset',
     scope: 'run',
-    value: null,
-    why: 'Self-clearing ritual/spell-feedback text with a start-time-based auto-expiry (RenderController), same shape as the already-registered wellCoinAnim/wellFlashTimer/wellFlashDuration. Registered anyway as a backstop against a stale message surviving into the next run\'s first frame.',
+    call: (game) => game.spellSystem.reset(),
+    covers: ['spellResponse', 'keyBuffer', 'keyFlashMap'],
+    why: 'Self-clearing ritual/spell-feedback text with a start-time-based auto-expiry (RenderController), same shape as the already-registered wellCoinAnim/wellFlashTimer/wellFlashDuration, plus the letters typed toward a word. A backstop against a stale message surviving into the next run\'s first frame.',
   },
   {
     path: 'idleEchoes',

@@ -32,6 +32,15 @@ export class SpellSystem {
   }
 
   /** Reset the awaiting state — call on any room or state transition. */
+  // A new run starts with nothing said: the text on screen, the letters typed
+  // toward a word and a pending follow-up all belong to whatever came before.
+  reset() {
+    this.game.spellResponse = null;
+    this.game.keyBuffer = [];
+    this.game.keyFlashMap = {};
+    this.awaitingSpell = null;
+  }
+
   resetAwaiting() {
     this.awaitingSpell = null;
   }

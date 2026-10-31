@@ -881,6 +881,8 @@ class Game {
 
     // Clear title screen state
     this.launchButtonBounds = null;
+    // Letters typed on the title never reach the title reset, which already ran.
+    if (this.stateMachine.getPreviousState() === GAME_STATES.TITLE) this.spellSystem.reset();
 
     // Transition from title music to gameplay music (only on first REST entry)
     if (this.audioSystem.mode === 'single') {
