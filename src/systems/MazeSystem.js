@@ -5,6 +5,8 @@ import { Item } from '../entities/Item.js';
 import { INGREDIENTS } from '../data/items.js';
 import { coverFor } from '../data/cipher.js';
 import { freezeSurfaceRoom, thawSurfaceRoom, isInteriorActive } from './PlaneSystem.js';
+import { bfsPath } from './mazePath.js';
+import { MazeTrapSystem } from './MazeTrapSystem.js';
 
 /**
  * MazeSystem — manages the Maze (M) room interior.
@@ -186,6 +188,8 @@ class MazeTorch {
 export class MazeSystem {
   constructor(game) {
     this.game = game;
+    // Deep-Maze traps: Wellspring, Flood Panels, Rat Nests.
+    this.trapSystem = new MazeTrapSystem(game);
   }
 
   // ─── Interior Generation ─────────────────────────────────────────────────
@@ -287,6 +291,7 @@ export class MazeSystem {
       // physics, drowning, combat and EnemyUpdateSystem run on them as on any layer.
       backgroundObjects: [],
       enemies: [],
+      wellspring: null,     // { col, row } at depth ≥ 6 (MazeTrapSystem.seed), else null
       spawnCount: 0,        // cumulative ghosts spawned via blink expiry
       blinkCooldown: 0,     // s before the next single candidate may blink
       disturbed: false,     // true once the first object is broken open — arms the blink system
@@ -357,6 +362,7 @@ export class MazeSystem {
     game.player.position.y = game.mazeInterior.spawnPoint.y;
     game.player.inMaze = true;
     freezeSurfaceRoom(game);
+    this.trapSystem.seed(game.mazeInterior, game.getCurrentZoneDepth?.() ?? 0);
 
     // Bring the camp companion (if any) along, onto the maze's collision map —
     // left behind it kept following the player's maze coordinates across the
@@ -661,7 +667,7 @@ export class MazeSystem {
     if (game.spectaclesObtainedThisRun) return;
     if (!mi.mazeObjects.every(o => o.destroyed)) return;
     if (game.ingredients.some(i => i.mazePlane)) return;
-    if (game.items.some(i => i.mazePlane)) return;
+    if (game.items.some(i => i.mazePlane && !i.wellspringTorch)) return;
 
     mi.spectaclesGranted = true;
     game.spectaclesObtainedThisRun = true;
@@ -771,42 +777,11 @@ export class MazeSystem {
     const row = ghost._targetCell.row;
     const pc = Math.floor(game.player.position.x / CS);
     const pr = Math.floor(game.player.position.y / CS);
-    const path = this._bfsPath(col, row, pc, pr, mi);
+    const path = bfsPath(mi.collisionMap, col, row, pc, pr);
     if (path && path.length > 0) {
       ghost._targetCell = path[0];
     }
     // If no path (player at same cell), stay put until next arrival
-  }
-
-  _bfsPath(startCol, startRow, goalCol, goalRow, mi) {
-    if (startCol === goalCol && startRow === goalRow) return [];
-    const queue  = [[startCol, startRow]];
-    const parent = new Map();
-    parent.set(`${startRow},${startCol}`, null);
-
-    while (queue.length > 0) {
-      const [col, row] = queue.shift();
-      if (col === goalCol && row === goalRow) {
-        const path = [];
-        let key = `${row},${col}`;
-        while (parent.get(key) !== null) {
-          const [r, c] = key.split(',').map(Number);
-          path.unshift({ col: c, row: r });
-          key = parent.get(key);
-        }
-        return path;
-      }
-      for (const [dc, dr] of [[0,-1],[0,1],[-1,0],[1,0]]) {
-        const nc = col + dc, nr = row + dr;
-        if (nc < 0 || nc >= PHYS || nr < 0 || nr >= PHYS) continue;
-        if (mi.collisionMap[nr][nc]) continue;
-        const key = `${nr},${nc}`;
-        if (parent.has(key)) continue;
-        parent.set(key, `${row},${col}`);
-        queue.push([nc, nr]);
-      }
-    }
-    return null; // maze fully connected via DFS — this shouldn't occur
   }
 
   _ghostCollides(x, y, mi) {

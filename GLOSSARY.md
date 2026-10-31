@@ -130,6 +130,16 @@ identity, not standard programming terms.
 - **Not:** the on/off toggle used for UI cooldown indicators (`BowChargeIndicator.js`); the
   Yellow Mage's teleport-dash (`WarpSystem.resolveBlinkTeleport`) — unrelated naming collision.
 
+### Wellspring
+- **Definition:** The open cell of a deep Maze (zone Depth ≥ 6) furthest from its entrance,
+  measured along the corridors. Every dead end is a solid tomb, so it sits beside the furthest
+  tomb. A Torch (`♨`) lies there.
+- **In code:** `mazeInterior.wellspring` (`{ col, row }`, null below Depth 6), found by
+  `MazeTrapSystem._findWellspring` (BFS from the spawn cell, `mazePath.bfsOrder`). The Torch is
+  Maze-plane loot flagged `wellspringTorch`, which `MazeSystem._checkMazeCleared` skips, so
+  Spectacles never wait on it.
+- **Not:** a Well (the W Room); the Fountain.
+
 ### Pond
 - **Definition:** The small round body of shallow water in a Quagmire whose center tile is the
   Whirlpool — plain-looking water until the Quagmire's rounds are cleared.
@@ -926,13 +936,25 @@ identity, not standard programming terms.
   (its swing lights Maze torches and dungeon torch triggers, as any fire attack does — see
   `torchIgnition.js`; burns on hit, glows while carried, counts at a
   Fireplace) and one thing more: it stays lit underwater, where a Torch goes out. Carried in any
-  quick slot, it widens an underwater Room's dark from about one cell to five.
-- **In code:** `ITEMS['♁']` (`weaponSubtype: 'torch'`, `lightsUnderwater: true`); every torch
+  quick slot, it widens an underwater Room's dark from about one cell to five. Deep water, which
+  destroys a Torch (DOUSED), leaves it alone.
+- **In code:** `ITEMS['♁']` (`weaponSubtype: 'torch'`, `lightsUnderwater: true`, and no
+  `dousedByDeepWater`); every torch
   read checks `weaponSubtype === 'torch'`, never the name. The underwater radius is
   `underwaterFogRadius` / `isLightingUnderwater` in `torchLight.js`, for a Room flagged
   `underwater`.
 - **Not:** a light source of its own kind (no Lantern-only mechanic outside underwater); the
   Fire Berry's passive glow.
+
+### DOUSED
+- **Definition:** The word that floats over the player when deep water destroys a Torch (`♨`),
+  and the rule behind it. A Torch carried in any quick slot is lost the moment the player stands
+  in deep water (one DOUSED however many it took); one lying on the ground in deep water is
+  gone. A global rule: every deep-water tile, in any Room or Interior. The Lantern is exempt.
+- **In code:** `ITEMS['♨'].dousedByDeepWater`; `TorchDousing.js` (`isDousedByDeepWater`,
+  `douseCarriedTorches`), called from `PhysicsSystem.applyLiquidResults` on a deep-water frame.
+- **Not:** a lit Maze Torch fixture going out (a Ghost's touch or the flood does that, with no
+  word); the wet status washing an Oil off (DISSOLVED, `ConsumableSlotBreaks.destroyWetOils`).
 
 ### Quick slot
 - **Definition:** A persistent equipped-item slot shown in the top status bar. Persists across
