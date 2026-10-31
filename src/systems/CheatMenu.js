@@ -116,7 +116,7 @@ export class CheatMenu {
 
     const weaponBuckets = {
       'GUNS': [], 'BOWS': [], 'SWORDS': [], 'AXES': [], 'HAMMERS': [],
-      'SPEARS': [], 'STAVES': [], 'DAGGERS': [], 'WHIPS': [], 'FLAILS': [],
+      'SPEARS': [], 'STAVES': [], 'DAGGERS': [], 'WHIPS': [],
       'PICKAXES': [], 'WANDS': [], 'OTHER': []
     };
     const armorItems = [];
@@ -127,7 +127,7 @@ export class CheatMenu {
 
     const meleeSubtypeBuckets = {
       sword: 'SWORDS', axe: 'AXES', hammer: 'HAMMERS', spear: 'SPEARS',
-      staff: 'STAVES', dagger: 'DAGGERS', whip: 'WHIPS', flail: 'FLAILS',
+      staff: 'STAVES', dagger: 'DAGGERS', whip: 'WHIPS',
       pickaxe: 'PICKAXES'
     };
 

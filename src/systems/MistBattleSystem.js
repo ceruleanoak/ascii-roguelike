@@ -62,7 +62,7 @@ const WAVE_FLOOR = 3;
 const WAVE_SIZE = 4;
 const WAVE_DELAY = 1.5;
 
-// Weapons that can't mirror (canMirror: bat, flail, charge hammer, gem wand,
+// Weapons that can't mirror (canMirror: bat, charge hammer, gem wand,
 // mana weapons) stay out of all three loadouts: Rotate can promote any body
 // to Primary, so every body draws from the same pools.
 

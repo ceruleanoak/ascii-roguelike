@@ -52,10 +52,10 @@ export const PlayerInputSystem = {
       return;
     }
 
-    // Check if charging a bow (for movement slowdown). Bat/flail charges are
+    // Check if charging a bow (for movement slowdown). Bat charges are
     // exempt from the full stop — reduced speed instead (see mult below).
     const isChargingBow = player.heldItem && player.heldItem.isCharging
-      && !player.heldItem.data?.batCharge && !player.heldItem.data?.flailSpin;
+      && !player.heldItem.data?.batCharge;
 
     // Calculate target acceleration based on input (1.5x acceleration when sprinting)
     // Polymorph speed/accel overrides (set by PolymorphSystem when in frog form)
@@ -150,11 +150,11 @@ export const PlayerInputSystem = {
     const firingMult = player.firingSlowTimer > 0 ? 0.35 : 1; // Dramatic ~65% slow while firing a gun
     // Charging melee is heavy: a bat charging or a held windup (the Exploding
     // Mace and every other AoE swing that holds SPACE, Item.holdsWindup) drops
-    // to a quarter speed; the flail spinning up to 1/20. (The Crystal Maul's
+    // to a quarter speed. (The Crystal Maul's
     // charge is a full stop, above.)
     const held = player.heldItem;
     const chargeMult = held?.isCharging
-      ? (held.data?.batCharge ? CHARGING_MELEE_SPEED : held.data?.flailSpin ? 0.05 : 1)
+      ? (held.data?.batCharge ? CHARGING_MELEE_SPEED : 1)
       : (held?.windupActive && held.holdsWindup() ? CHARGING_MELEE_SPEED : 1);
     const finalMax = boostedMax * player.getStatusSpeedMultiplier() * firingMult * chargeMult;
     const speed = Math.sqrt(player.velocity.vx ** 2 + player.velocity.vy ** 2);

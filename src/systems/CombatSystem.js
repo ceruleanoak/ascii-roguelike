@@ -114,14 +114,14 @@ export class CombatSystem {
       }
     }
 
-    // Update pending melee attacks (for delayed spawning like flail sweep)
+    // Update pending melee attacks (for delayed spawning like the sweep)
     for (let i = this.pendingMeleeAttacks.length - 1; i >= 0; i--) {
       const pending = this.pendingMeleeAttacks[i];
       pending.delay -= deltaTime;
 
       if (pending.delay <= 0) {
         // Recalculate position from owner's current location so moving
-        // multi-hit weapons (flail, arc, sweep, etc.) track the player
+        // multi-hit weapons (ring, arc, sweep, etc.) track the player
         const spawnPosition = (pending.relX !== undefined && pending.owner)
           ? { x: pending.owner.position.x + pending.relX, y: pending.owner.position.y + pending.relY }
           : pending.position;
@@ -887,7 +887,7 @@ export class CombatSystem {
 
             // Blunt weapons can't damage objects, but still rustle grass; Brush
             // yields to anything, and allWeaponsDamage-flagged instances yield to anything too.
-            // Rocks (0) are the standing exception (bug #10): the Glaive is
+            // Rocks (0) are the standing exception (bug #10): the Flail is
             // blunt and breaks rock, and resolveSmashRefusal already let the
             // swing through — without this the payload below would eat it.
             if (!attack.isBlunt || obj.data.kind === 'brush' || obj.char === '0' || obj.allWeaponsDamage) {
@@ -1095,8 +1095,6 @@ export class CombatSystem {
             if (damaged && damaged.dodged) {
               this.createDamageNumber('DODGE', enemy.position.x, enemy.position.y, '#ffffff');
             } else if (damaged !== false) {
-              // Generic hit-landed signal — FlailSystem resets its spin ramp on this.
-              attack.hitConnected = true;
               // Show damage number with color based on affinity (crit overrides color + scale)
               const damageColor = critRoll.isCrit ? '#ffff66' :
                                  elementalMod < 1.0 ? '#888888' :   // Resisted
@@ -1680,7 +1678,7 @@ export class CombatSystem {
       tagLaunchPit(this.game?.activeRoom, proj, attackData.owner ?? this.game?.player);
       this.projectiles.push(proj);
     } else if (attackData.type === 'melee') {
-      // Check if this is a delayed attack (for sequential animations like flail sweep)
+      // Check if this is a delayed attack (for sequential animations like the sweep)
       if (attackData.delay && attackData.delay > 0) {
         this.pendingMeleeAttacks.push({
           ...attackData

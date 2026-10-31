@@ -1086,14 +1086,14 @@ export const ITEMS = {
     blockReleaseDamage: 1,
     color: '#aa8855'
   },
-  // Glaive (Dagger + Staff): a blade lashed to the staff's head. Still a
+  // Flail (Dagger + Staff): a blade lashed to the staff's head. Still a
   // staff — same block stance and bare-staff missile — with the heaviest
   // swing of the line and a touch more reach. The one staff that breaks Rock
   // (breaksRock — InteractionSystem.resolveSmashRefusal).
   '⍋': {
     char: '⍋',
     tier: 2,
-    name: 'Glaive',
+    name: 'Flail',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
     weaponSubtype: 'staff',
@@ -1669,29 +1669,6 @@ export const ITEMS = {
     meleeChar: '~',
     onHit: 'poison',
     color: '#00cc44'
-  },
-
-  // ── MELEE / flail ─────────────────────────────────────────────────────────
-  // Hold-to-spin (FlailSystem): a single orbiting hit point ramps linearly
-  // from 0 to spinMaxSpeed over spinRampTime while SPACE is held. Below half
-  // top speed it passes through enemies with no collision at all; from half
-  // speed to top speed, damage scales continuously with current speed (0 at
-  // the threshold, full damage at top speed). Landing a hit drops the ramp
-  // back to 0 (plus spinStagger), so the flail can't wall off a crowd the
-  // way a one-shot 360° ring could.
-  '○': {
-    char: '○',
-    name: 'Flail',
-    type: ITEM_TYPES.WEAPON,
-    weaponType: WEAPON_TYPES.MELEE,
-    weaponSubtype: 'flail',
-    flailSpin: true,
-    damage: 3,
-    spinRampTime: 0.7,
-    spinMaxSpeed: 18,
-    spinStagger: 0.15,
-    range: 16,
-    color: '#aaaaaa'
   },
 
   // ── MELEE / unsubtyped ────────────────────────────────────────────────────
@@ -3117,7 +3094,7 @@ export const ITEMS = {
 // table: { family: [ [tier-1 chars], [tier-2 chars], ... ] }, where family is
 // the weapon's subtype (or weaponType for GUN/BOW/WAND). Grouping by subtype
 // keeps two staffs from producing a sword result. A weapon with no `tier`
-// (gem wands, pickaxe, scythe, flail, fishing pole, …) is absent here, so it
+// (gem wands, pickaxe, scythe, fishing pole, …) is absent here, so it
 // has no upgrade path and the fountain hands it back. Tier gaps collapse, so
 // the "next tier" is always the next populated rung.
 function buildWeaponTiers() {
@@ -3238,7 +3215,6 @@ export const SUBTYPE_DEFAULTS = {
   spear:   { attackPattern: 'thrust',    isBlade: true, range: 28, distanceCrit: true },
   dagger:  { attackPattern: 'multistab', isBlade: true, range: 16 },
   hammer:  { attackPattern: 'shockwave', canSmash: true },
-  flail:   { attackPattern: 'ring',      isBlunt: true },
   whip:    { attackPattern: 'whipcrack', disarm: true },
   staff:   { attackPattern: 'thrust',    isBlunt: true },
   pickaxe: { attackPattern: 'thrust',    isBlade: false, isBlunt: false },
@@ -3467,7 +3443,7 @@ export const AFFINITY_POOLS = {
       [RARITY.RARE]:     []
     },
     weapons: {
-      [RARITY.COMMON]:   ['†', ')', '↑', '≋', '○', '⊥', '⊸'],         // Sword, Bow, Spear, Whip, Flail, Hammer, Sling
+      [RARITY.COMMON]:   ['†', ')', '↑', '≋', '⊥', '⊸'],         // Sword, Bow, Spear, Whip, Hammer, Sling
       [RARITY.UNCOMMON]: ['¬', '⋙', '⫯', 'Ⲯ', 'ߒ'],                   // Gun, Multi-Shot Bow, Longsword, Thick Staff, Fishing Pole
       // Vault Key ('߃') intentionally excluded — it's a green-zone-only
       // "held, not equipped" pickup (InteractionSystem.dropsKey, from the

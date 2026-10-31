@@ -166,7 +166,7 @@ export class BoulderSystem {
       // Hammer knocks loose from rest (rollFromRest). The faster boulder turns
       // the zone's hazard into the player's weapon, routed through deflector
       // rocks into enemies or anything a bomb breaks. Other blunt weapons
-      // (flail, staff, bat) knock the boulder back the same way but never
+      // (staff, bat) knock the boulder back the same way but never
       // empower it — that stays hammer-exclusive.
       if (game.combatSystem) {
         for (const attack of game.combatSystem.getMeleeAttacks()) {

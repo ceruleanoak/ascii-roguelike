@@ -81,7 +81,6 @@
 |------|-------|--------|------|--------|---------|
 | `⊤` | `g` | `☃` | Ice Hammer | 4 | Freeze + knockback 250 |
 | `~` | `~` | `≋` | Whip | 2 | Long range (40) |
-| `M` | `~` | `○` | Flail | 3 | Ring attack |
 | `†` | `m` | `╫` | Blood Sword | 4 | Bleed + 40% lifesteal |
 | `⊤` | `F` | `⚯` | Thunder Axe | 5 | Chain to 2 enemies |
 | `⊤` | `@` | `◉` | Exploding Mace | 4 | 45 radius explosion |
@@ -245,7 +244,6 @@ b (Bone)
 - `/` + `M` → `⌐` (Machine Gun)
 - `⌂` + `M` → `⊞` (Scatter Gun)
 - `※` + `M` → `⊿` (Ricochet Rifle)
-- `M` + `~` → `○` (Flail)
 - `⚒` + `M` → `▼` (Earthquake Hammer)
 - `)` + `M` → `⇶` (Piercing Bow)
 

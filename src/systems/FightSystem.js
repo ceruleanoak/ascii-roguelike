@@ -562,7 +562,7 @@ export class FightSystem {
         const hold = d - CELL * 0.5 > CELL ? d - CELL * 0.5 : 0;
         return { hold, strike: Math.max(MELEE_RANGE, d + CELL * 0.5) };
       }
-      default: // hammerRing (one cell flat), a flail's spin, anything else
+      default: // hammerRing (one cell flat), anything else
         return { hold: 0, strike: MELEE_RANGE };
     }
   }

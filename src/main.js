@@ -100,7 +100,6 @@ import { TransmutationSystem } from './systems/TransmutationSystem.js';
 import { MagicSystem } from './systems/MagicSystem.js';
 import { WeaponEffectsSystem } from './systems/WeaponEffectsSystem.js';
 import { BatSystem } from './systems/BatSystem.js';
-import { FlailSystem } from './systems/FlailSystem.js';
 import { WellSystem } from './systems/WellSystem.js';
 import { LavaAscentSystem } from './systems/LavaAscentSystem.js';
 import { IceAscentSystem } from './systems/IceAscentSystem.js';
@@ -286,7 +285,6 @@ class Game {
     this.magicSystem = new MagicSystem(this);
     this.weaponEffectsSystem = new WeaponEffectsSystem(this);
     this.batSystem = new BatSystem(this);
-    this.flailSystem = new FlailSystem(this);
     this.wellSystem = new WellSystem(this);
     this.lavaAscentSystem = new LavaAscentSystem(this);
     this.iceAscentSystem = new IceAscentSystem(this);
@@ -2031,9 +2029,6 @@ class Game {
     // Bat windup visual + charge lifecycle (batCharge weapons, all states)
     this.batSystem.update(deltaTime);
 
-    // Flail spin ramp + hitbox
-    this.flailSystem.update(deltaTime);
-
     // Frog form (hop/swim movement, tongue attacks, cure Rusalka contact, Lake
     // room spawn). State-shared because the curse follows the player home:
     // EXPLORE-only dispatch left a frog frozen in REST and NEUTRAL ([rest-parity]).
@@ -3400,8 +3395,6 @@ class Game {
         this.player.heldItem.releaseChargeHammer();
       } else if (this.player.heldItem.data?.batCharge) {
         this.batSystem.release(this.player);
-      } else if (this.player.heldItem.data?.flailSpin) {
-        this.flailSystem.release(this.player);
       } else {
         this.audioSystem.stopSFXByName('charge_bow');
         if (this.player.canAttack()) {

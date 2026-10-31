@@ -329,18 +329,6 @@ export class Item {
       return null;
     }
 
-    // Flail: hold-to-spin. FlailSystem drives the ramping orbit and applies
-    // damage directly while held — no release attack (handleSpaceRelease just
-    // stops the spin).
-    if (this.data.flailSpin) {
-      if (!this.isCharging) {
-        this.isCharging = true;
-        this.chargeTime = 0;
-        this.chargingPlayer = player;
-      }
-      return null;
-    }
-
     // Bat: hold-to-windup charge. BatSystem drives the rotating windup visual
     // and fires the release sweep on SPACE release (handleSpaceRelease).
     if (this.data.batCharge) {
@@ -920,7 +908,7 @@ export class Item {
       if (this.data.isBlunt) props.isBlunt = this.data.isBlunt;
       if (this.data.canSmash) props.canSmash = this.data.canSmash;
       if (this.data.isPickaxe) props.isPickaxe = this.data.isPickaxe;
-      // Glaive: the one non-hammer that breaks Rock (resolveSmashRefusal).
+      // Flail: the one non-hammer that breaks Rock (resolveSmashRefusal).
       if (this.data.breaksRock) props.breaksRock = true;
       // Onyx Hammer: knocks an unbreakable rock loose (BoulderSystem.rollFromRest).
       if (this.data.rollsRock) props.rollsRock = true;

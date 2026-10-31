@@ -39,7 +39,6 @@ Open question: Dragon Shotgun and Dragon Blade are affinity items (dragon). Rule
 
 | Item | Mechanic | Pool / rarity |
 |---|---|---|
-| Flail `○` | spin | humanoid, COMMON |
 | Multi-Shot Bow `⋙` (t3) | multi-arrow | humanoid, UNCOMMON |
 | Thick Staff `Ⲯ` | block-release | (pool entry) |
 | Trident `ⲯ` | pinning | aquatic, UNCOMMON |

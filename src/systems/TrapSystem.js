@@ -65,7 +65,6 @@ const THROW_PROFILES = {
   sword:   { maxDist: GRID.CELL_SIZE * 8,  damageMult: 0.7, minVelForDamage: 100, maxDamageVel: 390 },
   axe:     { maxDist: GRID.CELL_SIZE * 8,  damageMult: 0.7, minVelForDamage: 100, maxDamageVel: 390 },
   hammer:  { maxDist: GRID.CELL_SIZE * 8,  damageMult: 0.6, minVelForDamage: 100, maxDamageVel: 390 },
-  flail:   { maxDist: GRID.CELL_SIZE * 8,  damageMult: 0.6, minVelForDamage: 100, maxDamageVel: 390 },
   pickaxe: { maxDist: GRID.CELL_SIZE * 8,  damageMult: 0.6, minVelForDamage: 100, maxDamageVel: 390 },
   whip:    { maxDist: GRID.CELL_SIZE * 8,  damageMult: 0.5, minVelForDamage: 100, maxDamageVel: 390 },
   bow:     { maxDist: GRID.CELL_SIZE * 6,  damageMult: 0.3, minVelForDamage: 100, maxDamageVel: 340 },

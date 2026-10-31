@@ -16,11 +16,11 @@ import { attackHitsBox, isSweptStrike } from '../game/Telegraph.js';
 import { inSamePlane } from './PlaneSystem.js';
 
 // Weapon behavior that lives in player-bound systems (MagicSystem's mana
-// meter, the bat-charge and flail-spin tickers in main.js, the charge-hammer
+// meter, the bat-charge ticker in main.js, the charge-hammer
 // lifecycle) can't run from a second body, so these weapons never mirror.
 export function canMirror(data) {
-  if (data.weaponSubtype === 'bat' || data.weaponSubtype === 'flail') return false;
-  if (data.chargeHammer || data.gemWand || data.batCharge || data.flailSpin) return false;
+  if (data.weaponSubtype === 'bat') return false;
+  if (data.chargeHammer || data.gemWand || data.batCharge) return false;
   if (data.manaCost) return false;
   return true;
 }

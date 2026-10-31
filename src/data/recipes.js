@@ -63,7 +63,7 @@ export const RECIPES = [
   { left: 'g', right: '|', result: '‖', name: 'Rubber Bat' },    // Goo + Stick = Rubber Bat (0 dmg, launch only)
   { left: '¡', right: 'M', result: '⸘', name: 'Metal Bat' },     // Bat + Metal = Metal Bat (double damage)
   { left: 'M', right: '|', result: '↾', name: 'Dagger' },      // Metal + Stick = Dagger
-  { left: '↾', right: '/', result: '⍋', name: 'Glaive' },      // Dagger + Staff = Glaive (high-damage staff)
+  { left: '↾', right: '/', result: '⍋', name: 'Flail' },      // Dagger + Staff = Flail (high-damage staff)
   { left: '↾', right: 'e', result: '↿', name: 'Keen Dagger' }, // Dagger + Eye = Keen Dagger (stabs toward the nearest enemy)
 
   // === MAGIC STAVES (Storm Staff + gemstone) ===
@@ -211,7 +211,6 @@ export const RECIPES = [
   { left: 'X', right: 'M', result: 'ᚱ', name: 'Ricochet Rifle' },  // Dual Pistols + Metal = Ricochet Rifle
 
   // === NEW MELEE RECIPES (10) ===
-  { left: 'j', right: '~', result: '○', name: 'Flail' },           // Jaw + String = Flail
   { left: '⊦', right: '◇', result: 'ᚨ', name: 'Thunder Axe' },     // Axe + Topaz = Thunder Axe (gem rule)
   { left: '⊤', right: '⊗', result: '✺', name: 'Exploding Mace' },  // Bone Axe + Bomb = Exploding Mace
   { left: '↑', right: 'w', result: '⌁', name: 'Stun Baton' },      // Spear + Wing = Stun Baton

@@ -54,7 +54,7 @@ function inExitLane(spot) {
 // What each Spell farms, and the tool it takes (`tool(item, obj)`; `obj` is
 // left out when the question is whether the player carries a tool for the
 // material at all). Trees fall only to an axe; rocks to the pickaxe, a
-// hammer or the Glaive (InteractionSystem.resolveSmashRefusal). A Glittering
+// hammer or the Flail (InteractionSystem.resolveSmashRefusal). A Glittering
 // Rock is a rock too, but takes only the pickaxe or a hammer of its
 // minHammerLevel (InteractionSystem.resolveGlitteringRockDamage).
 // HARVEST works them in `stage` order: containers first, then trees, rocks and
@@ -86,7 +86,7 @@ const MATERIALS = {
     // Mirrors the strike rules: a pickaxe mines anything; a Glittering Rock
     // takes only a hammer of its minHammerLevel
     // (InteractionSystem.resolveGlitteringRockDamage); plain Rock takes any
-    // hammer or the Glaive (breaksRock).
+    // hammer or the Flail (breaksRock).
     tool: (item, obj) => {
       const data = item?.data;
       if (data?.isPickaxe) return true;

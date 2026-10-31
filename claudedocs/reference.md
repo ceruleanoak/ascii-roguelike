@@ -183,7 +183,7 @@ src/
 | `dagger` | Benefits from oil augment (`onHit` + `extraOnHit`) on multistab (spears too, on thrust); special slot UI and menu equip filter | `Item.js:809`; `EquipmentSlots.js:162`; `MenuSystem.js:293` |
 | `hammer` | Shatters frozen enemies (multiplied damage / instant kill) | `CombatSystem.js:777,839` |
 | `wand` | Gem-wand charge-cast pipeline (separate from bow charge) | `Item.js`, `MagicSystem.js` |
-| `sword`, `axe`, `spear`, `whip`, `flail`, `pickaxe` | Purely descriptive — no implicit behavior beyond `attackPattern` | — |
+| `sword`, `axe`, `spear`, `whip`, `pickaxe` | Purely descriptive — no implicit behavior beyond `attackPattern` | — |
 
 Orthogonal flags: `isBlade`, `isBlunt`, `canSmash`, `isPickaxe`, `isImpact` (bypasses staff block).
 
@@ -359,7 +359,6 @@ Existing patterns in `Item.js` → `createMeleeAttack()`:
 | `arc` | `createMeleeArc()` | Swords — 3-hit sweep |
 | `sweep` | `createMeleeSweep()` | Axes — 5-position horiz. |
 | `thrust` | `createMeleeThrust()` | Spears — linear forward |
-| `ring` | `createMeleeRing()` | Flails — circular sweep |
 | `shockwave` | `createMeleeShockwave()` | Hammers — expanding rings |
 | `multistab` | `createMeleeMultistab()` | Daggers — rapid same-spot |
 | `whipcrack` | `createMeleeWhipcrack()` | Whips — long linear crack |

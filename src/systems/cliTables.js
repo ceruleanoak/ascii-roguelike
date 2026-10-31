@@ -184,7 +184,7 @@ const TYPE_DEFAULTS = {
 };
 
 // What the TYPE row steps through: each melee subtype a swing reads cleanly
-// from (flail spin, bat charge and pickaxe mining are bespoke), then the gun.
+// from (bat charge and pickaxe mining are bespoke), then the gun.
 const KINDS = ['sword', 'dagger', 'axe', 'spear', 'hammer', 'staff', 'whip', 'scythe', 'gun'];
 const weaponTypeOf = kind => (kind === 'gun' ? WEAPON_TYPES.GUN : WEAPON_TYPES.MELEE);
 const kindOf = data => (data.weaponType === WEAPON_TYPES.GUN ? 'gun' : data.weaponSubtype);

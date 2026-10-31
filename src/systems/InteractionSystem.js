@@ -118,8 +118,8 @@ export class InteractionSystem {
     if (obj.obsidian) return SMASH_REFUSED;
 
     // Rock yields to the pickaxe, a hammer (canSmash), and the one weapon that
-    // declares `breaksRock` (the Glaive). Everything else clinks off — blades,
-    // axes, and the other blunt weapons (flail, plain staffs, bats, baton,
+    // declares `breaksRock` (the Flail). Everything else clinks off — blades,
+    // axes, and the other blunt weapons (plain staffs, bats, baton,
     // a bare fist) alike.
     if (obj.char === '0') {
       const strikes = attack.isPickaxe || attack.canSmash || attack.breaksRock || obj.allWeaponsDamage;

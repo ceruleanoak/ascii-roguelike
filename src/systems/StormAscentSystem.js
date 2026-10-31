@@ -18,7 +18,7 @@
  * ground and becomes charged (can't be retrieved while charged).
  *
  * Metal detection: weaponSubtype in [sword, dagger, axe, hammer, spear,
- * pickaxe, scythe, flail, whip, bat, metal_bat] is conductive.
+ * pickaxe, scythe, whip, bat, metal_bat] is conductive.
  */
 
 import { DEATH_CAUSES } from '../data/deathCauses.js';
@@ -29,7 +29,7 @@ import { absorbsZap } from './ImbuePoolSystem.js';
 // Metal weapon subtypes that conduct electricity
 const METAL_SUBTYPES = new Set([
   'sword', 'dagger', 'axe', 'hammer', 'spear', 'pickaxe',
-  'scythe', 'flail', 'whip', 'bat'
+  'scythe', 'whip', 'bat'
 ]);
 
 const CHARGE_DURATION = 4;     // seconds a charged object stays charged
