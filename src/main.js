@@ -19,6 +19,7 @@ import { captureExploreRoomForRest, captureNeutralEntryRoomForRest } from './sys
 import { ArmorEffectsSystem } from './systems/ArmorEffectsSystem.js';
 import { FloatingBootsSystem } from './systems/FloatingBootsSystem.js';
 import { BottlesSystem } from './systems/BottlesSystem.js';
+import { BottlesColumnSystem } from './systems/BottlesColumnSystem.js';
 import { ConsumableTriggerSystem } from './systems/ConsumableTriggerSystem.js';
 import { NeutralRoomSystem, applyBlessing as applyBlessingBuff } from './systems/NeutralRoomSystem.js';
 import { spawnRoomNeutralCharacters } from './systems/roomFeatures.js';
@@ -306,6 +307,7 @@ class Game {
     this.inventorySystem.game = this;
     this.consumableTriggerSystem = new ConsumableTriggerSystem(this);
     this.bottlesSystem = new BottlesSystem(this);
+    this.bottlesColumnSystem = new BottlesColumnSystem(this);
     this.campNPCSystem = new CampNPCSystem(this);
     this.mistBattleSystem = new MistBattleSystem(this);
     this.dragonSpiritSystem = new DragonSpiritSystem(this);
@@ -549,6 +551,7 @@ class Game {
         this.keys[key] = true;
       }
       if (e.key === 'Tab') {
+        if (!this.keys.tab) this.bottlesColumnSystem.begin();
         this.keys.tab = true;
         e.preventDefault();
       }
@@ -591,10 +594,12 @@ class Game {
         if (key === 'r') this.player?.heldItem?.startManualReload?.(); // gun reload (Item)
       }
 
-      // Arrow keys for dodge rolling — suppressed when polymorphed
+      // Arrow keys for dodge rolling — suppressed when polymorphed. While TAB
+      // is held they walk the Bottles column instead (BottlesColumnSystem).
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown' ||
           e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-        if (!this.player?.polymorphed) this.arrowKeys[e.key] = true;
+        if (this.keys.tab) this.bottlesColumnSystem.stepArrow(e.key);
+        else if (!this.player?.polymorphed) this.arrowKeys[e.key] = true;
         e.preventDefault();
       }
     });
@@ -621,6 +626,7 @@ class Game {
       }
       if (e.key === 'Tab') {
         this.keys.tab = false;
+        this.bottlesColumnSystem.commit();
       }
       if (key === ' ') {
         this.keys.space = false;

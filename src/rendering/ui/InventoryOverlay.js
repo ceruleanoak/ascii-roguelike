@@ -7,7 +7,9 @@
  *   columns, widening to 3 columns if the roster won't fit in 2
  * - Rows that still don't fit the box are dropped in favor of a "+N MORE"
  *   indicator rather than overflowing past the border
- * - Show the run timer (RunTimerSystem) in the top-right corner
+ * - Show the run timer (RunTimerSystem) in the top-right corner, and the
+ *   Bottles column beneath it (BottlesColumnSystem — arrows walk it, TAB
+ *   release arms the highlighted Bottle)
  * - Identical in EXPLORE and REST — always the combined pool
  *
  * Drawn on the zoom-exempt UI layer (renderer.uiCtx, see ASCIIRenderer.clearUI)
@@ -20,6 +22,7 @@ import { GRID, COLORS, GAME_STATES } from '../../game/GameConfig.js';
 import { spectaclesTransformString, isSpectaclesActive } from '../../data/cipher.js';
 import { getPickupCategory } from '../../data/items.js';
 import { ZONE_COLORS } from '../../data/zones.js';
+import { BOTTLES_COLUMN_ROWS } from '../../systems/BottlesColumnSystem.js';
 
 const TREASURE_COLOR = '#ffd700';
 const COMPONENTS_COLOR = '#ffaa00';
@@ -33,20 +36,35 @@ const KEY_ITEM_COLOR = '#ff5555';
 
 // Column start cells (icon, text), keyed by column count. Icon-text gap is
 // 1 cell (was 2) to leave more width for the name before the next column.
+// The sections stop short of the Bottles column on the right.
 const COLUMN_LAYOUTS = {
   2: [
     { iconX: 4, textX: 5 },
-    { iconX: 16, textX: 17 }
+    { iconX: 12, textX: 13 }
   ],
   3: [
     { iconX: 4, textX: 5 },
-    { iconX: 12, textX: 13 },
-    { iconX: 20, textX: 21 }
+    { iconX: 9, textX: 10 },
+    { iconX: 14, textX: 15 }
   ]
 };
 
-// Rightmost cell content may occupy before it would cross the border.
-const CONTENT_RIGHT_CELL = (GRID.WIDTH - GRID.CELL_SIZE * 2) / GRID.CELL_SIZE - 1;
+// Rightmost cell section content may occupy before it would run into the
+// Bottles column.
+const CONTENT_RIGHT_CELL = 20;
+
+// ── Bottles column (BottlesColumnSystem owns the cursor) ─────────────────
+// Right-aligned under the run timer: title, a wrapped label naming the
+// highlighted stack, then one glyph per stack, wrapping into a 2nd column.
+const BOTTLES_COLOR = '#aaccee';
+const BOTTLES_RIGHT = GRID.WIDTH - GRID.CELL_SIZE * 3;       // run timer's right edge
+const BOTTLES_GLYPH_X = [GRID.CELL_SIZE * 24.5, GRID.CELL_SIZE * 26.25];
+const BOTTLES_LABEL_SCALE = 0.75;
+const BOTTLES_LABEL_WIDTH = GRID.CELL_SIZE * 5.5;            // on-screen px
+const BOTTLES_LABEL_LINES = 3;
+const BOTTLES_LABEL_LINE_HEIGHT = GRID.CELL_SIZE * 0.75;
+const BOTTLES_GLYPH_TOP = GRID.CELL_SIZE * 8.5;
+const BOTTLES_GLYPH_STEP = GRID.CELL_SIZE * 1.25;
 
 export class InventoryOverlay {
   constructor(renderer) {
@@ -137,6 +155,60 @@ export class InventoryOverlay {
     return index;
   }
 
+  // Word-wraps text into lines no wider than maxWidth (canvas px at the
+  // current font), the last line truncated if it still doesn't fit.
+  _wrapText(text, maxWidth, maxLines) {
+    const ctx = this.renderer.uiCtx;
+    const lines = [];
+    let line = '';
+    for (const word of text.split(' ')) {
+      const candidate = line ? `${line} ${word}` : word;
+      if (!line || ctx.measureText(candidate).width <= maxWidth) {
+        line = candidate;
+      } else {
+        lines.push(line);
+        line = word;
+      }
+    }
+    if (line) lines.push(line);
+    if (lines.length > maxLines) {
+      lines.length = maxLines;
+      lines[maxLines - 1] = this._fitText(lines[maxLines - 1] + '…', maxWidth);
+    }
+    return lines;
+  }
+
+  // The Bottles column: BOTTLES title, the highlighted stack's name (×N when
+  // more than one), then glyphs only — one per stack, the cursor boxed.
+  _renderBottlesColumn(game, startY, spectaclesOn) {
+    const ctx = this.renderer.uiCtx;
+    const column = game.bottlesColumnSystem;
+    const rows = column.rows();
+
+    ctx.textAlign = 'right';
+    ctx.fillStyle = BOTTLES_COLOR;
+    ctx.fillText(spectaclesTransformString('BOTTLES', spectaclesOn), BOTTLES_RIGHT, startY);
+
+    const selected = column.selectedRow();
+    if (selected) {
+      const name = selected.count > 1 ? `${selected.item.data.name} ×${selected.count}` : selected.item.data.name;
+      const lines = this._wrapText(spectaclesTransformString(name, spectaclesOn), BOTTLES_LABEL_WIDTH / BOTTLES_LABEL_SCALE, BOTTLES_LABEL_LINES);
+      lines.forEach((line, i) => {
+        this.renderer.drawUIEntityScaled(BOTTLES_RIGHT, startY + GRID.CELL_SIZE + i * BOTTLES_LABEL_LINE_HEIGHT, line, COLORS.TEXT, BOTTLES_LABEL_SCALE);
+      });
+    }
+
+    ctx.textAlign = 'center';
+    rows.forEach((row, i) => {
+      const x = BOTTLES_GLYPH_X[Math.floor(i / BOTTLES_COLUMN_ROWS)];
+      const y = BOTTLES_GLYPH_TOP + (i % BOTTLES_COLUMN_ROWS) * BOTTLES_GLYPH_STEP;
+      this.renderer.drawUIEntity(x, y, row.char, row.item.data.color || COLORS.ITEM);
+      if (i === column.cursor) {
+        this.renderer.drawUIRect(x - GRID.CELL_SIZE * 0.6, y - GRID.CELL_SIZE * 0.6, GRID.CELL_SIZE * 1.2, GRID.CELL_SIZE * 1.2, COLORS.ITEM, false);
+      }
+    });
+  }
+
   render(game) {
     const spectaclesOn = isSpectaclesActive(game);
     this.renderer.uiCtx.save();
@@ -192,6 +264,8 @@ export class InventoryOverlay {
     const startY = GRID.CELL_SIZE * 5;
     const lineHeight = GRID.CELL_SIZE * 1.5;
     let index = 0;
+
+    this._renderBottlesColumn(game, startY, spectaclesOn);
 
     // The whole ingredient pile — one array in every game state.
     const ingredients = game.getIngredients();

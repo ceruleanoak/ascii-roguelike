@@ -1299,6 +1299,16 @@ identity, not standard programming terms.
   cooldown in Bottles is `item.bottleCooldown`.
 - **Not:** `consumableInventory` (the unequipped non-Bottle consumables); not a slot.
 
+### Bottles column
+- **Definition:** The `BOTTLES` column of the TAB overlay, under the run timer: one glyph per
+  stack of Bottles (stacked by glyph; Hot Water by rooms left), a label under the title naming
+  the highlighted stack, wrapping into a second column when long. While TAB is held the arrow
+  keys walk it instead of dodging; releasing TAB arms the highlighted Bottle. A TAB peek with no
+  arrow press arms nothing. No equip menu.
+- **In code:** `src/systems/BottlesColumnSystem.js` (`rows`, `begin`/`stepArrow`/`commit`,
+  cursor only); drawn by `InventoryOverlay._renderBottlesColumn`.
+- **Not:** the slot equip menu; not a Frame Pass (HUD on the UI layer).
+
 ### Armed Consumable
 - **Definition:** What SPACE uses next instead of the weapon: a consumable slot armed with keys
   4–8, or a Bottle armed from Bottles. Arming one disarms the other; a weapon key disarms both.
