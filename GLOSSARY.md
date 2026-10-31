@@ -804,7 +804,8 @@ identity, not standard programming terms.
 - **Definition:** A Mechanic for an archer Enemy: when its equipped bow runs out of arrows
   (enemy-held bows share the player's per-room magazine), it flips to cowardly flight until a
   recharge clock fills (Goblin: 10 real seconds), then the bow refills and it hunts again.
-  Picking up another weapon mid-flight ends the flight early.
+  Picking up another weapon mid-flight ends the flight early. A disarmed archer flips the same
+  way with no clock: it shoots only what it holds, so it runs until it holds a weapon again.
 - **In code:** `QuiverRechargeMechanic` gated by `data.quiverRecharge` (`rechargeTime` in
   double-seconds). The flip itself is the shared `enterCowardice`/`leaveCowardice`
   (`enemyMechanics/cowardice.js`), the same one Thief uses.

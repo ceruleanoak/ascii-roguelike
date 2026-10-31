@@ -1517,6 +1517,7 @@ export class Enemy {
   // Telegraph.js, which is the only thing that calls this in play.
   createAttack() {
     if (!this.canAttack() || !this.target) return null;
+    if (QuiverRechargeMechanic.isDisarmed(this)) return null;
 
     // Use equipped weapon if available
     if (this.equippedWeapon && this.attackType.startsWith('item_')) {
