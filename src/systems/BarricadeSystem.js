@@ -534,8 +534,9 @@ export class BarricadeSystem {
   }
 
   /**
-   * A rolling rock ran into a Rubble Wall (BoulderSystem._strikeFixtures). If
-   * the block is part of this room's plug, the whole plug comes down.
+   * A rolling rock ran into a Rubble Wall (BoulderSystem._strikeFixtures), or
+   * a Punch landed on a Brick Wall (PunchSystem._land). If the block is part of
+   * this room's plug, the whole plug comes down.
    */
   strikePlug(obj) {
     const room = this.game?.currentRoom;

@@ -1472,6 +1472,27 @@ export const BACKGROUND_OBJECT_VARIANTS = {
       default: { animation: 'bounce', message: null }
     }
   },
+  // Brick Wall — the red fist gate's plug (barricades.js PUNCH_LOCK). Nothing
+  // but a Punch opens it (PunchSystem._strikeBrickWall → BarricadeSystem
+  // .strikePlug), which brings the whole plug down at once. Every swing, shot
+  // and bomb bounces off. '\\' is a free glyph, and a block of it reads as the
+  // hatching drawn for masonry; the red is hard-coded because this plug is only
+  // ever raised across a red exit.
+  'brick_wall': {
+    char: '\\',
+    name: 'Brick Wall',
+    color: '#ff4400',
+    bulletInteraction: 'block',
+    flammability: 'none',
+    conductivity: 'none',
+    indestructible: true,
+    punchBreakable: true,
+    hp: null,
+    solid: true,
+    interactions: {
+      default: { animation: 'bounce', message: null }
+    }
+  },
   // Watcher Eye — the red roll gate's trigger (barricades.js EYE_LOCK; the
   // rules live in src/systems/WatcherEye.js). It shuts when it sees the player
   // come near and only a melee hit on it open counts, so its data is a wall's:

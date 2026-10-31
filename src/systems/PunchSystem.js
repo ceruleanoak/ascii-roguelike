@@ -147,18 +147,20 @@ export class PunchSystem {
   }
 
   // Hand the blow to CombatSystem as a live player melee hitbox on the box's
-  // cell. Objects are skipped: an unarmed SPACE beside one interacts with it
-  // instead (main.js), so a Punch is only ever thrown at open ground.
+  // cell. Objects are skipped, a Brick Wall excepted: an unarmed SPACE beside
+  // one interacts with it (main.js), and the Punch's damage is not for objects.
   _land(punch) {
     const player = this.game.player;
     // Dragon Gauntlets (or any armor authoring punchDamage/punchKnockback)
     // harden the blow; bare skin is the Slime's 1-damage, no-knockback hit.
     const armor = this.game.inventorySystem?.equippedArmor?.data;
+    const position = this._hitPosition(player, punch.facing, punch.reach);
+    this._strikeBrickWall(position);
     this.game.combatSystem.createAttack({
       type: 'melee',
       char: '',
       telegraphDrawn: true,    // the Punch's Frame Pass draws it, not the melee pass
-      position: this._hitPosition(player, punch.facing, punch.reach),
+      position,
       width: CELL,
       height: CELL,
       damage: armor?.punchDamage ?? PUNCH_DAMAGE,
@@ -172,6 +174,19 @@ export class PunchSystem {
       isBlunt: true,
       isPunch: true,           // interior object passes (MazeSystem tombs) skip it too
     }, this.game._activeEnemies());
+  }
+
+  // A Brick Wall is the one object a Punch reaches. No accuracy roll: the Punch
+  // is what it asks for, so a thrown one always lands. Read from the active
+  // layer so a Punch inside a hut can't reach a wall out on the surface.
+  _strikeBrickWall(position) {
+    for (const obj of this.game._activeBackgroundObjects()) {
+      if (!obj.data?.punchBreakable) continue;
+      if (Math.abs(obj.position.x - position.x) >= CELL) continue;
+      if (Math.abs(obj.position.y - position.y) >= CELL) continue;
+      this.game.barricadeSystem.strikePlug(obj);
+      return;
+    }
   }
 
   // Distance from the player's center to the middle of the hit cell.

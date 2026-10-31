@@ -1792,7 +1792,7 @@ identity, not standard programming terms.
   Telegraph, in yellow. It holds a weapon's priority on SPACE: a Background Object in reach is
   touched by the same press but never takes the Punch's place (only a Maze cover object still
   recovering from a hit swallows the press). Its hit skips Background Objects and a Maze's cover
-  objects. An empty slot may be selected while another slot can fight, but the first SPACE there
+  objects, except a Brick Wall, which it always brings down. An empty slot may be selected while another slot can fight, but the first SPACE there
   Punches once and returns the hand to that slot, a weapon first. So the Punch stays the attack
   only when no slot can fight. Not thrown at REST or in NEUTRAL rooms. Armor can harden it:
   the Dragon Gauntlets (𐤕, Scale + Scale at the Dragon Forge) raise its damage and give it knockback.
@@ -2413,7 +2413,7 @@ identity, not standard programming terms.
 - **In code:** `BARRICADE_FAMILIES` keyed by family name, `FAMILY_BY_COLOR` mapping a `ZONE_COLORS`
   value onto one. A family that is empty raises nothing rather than borrowing another family's
   question. Red's members: the Rubble Wall (`hammer_lock`), the Watcher Eye
-  (`eye_lock`) and the Chasm the Pole Vault crosses (`gap_lock`). Cyan's only member so far is the Barricade Target, which asks for a gun or a
+  (`eye_lock`), the Chasm the Pole Vault crosses (`gap_lock`) and the Brick Wall (`punch_lock`). Cyan's only member so far is the Barricade Target, which asks for a gun or a
   bow rather than a sacrifice.
 - **Not:** "barricade type", "gate category", "tier", "colour group".
 
@@ -2436,6 +2436,16 @@ identity, not standard programming terms.
   which lifts the plug. The staged rocks are the descriptor's `rollables`, placed by
   `_placeRollables` and left non-structural so `isHammerRollable` accepts them. Not `bombable`.
 - **Not:** "rubble", "rock wall", "debris", "rock plug".
+
+### Brick Wall
+- **Definition:** The red fist Barricade's plug: a red hatched wall (`\`) that only a Punch opens.
+  One landed Punch brings the whole plug down, with no accuracy roll. Weapons, shots and bombs
+  bounce off it, so a run has to fight with an empty hand or a spent weapon to pass.
+- **In code:** the `brick_wall` Background Object variant (`GameConfig.js`), raised by the
+  `punch_lock` entry in `barricades.js`. `PunchSystem._strikeBrickWall` looks for its
+  `punchBreakable` flag in the active layer's objects, and the hit goes to
+  `BarricadeSystem.strikePlug`. `indestructible` is what turns everything else away.
+- **Not:** the Rubble Wall (a rolling rock's), the Barricade Wall (answers only to its fixtures).
 
 ### Watcher Eye
 - **Definition:** The red roll Barricade's trigger: an eye in the lane in front of a sealed plug.

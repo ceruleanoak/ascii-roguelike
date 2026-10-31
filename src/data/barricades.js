@@ -319,10 +319,21 @@ const GAP_LOCK = {
   char: '▓'
 };
 
+// A Brick Wall across the lane. Every weapon bounces off it, and so does a bomb;
+// the one thing that brings it down is a Punch, and one Punch brings down all of
+// it. The combo is a move and an absence: the run has to set down what it has
+// been fighting with, in the zone where that feels least safe. A Punch that
+// would miss an enemy never misses a wall.
+const PUNCH_LOCK = {
+  id: 'punch_lock',
+  shape: 'material',
+  typeId: 'brick_wall'
+};
+
 export const BARRICADE_FAMILIES = {
   green: [ROCKS, PETRIFIED_TREES, WHIP_LOCK, BOOMERANG_LOCK, SPEAR_LOCK, GRASS_LOCK, PUSH_LOCK],
   yellow: [LAVA_MOAT, ICE_BLOCKS, ELECTRIC_POLES],
-  red: [HAMMER_LOCK, EYE_LOCK, GAP_LOCK],
+  red: [HAMMER_LOCK, EYE_LOCK, GAP_LOCK, PUNCH_LOCK],
   cyan: [TARGETS]
 };
 
