@@ -1,6 +1,12 @@
 import { GRID } from '../game/GameConfig.js';
 import { BoomerangMechanic } from './BoomerangMechanic.js';
 
+// Seconds an arrow stays stuck in anything: ground, wall, object, enemy or
+// player. A lodged boomerang keeps its own, longer clock (it carries the
+// throw's ammo charge until it is picked up or despawns).
+export const STUCK_ARROW_LIFETIME = 5.0;
+export const STUCK_BOOMERANG_LIFETIME = 12.0;
+
 // Per-frame upkeep for CombatSystem.stuckArrows — arrows (and lodged
 // boomerangs) resting in the world after a shot: expire on lifetime, follow
 // the host they're stuck to (enemy/object/player) and drop or vanish when it
@@ -32,7 +38,7 @@ export function updateStuckArrows(stuckArrows, deltaTime, player, combat) {
           arrow.stuckTo = null;
           arrow.stuckType = 'ground';
           arrow.pickupable = true;
-          arrow.lifetime = 8.0;
+          arrow.lifetime = STUCK_ARROW_LIFETIME;
           arrow.offset = { x: 0, y: 0 };
         } else {
           stuckArrows.splice(i, 1);
