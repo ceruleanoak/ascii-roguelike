@@ -178,19 +178,22 @@ export class InventoryOverlay {
     return lines;
   }
 
-  // The Bottles column: ↕ BOTTLES title, the highlighted stack's name (×N when
-  // more than one), then glyphs only — one per stack, the cursor boxed.
+  // The Bottles column: BOTTLES ↕ title, the highlighted stack's name (×N when
+  // more than one), then glyphs only — one per stack, the cursor boxed. Absent
+  // entirely until a Bottle is carried.
   _renderBottlesColumn(game, startY, spectaclesOn) {
     const ctx = this.renderer.uiCtx;
     const column = game.bottlesColumnSystem;
     const rows = column.rows();
+    if (rows.length === 0) return;
 
     ctx.textAlign = 'right';
     ctx.fillStyle = BOTTLES_COLOR;
-    const title = spectaclesTransformString('BOTTLES', spectaclesOn);
-    ctx.fillText(title, BOTTLES_RIGHT, startY);
     // ↕ beside the title: the column is walked with the arrow keys.
-    ctx.fillText('↕', BOTTLES_RIGHT - ctx.measureText(title).width - GRID.CELL_SIZE * 0.4, startY);
+    const arrows = '↕';
+    ctx.fillText(arrows, BOTTLES_RIGHT, startY);
+    const titleRight = BOTTLES_RIGHT - ctx.measureText(arrows).width - GRID.CELL_SIZE * 0.4;
+    ctx.fillText(spectaclesTransformString('BOTTLES', spectaclesOn), titleRight, startY);
 
     const selected = column.selectedRow();
     if (selected) {
