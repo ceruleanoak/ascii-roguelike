@@ -633,14 +633,16 @@ function stampSlopeBelt(gen, room, centerCol, centerRow, innerRadius, outerRadiu
 }
 
 // A Pit (see pits.js): the cells within `radius` of the centre cell, with the
-// outer ring as Slopes running down into it and a flat floor in the middle.
+// outer two rings as Slopes running down into it and a flat floor in the middle.
 // Every cell is stamped (no fill gaps) so the rim reads cleanly — the rim is
 // the only thing telling the player where cover begins.
+const PIT_RIM_WIDTH = 2;    // cells of Slope around a Pit's floor
+
 export function stampPit(gen, room, centerCol, centerRow, radius) {
   for (let dr = -radius; dr <= radius; dr++) {
     for (let dc = -radius; dc <= radius; dc++) {
       const dist = Math.sqrt(dc * dc + dr * dr);
-      if (dist > radius || dist <= radius - 1) continue; // floor cells stay open ground
+      if (dist > radius || dist <= radius - PIT_RIM_WIDTH) continue; // floor cells stay open ground
       const col = centerCol + dc, row = centerRow + dr;
       if (!gen.isValidPosition(col, row, room)) continue;
       const slope = makeSlopeTile(col, row, cardinalOf(-dc, -dr)); // downhill = inward
@@ -687,7 +689,7 @@ export function seedAscentZone(gen, room, centerCol, centerRow, innerRadius, out
 // across the room, and a player down in a Pit is under them — so the room is
 // cleared by reading the Shadow and moving between Pits.
 const POND_RADIUS = 4;      // cells
-const PIT_RADIUS = 2;       // cells
+const PIT_RADIUS = 3;       // cells
 const PIT_DISTANCE = 9;     // cells from the room centre to each Pit's centre
 
 export function seedFrozenAscent(gen, room, centerCol, centerRow) {
