@@ -12,6 +12,7 @@ import { applyLavaContact } from './LavaContact.js';
 import { isOnMetalPlatform, metalPlatformCovers } from './MetalPlatformSystem.js';
 import { wetPipCount, wetPipSpeed } from './StatusEffectSystem.js';
 import { destroyWetOils } from './ConsumableSlotBreaks.js';
+import { isDousedByDeepWater, douseCarriedTorches } from './TorchDousing.js';
 import { ChargeMechanic } from '../entities/enemyMechanics/ChargeMechanic.js';
 
 // Re-exported so existing imports (e.g. Enemy.js) keep working.
@@ -1742,7 +1743,8 @@ export class PhysicsSystem {
   }
 
   // Apply the liquid interaction results produced by update() to the world:
-  // lava destroys ingredients/dropped items and ticks damage; water applies
+  // lava destroys ingredients/dropped items and ticks damage; deep water
+  // destroys torches; water applies
   // bob/wet/status effects. `game` supplies the entity arrays and combat
   // feedback (damage numbers). Returns true if lava killed the player.
   applyLiquidResults(deltaTime, waterResults, game) {
@@ -1806,6 +1808,10 @@ export class PhysicsSystem {
         if (wetStatus?.stacks !== undefined) wetStatus.stacks = wetStatus.active ? wetPipCount(entity) : 0;
       }
 
+      // Deep water destroys torches — the player's carried ones here, a
+      // dropped one in the item branch below (TorchDousing.js).
+      if (inDeepWater && entity === game.player) douseCarriedTorches(game, entity);
+
       // Ingredients: lava destroys them, water makes them bob. Loot on another
       // layer (the frozen surface while an Interior owns the frame) was tested
       // against the live layer's liquid at overlapping coordinates — skip it.
@@ -1829,7 +1835,8 @@ export class PhysicsSystem {
       // Dropped items (weapons/armor): lava destroys them
       const itemIdx = game.items.indexOf(entity);
       if (itemIdx !== -1) {
-        if (damagingLiquid && lootOnActiveLayer(game, entity)) {
+        const destroyed = damagingLiquid || (inDeepWater && isDousedByDeepWater(entity));
+        if (destroyed && lootOnActiveLayer(game, entity)) {
           this.removeEntity(entity);
           game.items.splice(itemIdx, 1);
         }

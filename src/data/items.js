@@ -554,6 +554,9 @@ export const ITEMS = {
     patternSpeed: 0.05,
     range: 16,
     onHit: 'burn',
+    // Deep water puts it out — carried or on the ground (TorchDousing.js).
+    // The Lantern below doesn't carry it.
+    dousedByDeepWater: true,
     color: '#ff8800',
   },
 
@@ -561,7 +564,8 @@ export const ITEMS = {
   // The Torch in a metal cage: every stat and every torch read is the Torch's
   // (each one checks weaponSubtype 'torch', never the name). The one thing the
   // cage adds is a flame water can't put out — `lightsUnderwater` is what
-  // lights an underwater room (torchLight.underwaterFogRadius).
+  // lights an underwater room (torchLight.underwaterFogRadius), and it lacks
+  // the Torch's `dousedByDeepWater`, so deep water doesn't destroy it.
   '♁': {
     char: '♁',
     tier: 1,
