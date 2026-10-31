@@ -93,8 +93,7 @@ const COIN_PER_TIER = { WEAPON: 3, ARMOR: 3, CONSUMABLE: 2 };
  * baseCoins is the full coin price with zero ingredients toggled in.
  * coinFloor is the minimum it can shrink to — ingredients alone never pay a
  * listing down to zero coins. ShopSystem computes the live remaining price by
- * shaving an even share of (baseCoins - coinFloor) off per toggled ingredient
- * lane.
+ * taking one coin off per toggled ingredient lane.
  */
 function computeCoinPrice(T, role) {
   const baseCoins = BASE_COIN[role] + T * COIN_PER_TIER[role];
@@ -115,8 +114,14 @@ function computeCoinPrice(T, role) {
 const PAWN_SELL_BASE = 1;
 const PAWN_SELL_PER_TIER = 1;
 
-/** Coins paid out for selling one owned Item (weapon/armor/consumable/trap). */
+/**
+ * Coins paid out for selling one owned Item (weapon/armor/consumable/trap).
+ * An item's own `pawnValue` overrides the tier scale — the Empty Bottle and
+ * the raw liquid Bottles are free to fill from the world, so pawning them at
+ * 1+ coin turned every Bottle drop into a coin.
+ */
 export function computePawnSellValue(itemData) {
+  if (itemData.pawnValue !== undefined) return itemData.pawnValue;
   const tier = deriveValueTier(itemData, itemData.type);
   return PAWN_SELL_BASE + tier * PAWN_SELL_PER_TIER;
 }

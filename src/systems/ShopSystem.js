@@ -272,25 +272,18 @@ export class ShopSystem {
 
   /**
    * Current coin price after toggled-ingredient reductions (never below
-   * coinFloor). (baseCoins - coinFloor) is split evenly across the ingredient
-   * lanes, and the remainder goes to whichever lanes are toggled first — so
-   * the discount depends on how many lanes are toggled, never which ones (a
-   * Fur + Fur listing's second Fur is worth the same as its first).
+   * coinFloor). Each toggled ingredient takes one coin off — the discount
+   * depends on how many lanes are toggled, never which ones (a Fur + Fur
+   * listing's second Fur is worth the same as its first). Paying in
+   * ingredients trims the price; Coins or Treasure is what buys the item.
    */
   getRemainingCoinPrice() {
     const row = this.currentRow;
-    let laneCount = 0;
     let toggledCount = 0;
     for (let i = 0; i < this.lanes.length; i++) {
-      if (this.lanes[i].type !== 'ingredient') continue;
-      laneCount++;
-      if (this.toggled[i]) toggledCount++;
+      if (this.lanes[i].type === 'ingredient' && this.toggled[i]) toggledCount++;
     }
-    if (laneCount === 0) return row.baseCoins;
-    const reducible = row.baseCoins - row.coinFloor;
-    const reduction = Math.floor(reducible / laneCount) * toggledCount
-      + Math.min(toggledCount, reducible % laneCount);
-    return Math.max(row.coinFloor, row.baseCoins - reduction);
+    return Math.max(row.coinFloor, row.baseCoins - toggledCount);
   }
 
   // ── PERSUADE (InfluenceSystem) ──────────────────────────────────────────────

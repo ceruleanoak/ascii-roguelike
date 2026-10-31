@@ -2641,6 +2641,7 @@ export const ITEMS = {
     char: 'B',
     name: 'Empty Bottle',
     type: ITEM_TYPES.CONSUMABLE, bottle: true,
+    pawnValue: 0, // free to fill from the world, so worth nothing at the counter
     effect: 'emptyBottle',
     color: '#aaccee'
   },
@@ -2672,6 +2673,7 @@ export const ITEMS = {
     char: '🜉',
     name: 'Bottle of Water',
     type: ITEM_TYPES.CONSUMABLE, bottle: true,
+    pawnValue: 0, // free to fill from the world, so worth nothing at the counter
     effect: 'cauldronInput',
     color: '#aaddff'
   },
@@ -2683,6 +2685,7 @@ export const ITEMS = {
     char: '🜊',
     name: 'Bottle of Hot Water',
     type: ITEM_TYPES.CONSUMABLE, bottle: true,
+    pawnValue: 0, // free to fill from the world, so worth nothing at the counter
     effect: 'cauldronInput',
     color: '#ff8855'
   },
@@ -2711,6 +2714,7 @@ export const ITEMS = {
     char: 'ε',
     name: 'Bottle of Electrified Water',
     type: ITEM_TYPES.CONSUMABLE, bottle: true,
+    pawnValue: 0, // free to fill from the world, so worth nothing at the counter
     effect: 'cauldronInput',
     color: '#ffff00'
   },
@@ -2718,6 +2722,7 @@ export const ITEMS = {
     char: '◆',
     name: 'Bottle of Magma',
     type: ITEM_TYPES.CONSUMABLE, bottle: true,
+    pawnValue: 0, // free to fill from the world, so worth nothing at the counter
     effect: 'cauldronInput',
     color: '#ff5500'
   },
@@ -2725,6 +2730,7 @@ export const ITEMS = {
     char: '◐',
     name: 'Bottle of Mud',
     type: ITEM_TYPES.CONSUMABLE, bottle: true,
+    pawnValue: 0, // free to fill from the world, so worth nothing at the counter
     effect: 'cauldronInput',
     color: '#6b4423'
   },
