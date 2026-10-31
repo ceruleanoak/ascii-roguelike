@@ -4,8 +4,10 @@
  * The Bottles column — the BOTTLES column of the TAB overlay (InventoryOverlay
  * draws it). While TAB is held the arrow keys walk a cursor over Bottles,
  * stacked by glyph; releasing TAB arms the first Bottle of the highlighted
- * stack (ConsumableTriggerSystem.armBottle), so the Armed Glyph rises over
- * the player and SPACE uses it. No equip menu.
+ * stack, so the Armed Glyph rises over the player and SPACE uses it. With a
+ * consumable slot free, the Bottle moves into it and the slot is armed
+ * (InventorySystem.equipBottleIntoFreeSlot); with none, it is armed straight
+ * from Bottles (ConsumableTriggerSystem.armBottle). No equip menu.
  *
  * A plain TAB peek arms nothing: the release only commits when an arrow moved
  * the cursor during that hold.
@@ -98,6 +100,11 @@ export class BottlesColumnSystem {
     const row = this.moved ? this.selectedRow() : null;
     this.begin();
     if (!row || this.game.player?.polymorphed) return;
-    this.game.consumableTriggerSystem.armBottle(row.item);
+    // A free slot takes the chosen Bottle and arms it there; full slots arm
+    // it straight from Bottles.
+    const { game } = this;
+    const slot = game.inventorySystem.equipBottleIntoFreeSlot(row.item, game.player);
+    if (slot !== -1) game.consumableTriggerSystem.selectSlot(slot);
+    else game.consumableTriggerSystem.armBottle(row.item);
   }
 }

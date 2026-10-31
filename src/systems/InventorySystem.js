@@ -265,13 +265,35 @@ export class InventorySystem {
       ((!twinsAllowed && s.char === item?.char) || (group && s.data?.exclusiveGroup === group)));
   }
 
+  // A Bottle that comes to hand (pickup, craft, bake) joins Bottles and, when
+  // a consumable slot is free, is equipped into it — a free slot is never
+  // left empty beside a Bottle. Full slots: it stays in Bottles, no prompt
+  // (Bottles are uncapped). Returns the slot index it took, or -1.
+  stowBottle(item, player) {
+    this.bottles.push(item);
+    return this.equipBottleIntoFreeSlot(item, player);
+  }
+
+  // Moves `item` from Bottles into the first free consumable slot (not one
+  // reserved by the magic meter, not one whose Exclusive Group is taken).
+  // Returns the slot index, or -1 when no slot can take it.
+  equipBottleIntoFreeSlot(item, player) {
+    if (!this.bottles.includes(item)) return -1;
+    const emptySlot = this.firstFreeConsumableSlot(player);
+    if (emptySlot === -1 || this.conflictingConsumableSlot(item) !== -1) return -1;
+    if (player?.armedBottle === item) player.armedBottle = null;
+    this.equipConsumable(emptySlot, item);
+    this.applyEquipmentEffectsToPlayer(player);
+    return emptySlot;
+  }
+
   // A consumable made in place (Fireplace bake, Press oil) goes where a
   // pickup would: onto its stack, else into the first free slot, and only
   // into the consumable pile when no slot can take it. Returns the merged
   // stack, or null. Pushing straight onto the pile hid the item behind the
   // equipment menu while slots sat empty (bug-inbox 2026-10-28, Meat Jerky).
   stowConsumable(item, player) {
-    if (this.isBottle(item)) { this.bottles.push(item); return null; }
+    if (this.isBottle(item)) { this.stowBottle(item, player); return null; }
     const stacked = this.mergeStackableConsumable(item);
     if (stacked) return stacked;
     this.consumableInventory.push(item);
@@ -422,9 +444,9 @@ export class InventorySystem {
           physicsSystem.removeEntity(item);
           items.splice(i, 1);
         } else if (item.data.type === 'CONSUMABLE' && this.isBottle(item)) {
-          // A Bottle goes straight to Bottles — never a slot, never the
+          // A Bottle takes a free slot, else waits in Bottles — never the
           // slot-choice prompt (its count is uncapped).
-          this.bottles.push(item);
+          this.stowBottle(item, player);
           item.consumed = true;
           physicsSystem.removeEntity(item);
           items.splice(i, 1);

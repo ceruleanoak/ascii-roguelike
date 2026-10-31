@@ -1126,8 +1126,8 @@ export class MenuSystem {
         game.inventorySystem.equipArmor(item);
         game.inventorySystem.applyEquipmentEffectsToPlayer(game.player);
       } else if (item.data.type === 'CONSUMABLE' && game.inventorySystem.isBottle(item)) {
-        // A crafted Bottle goes to Bottles like a world pickup — no slot.
-        game.inventorySystem.bottles.push(item);
+        // A crafted Bottle stows like a world pickup: a free slot, else Bottles.
+        game.inventorySystem.stowBottle(item, game.player);
       } else if (item.data.type === 'CONSUMABLE') {
         // A crafted stackable (Meat Jerky, Sandwich, ...) joins an existing
         // stack like a world pickup does, instead of contesting a slot.

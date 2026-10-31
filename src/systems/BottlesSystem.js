@@ -17,6 +17,9 @@
  * Bottles never auto-fire. Equipping a Bottle into a slot is the only way to
  * get the emergency triggers (heal threshold, ⚱ revive, ♔ heal-on-hit) — the
  * slot keeps its full machinery in InventorySystem/ConsumableTriggerSystem.
+ * A Bottle that comes to hand, or is chosen in the Bottles column, takes a
+ * free slot when there is one (InventorySystem.stowBottle /
+ * equipBottleIntoFreeSlot); Bottles holds the rest.
  *
  * A Bottle Ref names one Bottle wherever it sits, so the fill helpers can
  * write back without caring which store holds it:

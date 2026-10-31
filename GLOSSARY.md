@@ -1286,14 +1286,17 @@ identity, not standard programming terms.
 
 ### Bottles
 - **Definition:** The player's store of every carried Bottle not equipped in a consumable
-  slot. Uncapped; never the slot-choice prompt. A Bottle in Bottles is used directly (arm it,
+  slot. Uncapped; never the slot-choice prompt. A Bottle that comes to hand (pickup, craft,
+  bake) takes a free consumable slot first, unless a twin or its Exclusive Group already holds
+  one; Bottles holds the rest. A Bottle in Bottles is used directly (arm it,
   SPACE drinks/throws/fills, SHIFT tosses) but never auto-fires — equipping it into a slot is
   what buys the emergency triggers (heal threshold, ⚱ revive, ♔ heal-on-hit). Run-scoped:
   rides REST↔EXPLORE, cleared on death.
 - **In code:** `inventorySystem.bottles` (cleared in `handleGameOver`). Operations in
   `src/systems/BottlesSystem.js` — `trigger` (drink/throw with `slotIndex: null` on the
   windup), `replaceAt`/`putAt` (fill or brew in place), `findRef`/`emptyBottleRef`/`refOf`,
-  `allRefs` (every carried Bottle, slots included), `coolHotWater`. A Bottle Ref
+  `allRefs` (every carried Bottle, slots included), `coolHotWater`. Free-slot routing:
+  `InventorySystem.stowBottle` / `equipBottleIntoFreeSlot`. A Bottle Ref
   names one Bottle wherever it sits: `{ source: 'bottles', item }` or `{ source: 'slot', index }`.
   Routing helpers on InventorySystem (`stashUnequipped`, `removeUnequipped`,
   `allUnequippedConsumables`) pick Bottles or `consumableInventory` per item. A reusable Bottle's
@@ -1301,10 +1304,11 @@ identity, not standard programming terms.
 - **Not:** `consumableInventory` (the unequipped non-Bottle consumables); not a slot.
 
 ### Bottles column
-- **Definition:** The `BOTTLES` column of the TAB overlay, under the run timer: one glyph per
+- **Definition:** The `↕ BOTTLES` column of the TAB overlay, under the run timer: one glyph per
   stack of Bottles (stacked by glyph; Hot Water by rooms left), a label under the title naming
   the highlighted stack, wrapping into a second column when long. While TAB is held the arrow
-  keys walk it instead of dodging; releasing TAB arms the highlighted Bottle. A TAB peek with no
+  keys walk it instead of dodging; releasing TAB arms the highlighted Bottle, moving it into a
+  free consumable slot first when one can take it (that slot is armed). A TAB peek with no
   arrow press arms nothing. No equip menu.
 - **In code:** `src/systems/BottlesColumnSystem.js` (`rows`, `begin`/`stepArrow`/`commit`,
   cursor only); drawn by `InventoryOverlay._renderBottlesColumn`.
