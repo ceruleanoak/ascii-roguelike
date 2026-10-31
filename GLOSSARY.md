@@ -1288,16 +1288,17 @@ identity, not standard programming terms.
 - **Definition:** The player's store of every carried Bottle not equipped in a consumable
   slot. Uncapped; never the slot-choice prompt. A Bottle that comes to hand (pickup, craft,
   bake) takes a free consumable slot first, unless a twin or its Exclusive Group already holds
-  one; Bottles holds the rest. A Bottle in Bottles is used directly (arm it,
-  SPACE drinks/throws/fills, SHIFT tosses) but never auto-fires — equipping it into a slot is
+  one; Bottles holds the rest. A picked-up Empty Bottle comes to hand armed, ready to fill.
+  A Bottle in Bottles is used directly (arm it, SPACE drinks/throws/fills, SHIFT tosses) but
+  never auto-fires — equipping it into a slot is
   what buys the emergency triggers (heal threshold, ⚱ revive, ♔ heal-on-hit). Run-scoped:
   rides REST↔EXPLORE, cleared on death.
 - **In code:** `inventorySystem.bottles` (cleared in `handleGameOver`). Operations in
   `src/systems/BottlesSystem.js` — `trigger` (drink/throw with `slotIndex: null` on the
   windup), `replaceAt`/`putAt` (fill or brew in place), `findRef`/`emptyBottleRef`/`refOf`,
   `allRefs` (every carried Bottle, slots included), `coolHotWater`. Free-slot routing:
-  `InventorySystem.stowBottle` / `equipBottleIntoFreeSlot`. A Bottle Ref
-  names one Bottle wherever it sits: `{ source: 'bottles', item }` or `{ source: 'slot', index }`.
+  `BottlesSystem.stow` / `equipIntoFreeSlot`; a picked-up Empty Bottle comes to hand armed
+  (`pickUp`). A Bottle Ref names one Bottle wherever it sits: `{ source: 'bottles', item }` or `{ source: 'slot', index }`.
   Routing helpers on InventorySystem (`stashUnequipped`, `removeUnequipped`,
   `allUnequippedConsumables`) pick Bottles or `consumableInventory` per item. A reusable Bottle's
   cooldown in Bottles is `item.bottleCooldown`.

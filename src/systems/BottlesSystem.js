@@ -18,8 +18,8 @@
  * get the emergency triggers (heal threshold, ⚱ revive, ♔ heal-on-hit) — the
  * slot keeps its full machinery in InventorySystem/ConsumableTriggerSystem.
  * A Bottle that comes to hand, or is chosen in the Bottles column, takes a
- * free slot when there is one (InventorySystem.stowBottle /
- * equipBottleIntoFreeSlot); Bottles holds the rest.
+ * free slot when there is one (stow / equipIntoFreeSlot); Bottles holds the
+ * rest. A picked-up Empty Bottle comes to hand armed (pickUp).
  *
  * A Bottle Ref names one Bottle wherever it sits, so the fill helpers can
  * write back without caring which store holds it:
@@ -39,6 +39,40 @@ export class BottlesSystem {
 
   get bottles() {
     return this.game.inventorySystem.bottles;
+  }
+
+  // A Bottle that comes to hand (pickup, craft, bake) joins Bottles and, when
+  // a consumable slot is free, is equipped into it — a free slot is never
+  // left empty beside a Bottle. Full slots: it stays in Bottles, no prompt
+  // (Bottles are uncapped). Returns the slot index it took, or -1.
+  stow(item, player) {
+    this.bottles.push(item);
+    return this.equipIntoFreeSlot(item, player);
+  }
+
+  // A world pickup: stow it, and an Empty Bottle comes to hand armed, as if
+  // its slot key were pressed — pick one up in the lab, walk to the trough,
+  // SPACE fills it.
+  pickUp(item, player) {
+    const slot = this.stow(item, player);
+    if (item.char !== EMPTY_BOTTLE_CHAR || player.polymorphed) return;
+    const triggers = this.game.consumableTriggerSystem;
+    if (slot !== -1) triggers.selectSlot(slot);
+    else triggers.armBottle(item);
+  }
+
+  // Moves `item` from Bottles into the first free consumable slot (not one
+  // reserved by the magic meter, not one whose Exclusive Group is taken).
+  // Returns the slot index, or -1 when no slot can take it.
+  equipIntoFreeSlot(item, player) {
+    const inv = this.game.inventorySystem;
+    if (!this.bottles.includes(item)) return -1;
+    const emptySlot = inv.firstFreeConsumableSlot(player);
+    if (emptySlot === -1 || inv.conflictingConsumableSlot(item) !== -1) return -1;
+    if (player?.armedBottle === item) player.armedBottle = null;
+    inv.equipConsumable(emptySlot, item);
+    inv.applyEquipmentEffectsToPlayer(player);
+    return emptySlot;
   }
 
   /** The Item a Bottle Ref points at, or null when it's gone. */

@@ -7,7 +7,7 @@
  * glyph; releasing TAB arms the highlighted stack, so the Armed Glyph rises
  * over the player and SPACE uses it. An equipped stack arms its slot.
  * Otherwise, with a consumable slot free, the Bottle moves into it and the
- * slot is armed (InventorySystem.equipBottleIntoFreeSlot); with none, it is
+ * slot is armed (BottlesSystem.equipIntoFreeSlot); with none, it is
  * armed straight from Bottles (ConsumableTriggerSystem.armBottle). No equip
  * menu.
  *
@@ -115,7 +115,7 @@ export class BottlesColumnSystem {
     const { game } = this;
     const slotRef = row.refs.find(r => r.source === 'slot');
     if (slotRef) { game.consumableTriggerSystem.selectSlot(slotRef.index); return; }
-    const slot = game.inventorySystem.equipBottleIntoFreeSlot(row.item, game.player);
+    const slot = game.bottlesSystem.equipIntoFreeSlot(row.item, game.player);
     if (slot !== -1) game.consumableTriggerSystem.selectSlot(slot);
     else game.consumableTriggerSystem.armBottle(row.item);
   }
