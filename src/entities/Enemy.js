@@ -33,6 +33,7 @@ import { RiseAgainMechanic } from './enemyMechanics/RiseAgainMechanic.js';
 import { GameAnimalMechanic } from './enemyMechanics/GameAnimalMechanic.js';
 import { SniperMechanic } from './enemyMechanics/SniperMechanic.js';
 import { RipenMechanic } from './enemyMechanics/RipenMechanic.js';
+import { targetSlipsLatch } from './enemyMechanics/sapLatch.js';
 import { ThiefMechanic } from './enemyMechanics/ThiefMechanic.js';
 import { WeaponConversion } from './enemyMechanics/weaponConversion.js';
 import { QuiverRechargeMechanic } from './enemyMechanics/QuiverRechargeMechanic.js';
@@ -1456,7 +1457,7 @@ export class Enemy {
         const dy = this.target.position.y - this.position.y;
         inRange = (dx * dx + dy * dy) <= (this.attackRange * this.attackRange);
       }
-      return !this.sapping && !targetFull && inRange && this.state === 'attack' && this.attackTimer <= 0 && this.windupTimer <= 0;
+      return !this.sapping && !targetFull && inRange && !targetSlipsLatch(this.target) && this.state === 'attack' && this.attackTimer <= 0 && this.windupTimer <= 0;
     }
     // Can only attack after windup completes
     return this.state === 'attack' && this.attackTimer <= 0 && this.windupTimer <= 0;

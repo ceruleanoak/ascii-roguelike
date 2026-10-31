@@ -1,4 +1,5 @@
 import { inSamePlane } from '../../systems/PlaneSystem.js';
+import { targetSlipsLatch } from './sapLatch.js';
 
 // Frost Lunge (Ice Wraith): windup → frost line → lunge → latch.
 //
@@ -96,7 +97,7 @@ export const FrostLungeMechanic = {
     if (enemy.frostLungePhase === 'lunge') {
       enemy.frostLungeTimer -= deltaTime;
       if (!onScreen || !enemy.target || enemy.frostLungeTimer <= 0) { this.interrupt(enemy); return; }
-      if (distance <= enemy.attackRange && canLatch(enemy) && inSamePlane(enemy, enemy.target)) {
+      if (distance <= enemy.attackRange && canLatch(enemy) && !targetSlipsLatch(enemy.target) && inSamePlane(enemy, enemy.target)) {
         stop(enemy);
         enemy.createSapAttack();
         this.interrupt(enemy);
