@@ -211,7 +211,7 @@ export class LightningStrikeSystem {
       if (pips > 0) nearestEnemy.applyStatusEffect('zap', stunDur, pips);
       game.combatSystem.createDamageNumber(actualDamage, nearestEnemy.position.x, nearestEnemy.position.y, '#00ffff');
       if (isWet) {
-        game.combatSystem.createDamageNumber('⚡', nearestEnemy.position.x, nearestEnemy.position.y - 12, '#ffff00');
+        game.combatSystem.createDamageNumber('ϟ', nearestEnemy.position.x, nearestEnemy.position.y - 12, '#ffff00');
       }
 
       const cs = (currentEnemy.width || GRID.CELL_SIZE) / 2;

@@ -413,7 +413,7 @@ export class FishingSystem {
       this.fishEntities.splice(i, 1);
       this.fishingElectrocuted = true;
       game.lootSystem?.spawnIngredientDrop?.('m', fish.position.x, fish.position.y);
-      game.combatSystem?.createDamageNumber?.('⚡', fish.position.x, fish.position.y - C * 0.5, '#ffff00');
+      game.combatSystem?.createDamageNumber?.('ϟ', fish.position.x, fish.position.y - C * 0.5, '#ffff00');
 
       // Cancel an in-flight cast (charging/bobbing/bite) — the lake is dead.
       if (this.state !== STATES.IDLE) {

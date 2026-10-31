@@ -30,7 +30,7 @@ export function conductElectricity(combatSystem, sourceObj, damage, enemies, pla
       // electric-affinity enemies are auto-immune via EFFECT_AFFINITY.
       enemy.applyStatusEffect('zap', 3.5, CONDUCTED_PIPS);
       combatSystem.createDamageNumber(dmg, enemy.position.x, enemy.position.y, '#00ffff');
-      combatSystem.createDamageNumber('⚡', enemy.position.x, enemy.position.y - 10, '#ffff00');
+      combatSystem.createDamageNumber('ϟ', enemy.position.x, enemy.position.y - 10, '#ffff00');
     }
   }
 

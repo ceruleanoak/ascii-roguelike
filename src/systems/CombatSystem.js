@@ -1143,7 +1143,7 @@ export class CombatSystem {
 
               // Show electric indicator for wet-boosted hits
               if (isWet && attack.onHit === 'stun') {
-                this.createDamageNumber('⚡', enemy.position.x, enemy.position.y - 12, '#ffff00');
+                this.createDamageNumber('ϟ', enemy.position.x, enemy.position.y - 12, '#ffff00');
               }
 
               // Show blunt-on-frozen / blade-on-snared bonus indicator
