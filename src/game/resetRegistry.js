@@ -543,6 +543,12 @@ export const RESET_REGISTRY = [
     why: 'Forget which crafting pairs were identified or failed — the Dragon Forge shares these maps (pairMemory), so this clears its memory too.',
   },
   {
+    path: 'player.wingsDodgeSpent',
+    scope: 'room',
+    value: false,
+    why: 'Wings give one guaranteed dodge per room; a new room gives it back.',
+  },
+  {
     path: 'beelineSystem.reset',
     scope: 'room',
     call: (game) => game.beelineSystem.reset(),

@@ -426,6 +426,15 @@ identity, not standard programming terms.
 - **Not:** an Armor Flavor word (said once, on equip, for an armor family); a pickup message;
   narrator text.
 
+### Wings
+- **Definition:** A slot-holding passive (`∞`, Wing + Wing) that dodges the first damage that
+  would land in each room. A hit already stopped by a dodge roll, a Guard or an immunity does not
+  spend it. Its Passive Indicator is `FLUTTER`.
+- **In code:** `ITEMS['∞']` (`roomDodge`, `passiveIndicator`) in `src/data/items.js`, projected to
+  `player.wingsDodge` by `EquipmentEffectsSystem`; `PlayerDamageSystem.applyDamage` spends it
+  (`player.wingsDodgeSpent`, room-scoped); `WingsSystem.update` floats the word.
+- **Not:** a Wing (`w`, the raw ingredient); Floating Boots (crafted from Wings, they cross liquid).
+
 ### Enemy
 - **Definition:** Any autonomous hostile actor. Behaviors are composed, not subclassed.
 - **In code:** `Enemy` base in `src/entities/`; data in `src/data/enemies.js`.

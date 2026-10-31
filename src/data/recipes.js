@@ -156,7 +156,7 @@ export const RECIPES = [
   // Secret recipes
   { left: '♥', right: 's', result: '♦', name: 'Dragon Heart' },  // Heart + Scale = Dragon Heart
   { left: 'g', right: 'g', result: '◉', name: 'Slime Bomb' },    // Goo + Goo = Slime Bomb (trap)
-  { left: 'w', right: 'w', result: '∞', name: 'Wings' },         // Wing + Wing = Wings (speed boost)
+  { left: 'w', right: 'w', result: '∞', name: 'Wings' },         // Wing + Wing = Wings (one dodge per room)
 
   // === GREEN GAP RECIPES (early game common ingredients) ===
   { left: 'm', right: 'm', result: 'ᒧ', name: 'Meat Jerky' },    // Meat + Meat = Meat Jerky (heal 2)

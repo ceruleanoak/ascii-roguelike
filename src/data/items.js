@@ -2353,13 +2353,16 @@ export const ITEMS = {
   },
 
   // ── Movement ──────────────────────────────────────────────────────────────
+  // Wings — Wing + Wing. A slot-holding passive: the first damage taken in each
+  // room is dodged outright (PlayerDamageSystem spends it, WingsSystem says the
+  // word).
   '∞': {
     char: '∞',
     name: 'Wings',
     type: ITEM_TYPES.CONSUMABLE,
-    effect: 'speed',
-    duration: 30,
-    cooldown: 20, // Reusable with 20s cooldown
+    passive: true,
+    roomDodge: true,
+    passiveIndicator: 'FLUTTER',
     color: '#00ffff'
   },
   // Boots — Fur + Fur. A slot-holding passive: most of the unarmed sprint
@@ -3652,7 +3655,7 @@ export const AFFINITY_POOLS = {
       [RARITY.RARE]:     []
     },
     consumables: {
-      [RARITY.UNCOMMON]: ['∞'],             // Wings (float above water)
+      [RARITY.UNCOMMON]: ['∞'],             // Wings (dodge the first hit in each room)
       [RARITY.RARE]:     []
     }
   },

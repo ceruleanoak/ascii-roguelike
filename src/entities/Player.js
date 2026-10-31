@@ -45,6 +45,9 @@ export class Player {
     this.smokeBurstPending = false; // one-frame signal consumed by main.js to spawn the cloud
     this.splinterChance = 0;     // bone armor: chance a landed melee hit Splinters it
     this.splinterPending = false; // one-frame signal consumed by ArmorEffectsSystem.updateSplinter
+    this.wingsDodge = false;       // Wings worn: projected by EquipmentEffectsSystem
+    this.wingsDodgeSpent = false;  // this room's Wings dodge is used (room-scoped, Reset Registry)
+    this.wingsDodgePending = false; // one-frame signal consumed by WingsSystem.update
     this.hurtPending = false; // survived a hit since the last consumable check (healOnHit; InventorySystem)
     this.speedBoost = 0;
     this.speedPenalty = 0;
@@ -673,38 +676,6 @@ export class Player {
     return result;
   }
 
-  cycleSlotNext() {
-    const len = this.quickSlots.length;
-    let next = (this.activeSlotIndex + 1) % len;
-    for (let i = 0; i < len; i++) {
-      if (!this.destroyedSlots[next]) {
-        if (next !== this.activeSlotIndex) this._cancelHeldItemActivity();
-        this.activeSlotIndex = next;
-        return;
-      }
-      next = (next + 1) % len;
-    }
-    // All slots destroyed — stay put
-  }
-
-  cycleSlotPrevious() {
-    const len = this.quickSlots.length;
-    let prev = (this.activeSlotIndex - 1 + len) % len;
-    for (let i = 0; i < len; i++) {
-      if (!this.destroyedSlots[prev]) {
-        if (prev !== this.activeSlotIndex) this._cancelHeldItemActivity();
-        this.activeSlotIndex = prev;
-        return;
-      }
-      prev = (prev - 1 + len) % len;
-    }
-    // All slots destroyed — stay put
-  }
-
-  _cancelHeldItemActivity() {
-    this.heldItem?.cancelChargeAndReload?.();
-  }
-
   // Check if active slot has a trap with charges remaining
   reset() {
     this.hp = PLAYER_STATS.START_HP;
@@ -761,6 +732,9 @@ export class Player {
     this.smokeOnHit = false;
     this.splinterChance = 0;
     this.splinterPending = false;
+    this.wingsDodge = false;
+    this.wingsDodgeSpent = false;
+    this.wingsDodgePending = false;
     this.speedBoost = 0;
     this.speedPenalty = 0;
     this.slowEnemies = false;

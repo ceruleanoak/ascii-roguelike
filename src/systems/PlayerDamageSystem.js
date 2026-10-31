@@ -84,6 +84,15 @@ export const PlayerDamageSystem = {
       }
     }
 
+    // Wings: the first damage that would land in this room is dodged. Sits after
+    // the dodge rolls and immunities so a hit that was never going to land does
+    // not spend it.
+    if (player.wingsDodge && !player.wingsDodgeSpent && amount > 0) {
+      player.wingsDodgeSpent = true;
+      player.wingsDodgePending = true;
+      return { dodged: true, lucky: false };
+    }
+
     // Frog form is weak to fire: burn hits (fire weapons, burn DoT) land
     // multiplied before Stone Skin/defense/resists reduce them.
     if (player.polymorphed && damageSource.element === 'burn') {

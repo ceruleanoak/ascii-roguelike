@@ -102,6 +102,7 @@ export class EquipmentEffectsSystem {
     player.luckDodgeBonus = 0;
     player.fireBerryLit = false;
     player.bootsSprintMult = 1;
+    player.wingsDodge = false;
     player.elementReduction = { burn: 0, freeze: 0, poison: 0, electric: 0 };
     player.poisonResist = 0;
     player.slimeResist = 0;
@@ -135,6 +136,8 @@ export class EquipmentEffectsSystem {
       // Boots: part of the unarmed sprint speed (and its footstep trail)
       // while armed — routed through Player.getSprintMultiplier().
       if (cd.passiveSprint) player.bootsSprintMult = Math.max(player.bootsSprintMult, cd.passiveSprint);
+      // Wings: the room's one guaranteed dodge (PlayerDamageSystem spends it).
+      if (cd.roomDodge) player.wingsDodge = true;
       // Fire Berry: passive torch-light while equipped and unspent. Consuming
       // it (SPACE) empties the slot, which naturally stops the light.
       if (cd.fireBerryLight && !inventorySystem.spentConsumableSlots[idx]) {

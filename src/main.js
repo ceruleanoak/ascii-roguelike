@@ -17,6 +17,7 @@ import { PersistenceSystem } from './systems/PersistenceSystem.js';
 import { InventorySystem } from './systems/InventorySystem.js';
 import { captureExploreRoomForRest, captureNeutralEntryRoomForRest } from './systems/RoomStatePersistence.js';
 import { ArmorEffectsSystem } from './systems/ArmorEffectsSystem.js';
+import { WingsSystem } from './systems/WingsSystem.js';
 import { FloatingBootsSystem } from './systems/FloatingBootsSystem.js';
 import { BottlesSystem } from './systems/BottlesSystem.js';
 import { BottlesColumnSystem } from './systems/BottlesColumnSystem.js';
@@ -206,6 +207,7 @@ class Game {
     this.persistenceSystem = new PersistenceSystem();
     this.inventorySystem = new InventorySystem();
     this.armorEffectsSystem = new ArmorEffectsSystem(this);
+    this.wingsSystem = new WingsSystem(this);
     this.inventorySystem.onArmorEquipped = (item) => this.armorEffectsSystem.announceFlavor(item);
     this.floatingBootsSystem = new FloatingBootsSystem(this);
     this.audioSystem = new AudioSystem();
@@ -1962,6 +1964,8 @@ class Game {
     this.armorEffectsSystem.updateMossCloak();
     // rest-parity: absent because REST has no enemies to land a melee hit.
     this.armorEffectsSystem.updateSplinter();
+    // rest-parity: absent because REST has nothing that damages the player.
+    this.wingsSystem.update();
 
     this.floatingBootsSystem.update(deltaTime);
 
