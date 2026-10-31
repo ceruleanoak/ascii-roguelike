@@ -214,7 +214,7 @@ export const ENEMIES = {
     speed: 100,
     acceleration: 500,  // Agile — quick to close and quick to bolt
     damage: 1,
-    attackRange: GRID.CELL_SIZE * 1.75,  // Same steal-contact range as Rat
+    attackRange: GRID.CELL_SIZE * 1.75,
     aggroRange: GRID.CELL_SIZE * 9,
     attackCooldown: 1.4,
     attackWindup: 0.9,
@@ -233,11 +233,23 @@ export const ENEMIES = {
     affinities: ['beast'],
     tier: 'normal',
     // Steals like Rat (see ThiefMechanic) but goes for the satchel instead
-    // of coin: whenever the player carries an ingredient or a weapon, its
-    // bite becomes a steal that ejects up to 3 ingredients (keeping 1) and
-    // knocks the held weapon away. Taking damage OR a successful grab
-    // permanently flips it to pure flight, same as Rat.
-    thiefMechanic: { enabled: true, steals: 'satchel' }
+    // of coin, and with a leap instead of its bite: while the player carries
+    // an ingredient or a weapon, it leaps from out of bite range and the
+    // landing ejects up to 3 ingredients (keeping 1) and knocks the held
+    // weapon away. Up close it bites like any melee enemy. Taking damage OR
+    // a successful grab permanently flips it to pure flight, same as Rat.
+    thiefMechanic: { enabled: true, steals: 'satchel' },
+    leapAttack: {
+      enabled: true,
+      steal: true,
+      triggerRangeMin: GRID.CELL_SIZE,
+      triggerRangeMax: GRID.CELL_SIZE * 7,
+      cooldown: 6.0,
+      windupTime: 1.0,
+      airTime: 0.6,
+      arcLift: GRID.CELL_SIZE * 1.5,
+      landRadius: GRID.CELL_SIZE * 1.5
+    }
   },
 
   '^': {
@@ -505,6 +517,7 @@ export const ENEMIES = {
     },
     leapAttack: {
       enabled: true,
+      takeoffSfx: 'slime_jump',
       triggerRangeMin: GRID.CELL_SIZE * 4,    // Only leap when player is outside melee range
       triggerRangeMax: GRID.CELL_SIZE * 12,   // Don't leap from across the map
       cooldown: 5.0,

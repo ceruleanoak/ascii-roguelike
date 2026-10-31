@@ -797,15 +797,16 @@ identity, not standard programming terms.
 - **Not:** a suicide bomber triggered by proximity — the fuse is time-driven and readable.
 
 ### Thief
-- **Definition:** An urgency Mechanic: the Enemy steals from the player on contact and
-  permanently flips to cowardly flight the moment it succeeds (or is struck first). Rat/
+- **Definition:** An urgency Mechanic: the Enemy steals from the player on contact (Monkey by
+  leaping onto them, its bite stays a plain bite) and permanently flips to cowardly flight the moment it succeeds (or is struck first). Rat/
   Plague Rat take every coin on hand; Monkey ejects up to three ingredients (keeping one,
   scattering the rest) plus knocks away the held weapon (3 cells, pickup-cooldown gated).
   Either way, whatever the thief keeps is carried visibly — its glyph above the head plus
   one white pip per item held — and dropped back if it's killed before it escapes; gone
   for good only if it survives.
 - **In code:** `ThiefMechanic` gated by `data.thiefMechanic`; `steals: 'satchel'` selects
-  the ingredient+weapon variant, unset defaults to coin.
+  the ingredient+weapon variant, unset defaults to coin. `leapAttack.steal` routes the steal
+  through `LeapAttackMechanic`.
 - **Not:** Looter (an Enemy that picks items up off the ground; it never takes from the
   player). Not despawn-on-success — the thief flees and can recover, it doesn't vanish.
 

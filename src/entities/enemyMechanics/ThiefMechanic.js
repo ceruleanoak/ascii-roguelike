@@ -11,6 +11,10 @@
 // back if the player corners it — it just never again closes distance on
 // its own.
 //
+// A thief with `leapAttack.steal` (Monkey) keeps its plain bite: the steal
+// only comes through the leap, which lands `leapStealAttack` (see
+// LeapAttackMechanic). The others swap the bite for `attackType: 'thief'`.
+//
 // `data.thiefMechanic.steals` selects what's on offer: default (unset) is
 // Rat's coin grab (every coin on hand); `'satchel'` is Monkey's kit — up to
 // three ingredients ejected from the pile (one kept, the rest scatter to the
@@ -83,6 +87,7 @@ export const ThiefMechanic = {
     // Never yank the attack type out from under a swing already in motion —
     // Strike reads attackType/attackWindup fresh on entry, not mid-swing.
     if (enemy.stateMachine.current === 'strike') return;
+    if (enemy.data.leapAttack?.steal) return;
 
     const hasTarget = ThiefMechanic._hasStealTarget(enemy);
     enemy.attackType = hasTarget ? 'thief' : (enemy.data.attackType || 'melee');
@@ -99,6 +104,37 @@ export const ThiefMechanic = {
       return inv.getIngredients().length > 0 || !!enemy.game.player?.heldItem;
     }
     return inv.hasCoin(1);
+  },
+
+  // A steal leap comes from a thief still hunting, free to move, with
+  // something to take. Checked on trigger and through the windup, so a hit
+  // or a stun mid-windup calls it off.
+  canLeapSteal(enemy) {
+    return !enemy.thiefFlipped && !enemy.thiefFlipPending
+      && (enemy.stateMachine.current === 'approach' || enemy.stateMachine.current === 'recover')
+      && !enemy.isStunned() && !enemy.isZapped() && !enemy.isFrozen()
+      && ThiefMechanic._hasStealTarget(enemy);
+  },
+
+  // The grab a steal leap lands: a circle around the thief where it came
+  // down. The leap homes, so the roll's i-frames are what beat it.
+  leapStealAttack(enemy, cfg) {
+    return {
+      type: 'enemy_melee',
+      char: '█',
+      position: { x: enemy.position.x, y: enemy.position.y },
+      width: GRID.CELL_SIZE,
+      height: GRID.CELL_SIZE,
+      hitShape: { kind: 'circle', radius: cfg.landRadius / GRID.CELL_SIZE },
+      facing: 0,
+      damage: 0,
+      steal: true,
+      duration: 0.30,
+      color: enemy.color,
+      knockback: 0,
+      owner: enemy,
+      shooterPlane: enemy.plane
+    };
   },
 
   _flipToCoward(enemy, ctx) {

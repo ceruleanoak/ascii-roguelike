@@ -1,5 +1,6 @@
 import { GRID } from '../../game/GameConfig.js';
 import { inSamePlane } from '../../systems/PlaneSystem.js';
+import { ThiefMechanic } from './ThiefMechanic.js';
 
 // Giant Slime leap: 3-phase sequence (windup → airborne → cooldown). Airborne
 // lerps from a snapshot start to a target snapshot taken at windup completion.
@@ -11,6 +12,25 @@ import { inSamePlane } from '../../systems/PlaneSystem.js';
 //   - tryTrigger(): after distance calc. If conditions are met (cooldown ready,
 //     not spewing, in leap-trigger range, same plane), starts the windup and
 //     returns a suspend signal.
+//
+// `cfg.steal` makes the leap a Thief's grab (Monkey): the leap only fires
+// while ThiefMechanic.canLeapSteal holds, homes on its target from takeoff
+// (a dizzy thief keeps its misjudged aim), and lands a steal, not a shockwave
+// (EnemyUpdateSystem._handleLeapLand).
+
+// Point a leap at `target`. A dizzy leaper misjudges its landing, so a
+// player-aimed vector is rotated by the dizzy offset.
+function aimLeap(enemy, target, dizzyOffset) {
+  enemy.leapTargetX = target.x;
+  enemy.leapTargetY = target.y;
+  if (dizzyOffset) {
+    const ldx = target.x - enemy.position.x;
+    const ldy = target.y - enemy.position.y;
+    const cos = Math.cos(dizzyOffset), sin = Math.sin(dizzyOffset);
+    enemy.leapTargetX = enemy.position.x + ldx * cos - ldy * sin;
+    enemy.leapTargetY = enemy.position.y + ldx * sin + ldy * cos;
+  }
+}
 
 export const LeapAttackMechanic = {
   isEnabled(enemy) {
@@ -48,6 +68,7 @@ export const LeapAttackMechanic = {
 
     if (enemy.leapAirborneActive) {
       enemy.leapAirTimer -= deltaTime;
+      if (cfg.steal && enemy.target && !enemy._dizzyAngleOffset()) aimLeap(enemy, enemy.target.position, 0);
       const dur = enemy.leapAirDuration || cfg.airTime || 0.5;
       const t = Math.min(1, 1 - enemy.leapAirTimer / dur);
       enemy.position.x = enemy.leapStartX + (enemy.leapTargetX - enemy.leapStartX) * t;
@@ -86,7 +107,7 @@ export const LeapAttackMechanic = {
       // Lost visibility mid-windup — cancel rather than let the leap fire
       // unseen. Free retry (no cooldown charge), same idiom as an aborted
       // Strike windup: nothing was actually spent.
-      if (!ctx.onScreen) {
+      if (!ctx.onScreen || (cfg.steal && !ThiefMechanic.canLeapSteal(enemy))) {
         enemy.leapWindupActive = false;
         enemy.leapWindupTimer = 0;
         return { suspend: true, result: { dotDamage: dotDamageEvents } };
@@ -99,10 +120,11 @@ export const LeapAttackMechanic = {
         enemy.leapWindupActive = false;
         enemy.leapStartX = enemy.position.x;
         enemy.leapStartY = enemy.position.y;
+        if (cfg.steal) aimLeap(enemy, enemy.target.position, enemy._dizzyAngleOffset());
         enemy.leapAirDuration = cfg.airTime;
         enemy.leapAirTimer = enemy.leapAirDuration;
         enemy.leapAirborneActive = true;
-        enemy.game?.audioSystem?.playSFX?.('slime_jump');
+        if (cfg.takeoffSfx) enemy.game?.audioSystem?.playSFX?.(cfg.takeoffSfx);
       }
       return { suspend: true, result: { dotDamage: dotDamageEvents } };
     }
@@ -114,7 +136,7 @@ export const LeapAttackMechanic = {
   // taken mid-leap (windup or airborne) doesn't queue another leap for the
   // landing.
   onDamaged(enemy) {
-    if (enemy.data?.leapAttack?.enabled &&
+    if (enemy.data?.leapAttack?.enabled && !enemy.data.leapAttack.steal &&
         !enemy.leapWindupActive && !enemy.leapAirborneActive) {
       enemy.forcedLeapPending = true;
     }
@@ -125,6 +147,7 @@ export const LeapAttackMechanic = {
     const cfg = enemy.data.leapAttack;
     if (!cfg?.enabled) return;
     if (enemy.spewWindupActive) return;
+    if (cfg.steal && !ThiefMechanic.canLeapSteal(enemy)) return;
     // Wet, it can't leap at all — not even the counter-leap a hit arms.
     if (enemy.isWet()) { enemy.forcedLeapPending = false; return; }
     if (!inSamePlane(enemy, enemy.target)) return;
@@ -155,18 +178,8 @@ export const LeapAttackMechanic = {
     const target = pool ? pool.center : enemy.target.position;
     enemy.leapPool = pool ?? null;
     enemy.leapPoolTarget = null;
-    enemy.leapTargetX = target.x;
-    enemy.leapTargetY = target.y;
-    // A dizzy leaper misjudges its landing: rotate the player-aimed vector by
-    // the dizzy offset (a pool leap is a deliberate target, left alone).
-    const dizzyOffset = pool ? 0 : enemy._dizzyAngleOffset();
-    if (dizzyOffset) {
-      const ldx = target.x - enemy.position.x;
-      const ldy = target.y - enemy.position.y;
-      const cos = Math.cos(dizzyOffset), sin = Math.sin(dizzyOffset);
-      enemy.leapTargetX = enemy.position.x + ldx * cos - ldy * sin;
-      enemy.leapTargetY = enemy.position.y + ldx * sin + ldy * cos;
-    }
+    // A pool leap is a deliberate target, so dizziness leaves it alone.
+    aimLeap(enemy, target, pool ? 0 : enemy._dizzyAngleOffset());
     enemy.velocity.vx = 0;
     enemy.velocity.vy = 0;
     if (enemy.targetVelocity) { enemy.targetVelocity.vx = 0; enemy.targetVelocity.vy = 0; }

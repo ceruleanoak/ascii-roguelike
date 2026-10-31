@@ -1,4 +1,5 @@
 import { GRID, PHYSICS } from '../game/GameConfig.js';
+import { ThiefMechanic } from '../entities/enemyMechanics/ThiefMechanic.js';
 import { MAGIC_SFX_NAMES } from '../data/enemies.js';
 import { inSamePlane, tagInteriorPlane, isInteriorActive, lootOnActiveLayer } from './PlaneSystem.js';
 import { CAMP_NPC_STATE } from '../entities/CampNPC.js';
@@ -524,6 +525,11 @@ export class EnemyUpdateSystem {
   _handleLeapLand(player, ld, enemy) {
     const game = this.game;
     const cfg = ld.cfg;
+    if (cfg.steal) {
+      // A hit taken in the air calls the grab off, same as one in the windup.
+      if (!enemy.thiefFlipPending) game.combatSystem.createEnemyAttack(ThiefMechanic.leapStealAttack(enemy, cfg));
+      return;
+    }
     const hitEntities = new Set();
     if (player && (player.plane ?? 0) === ld.plane) {
       const pcx = player.position.x + GRID.CELL_SIZE / 2;
