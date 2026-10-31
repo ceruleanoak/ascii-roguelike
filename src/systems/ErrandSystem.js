@@ -253,7 +253,7 @@ export class ErrandSystem {
     };
     // Spare consumables first, so handing one over doesn't strip the armed slot
     // while a spare is in the pack (same preference as itemCostDispatch).
-    const spareConsumable = inv.consumableInventory?.find(c => c.char === requestedChar);
+    const spareConsumable = inv.allUnequippedConsumables().find(c => c.char === requestedChar);
     if (spareConsumable) {
       return {
         remove: () => takeOneFromStack(spareConsumable) || inv.removeFromConsumableInventory(spareConsumable)

@@ -3,9 +3,9 @@
  *
  * Resolves a consumable's windup once its throw lands — the second half of
  * the throw ConsumableTriggerSystem starts. Every consumable use arcs before
- * it resolves; InventorySystem owns the in-flight windup list and ticks it
- * (updateConsumableWindups), and hands each expired entry here to be turned
- * into damage, status effects, steam clouds and particles.
+ * it resolves; InventorySystem owns the in-flight windup list, tick() here
+ * advances it, and each expired entry is turned into damage, status
+ * effects, steam clouds and particles.
  *
  * Extracted from InventorySystem — which still owns the windup list, the
  * cooldown/blink/active-effect timers this writes back to, and the sole call
@@ -25,6 +25,34 @@ import { detonateBomb } from './ExplosionEffects.js';
 import { clearStatusEffect } from './StatusEffects.js';
 
 export class ConsumableWindupEffects {
+  // Ticks the in-flight windup list (owned by InventorySystem) and resolves
+  // each throw as it lands. Moved here from InventorySystem
+  // (updateConsumableWindups) with the auto-trigger scan, for its budget.
+  tick(inv, deltaTime, player, combatSystem, steamClouds, particles) {
+    // inv.game — a bare `game` here (2026-08-24 layer-guard refactor) threw
+    // ReferenceError on every EXPLORE frame, halting the loop on room entry.
+    const enemies = inv.game._activeEnemies();
+
+    for (let i = inv.consumableWindups.length - 1; i >= 0; i--) {
+      const windup = inv.consumableWindups[i];
+      windup.timer -= deltaTime;
+
+      // Jolt Jar throw arc: interpolate jar position from player to target,
+      // with a small parabolic lift so it reads as a throw.
+      if (windup.effectType === 'jolt' && windup.targetX != null) {
+        const t = Math.min(1, Math.max(0, 1 - windup.timer / windup.maxTimer));
+        windup.x = windup.startX + (windup.targetX - windup.startX) * t;
+        windup.y = windup.startY + (windup.targetY - windup.startY) * t - Math.sin(t * Math.PI) * 22;
+      }
+
+      // Windup complete — trigger effect
+      if (windup.timer <= 0) {
+        this.execute(inv, windup, player, enemies, combatSystem, steamClouds, particles);
+        inv.consumableWindups.splice(i, 1);
+      }
+    }
+  }
+
   execute(inv, windup, player, enemies, combatSystem, steamClouds, particles) {
     const cd = windup.consumable.data;
     const px = windup.x;
@@ -177,12 +205,17 @@ export class ConsumableWindupEffects {
         }
 
         // Mark effect as active for the full duration (drives slow bar blink)
-        if (cd.duration > 0) {
+        if (cd.duration > 0 && windup.slotIndex != null) {
           inv.activeEffectTimers[windup.slotIndex] = cd.duration;
         }
         break;
       }
     }
+
+    // A Bottle drunk straight from Bottles has no slot (slotIndex null): no
+    // slot to blink, and its cooldown rides on the Item (bottleCooldown,
+    // set when it was thrown — BottlesSystem.trigger).
+    if (windup.slotIndex == null) return;
 
     // Blink HUD slot
     inv.consumableBlinkSlot = windup.slotIndex;

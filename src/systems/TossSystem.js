@@ -4,10 +4,11 @@ import { GAME_STATES } from '../game/GameConfig.js';
  * TossSystem — SHIFT with a consumable armed tosses it
  * (claudedocs/dungeon-boss-green.md "SHIFT Toss"; glossary term pending: Toss).
  *
- * Keys 4-8 arm a consumable slot (existing selectedConsumableIndex). SHIFT
- * press with a slot armed and hands free begins a charge along TrapSystem's
- * drop-throw pipeline — 'drop' mode extended with a source descriptor naming
- * the armed slot; keyup release flings the item as a ground pickup with the
+ * Keys 4-8 arm a consumable slot, the Bottles column arms a Bottle — either
+ * is the Armed Consumable (ConsumableTriggerSystem.armed). SHIFT press with
+ * one armed and hands free begins a charge along TrapSystem's drop-throw
+ * pipeline — 'drop' mode extended with a source descriptor carrying the
+ * armed item's Bottle Ref (BottlesSystem); keyup release flings the item as a ground pickup with the
  * standard pickupReadyAt cooldown. An armed slot outranks the held weapon —
  * arming a consumable already takes SPACE from it — so SHIFT drops the held
  * item only when no consumable is armed.
@@ -47,10 +48,9 @@ export class TossSystem {
     const state = game.stateMachine.getCurrentState();
     if (state !== GAME_STATES.EXPLORE && state !== GAME_STATES.REST
       && state !== GAME_STATES.NEUTRAL && state !== GAME_STATES.ARCADE_DEMO) return false;
-    const slotIndex = player?.selectedConsumableIndex ?? -1;
-    if (slotIndex < 0) return false;
-    if (!player.equippedConsumables?.[slotIndex]) return false;
-    game.trapSystem.startTrapCharge('drop', { kind: 'consumable', slotIndex });
+    const ref = game.consumableTriggerSystem.armed();
+    if (!ref) return false;
+    game.trapSystem.startTrapCharge('drop', { kind: 'consumable', ref });
     return true;
   }
 }

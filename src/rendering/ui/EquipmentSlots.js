@@ -98,7 +98,7 @@ export class EquipmentSlots {
     ];
 
     const maxSlots = game.inventorySystem?.maxConsumableSlots ?? 2;
-    const consumableAvailable = (game.inventorySystem.consumableInventory?.length ?? 0) > 0;
+    const consumableAvailable = game.inventorySystem.allUnequippedConsumables().length > 0;
     const consumableBlinkOffsets = [60, 200, 340, 480, 620];
     const meter = game.player?.magicMeter;
 

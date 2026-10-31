@@ -18,6 +18,7 @@ import { InventorySystem } from './systems/InventorySystem.js';
 import { captureExploreRoomForRest, captureNeutralEntryRoomForRest } from './systems/RoomStatePersistence.js';
 import { ArmorEffectsSystem } from './systems/ArmorEffectsSystem.js';
 import { FloatingBootsSystem } from './systems/FloatingBootsSystem.js';
+import { BottlesSystem } from './systems/BottlesSystem.js';
 import { ConsumableTriggerSystem } from './systems/ConsumableTriggerSystem.js';
 import { NeutralRoomSystem, applyBlessing as applyBlessingBuff } from './systems/NeutralRoomSystem.js';
 import { spawnRoomNeutralCharacters } from './systems/roomFeatures.js';
@@ -304,6 +305,7 @@ class Game {
     // Wire InventorySystem back to game so it can mutate player.equippedConsumables
     this.inventorySystem.game = this;
     this.consumableTriggerSystem = new ConsumableTriggerSystem(this);
+    this.bottlesSystem = new BottlesSystem(this);
     this.campNPCSystem = new CampNPCSystem(this);
     this.mistBattleSystem = new MistBattleSystem(this);
     this.dragonSpiritSystem = new DragonSpiritSystem(this);
@@ -1447,7 +1449,7 @@ class Game {
     this.inventorySystem.consumableBlinkSlot = -1;
     this.inventorySystem.consumableBlinkTimer = 0;
     this.inventorySystem.consumableBlinkPhase = 0;
-    if (this.player) this.player.selectedConsumableIndex = -1;
+    this.consumableTriggerSystem.disarm();
     this.inventorySystem.consumableBlinkShowBlock = false;
     this.inventorySystem.consumableWindups = []; // Clear any pending windups
 
@@ -1646,15 +1648,8 @@ class Game {
     // New room = fresh arrows (plus a worn Fletch of Arrows' bonus)
     const fletch = refillQuiversForNewRoom(this.player);
 
-    // Bottle of Hot Water reverts to a regular Bottle of Water after 3 room
-    // exits (caldera capture — see AlchemySystem.fillHotWaterBottle).
-    this.player.equippedConsumables?.forEach((item, idx) => {
-      if (!item || item.hotWaterRoomsLeft === undefined) return;
-      item.hotWaterRoomsLeft -= 1;
-      if (item.hotWaterRoomsLeft <= 0) {
-        this.inventorySystem.replaceConsumableSlot(idx, '🜉');
-      }
-    });
+    // Bottle of Hot Water cools a room exit (BottlesSystem.coolHotWater).
+    this.bottlesSystem.coolHotWater();
 
     // Apply equipment effects
     this.applyEquipmentEffects();
@@ -3472,7 +3467,7 @@ class Game {
       this.player.heldItem?.cancelChargeAndReload?.();
     }
     this.player.activeSlotIndex = index;
-    this.player.selectedConsumableIndex = -1; // weapon selection wins back SPACE control
+    this.consumableTriggerSystem.disarm(); // weapon selection wins back SPACE control
     this.mistBattleSystem.onSelectSlot(index);
     this.updateUI();
   }

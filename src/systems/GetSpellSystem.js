@@ -20,10 +20,11 @@ const BESIDE = [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]];
  * armed-bottle gesture's own (AlchemySystem.tryFillArmedBottle,
  * InteractionSystem.tryBottleFairy), so the pickup box answers.
  *
- * The liquids fill the first equipped Empty Bottle. GETWATER takes the best
+ * The liquids fill an Empty Bottle — one in Bottles first, else an
+ * equipped one (BottlesSystem.emptyBottleRef). GETWATER takes the best
  * water in reach: a hot spring, then the fountain's pool (fairy water,
  * flavoured by attunement), then the hut trough or plain water, then
- * electrified water. GETFAIRY needs no bottle: with one equipped the fairy is
+ * electrified water. GETFAIRY needs no bottle: with one carried the fairy is
  * caught in it; without one it heals the player, or at full health blesses
  * them (+1 max HP), as touch and the full-health SPACE do. The Fairy King
  * only goes into a bottle.
@@ -48,18 +49,21 @@ export class GetSpellSystem {
     if (state !== GAME_STATES.REST && state !== GAME_STATES.EXPLORE && state !== GAME_STATES.NEUTRAL) return '...NOTHING.';
     if (!game.player) return '...NOTHING.';
 
-    const slot = game.player.equippedConsumables?.findIndex(s => s?.char === EMPTY_BOTTLE_CHAR) ?? -1;
-    if (kind === 'fairy') return this._getFairy(slot, this._reachedCells());
+    const bottle = game.bottlesSystem.emptyBottleRef();
+    if (kind === 'fairy') return this._getFairy(bottle, this._reachedCells());
 
-    if (slot === -1) return 'NO BOTTLE.';
+    if (!bottle) return 'NO BOTTLE.';
     const reached = this._reachedCells();
     const plane = planeOf(game.player);
     const tiles = game._activeBackgroundObjects().filter(obj => !obj.destroyed && objectOnPlane(obj, plane));
     for (const source of this._liquidSources(kind)) {
       const tile = tiles.find(obj => source.is(obj) && this._reaches(reached, obj));
       if (!tile) continue;
-      source.fill(slot);
-      if (game.player.selectedConsumableIndex === slot) game.player.selectedConsumableIndex = -1;
+      // An armed Empty Bottle that just got filled is no longer what was armed.
+      const armed = game.consumableTriggerSystem.armed();
+      const wasArmed = armed && game.bottlesSystem.itemAt(bottle) === armed.item;
+      source.fill(bottle);
+      if (wasArmed) game.consumableTriggerSystem.disarm();
       return null;
     }
     return '...NOTHING.';
@@ -70,16 +74,16 @@ export class GetSpellSystem {
     const game = this.game;
     const alchemy = game.alchemySystem;
     const bottleOf = obj => alchemy.liquidBottleFor(obj);
-    const fillWith = char => slot => alchemy.fillLiquidBottle(slot, char);
+    const fillWith = char => ref => alchemy.fillLiquidBottle(ref, char);
     switch (kind) {
       case 'lava': return [{ is: obj => bottleOf(obj) === '◆', fill: fillWith('◆') }];
       case 'mud':  return [{ is: obj => bottleOf(obj) === '◐', fill: fillWith('◐') }];
       case 'water': {
         const poolBottle = game.fountainSystem?.poolBottleChar();
         return [
-          { is: obj => obj.typeId === 'hot_water', fill: slot => alchemy.fillHotWaterBottle(slot) },
+          { is: obj => obj.typeId === 'hot_water', fill: ref => alchemy.fillHotWaterBottle(ref) },
           { is: obj => !!poolBottle && !!obj.fountainWater, fill: fillWith(poolBottle) },
-          { is: obj => game.player.inHut && obj.char === '≈', fill: slot => alchemy.fillBottle(slot) },
+          { is: obj => game.player.inHut && obj.char === '≈', fill: ref => alchemy.fillBottle(ref) },
           { is: obj => bottleOf(obj) === '🜉', fill: fillWith('🜉') },
           { is: obj => bottleOf(obj) === 'ε', fill: fillWith('ε') },
         ];
@@ -88,22 +92,22 @@ export class GetSpellSystem {
     }
   }
 
-  // The nearest catchable fairy in reach: into the bottle if one is
-  // equipped, else the heal (hurt) or the blessing (full health).
-  _getFairy(slot, reached) {
+  // The nearest catchable fairy in reach: into the bottle (Bottle Ref) if
+  // one is carried, else the heal (hurt) or the blessing (full health).
+  _getFairy(bottle, reached) {
     const game = this.game;
     const interaction = game.interactionSystem;
     const p = entityCenter(game.player);
     const fairies = (game.neutralCharacters || [])
       .filter(c => interaction.isCatchableFairy(c) && this._reaches(reached, c))
-      .filter(c => slot !== -1 || !(c instanceof FairyKing))
+      .filter(c => bottle || !(c instanceof FairyKing))
       .sort((a, b) => {
         const ca = entityCenter(a), cb = entityCenter(b);
         return Math.hypot(ca.x - p.x, ca.y - p.y) - Math.hypot(cb.x - p.x, cb.y - p.y);
       });
     const fairy = fairies[0];
     if (!fairy) return '...NOTHING.';
-    if (slot !== -1) interaction.bottleFairy(fairy, slot);
+    if (bottle) interaction.bottleFairy(fairy, bottle);
     else if (game.player.hp < game.player.maxHp) interaction.healFromFairy(fairy);
     else interaction.blessFromFairy(fairy);
     return null;

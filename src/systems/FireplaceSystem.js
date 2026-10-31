@@ -150,7 +150,7 @@ export class FireplaceSystem {
         counts.set('❋', berryCount);
         items.push('❋');
       }
-      const hasWaterBottle = game.player.equippedConsumables.some(s => s?.char === '🜉');
+      const hasWaterBottle = !!game.bottlesSystem.findRef('🜉');
       if (hasWaterBottle) {
         counts.set('🜉', 1);
         items.push('🜉');
@@ -212,12 +212,11 @@ export class FireplaceSystem {
       game.menuSystem.announceCrafted('𝑚');
     } else if (rawChar === '🜉') {
       if (!fireplace.burning) return;
-      const idx = game.player.equippedConsumables.findIndex(s => s?.char === '🜉');
-      if (idx === -1) return;
-      game.inventorySystem.replaceConsumableSlot(idx, '🜊');
+      const hotWater = game.bottlesSystem.replaceAt(game.bottlesSystem.findRef('🜉'), '🜊');
+      if (!hotWater) return;
       // Reverts after 3 room exits, same decay as the Caldera fill — see
       // main.js's room-transition reset block.
-      game.player.equippedConsumables[idx].hotWaterRoomsLeft = 3;
+      hotWater.hotWaterRoomsLeft = 3;
       game.menuSystem.announceCrafted('🜊');
     } else {
       return;

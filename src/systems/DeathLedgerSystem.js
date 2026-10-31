@@ -75,7 +75,7 @@ export function captureDeath(game, { event = 'death', revivedBy = null } = {}) {
       armorCollected: inv.armorInventory.map(a => ({
         char: a.char, name: a.data?.name ?? null,
       })),
-      consumablesCollected: inv.consumableInventory.map(c => ({
+      consumablesCollected: inv.allUnequippedConsumables().map(c => ({
         char: c.char, name: c.data?.name ?? null,
       })),
     },

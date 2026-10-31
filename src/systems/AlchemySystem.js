@@ -144,40 +144,27 @@ export class AlchemySystem {
   }
 
   /**
-   * SPACE with the Bottle slot armed (selected via number key) and the player
-   * within one cell of a liquid source. Must be checked BEFORE
-   * ConsumableTriggerSystem.fireSelected() — an armed Empty Bottle has no
-   * consumable effect of its own, so the generic fire path would just
-   * silently swallow the SPACE press and clear the selection.
+   * SPACE with an Empty Bottle armed (a slot via number key, or a Bottle from
+   * the Bottles column) and the player within one cell of a liquid source.
+   * Must be checked BEFORE ConsumableTriggerSystem.fireSelected() — an armed
+   * Empty Bottle has no consumable effect of its own, so the generic fire
+   * path would just silently swallow the SPACE press and clear the selection.
    */
   tryFillArmedBottle() {
     const game = this.game;
-    const idx = game.player?.selectedConsumableIndex ?? -1;
-    if (idx < 0) return false;
-    const slots = game.player.equippedConsumables;
-    if (slots?.[idx]?.char !== 'B') return false;
+    const triggers = game.consumableTriggerSystem;
+    const ref = triggers.armed();
+    if (ref?.item.char !== 'B') return false;
 
-    if (game.fountainSystem?.tryFillArmedBottle(idx)) {
-      game.player.selectedConsumableIndex = -1;
-      return true;
+    let filled = !!game.fountainSystem?.tryFillArmedBottle(ref);
+    if (!filled && this.nearTrough()) filled = this.fillBottle(ref);
+    if (!filled && this.nearHotSpring()) filled = this.fillHotWaterBottle(ref);
+    if (!filled) {
+      const worldLiquid = this._nearWorldLiquid();
+      if (worldLiquid) filled = this.fillLiquidBottle(ref, worldLiquid);
     }
-    if (this.nearTrough()) {
-      this.fillBottle(idx);
-      game.player.selectedConsumableIndex = -1;
-      return true;
-    }
-    if (this.nearHotSpring()) {
-      this.fillHotWaterBottle(idx);
-      game.player.selectedConsumableIndex = -1;
-      return true;
-    }
-    const worldLiquid = this._nearWorldLiquid();
-    if (worldLiquid) {
-      this.fillLiquidBottle(idx, worldLiquid);
-      game.player.selectedConsumableIndex = -1;
-      return true;
-    }
-    return false;
+    if (filled) triggers.disarm();
+    return filled;
   }
 
   // ─── World liquid tiles (open water, electrified water, lava, mud) ────────
@@ -221,47 +208,42 @@ export class AlchemySystem {
     return null;
   }
 
-  fillLiquidBottle(slotIndex, liquidChar) {
+  // The fill helpers below each take a Bottle Ref (BottlesSystem) naming the
+  // Empty Bottle to fill — the armed one, or the GET spell's pick — and
+  // return whether they filled it.
+  fillLiquidBottle(ref, liquidChar) {
     const game = this.game;
-    game.inventorySystem.replaceConsumableSlot(slotIndex, liquidChar);
+    if (!game.bottlesSystem.replaceAt(ref, liquidChar)) return false;
     game.menuSystem.announceItem(liquidChar, LIQUID_BOTTLE_NAMES[liquidChar]);
     game.audioSystem?.playSFX?.('pickup');
     game.updateUI();
+    return true;
   }
 
   // ─── Trough ──────────────────────────────────────────────────────────────
 
-  fillBottle(slotIndex = null) {
+  fillBottle(ref) {
     const game = this.game;
-    const slots = game.player.equippedConsumables;
-    const idx = slotIndex ?? (slots?.findIndex(s => s?.char === 'B') ?? -1);
-    if (idx === -1) {
-      game.menuSystem.showPickupMessage('NO EMPTY BOTTLE EQUIPPED');
-      return;
-    }
-    game.inventorySystem.replaceConsumableSlot(idx, '🜉');
+    if (!game.bottlesSystem.replaceAt(ref, '🜉')) return false;
     game.menuSystem.announceItem('🜉');
     game.audioSystem?.playSFX?.('pickup');
     game.updateUI();
+    return true;
   }
 
   // ─── Caldera Hot Spring ──────────────────────────────────────────────────
 
-  fillHotWaterBottle(slotIndex = null) {
+  fillHotWaterBottle(ref) {
     const game = this.game;
-    const slots = game.player.equippedConsumables;
-    const idx = slotIndex ?? (slots?.findIndex(s => s?.char === 'B') ?? -1);
-    if (idx === -1) {
-      game.menuSystem.showPickupMessage('NO EMPTY BOTTLE EQUIPPED');
-      return;
-    }
-    game.inventorySystem.replaceConsumableSlot(idx, '🜊');
+    const hotWater = game.bottlesSystem.replaceAt(ref, '🜊');
+    if (!hotWater) return false;
     // Reverts to a regular Bottle of Water after 3 room exits — decremented
     // in main.js's room-transition reset block.
-    game.player.equippedConsumables[idx].hotWaterRoomsLeft = 3;
+    hotWater.hotWaterRoomsLeft = 3;
     game.menuSystem.announceItem('🜊');
     game.audioSystem?.playSFX?.('pickup');
     game.updateUI();
+    return true;
   }
 
   // ─── Cauldron ────────────────────────────────────────────────────────────

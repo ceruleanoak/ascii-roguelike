@@ -38,6 +38,7 @@ import { drawShoreFishermanCoin } from './effects/ArcTossEffects.js';
 import { drawStatusPips } from './effects/StatusPipEffects.js';
 import { drawParryIndicator } from './ui/ParryIndicator.js';
 import { drawFairyKingOrbit } from './effects/FairyKingOrbit.js';
+import { drawArmedGlyph } from './effects/ArmedGlyphDraw.js';
 import { drawPlayerFacingIndicator } from './ui/PlayerFacingIndicator.js';
 import { drawKnownSpellHints } from './ui/ContextHints.js';
 import { drawTrine } from './effects/TrineDraw.js';
@@ -190,6 +191,8 @@ export const FRAME_PASSES = {
     { id: 'parryIndicator', on: everywhere, draw: (rc, game, owner) => { if (!deathHeld(game, owner)) drawParryIndicator(rc.renderer, game.player, game.player.parryMechanic); } },
     // Fairy King in a Bottle ready: a fairy circles the player.
     { id: 'fairyKingOrbit', on: everywhere, draw: (rc, game, owner) => { if (!deathHeld(game, owner)) drawFairyKingOrbit(rc.renderer, game); } },
+    // The Armed Consumable's glyph over the player (slot or Bottle) — ArmedGlyphDraw.
+    { id: 'armedGlyph', on: everywhere, draw: (rc, game, owner) => { if (!deathHeld(game, owner)) drawArmedGlyph(rc.renderer, game); } },
     // Attack-direction '^' orbiting tight around the player.
     { id: 'facingIndicator', on: { ...everywhere, rest: 'REST is the safe hub; the attack-direction cue is hidden there by design' }, draw: (rc, game, owner) => { if (!deathHeld(game, owner)) drawPlayerFacingIndicator(rc.renderer, game); } },
     { id: 'staffBlockStance', on: everywhere, draw: (rc, game) => er(rc).drawStaffBlockStance(game) },

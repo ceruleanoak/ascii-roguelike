@@ -156,8 +156,8 @@ export class TrapSystem {
   //   mode === 'drop'   — SHIFT on any item; lands on the ground as a pickup
   //                       (weapons may damage en route, traps do NOT arm).
   //   source (optional) — where the projectile comes from when it isn't the
-  //                       held item. Today: { kind: 'consumable', slotIndex }
-  //                       for the Toss (SHIFT with a consumable armed —
+  //                       held item. Today: { kind: 'consumable', ref } — ref
+  //                       a Bottle Ref (BottlesSystem) — for the Toss (SHIFT with a consumable armed —
   //                       TossSystem). Release routes on this descriptor.
   startTrapCharge(mode = 'deploy', source = null) {
     // A dizzy player can't place a trap or a wire end (see canPlaceTraps);
@@ -442,8 +442,8 @@ export class TrapSystem {
     const pos = this.getTrapReticulePos();
     game.trapCharging = null;
     if (!pos) return;
-    const slotIndex = charge.source.slotIndex;
-    const tossed = player.equippedConsumables?.[slotIndex];
+    const ref = charge.source.ref;
+    const tossed = game.bottlesSystem.itemAt(ref);
     if (!tossed) return;
 
     // Stacked consumable (Bread, e.g.): tossing one loaf peels a single unit
@@ -454,14 +454,19 @@ export class TrapSystem {
     if (tossed.data?.stackable && (tossed.count || 1) > 1) {
       tossed.count -= 1;
       thrown = new Item(tossed.char, 0, 0);
+    } else if (ref.source === 'bottles') {
+      // A Bottle tossed out of Bottles leaves the store; picking it back up
+      // returns it there.
+      game.inventorySystem.removeUnequipped(tossed);
+      game.consumableTriggerSystem.disarm();
     } else {
       // Clear the slot in both views (mirrors _consumeOneShotSlot's dual write)
       // and disarm the selection — the armed slot is empty now.
-      player.equippedConsumables[slotIndex] = null;
+      player.equippedConsumables[ref.index] = null;
       if (game.inventorySystem.equippedConsumables) {
-        game.inventorySystem.equippedConsumables[slotIndex] = null;
+        game.inventorySystem.equippedConsumables[ref.index] = null;
       }
-      player.selectedConsumableIndex = -1;
+      game.consumableTriggerSystem.disarm();
     }
 
     const C = GRID.CELL_SIZE;

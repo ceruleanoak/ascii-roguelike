@@ -488,7 +488,7 @@ export class RestRenderer {
       // Same condition that drives the consumable slot blink in EquipmentSlots.js.
       const consumableIdx = parseInt(nearestSlot.type.slice('equipment-consumable'.length), 10) - 1;
       const equipped = game.inventorySystem.equippedConsumables[consumableIdx];
-      const consumableAvailable = (game.inventorySystem.consumableInventory?.length ?? 0) > 0;
+      const consumableAvailable = game.inventorySystem.allUnequippedConsumables().length > 0;
       const meter = game.player?.magicMeter;
       const isMagicMeter = meter?.active && meter.slots?.includes(consumableIdx);
       if (!equipped && consumableAvailable && !isMagicMeter) {

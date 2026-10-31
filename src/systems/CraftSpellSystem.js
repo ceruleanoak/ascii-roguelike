@@ -79,7 +79,7 @@ export class CraftSpellSystem {
       ...(includeChest ? inv.itemChest : []),
       ...inv.pendingChestDeposits, // swapped out this trip — still carried
       ...inv.armorInventory,
-      ...inv.consumableInventory,
+      ...inv.allUnequippedConsumables(),
     ];
     const equipped = [...game.player.quickSlots, inv.equippedArmor, ...inv.equippedConsumables];
     for (const item of [...unequipped, ...equipped]) {

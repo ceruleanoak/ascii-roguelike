@@ -1790,7 +1790,7 @@ export class ExploreRenderer {
     // Only Toss charges (armed consumable) preview a ghost; held-weapon
     // throws (spear) render no charged-distance preview.
     if (game.trapCharging.source?.kind !== 'consumable') return;
-    const held = game.player?.equippedConsumables?.[game.trapCharging.source.slotIndex];
+    const held = game.bottlesSystem.itemAt(game.trapCharging.source.ref);
     if (!held || held.data?.type === 'TRAP') return;
     const pos = game.trapSystem.getTrapReticulePos();
     if (!pos) return;

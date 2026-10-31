@@ -345,6 +345,17 @@ for (const line of lookHereAuthored) {
   }
 }
 
+// ── Every bottle-shaped consumable is a Bottle ─────────────────────────────
+// Bottles live in their own uncapped inventory (inventorySystem.bottles), so an
+// item that leaves a bottle, is a bottle, or fills a cauldron must carry
+// data.bottle or it silently routes to the slot pile instead.
+for (const [key, def] of Object.entries(ITEMS)) {
+  const bottleShaped = def.leavesBottle === true || def.effect === 'emptyBottle' || def.effect === 'cauldronInput';
+  if (bottleShaped && def.bottle !== true) {
+    fail(`ITEMS['${key}'] (${def.name ?? '?'}) is bottle-shaped but lacks bottle: true — it routes to the consumable slots instead of Bottles`);
+  }
+}
+
 if (failed) {
   console.error('\nData integrity violated.');
   console.error('Fix the referenced registry entry, or extend an allowlist above only with a bug reference.');

@@ -592,7 +592,7 @@ export class InteractionSystem {
     if (py + ph < fh.y || py > fh.y + fh.height) return false;
 
     // An armed Empty Bottle claims the fairy for tryBottleFairy — see header.
-    if (this._armedBottleIndex() >= 0) return false;
+    if (this._armedEmptyBottle()) return false;
 
     // The Fairy King doesn't heal on touch — it talks (SPACE, DialogueSystem).
     if (fairy instanceof FairyKing) return false;
@@ -617,16 +617,15 @@ export class InteractionSystem {
     fairy.consume();
   }
 
-  /** Index of the armed (number-key selected) Empty Bottle slot, or -1. */
-  _armedBottleIndex() {
-    const idx = this.game.player?.selectedConsumableIndex ?? -1;
-    if (idx < 0) return -1;
-    return this.game.player.equippedConsumables?.[idx]?.char === 'B' ? idx : -1;
+  /** The armed Empty Bottle (slot or Bottles) as a Bottle Ref, or null. */
+  _armedEmptyBottle() {
+    const ref = this.game.consumableTriggerSystem?.armed();
+    return ref?.item.char === 'B' ? ref : null;
   }
 
   /**
-   * SPACE with the Bottle slot armed and a catchable fairy within reach →
-   * the slot becomes a Fairy in a Bottle (⚱). Deliberately the same gesture
+   * SPACE with an Empty Bottle armed and a catchable fairy within reach →
+   * the bottle becomes a Fairy in a Bottle (⚱). Deliberately the same gesture
    * as filling a bottle from mud/lava/water (AlchemySystem.tryFillArmedBottle):
    * arm the bottle, stand next to the thing you want in it, press SPACE. Like
    * that path it must be checked ahead of ConsumableTriggerSystem.fireSelected(),
@@ -637,27 +636,24 @@ export class InteractionSystem {
    */
   tryBottleFairy() {
     const game = this.game;
-    const slotIndex = this._armedBottleIndex();
-    if (slotIndex < 0) return false;
+    const bottle = this._armedEmptyBottle();
+    if (!bottle) return false;
 
     const fairy = this._nearestCatchableFairy();
     if (!fairy) return false;
 
-    this.bottleFairy(fairy, slotIndex);
+    this.bottleFairy(fairy, bottle);
     return true;
   }
 
-  /** Catch `fairy` in the Empty Bottle at consumable slot `slotIndex`. */
-  bottleFairy(fairy, slotIndex) {
+  /** Catch `fairy` in the Empty Bottle named by Bottle Ref `bottle`. */
+  bottleFairy(fairy, bottle) {
     const game = this.game;
     // A caught Fairy King becomes the reusable on-hit heal, not the revive.
     const isKing = fairy instanceof FairyKing;
     const bottled = isKing ? '♔' : '⚱';
-    const inv = game.inventorySystem;
-    if (!inv?.replaceConsumableSlot?.(slotIndex, bottled)) {
-      this._fallbackReplaceConsumableSlot(slotIndex, bottled);
-    }
-    game.player.selectedConsumableIndex = -1;
+    if (!game.bottlesSystem.replaceAt(bottle, bottled)) return;
+    game.consumableTriggerSystem.disarm();
     game.menuSystem?.showPickupMessage?.(isKing ? 'CAUGHT THE FAIRY KING!' : 'CAUGHT A FAIRY!');
     game.audioSystem?.playSFX?.('fairy_pickup');
     game.menuSystem?.updateUI?.();
@@ -675,7 +671,7 @@ export class InteractionSystem {
     const game = this.game;
     const player = game.player;
     if (!player || player.hp < player.maxHp) return false;
-    if (this._armedBottleIndex() >= 0) return false;
+    if (this._armedEmptyBottle()) return false;
 
     // The Fairy King gives no blessing — SPACE beside it falls through to
     // its dialogue (DialogueSystem.tryOpenNearby).
@@ -741,20 +737,6 @@ export class InteractionSystem {
     // Force reflow so removing+re-adding restarts the animation.
     void el.offsetWidth;
     el.classList.add('heal-blink');
-  }
-
-  // Fallback when InventorySystem doesn't expose a slot-replace helper. Writes
-  // a minimal item-like wrapper directly into both inventory and player slots.
-  _fallbackReplaceConsumableSlot(slotIndex, newChar) {
-    const game = this.game;
-    const newItem = new Item(newChar, 0, 0);
-    const inv = game.inventorySystem;
-    if (inv?.equippedConsumables) {
-      inv.equippedConsumables[slotIndex] = newItem;
-    }
-    if (game.player?.equippedConsumables) {
-      game.player.equippedConsumables[slotIndex] = newItem;
-    }
   }
 
   // Spacebar-triggered container open: bypasses HP/damage and runs the

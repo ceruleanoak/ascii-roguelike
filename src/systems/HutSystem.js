@@ -805,7 +805,7 @@ export class HutSystem {
 
   /**
    * Whether the player holds a Bottle of Hot Water right now — equipped or in
-   * the consumable inventory. Gates the Alchemist's hut presence above and his
+   * Bottles. Gates the Alchemist's hut presence above and his
    * "you brought it" line (AlchemistNPC.getDialogueLines), which is spoken
    * after the presence check and must not take it on trust.
    */
@@ -813,7 +813,7 @@ export class HutSystem {
     const { game } = this;
     return !!(
       game.player.equippedConsumables?.some(it => it?.char === HOT_WATER_CHAR) ||
-      game.inventorySystem.consumableInventory?.some(it => it?.char === HOT_WATER_CHAR));
+      game.inventorySystem.allUnequippedConsumables().some(it => it?.char === HOT_WATER_CHAR));
   }
 
   _exitHut() {

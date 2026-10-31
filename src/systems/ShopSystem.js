@@ -354,7 +354,7 @@ export class ShopSystem {
   //
   // Sells everything the player is carrying — the weapon quick slots, worn
   // armor and equipped consumables — plus their backing storage (itemChest,
-  // armorInventory, consumableInventory). Carried gear is in the list on
+  // armorInventory, consumableInventory, Bottles). Carried gear is in the list on
   // purpose: mid-run the storage piles are usually empty (a picked-up weapon
   // goes straight to a quick slot, and equipping armor splices it OUT of
   // armorInventory), so a storage-only list showed the player nothing they
@@ -401,7 +401,9 @@ export class ShopSystem {
     // now, not only after a trip home.
     for (const item of inv.pendingChestDeposits)entries.push({ item, source: 'pendingChest' });
     for (const item of inv.getArmorInventory()) entries.push({ item, source: 'armor' });
-    for (const item of inv.getConsumableInventory()) entries.push({ item, source: 'consumable' });
+    // Bottles sell like the consumable pile (removeFromConsumableInventory
+    // takes from either).
+    for (const item of inv.allUnequippedConsumables()) entries.push({ item, source: 'consumable' });
 
     for (const entry of entries) entry.value = computePawnSellValue(entry.item.data);
     return entries;

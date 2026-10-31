@@ -1267,11 +1267,55 @@ identity, not standard programming terms.
   floors for as long as that Dungeon lasts — its D-room, REST round trips included — and wipe
   when a new room replaces it (staging is per-Dungeon effort; the no-persistence law holds).
 - **In code:** `TossSystem.startToss()`; charge rides TrapSystem's drop-throw pipeline ('drop'
-  mode extended with a source descriptor naming the armed slot). Lands via the standard
+  mode extended with a source descriptor carrying the Armed Consumable's Bottle Ref — a slot
+  or a Bottle in Bottles). Lands via the standard
   pickup path with its cooldown. Weapon-held SHIFT behavior (drop) is unchanged — the Toss
   exists only with hands free.
 - **Not:** the held-item SHIFT drop; a trap deploy (that's SPACE); the Gold Breath coin
   discharge (which reuses the same gesture while cursed).
+
+### Bottle
+- **Definition:** Any consumable that is a bottle: the Empty Bottle, the liquid bottles
+  (Water, Hot Water, Electrified Water, Magma, Mud, Fairy/Ember/Frost/Blight Water), the starter
+  and finished potions, Poison Flask, Steam Vial, Tonic, Venom Vial, Fairy in a Bottle and
+  Fairy King in a Bottle. What the Alchemy Lab brews with and fills.
+- **In code:** `bottle: true` on the ITEMS entry (`src/data/items.js`);
+  `InventorySystem.isBottle(item)`. `npm run check:data` fails any `leavesBottle`,
+  `emptyBottle` or `cauldronInput` item that isn't flagged.
+- **Not:** a slot consumable by nature — a Bottle sits in a slot only when equipped there.
+
+### Bottles
+- **Definition:** The player's store of every carried Bottle not equipped in a consumable
+  slot. Uncapped; never the slot-choice prompt. A Bottle in Bottles is used directly (arm it,
+  SPACE drinks/throws/fills, SHIFT tosses) but never auto-fires — equipping it into a slot is
+  what buys the emergency triggers (heal threshold, ⚱ revive, ♔ heal-on-hit). Run-scoped:
+  rides REST↔EXPLORE, cleared on death.
+- **In code:** `inventorySystem.bottles` (cleared in `handleGameOver`). Operations in
+  `src/systems/BottlesSystem.js` — `trigger` (drink/throw with `slotIndex: null` on the
+  windup), `replaceAt` (fill in place), `findRef`/`emptyBottleRef`, `coolHotWater`. A Bottle Ref
+  names one Bottle wherever it sits: `{ source: 'bottles', item }` or `{ source: 'slot', index }`.
+  Routing helpers on InventorySystem (`stashUnequipped`, `removeUnequipped`,
+  `allUnequippedConsumables`) pick Bottles or `consumableInventory` per item. A reusable Bottle's
+  cooldown in Bottles is `item.bottleCooldown`.
+- **Not:** `consumableInventory` (the unequipped non-Bottle consumables); not a slot.
+
+### Armed Consumable
+- **Definition:** What SPACE uses next instead of the weapon: a consumable slot armed with keys
+  4–8, or a Bottle armed from Bottles. Arming one disarms the other; a weapon key disarms both.
+  SPACE fires it (or fills an armed Empty Bottle at a liquid source, or catches a fairy in it);
+  SHIFT tosses it.
+- **In code:** `player.selectedConsumableIndex` (slot, -1 = none) and `player.armedBottle`
+  (a Bottle in Bottles, or null). Every reader goes through
+  `ConsumableTriggerSystem.armed()` → `{ item, source: 'slot'|'bottles', index }`;
+  `armBottle`, `selectSlot`, `disarm`, `replaceArmed`.
+- **Not:** the held weapon (`activeSlotIndex`); not an equip.
+
+### Armed Glyph
+- **Definition:** The Armed Consumable's glyph hovering over the player's head, bobbing — what
+  SPACE will use is always in view, whichever source armed it.
+- **In code:** the `armedGlyph` Frame Pass (`src/rendering/framePasses.js`, every owner) →
+  `drawArmedGlyph` (`src/rendering/effects/ArmedGlyphDraw.js`).
+- **Not:** a HUD slot highlight (the blinking slot box still marks an armed slot).
 
 ### Gold Breath
 - **Definition:** The Hoardmaw's one-shot curse, exhaled at the Scaled→Glinting transition and
@@ -1691,19 +1735,19 @@ identity, not standard programming terms.
 ### Get (Spell)
 - **Definition:** The GETLAVA, GETWATER, GETMUD and GETFAIRY Spells: take that liquid or a fairy
   from anywhere in the room the player could walk to, without touching it (lava doesn't burn,
-  water doesn't wet). The liquids fill the first equipped Empty Bottle; GETWATER takes the best
+  water doesn't wet). The liquids fill an Empty Bottle — one in Bottles first, else an equipped
+  one; GETWATER takes the best
   water in reach: a hot spring, then the fountain's pool, then the hut trough or plain water,
-  then electrified water. GETFAIRY needs no bottle: with one equipped the fairy is caught,
+  then electrified water. GETFAIRY needs no bottle: with one carried the fairy is caught,
   without one it heals the player, or blesses them (+1 max HP) at full health. "Could walk to"
   is a flood over the player's steering terrain: walls, solid objects, lava and deep water stop
   it, so an islet or the far side of a lava moat is out of reach. REST, EXPLORE or NEUTRAL;
-  `NO BOTTLE.` (a liquid, none equipped), `...NOTHING.` (nothing in reach).
+  `NO BOTTLE.` (a liquid, no Empty Bottle carried), `...NOTHING.` (nothing in reach).
 - **In code:** `src/systems/GetSpellSystem.js` — `cast(kind)`; fills through
   `AlchemySystem.fillLiquidBottle` / `fillHotWaterBottle` / `fillBottle` and
   `FountainSystem.poolBottleChar`; fairies through `InteractionSystem.bottleFairy` /
   `healFromFairy` / `blessFromFairy`; reach from `buildTerrainGrid` (`steeringTerrain.js`).
-- **Not:** a walk — the player stays put; not a bottle from the carried inventory (equipped
-  slots only, as with the armed-bottle gesture).
+- **Not:** a walk — the player stays put.
 
 ### Consumable
 - **Definition:** A single-use Crafted item that can be equipped in a consumable slot or used

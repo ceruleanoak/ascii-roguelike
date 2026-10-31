@@ -181,7 +181,7 @@ export class MenuSystem {
     const inv = game.inventorySystem;
     const hasWeapon = game.player.quickSlots.some(i => i) || inv.itemChest.length > 0;
     const hasArmor = !!inv.equippedArmor || inv.armorInventory.length > 0;
-    const hasConsumable = inv.equippedConsumables.some(i => i) || inv.consumableInventory.length > 0;
+    const hasConsumable = inv.equippedConsumables.some(i => i) || inv.allUnequippedConsumables().length > 0;
     return hasWeapon || hasArmor || hasConsumable;
   }
 
@@ -422,7 +422,7 @@ export class MenuSystem {
       }
 
       const item = game.player.quickSlots[i];
-      const consumableSelected = (game.player.selectedConsumableIndex ?? -1) >= 0;
+      const consumableSelected = !!game.consumableTriggerSystem.armed();
       const isActive = i === game.player.activeSlotIndex && !consumableSelected;
       const color = isActive ? '#ffffff' : INACTIVE_WEAPON;
 
@@ -707,7 +707,7 @@ export class MenuSystem {
         equippedMenuItems.add(item);
       }
     }
-    for (const item of game.inventorySystem.consumableInventory) {
+    for (const item of game.inventorySystem.allUnequippedConsumables()) {
       if (!consumableList.find(i => i.char === item.char)) {
         consumableList.push(item);
       }
@@ -1125,6 +1125,9 @@ export class MenuSystem {
         game.inventorySystem.armorInventory.push(item);
         game.inventorySystem.equipArmor(item);
         game.inventorySystem.applyEquipmentEffectsToPlayer(game.player);
+      } else if (item.data.type === 'CONSUMABLE' && game.inventorySystem.isBottle(item)) {
+        // A crafted Bottle goes to Bottles like a world pickup — no slot.
+        game.inventorySystem.bottles.push(item);
       } else if (item.data.type === 'CONSUMABLE') {
         // A crafted stackable (Meat Jerky, Sandwich, ...) joins an existing
         // stack like a world pickup does, instead of contesting a slot.
@@ -1222,8 +1225,7 @@ export class MenuSystem {
         const armorIndex = inv.armorInventory.indexOf(item);
         if (armorIndex > -1) inv.armorInventory.splice(armorIndex, 1);
       } else if (item.data.type === 'CONSUMABLE') {
-        const consumableIndex = inv.consumableInventory.indexOf(item);
-        if (consumableIndex > -1) inv.consumableInventory.splice(consumableIndex, 1);
+        inv.removeUnequipped(item);
       }
     }
   }
@@ -1243,7 +1245,7 @@ export class MenuSystem {
       if (item.data.type === 'ARMOR') {
         game.inventorySystem.armorInventory.push(item);
       } else if (item.data.type === 'CONSUMABLE') {
-        if (!game.inventorySystem.mergeStackableConsumable(item)) game.inventorySystem.consumableInventory.push(item);
+        if (game.inventorySystem.isBottle(item) || !game.inventorySystem.mergeStackableConsumable(item)) game.inventorySystem.stashUnequipped(item);
       } else if (item.data.type === 'WEAPON' || item.data.type === 'TRAP') {
         if (trapAlreadyEquipped(game.player, item)) {
           game.inventorySystem.addToChest(item);
@@ -1282,16 +1284,18 @@ export class MenuSystem {
 
   handleCraftingSlotPlace(slotType) {
     const game = this.game;
-    const consumableIdx = game.player.selectedConsumableIndex;
-    const usingConsumable = consumableIdx >= 0 && !!game.player.equippedConsumables?.[consumableIdx];
-    const item = usingConsumable ? game.player.equippedConsumables[consumableIdx] : game.player.heldItem;
+    const armed = game.consumableTriggerSystem.armed();
+    const item = armed ? armed.item : game.player.heldItem;
     if (!item) return;
 
     const clearSource = () => {
-      if (usingConsumable) {
-        game.inventorySystem.equippedConsumables[consumableIdx] = null;
-        game.player.equippedConsumables[consumableIdx] = null;
-        game.player.selectedConsumableIndex = -1;
+      if (armed?.source === 'bottles') {
+        game.inventorySystem.removeUnequipped(item);
+        game.consumableTriggerSystem.disarm();
+      } else if (armed) {
+        game.inventorySystem.equippedConsumables[armed.index] = null;
+        game.player.equippedConsumables[armed.index] = null;
+        game.consumableTriggerSystem.disarm();
       } else {
         game.player.quickSlots[game.player.activeSlotIndex] = null;
       }

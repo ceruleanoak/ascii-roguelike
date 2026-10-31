@@ -262,11 +262,10 @@ export class SlotReplacementSystem {
     const game = this.game;
     const item = this.pendingItem;
     if (this.fromInventory) {
-      // Already the player's: lift it out of the consumable inventory, which
-      // every consumable confirm path then pushes it back into or equips from.
-      const inv = game.inventorySystem.consumableInventory;
-      const invIdx = inv.indexOf(item);
-      if (invIdx > -1) inv.splice(invIdx, 1);
+      // Already the player's: lift it off its unequipped pile (consumable
+      // inventory or Bottles), which every consumable confirm path then
+      // pushes it back onto or equips from.
+      game.inventorySystem.removeUnequipped(item);
       return item;
     }
     const idx = game.items.indexOf(item);
@@ -310,15 +309,15 @@ export class SlotReplacementSystem {
       }
     } else if (this.slotType === 'consumable') {
       const inv = game.inventorySystem;
-      // Grab old before equip; null it out so equipConsumable won't push it to consumableInventory
+      // Grab old before equip; null it out so equipConsumable won't push it to its pile
       const displaced = inv.equippedConsumables[slotIdx];
       inv.equippedConsumables[slotIdx] = null;
-      inv.consumableInventory.push(item);
+      inv.stashUnequipped(item);
       inv.equipConsumable(slotIdx, item);
       inv.applyEquipmentEffectsToPlayer(game.player);
-      // Displaced consumable returns to the consumable inventory, not the chest.
+      // Displaced consumable returns to its pile (Bottles for a Bottle), not the chest.
       if (displaced) {
-        inv.consumableInventory.push(displaced);
+        inv.stashUnequipped(displaced);
         game.audioSystem.playSFX('slot_swap');
       }
     } else {
@@ -356,7 +355,7 @@ export class SlotReplacementSystem {
       // Armor inventory feeds the armor equipment slot — NOT itemChest (weapon-only).
       inv.armorInventory.push(item);
     } else if (this.slotType === 'consumable') {
-      inv.consumableInventory.push(item);
+      inv.stashUnequipped(item);
     } else {
       this._routeToChest(item);
     }

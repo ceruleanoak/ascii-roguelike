@@ -61,7 +61,7 @@ export class EquipSpellSystem {
     const inv = game.inventorySystem;
     return inv.itemChest.some(item => isWeapon(item) || isTrap(item))
       || inv.armorInventory.length > 0
-      || (inv.consumableInventory.length > 0 && this._openConsumableSlots().length > 0);
+      || (inv.allUnequippedConsumables().length > 0 && this._openConsumableSlots().length > 0);
   }
 
   _equipWeapons() {
@@ -126,12 +126,12 @@ export class EquipSpellSystem {
     // Take everything off the open slots, then deal from the whole bag.
     for (const i of slots) {
       if (inv.equippedConsumables[i]) {
-        inv.consumableInventory.push(inv.equippedConsumables[i]);
+        inv.stashUnequipped(inv.equippedConsumables[i]);
         inv.equippedConsumables[i] = null;
       }
     }
     const picks = [];
-    for (const item of byScore(inv.consumableInventory, () => 0)) {
+    for (const item of byScore(inv.allUnequippedConsumables(), () => 0)) {
       if (picks.length === slots.length) break;
       if (picks.some(p => conflicts(p, item))) continue;
       picks.push(item);

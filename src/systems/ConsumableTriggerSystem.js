@@ -32,6 +32,40 @@ export class ConsumableTriggerSystem {
     this.game = game;
   }
 
+  // ── The Armed Consumable ────────────────────────────────────────────────
+  // What SPACE uses next: a consumable slot (keys 4-8, player.selected-
+  // ConsumableIndex) or a Bottle armed from the Bottles column
+  // (player.armedBottle). Arming one disarms the other. Every SPACE consumer
+  // reads it through armed(), which returns a Bottle Ref (BottlesSystem)
+  // plus the Item — { item, source: 'slot'|'bottles', index } — or null.
+  armed() {
+    const player = this.game.player;
+    if (!player) return null;
+    const bottle = player.armedBottle;
+    if (bottle) {
+      const index = this.game.inventorySystem.bottles.indexOf(bottle);
+      if (index !== -1) return { item: bottle, source: 'bottles', index };
+      player.armedBottle = null; // it left Bottles (equipped, sold, spent)
+    }
+    const slot = player.selectedConsumableIndex ?? -1;
+    const item = slot >= 0 ? player.equippedConsumables?.[slot] : null;
+    return item ? { item, source: 'slot', index: slot } : null;
+  }
+
+  // Turn the Armed Consumable into `newChar` where it sits (filling an armed
+  // Empty Bottle). Returns the new Item, or null when nothing is armed.
+  replaceArmed(newChar) {
+    const ref = this.armed();
+    return ref ? this.game.bottlesSystem.replaceAt(ref, newChar) : null;
+  }
+
+  disarm() {
+    const player = this.game.player;
+    if (!player) return;
+    player.selectedConsumableIndex = -1;
+    player.armedBottle = null;
+  }
+
   // Arm a consumable slot for the next SPACE press (keys 4-8).
   selectSlot(index) {
     const game = this.game;
@@ -39,18 +73,29 @@ export class ConsumableTriggerSystem {
     if (state !== GAME_STATES.EXPLORE && state !== GAME_STATES.REST && state !== GAME_STATES.NEUTRAL) return;
     if (index >= game.inventorySystem.maxConsumableSlots) return; // locked slot — no-op
     if (!game.player.equippedConsumables?.[index]) return; // nothing to select
+    game.player.armedBottle = null;
     game.player.selectedConsumableIndex = index;
     game.updateUI();
   }
 
-  // Fires the armed consumable slot (if any) and hands SPACE control back to
-  // the weapon slot. Returns true if a slot was armed (whether or not the
+  // Arm a Bottle from Bottles for the next SPACE press (the Bottles column).
+  armBottle(item) {
+    const game = this.game;
+    if (!game.player || !game.inventorySystem.bottles.includes(item)) return;
+    game.player.selectedConsumableIndex = -1;
+    game.player.armedBottle = item;
+    game.updateUI();
+  }
+
+  // Fires the Armed Consumable (if any) and hands SPACE control back to the
+  // weapon slot. Returns true if something was armed (whether or not the
   // consumable actually triggered), so the caller knows SPACE was consumed.
   fireSelected(state) {
     const game = this.game;
     const validState = state === GAME_STATES.EXPLORE || state === GAME_STATES.REST
       || state === GAME_STATES.NEUTRAL || state === GAME_STATES.ARCADE_DEMO;
-    if (!validState || (game.player?.selectedConsumableIndex ?? -1) < 0) return false;
+    const ref = validState ? this.armed() : null;
+    if (!ref) return false;
 
     // REST: a ground item in reach wins over the armed slot. The REST crafting
     // workflow leaves a potion armed whenever a SHIFT-place into a slot fails,
@@ -68,15 +113,26 @@ export class ConsumableTriggerSystem {
     // still consumes the press, same as a consumable that refuses to fire.
     if (game.goldBreathCurseActive) {
       game.dungeonBossSystem?.dischargeCoin();
-      game.player.selectedConsumableIndex = -1;
+      this.disarm();
       game.updateUI();
       return true;
     }
 
-    this.manualTrigger(game.player.selectedConsumableIndex, game.player, game.currentRoom);
-    game.player.selectedConsumableIndex = -1;
+    if (ref.source === 'slot') this.manualTrigger(ref.index, game.player, game.currentRoom);
+    else this.manualTriggerBottle(ref.item, game.player, game.currentRoom);
+    this.disarm();
     game.updateUI();
     return true;
+  }
+
+  // SPACE on a Bottle armed from Bottles — manualTrigger's gates without the
+  // slot. An oil (the Venom Vial) only works equipped, where it coats the
+  // weapon; the Bomb Bag is not a Bottle.
+  manualTriggerBottle(item, player, currentRoom) {
+    if (item.data.oilEffect) return false;
+    const result = this.checkTriggerCondition(item.data, player, currentRoom, item, true);
+    if (!result) return false;
+    return this.game.bottlesSystem.trigger(item, result, player);
   }
 
   manualTrigger(slotIndex, player, currentRoom) {
@@ -98,6 +154,49 @@ export class ConsumableTriggerSystem {
     const triggerData = result.windup ? result : null;
     inv._triggerConsumable(slotIndex, consumable, triggerData, player);
     return true;
+  }
+
+  // Auto-trigger scan over the equipped slots — the emergency gate. Only a
+  // slot auto-fires: a Bottle in Bottles never does, which is what equipping
+  // one buys. Moved here from InventorySystem (checkConsumableActivation),
+  // which still owns the per-slot arrays it reads.
+  checkAutoTriggers(inv, player, currentRoom) {
+    if (!player.equippedConsumables) return;
+
+    for (let i = 0; i < player.equippedConsumables.length; i++) {
+      const consumable = player.equippedConsumables[i];
+      if (!consumable) continue;
+      if (inv.spentConsumableSlots[i]) continue; // One-shot consumables already used
+
+      // Skip if on cooldown (reusable consumables)
+      if (inv.consumableCooldowns[i] > 0) continue;
+
+      // Skip if already winding up
+      if (inv.consumableWindups.some(w => w.slotIndex === i)) continue;
+
+      let shouldTrigger = false;
+      let triggerData = null; // Store trigger conditions for offensive items
+      const cd = consumable.data;
+
+      // Oils are passive augments — they apply to bow/dagger attacks via Item.js
+      // and never auto-trigger on their own.
+      if (cd.oilEffect) continue;
+
+      // Tactical items (proximity/count-gated) auto-trigger is for emergencies
+      // only; manualOnly items only fire via manualTrigger (SPACE).
+      if (cd.manualOnly) continue;
+
+      // Check trigger condition based on effect type
+      shouldTrigger = this.checkTriggerCondition(cd, player, currentRoom, consumable);
+      if (shouldTrigger && shouldTrigger.windup) {
+        triggerData = shouldTrigger;
+        shouldTrigger = true;
+      }
+
+      if (shouldTrigger) {
+        inv._triggerConsumable(i, consumable, triggerData, player);
+      }
+    }
   }
 
   // `manual` bypasses HP/proximity/count emergency gates (manual trigger =

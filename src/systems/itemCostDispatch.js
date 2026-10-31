@@ -33,7 +33,7 @@ function ownedCraftedItems(inv, player) {
   if (player) for (const item of player.quickSlots) if (item) items.push(item);
   if (inv.equippedArmor) items.push(inv.equippedArmor);
   for (const item of inv.equippedConsumables) if (item) items.push(item);
-  items.push(...inv.itemChest, ...inv.armorInventory, ...inv.consumableInventory);
+  items.push(...inv.itemChest, ...inv.armorInventory, ...inv.allUnequippedConsumables());
   return items;
 }
 
@@ -53,7 +53,7 @@ export function removeItemChar(inv, char, player) {
   const armorMatch = inv.armorInventory.find(item => item.char === char);
   if (armorMatch) { inv.removeFromArmorInventory(armorMatch); return true; }
 
-  const consumableMatch = inv.consumableInventory.find(item => item.char === char);
+  const consumableMatch = inv.allUnequippedConsumables().find(item => item.char === char);
   if (consumableMatch) { inv.removeFromConsumableInventory(consumableMatch); return true; }
 
   if (inv.equippedArmor?.char === char) {

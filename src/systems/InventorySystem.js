@@ -79,7 +79,14 @@ export class InventorySystem {
 
     // EXPLORE inventory (lost on death)
     this.armorInventory = []; // All collected armor
-    this.consumableInventory = []; // All collected consumables
+    this.consumableInventory = []; // Unequipped non-Bottle consumables
+    // Bottles: every carried Bottle (data.bottle) not equipped in a slot.
+    // Uncapped and never routed through consumableInventory or the
+    // SlotReplacement prompt — a Bottle is used straight from here (armed via
+    // the TAB Bottles column) and only enters a slot when the player equips
+    // it, which is what buys it auto-fire. stashUnequipped/removeUnequipped
+    // pick the right pile for any consumable.
+    this.bottles = [];
 
     // Narrative/puzzle keys (Vault Key, Skull Key) — held, not equipped.
     // Real Items, populated by tryPickupItem's KEY branch below; never a
@@ -190,6 +197,37 @@ export class InventorySystem {
     return this.consumableInventory;
   }
 
+  isBottle(item) {
+    return item?.data?.bottle === true;
+  }
+
+  // The unequipped pile an item belongs to: Bottles for a Bottle, the
+  // consumable pile for everything else.
+  unequippedPileFor(item) {
+    return this.isBottle(item) ? this.bottles : this.consumableInventory;
+  }
+
+  // Put an unequipped consumable on its pile (Bottles or consumableInventory).
+  stashUnequipped(item) {
+    this.unequippedPileFor(item).push(item);
+  }
+
+  // Take an unequipped consumable off whichever pile holds it. Returns whether
+  // it was present.
+  removeUnequipped(item) {
+    for (const pile of [this.bottles, this.consumableInventory]) {
+      const idx = pile.indexOf(item);
+      if (idx > -1) { pile.splice(idx, 1); return true; }
+    }
+    return false;
+  }
+
+  // Every unequipped consumable, Bottles included — for readers that search
+  // what the player carries but hasn't equipped (costs, errands, pawn lists).
+  allUnequippedConsumables() {
+    return [...this.consumableInventory, ...this.bottles];
+  }
+
   getEquippedArmor() {
     return this.equippedArmor;
   }
@@ -233,6 +271,7 @@ export class InventorySystem {
   // stack, or null. Pushing straight onto the pile hid the item behind the
   // equipment menu while slots sat empty (bug-inbox 2026-10-28, Meat Jerky).
   stowConsumable(item, player) {
+    if (this.isBottle(item)) { this.bottles.push(item); return null; }
     const stacked = this.mergeStackableConsumable(item);
     if (stacked) return stacked;
     this.consumableInventory.push(item);
@@ -382,6 +421,13 @@ export class InventorySystem {
           item.consumed = true;
           physicsSystem.removeEntity(item);
           items.splice(i, 1);
+        } else if (item.data.type === 'CONSUMABLE' && this.isBottle(item)) {
+          // A Bottle goes straight to Bottles — never a slot, never the
+          // slot-choice prompt (its count is uncapped).
+          this.bottles.push(item);
+          item.consumed = true;
+          physicsSystem.removeEntity(item);
+          items.splice(i, 1);
         } else if (item.data.type === 'CONSUMABLE') {
           // Stackable consumables (Meat Jerky, Bread, Firecracker, ...) merge
           // into an existing same-char stack instead of contesting a slot —
@@ -505,8 +551,8 @@ export class InventorySystem {
         }
       }
     } else if (slotType.startsWith('consumable')) {
-      // Get all consumables from consumable inventory (deduplicated)
-      for (const item of this.consumableInventory) {
+      // Get all consumables from the unequipped piles (deduplicated)
+      for (const item of this.allUnequippedConsumables()) {
         if (!availableItems.find(i => i.char === item.char)) {
           availableItems.push(item);
         }
@@ -575,16 +621,13 @@ export class InventorySystem {
 
     const previousConsumable = this.equippedConsumables[slotIndex];
 
-    // If there was previously equipped consumable, return it to inventory
+    // If there was previously equipped consumable, return it to its pile
     if (this.equippedConsumables[slotIndex]) {
-      this.consumableInventory.push(this.equippedConsumables[slotIndex]);
+      this.stashUnequipped(this.equippedConsumables[slotIndex]);
     }
 
-    // Remove selected consumable from inventory and equip it
-    const consumableIndex = this.consumableInventory.indexOf(selectedItem);
-    if (consumableIndex > -1) {
-      this.consumableInventory.splice(consumableIndex, 1);
-    }
+    // Remove selected consumable from its pile and equip it
+    this.removeUnequipped(selectedItem);
     this.equippedConsumables[slotIndex] = selectedItem;
 
     // Reset consumable state for this slot
@@ -603,12 +646,10 @@ export class InventorySystem {
     return true;
   }
 
-  // Same as removeFromArmorInventory, for consumableInventory.
+  // Same as removeFromArmorInventory, for the unequipped consumable piles
+  // (consumableInventory or Bottles).
   removeFromConsumableInventory(item) {
-    const idx = this.consumableInventory.indexOf(item);
-    if (idx === -1) return false;
-    this.consumableInventory.splice(idx, 1);
-    return true;
+    return this.removeUnequipped(item);
   }
 
   // Stackable-consumable merge: see mergeStackableConsumable in TrapSystem.js
@@ -691,13 +732,13 @@ export class InventorySystem {
     tickConsumableFlash(this, deltaTime);
 
     // Check if consumables should activate
-    this.checkConsumableActivation(player, currentRoom);
+    this.game.consumableTriggerSystem.checkAutoTriggers(this, player, currentRoom);
     // A hit only counts for the check that follows it — a healOnHit item still
     // on cooldown must not fire later off a stale hit.
     player.hurtPending = false;
 
     // Update active windups
-    this.updateConsumableWindups(deltaTime, player, currentRoom, combatSystem, steamClouds, particles);
+    this.consumableWindupEffects.tick(this, deltaTime, player, combatSystem, steamClouds, particles);
 
     // Drive per-frame HUD update while consumable slot is blinking
     if (this.consumableBlinkTimer > 0) this.game.updateUI();
@@ -712,47 +753,8 @@ export class InventorySystem {
         this.consumableCooldowns[i] = Math.max(0, this.consumableCooldowns[i] - deltaTime);
       }
     }
-  }
-
-  /**
-   * Check if equipped consumables should activate based on conditions
-   */
-  checkConsumableActivation(player, currentRoom) {
-    if (!player.equippedConsumables) return;
-
-    for (let i = 0; i < player.equippedConsumables.length; i++) {
-      const consumable = player.equippedConsumables[i];
-      if (!consumable) continue;
-      if (this.spentConsumableSlots[i]) continue; // One-shot consumables already used
-
-      // Skip if on cooldown (reusable consumables)
-      if (this.consumableCooldowns[i] > 0) continue;
-
-      // Skip if already winding up
-      if (this.consumableWindups.some(w => w.slotIndex === i)) continue;
-
-      let shouldTrigger = false;
-      let triggerData = null; // Store trigger conditions for offensive items
-      const cd = consumable.data;
-
-      // Oils are passive augments — they apply to bow/dagger attacks via Item.js
-      // and never auto-trigger on their own.
-      if (cd.oilEffect) continue;
-
-      // Tactical items (proximity/count-gated) auto-trigger is for emergencies
-      // only; manualOnly items only fire via ConsumableTriggerSystem.manualTrigger (SPACE).
-      if (cd.manualOnly) continue;
-
-      // Check trigger condition based on effect type
-      shouldTrigger = this.game.consumableTriggerSystem.checkTriggerCondition(cd, player, currentRoom, consumable);
-      if (shouldTrigger && shouldTrigger.windup) {
-        triggerData = shouldTrigger;
-        shouldTrigger = true;
-      }
-
-      if (shouldTrigger) {
-        this._triggerConsumable(i, consumable, triggerData, player);
-      }
+    for (const bottle of this.bottles) {
+      if (bottle.bottleCooldown > 0) bottle.bottleCooldown = Math.max(0, bottle.bottleCooldown - deltaTime);
     }
   }
 
@@ -778,9 +780,9 @@ export class InventorySystem {
   }
 
   // Centralized slot-consumption for one-shot consumables. Honors leavesBottle:
-  // magic potions tagged with leavesBottle: true convert the spent slot to an
-  // Empty Bottle ('B') instead of clearing to null. Sources: magic-potion
-  // residue (per design: any "potion such as haste draught").
+  // potions tagged with leavesBottle: true leave an Empty Bottle ('B') in
+  // Bottles and free the slot. Sources: magic-potion residue (per design: any
+  // "potion such as haste draught").
   _consumeOneShotSlot(slotIndex, consumable, player) {
     // Stacked consumable (data.stackable, count > 1): using one unit
     // decrements the stack instead of clearing the slot — the item stays
@@ -791,10 +793,11 @@ export class InventorySystem {
     }
     const leavesBottle = consumable?.data?.leavesBottle === true;
     if (leavesBottle) {
-      const bottle = new Item('B', 0, 0);
-      this.equippedConsumables[slotIndex] = bottle;
-      if (player.equippedConsumables) player.equippedConsumables[slotIndex] = bottle;
-      // Not spent — bottle is a real item in the slot
+      // The Empty Bottle goes to Bottles and the slot frees up for the next
+      // equip — a slot holds a Bottle only while it's worth auto-firing.
+      this.bottles.push(new Item('B', 0, 0));
+      this.equippedConsumables[slotIndex] = null;
+      if (player.equippedConsumables) player.equippedConsumables[slotIndex] = null;
       this.spentConsumableSlots[slotIndex] = false;
     } else {
       this.spentConsumableSlots[slotIndex] = true;
@@ -841,35 +844,6 @@ export class InventorySystem {
       isOneShot: consumable.data.oneShot === true
     });
   }
-
-  /**
-   * Update active consumable windups
-   */
-  updateConsumableWindups(deltaTime, player, currentRoom, combatSystem, steamClouds, particles) {
-    // this.game — a bare `game` here (2026-08-24 layer-guard refactor) threw
-    // ReferenceError on every EXPLORE frame, halting the loop on room entry.
-    const enemies = this.game._activeEnemies();
-
-    for (let i = this.consumableWindups.length - 1; i >= 0; i--) {
-      const windup = this.consumableWindups[i];
-      windup.timer -= deltaTime;
-
-      // Jolt Jar throw arc: interpolate jar position from player to target,
-      // with a small parabolic lift so it reads as a throw.
-      if (windup.effectType === 'jolt' && windup.targetX != null) {
-        const t = Math.min(1, Math.max(0, 1 - windup.timer / windup.maxTimer));
-        windup.x = windup.startX + (windup.targetX - windup.startX) * t;
-        windup.y = windup.startY + (windup.targetY - windup.startY) * t - Math.sin(t * Math.PI) * 22;
-      }
-
-      // Windup complete — trigger effect
-      if (windup.timer <= 0) {
-        this.consumableWindupEffects.execute(this, windup, player, enemies, combatSystem, steamClouds, particles);
-        this.consumableWindups.splice(i, 1);
-      }
-    }
-  }
-
 
   // ========== DEATH & LOADOUT MECHANICS ==========
 
@@ -924,6 +898,7 @@ export class InventorySystem {
     this.pendingChestDeposits = [];
     this.armorInventory = [];
     this.consumableInventory = [];
+    this.bottles = [];
     this.keyItemInventory = [];
     this.coinWallet = 0;
     this.equippedArmor = null;

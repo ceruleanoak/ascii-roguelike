@@ -591,6 +591,10 @@ export class CheatMenu {
       game.inventorySystem.equipArmor(item);
       game.inventorySystem.applyEquipmentEffectsToPlayer(game.player);
       console.log(`[CHEAT] ✓ Equipped armor: ${name}`);
+    } else if (type === ITEM_TYPES.CONSUMABLE && ITEMS[char]?.bottle) {
+      // A Bottle spawns into Bottles, where a world pickup would land it.
+      game.inventorySystem.bottles.push(new Item(char, 0, 0));
+      console.log(`[CHEAT] ✓ Added bottle: ${name}`);
     } else if (type === ITEM_TYPES.CONSUMABLE) {
       const item = new Item(char, 0, 0);
       const inv = game.inventorySystem;

@@ -122,6 +122,9 @@ export class Item {
 
     // Weapon state
     this.cooldownTimer = 0;
+    // A reusable Bottle's own cooldown while drunk straight from Bottles
+    // (BottlesSystem.trigger) — a slot's cooldown lives on InventorySystem.
+    this.bottleCooldown = 0;
     this.windupTimer = 0;
     this.windupDuration = 0; // full length of the windup in progress (drives its charge visual)
     this.windupActive = false;

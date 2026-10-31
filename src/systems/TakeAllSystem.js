@@ -161,7 +161,7 @@ export class TakeAllSystem {
     const inv = game.inventorySystem;
     const type = item.data.type;
     if (type === 'ARMOR') inv.armorInventory.push(item);
-    else if (type === 'CONSUMABLE') inv.consumableInventory.push(item);
+    else if (type === 'CONSUMABLE') inv.stashUnequipped(item);
     else if (game.stateMachine.getCurrentState() === GAME_STATES.REST) inv.addToChest(item);
     else inv.deferToChest(item);
     item.consumed = true;

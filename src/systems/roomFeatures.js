@@ -12,7 +12,6 @@ import { createPushRock } from './PushRock.js';
 import { ITEM_TYPES } from '../data/items.js';
 import { WeaponsMaster } from '../entities/WeaponsMaster.js';
 import { Jeweler } from '../entities/Jeweler.js';
-import { HOT_WATER_CHAR } from '../data/alchemy.js';
 import { PLANE_TUNNEL } from './PlaneSystem.js';
 import { hazardStep } from './ZoneSystem.js';
 import { islandLavaFeatures } from './MetalPlatformSystem.js';
@@ -342,10 +341,7 @@ export function maybeSpawnRoamingAlchemist(gen, room) {
     (room.exitLetter === 'T' && room.zone === 'cyan') ? 'cyan-T' : null;
   if (!placement) return false;
 
-  const carryingHotWater =
-    game.player?.equippedConsumables?.some(it => it?.char === HOT_WATER_CHAR) ||
-    game.inventorySystem?.consumableInventory?.some(it => it?.char === HOT_WATER_CHAR);
-  if (carryingHotWater) return false;
+  if (game.hutSystem?.playerCarriesHotWater()) return false;
 
   // Simple open-floor-cell search (same style as spawnShoreFisherman's ocean
   // fallback) rather than zone-specific placement — T rooms in particular

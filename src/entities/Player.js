@@ -61,6 +61,7 @@ export class Player {
     this.activeSlotIndex = 0; // Currently selected slot (0-2)
     this.destroyedSlots = [false, false, false]; // Slots permanently disabled by wish use
     this.selectedConsumableIndex = -1; // armed consumable slot; -1 = weapon controls SPACE
+    this.armedBottle = null; // a Bottle armed from Bottles (exclusive with the slot above)
 
     // Magic meter — converted consumable slot(s) used as a mana gauge.
     // slots holds indices into equippedConsumables showing the mana fill.
@@ -716,6 +717,7 @@ export class Player {
     this.activeSlotIndex = 0;
     this.destroyedSlots = [false, false, false];
     this.selectedConsumableIndex = -1;
+    this.armedBottle = null;
     // Ingredients are not reset here — the pile belongs to InventorySystem, and
     // a character swap deliberately keeps it (game over clears it instead).
     this.magicMeter = { active: false, slots: [], current: 0, max: 10, freeSlotGranted: false, potionSlotGranted: false };

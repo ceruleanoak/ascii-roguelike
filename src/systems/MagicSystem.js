@@ -134,7 +134,7 @@ export class MagicSystem {
     for (const idx of meter.slots) {
       const equipped = inv.equippedConsumables[idx];
       if (!equipped) continue;
-      inv.consumableInventory.push(equipped);
+      inv.stashUnequipped(equipped);
       inv.equippedConsumables[idx] = null;
       if (player.equippedConsumables) player.equippedConsumables[idx] = null;
       if (inv.spentConsumableSlots) inv.spentConsumableSlots[idx] = false;

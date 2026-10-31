@@ -343,7 +343,7 @@ export class FountainSystem {
 
   // ── Bottling ──────────────────────────────────────────────────────────────
 
-  // Fill the armed Empty Bottle (slot `slotIndex`) from the pool. Free and
+  // Fill the armed Empty Bottle (Bottle Ref `ref` — BottlesSystem) from the pool. Free and
   // repeatable: it spends neither the attunement nor the one offering per
   // visit, so the only limit is how many Empty Bottles the player is carrying.
   // Reached through AlchemySystem.tryFillArmedBottle — the same arm-then-SPACE
@@ -352,7 +352,7 @@ export class FountainSystem {
   // the pool's own (isPlayerAtPool), not the one-cell liquid-tile radius: the
   // pool tiles are solid, so a player on the bank can sit a full cell from the
   // nearest tile centre. Returns true if it filled the bottle.
-  tryFillArmedBottle(slotIndex) {
+  tryFillArmedBottle(ref) {
     const game = this.game;
     // A corrupted pool is no longer fairy water. Fall through to the ordinary
     // liquid-bottle path so it yields whatever the element turned it into.
@@ -360,7 +360,7 @@ export class FountainSystem {
     if (!bottleChar) return false;
     if (!this.isPlayerAtPool()) return false;
 
-    game.inventorySystem.replaceConsumableSlot(slotIndex, bottleChar);
+    if (!game.bottlesSystem.replaceAt(ref, bottleChar)) return false;
     game.menuSystem.announceItem(bottleChar);
     game.audioSystem?.playSFX?.('pickup');
     game.updateUI();

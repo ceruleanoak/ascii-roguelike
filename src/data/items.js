@@ -2128,7 +2128,7 @@ export const ITEMS = {
 
   // ── Heal ──────────────────────────────────────────────────────────────────
   '🜄': {
-    char: '🜄', name: 'Base Potion', type: ITEM_TYPES.CONSUMABLE,
+    char: '🜄', name: 'Base Potion', type: ITEM_TYPES.CONSUMABLE, bottle: true,
     effect: 'heal', amount: 1, oneShot: true,
     autoTriggerHP: 0.12, color: '#3355ff',
     leavesBottle: true,
@@ -2140,7 +2140,7 @@ export const ITEMS = {
   'H': {
     char: 'H',
     name: 'Health Potion',
-    type: ITEM_TYPES.CONSUMABLE,
+    type: ITEM_TYPES.CONSUMABLE, bottle: true,
     effect: 'heal',
     amount: 3,
     oneShot: true,
@@ -2192,7 +2192,7 @@ export const ITEMS = {
     color: '#ff6633'
   },
   'z': {
-    char: 'z', name: 'Mending Brew', type: ITEM_TYPES.CONSUMABLE,
+    char: 'z', name: 'Mending Brew', type: ITEM_TYPES.CONSUMABLE, bottle: true,
     effect: 'regen', permanentUntilRoomExit: true, regenAmount: 1, regenInterval: 1.0, oneShot: true,
     autoTriggerHP: 0.30, color: '#3355ff',
     leavesBottle: true
@@ -2223,20 +2223,20 @@ export const ITEMS = {
 
   // ── Buffs ─────────────────────────────────────────────────────────────────
   'q': {
-    char: 'q', name: 'Haste Draught', type: ITEM_TYPES.CONSUMABLE,
+    char: 'q', name: 'Haste Draught', type: ITEM_TYPES.CONSUMABLE, bottle: true,
     effect: 'speed', permanentUntilRoomExit: true, oneShot: true,
     autoTriggerHP: 0.24, color: '#3355ff',
     leavesBottle: true
   },
   'x': {
-    char: 'x', name: 'Stone Skin', type: ITEM_TYPES.CONSUMABLE,
+    char: 'x', name: 'Stone Skin', type: ITEM_TYPES.CONSUMABLE, bottle: true,
     effect: 'stoneskin', permanentUntilRoomExit: true, duration: 10, oneShot: true,
     autoTrigger: { criticalHP: 0.20 },
     color: '#3355ff',
     leavesBottle: true
   },
   'u': {
-    char: 'u', name: 'Battle Elixir', type: ITEM_TYPES.CONSUMABLE,
+    char: 'u', name: 'Battle Elixir', type: ITEM_TYPES.CONSUMABLE, bottle: true,
     effect: 'damageBuff', permanentUntilRoomExit: true, damageBonus: 2, oneShot: true,
     manualOnly: true, color: '#3355ff',
     leavesBottle: true
@@ -2294,7 +2294,7 @@ export const ITEMS = {
   '🜛': {
     char: '🜛',
     name: 'Mana Potion',
-    type: ITEM_TYPES.CONSUMABLE,
+    type: ITEM_TYPES.CONSUMABLE, bottle: true,
     effect: 'manaSlot',   // Grants a temporary mana slot (no true slot required)
     oneShot: true,
     manualOnly: true,     // checkTriggerCondition's manaSlot case has no HP/proximity
@@ -2508,7 +2508,7 @@ export const ITEMS = {
   'P': {
     char: 'P',
     name: 'Poison Flask',
-    type: ITEM_TYPES.CONSUMABLE,
+    type: ITEM_TYPES.CONSUMABLE, bottle: true,
     effect: 'poison',
     cooldown: 10, // Reusable with 10s cooldown
     manualOnly: true,
@@ -2528,7 +2528,7 @@ export const ITEMS = {
   'v': {
     char: 'v',
     name: 'Steam Vial',
-    type: ITEM_TYPES.CONSUMABLE,
+    type: ITEM_TYPES.CONSUMABLE, bottle: true,
     effect: 'throwSteam',
     radius: 64,
     duration: 8.0,
@@ -2553,7 +2553,7 @@ export const ITEMS = {
   'T': {
     char: 'T',
     name: 'Tonic',
-    type: ITEM_TYPES.CONSUMABLE,
+    type: ITEM_TYPES.CONSUMABLE, bottle: true,
     effect: 'cleanse',
     cooldown: 8, // Reusable with 8s cooldown
     color: '#aaddff',
@@ -2623,7 +2623,7 @@ export const ITEMS = {
   '🜕': {
     char: '🜕',
     name: 'Venom Vial',
-    type: ITEM_TYPES.CONSUMABLE,
+    type: ITEM_TYPES.CONSUMABLE, bottle: true,
     oilEffect: { onHit: 'poison' },
     color: '#00ff44'
   },
@@ -2638,14 +2638,14 @@ export const ITEMS = {
   'B': {
     char: 'B',
     name: 'Empty Bottle',
-    type: ITEM_TYPES.CONSUMABLE,
+    type: ITEM_TYPES.CONSUMABLE, bottle: true,
     effect: 'emptyBottle',
     color: '#aaccee'
   },
   '⚱': {
     char: '⚱',
     name: 'Fairy in a Bottle',
-    type: ITEM_TYPES.CONSUMABLE,
+    type: ITEM_TYPES.CONSUMABLE, bottle: true,
     effect: 'revive_on_death',
     oneShot: true,
     color: '#ffaaff'
@@ -2657,7 +2657,7 @@ export const ITEMS = {
   '♔': {
     char: '♔',
     name: 'Fairy King in a Bottle',
-    type: ITEM_TYPES.CONSUMABLE,
+    type: ITEM_TYPES.CONSUMABLE, bottle: true,
     effect: 'heal',
     amount: 3,
     cooldown: 20,
@@ -2669,7 +2669,7 @@ export const ITEMS = {
   '🜉': {
     char: '🜉',
     name: 'Bottle of Water',
-    type: ITEM_TYPES.CONSUMABLE,
+    type: ITEM_TYPES.CONSUMABLE, bottle: true,
     effect: 'cauldronInput',
     color: '#aaddff'
   },
@@ -2680,7 +2680,7 @@ export const ITEMS = {
   '🜊': {
     char: '🜊',
     name: 'Bottle of Hot Water',
-    type: ITEM_TYPES.CONSUMABLE,
+    type: ITEM_TYPES.CONSUMABLE, bottle: true,
     effect: 'cauldronInput',
     color: '#ff8855'
   },
@@ -2689,14 +2689,14 @@ export const ITEMS = {
   // third starter. potionModifier carries through to the true potion made
   // from this starter at Cauldron stage 2 — see AlchemySystem.
   '🜅': {
-    char: '🜅', name: 'Purified Potion', type: ITEM_TYPES.CONSUMABLE,
+    char: '🜅', name: 'Purified Potion', type: ITEM_TYPES.CONSUMABLE, bottle: true,
     effect: 'heal', amount: 1, oneShot: true,
     autoTriggerHP: 0.12, color: '#ffffff',
     leavesBottle: true,
     potionModifier: 'buff'
   },
   '🜆': {
-    char: '🜆', name: 'Unstable Potion', type: ITEM_TYPES.CONSUMABLE,
+    char: '🜆', name: 'Unstable Potion', type: ITEM_TYPES.CONSUMABLE, bottle: true,
     effect: 'heal', amount: 1, oneShot: true,
     autoTriggerHP: 0.12, color: '#8833cc',
     leavesBottle: true,
@@ -2708,21 +2708,21 @@ export const ITEMS = {
   'ε': {
     char: 'ε',
     name: 'Bottle of Electrified Water',
-    type: ITEM_TYPES.CONSUMABLE,
+    type: ITEM_TYPES.CONSUMABLE, bottle: true,
     effect: 'cauldronInput',
     color: '#ffff00'
   },
   '◆': {
     char: '◆',
     name: 'Bottle of Magma',
-    type: ITEM_TYPES.CONSUMABLE,
+    type: ITEM_TYPES.CONSUMABLE, bottle: true,
     effect: 'cauldronInput',
     color: '#ff5500'
   },
   '◐': {
     char: '◐',
     name: 'Bottle of Mud',
-    type: ITEM_TYPES.CONSUMABLE,
+    type: ITEM_TYPES.CONSUMABLE, bottle: true,
     effect: 'cauldronInput',
     color: '#6b4423'
   },
@@ -2736,28 +2736,28 @@ export const ITEMS = {
   '🜈': {
     char: '🜈',
     name: 'Bottle of Fairy Water',
-    type: ITEM_TYPES.CONSUMABLE,
+    type: ITEM_TYPES.CONSUMABLE, bottle: true,
     effect: 'cauldronInput',
     color: '#ffaaff'
   },
   '🜍': {
     char: '🜍',
     name: 'Bottle of Ember Water',
-    type: ITEM_TYPES.CONSUMABLE,
+    type: ITEM_TYPES.CONSUMABLE, bottle: true,
     effect: 'cauldronInput',
     color: '#ff6633'
   },
   '🜗': {
     char: '🜗',
     name: 'Bottle of Frost Water',
-    type: ITEM_TYPES.CONSUMABLE,
+    type: ITEM_TYPES.CONSUMABLE, bottle: true,
     effect: 'cauldronInput',
     color: '#bbeeff'
   },
   '🜩': {
     char: '🜩',
     name: 'Bottle of Blight Water',
-    type: ITEM_TYPES.CONSUMABLE,
+    type: ITEM_TYPES.CONSUMABLE, bottle: true,
     effect: 'cauldronInput',
     color: '#66cc44'
   },
@@ -2767,7 +2767,7 @@ export const ITEMS = {
   '!': {
     char: '!',
     name: 'Charged Potion',
-    type: ITEM_TYPES.CONSUMABLE,
+    type: ITEM_TYPES.CONSUMABLE, bottle: true,
     effect: 'heal', amount: 1, oneShot: true,
     autoTriggerHP: 0.12, color: '#ffff88',
     leavesBottle: true,
@@ -2777,7 +2777,7 @@ export const ITEMS = {
   '«': {
     char: '«',
     name: 'Burning Potion',
-    type: ITEM_TYPES.CONSUMABLE,
+    type: ITEM_TYPES.CONSUMABLE, bottle: true,
     effect: 'heal', amount: 1, oneShot: true,
     autoTriggerHP: 0.12, color: '#ff8844',
     leavesBottle: true,
@@ -2787,7 +2787,7 @@ export const ITEMS = {
   '¿': {
     char: '¿',
     name: 'Primal Potion',
-    type: ITEM_TYPES.CONSUMABLE,
+    type: ITEM_TYPES.CONSUMABLE, bottle: true,
     effect: 'heal', amount: 1, oneShot: true,
     autoTriggerHP: 0.12, color: '#886644',
     leavesBottle: true,
