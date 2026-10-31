@@ -172,7 +172,7 @@ export class ConsumableWindupEffects {
           }
         }
         createSparkBurst(inv.game, particles, px, py);
-        createExplosionAftermath(inv.game, px, py, { shake: 5, shakeDuration: 0.3, smoke: 8, spread: burnRadius * 0.4 });
+        createExplosionAftermath(inv.game, px, py, { shake: 0, smoke: 8, spread: burnRadius * 0.4 });
         break;
       }
       case 'throwSteam': {
