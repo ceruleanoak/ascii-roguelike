@@ -10,6 +10,9 @@ import { hasLuckBlessing, coinDropChance } from './luck.js';
 
 // Chance each Coin an enemy drops becomes a Frog Coin while the player is in frog form.
 const FROG_COIN_SWAP_CHANCE = 0.25;
+// Chance the universal Coin drop comes up an Empty Bottle instead — bottles
+// had no general enemy source (only goo's uncommon pool, ~0.4% per kill).
+const BOTTLE_FOR_COIN_CHANCE = 0.10;
 
 export class LootSystem {
   constructor(game) {
@@ -222,9 +225,9 @@ export class LootSystem {
     // drop 1 Coin, on top of whatever the affinity/tier or legacy `drops`
     // tooling above already rolled — not scaled by luckMult/bonusChance,
     // since it's deliberately separate from those systems rather than folded
-    // into them.
+    // into them. One in ten of those Coins is an Empty Bottle instead.
     if (Math.random() < coinDropChance(player)) {
-      drops.push('c');
+      drops.push(Math.random() < BOTTLE_FOR_COIN_CHANCE ? 'B' : 'c');
     }
 
     // A beast killed while snared (Snare Trap, Bolo — Enemy.isSnared) always
