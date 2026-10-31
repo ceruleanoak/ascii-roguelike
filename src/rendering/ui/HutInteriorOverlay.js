@@ -11,7 +11,6 @@ import { drawErrandConfirmPanel } from './ErrandConfirmOverlay.js';
 import { drawTamedRats, drawGolems } from './CompanionRenderers.js';
 import { SLOT_CHROME } from '../../data/slotChrome.js';
 import { drawFramePasses } from '../framePasses.js';
-import { drawBottleShelf } from './BottleShelf.js';
 
 /**
  * HutInteriorOverlay — picture-in-picture rendering for every floor Interior
@@ -53,7 +52,7 @@ export class HutInteriorOverlay {
     // untagged puddles/gooBlobs) from drawing on top of the PiP frame.
     const isCavern = game.activeFloor.hutKind === 'cavern';
     const isRock = isCavern || game.player.inAquifer;
-    const frame = drawInteriorFrame(ctx, {
+    drawInteriorFrame(ctx, {
       gridCols: game.activeFloor.gridCols,
       gridRows: game.activeFloor.gridRows,
       panelColor: isRock ? CAVERN_PANEL_COLOR : '#111108',
@@ -392,8 +391,5 @@ export class HutInteriorOverlay {
 
     // ── Restore interior offset ────────────────────────────────────────────────
     ctx.restore(); // removes translate + restores outer state
-
-    // Alchemy Lab only: the Bottle Shelf above the panel (outside the clip).
-    drawBottleShelf(ctx, game, frame);
   }
 }
