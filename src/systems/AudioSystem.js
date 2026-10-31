@@ -1536,6 +1536,7 @@ export class AudioSystem {
     // P-room puzzles + key items — placeholder names, no assets yet.
     this.loadSFX('puzzle_pulse', null);  // correct listening-stone strike
     this.loadSFX('puzzle_fizzle', null); // wrong stone — sequence reset
+    this.loadSFX('maze_flood_panel', null); // a Flood Panel fires (MazeTrapSystem)
     this.loadSFX('puzzle_solve', null);  // puzzle solved, spirit rises
     this.loadSFX('barricade_lift', null); // a trigger Barricade's plug gives way
     this.loadSFX('plank_place', null);   // Platform plank laid over deep water

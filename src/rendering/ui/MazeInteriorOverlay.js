@@ -17,11 +17,12 @@ import { drawFramePasses } from '../framePasses.js';
  * Rendering layers (all in interior-translated coordinates):
  *   1. Dim exterior + floor panel
  *   2. Wall cells
+ *   2a. Flood Panels (dark until torch light), then deep-water tiles
  *   2b. Maze torches (fixture glyph + pulsing light when lit)
  *   3. Exit indicator
  *   4. Maze objects (3-hit breakables, hit flash, blink warning)
  *   5. Ground Frame Passes (puddles, goo, debris, mazePlane loot, traps)
- *   6. Ghosts
+ *   6. Ghosts, then Maze enemies (sapping ones again after the player)
  *   7. Combat Frame Passes (attacks, arcs, damage numbers, particles, steam)
  *   8. Player Frame Passes (torch glow, glyph, pips, poses, throwables)
  *   9. Camp companion
@@ -36,6 +37,13 @@ const FLOOR_COLOR = '#100d18';
 const WALL_COLOR  = '#2a2233';
 const WALL_GLYPH  = '#';
 const WALL_GLYPH_COLOR = '#3a3040';
+
+// Flood Panels read very dark until torch light reaches them
+// (MazeSystem.torchLightBand): stepped colors, never an alpha gradient (retro
+// alpha quantization) — dark, the light's rim, fully lit. A fired panel never
+// drops below the rim shade.
+const FLOOD_PANEL_GLYPH = '▭';
+const PANEL_COLORS = ['#1c1826', '#4a4258', '#8a80a0'];
 
 export class MazeInteriorOverlay {
   constructor(renderer, renderController) {
@@ -68,6 +76,21 @@ export class MazeInteriorOverlay {
         ctx.fillStyle = WALL_GLYPH_COLOR;
         ctx.fillText(WALL_GLYPH, c * CS + CS / 2, r * CS + CS / 2);
       }
+    }
+
+    // ── 2a. Flood Panels (dark until torch light finds them) ───────────────
+    for (const panel of mi.floodPanels) {
+      const band = game.mazeSystem.torchLightBand(mi, panel.col * CS, panel.row * CS);
+      ctx.fillStyle = PANEL_COLORS[panel.triggered ? Math.max(1, band) : band];
+      ctx.fillText(FLOOD_PANEL_GLYPH, panel.col * CS + CS / 2, panel.row * CS + CS / 2);
+    }
+
+    // ── 2a2. Maze background objects (the flood's deep-water tiles) ───────
+    for (const obj of mi.backgroundObjects) {
+      if (obj.destroyed) continue;
+      const renderData = obj.getRenderPosition();
+      ctx.fillStyle = renderData.color;
+      ctx.fillText(renderData.char, renderData.x + CS / 2, renderData.y + CS / 2);
     }
 
     // ── 2b. Maze torches (fixture glyph + pulsing light) ───────────────────
@@ -121,14 +144,6 @@ export class MazeInteriorOverlay {
         ctx.fillStyle = i < obj.hp ? '#cc88ff' : '#333333';
         ctx.fillRect(cx - 4 + i * 4, cy - CS - 2, 3, 3);
       }
-    }
-
-    // ── 4b. Maze background objects (deep-water tiles) ───────────────────
-    for (const obj of mi.backgroundObjects) {
-      if (obj.destroyed) continue;
-      const renderData = obj.getRenderPosition();
-      ctx.fillStyle = renderData.color;
-      ctx.fillText(renderData.char, renderData.x + CS / 2, renderData.y + CS / 2);
     }
 
     // ── 5. Shared ground Frame Passes ────────────────────────────────────

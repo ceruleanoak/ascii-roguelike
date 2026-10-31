@@ -140,6 +140,21 @@ identity, not standard programming terms.
   Spectacles never wait on it.
 - **Not:** a Well (the W Room); the Fountain.
 
+### Flood Panel
+- **Definition:** A dark floor plate in a deep Maze, all but invisible until torch light (a
+  carried Torch or a lit Maze Torch fixture) reaches it. Each fires once when the player walks
+  onto it; a dodge roll passes over it. The first one fired opens the Wellspring and the flood
+  rises there — never at the panel — spreading cell by cell along the corridors as deep water
+  until the Maze is full; each later one speeds the spread. The flood snuffs every Maze Torch
+  fixture it reaches and, being deep water, DOUSES a carried Torch.
+- **In code:** `FloodPanel` (`col`/`row`/`triggered`) in `MazeTrapSystem.js`, on
+  `mazeInterior.floodPanels`; the flood is `mazeInterior.flood` (`open`, `rate`, a BFS `order`
+  from the Wellspring) and each flooded cell a `BackgroundObject('~', …, { deepWater: true })` in
+  `mazeInterior.backgroundObjects`. Drawn by `MazeInteriorOverlay` in stepped shades (dark → rim →
+  lit) from `MazeSystem.torchLightBand`.
+- **Not:** the Dungeon Branch floor's paired panels (`▭`, a companion puzzle,
+  `DungeonPuzzleSystem`), though it shares their glyph.
+
 ### Pond
 - **Definition:** The small round body of shallow water in a Quagmire whose center tile is the
   Whirlpool — plain-looking water until the Quagmire's rounds are cleared.

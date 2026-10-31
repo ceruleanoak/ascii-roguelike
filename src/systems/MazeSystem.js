@@ -6,6 +6,7 @@ import { INGREDIENTS } from '../data/items.js';
 import { coverFor } from '../data/cipher.js';
 import { freezeSurfaceRoom, thawSurfaceRoom, isInteriorActive } from './PlaneSystem.js';
 import { bfsPath } from './mazePath.js';
+import { hasTorchLight, PLAYER_TORCH_LIGHT_RADIUS } from '../rendering/ui/torchLight.js';
 import { MazeTrapSystem } from './MazeTrapSystem.js';
 
 /**
@@ -73,6 +74,7 @@ const DOOM_THRESHOLD  = 2;   // ghosts spawned before all-remaining-blink mode
 
 export const TORCH_COUNT           = 5;
 export const TORCH_LIGHT_RADIUS    = CS * 3.5;   // "decent sized radius" of a lit torch's glow
+const TORCH_LIGHT_RIM = 1.35; // × a light's radius: the rim band, where a Flood Panel half-shows
 const GHOST_TORCH_DESTROY_RADIUS = CS * 1.0; // ghost proximity that destroys a torch
 export const TORCH_ALPHA_HIGH      = 0.3;
 export const TORCH_ALPHA_LOW       = 0.1;
@@ -292,6 +294,8 @@ export class MazeSystem {
       backgroundObjects: [],
       enemies: [],
       wellspring: null,     // { col, row } at depth ≥ 6 (MazeTrapSystem.seed), else null
+      floodPanels: [],      // FloodPanel[] (MazeTrapSystem)
+      flood: null,          // { open, rate, progress, next, order } once seeded
       spawnCount: 0,        // cumulative ghosts spawned via blink expiry
       blinkCooldown: 0,     // s before the next single candidate may blink
       disturbed: false,     // true once the first object is broken open — arms the blink system
@@ -500,6 +504,9 @@ export class MazeSystem {
         }
       }
     }
+
+    // Deep-Maze traps: Flood Panels and the flood (MazeTrapSystem).
+    this.trapSystem.update(mi, dt);
 
     // Blink candidate selection (single-candidate mode only — doom mode keeps
     // every survivor blinking continuously, set once on doom entry). Nothing
@@ -831,6 +838,28 @@ export class MazeSystem {
 
   _nearLitTorch(obj, mi) {
     return mi.torches.some(t => t.lit && this._within(obj.position, t.position, TORCH_LIGHT_RADIUS));
+  }
+
+  /**
+   * How much torch light reaches a Maze point: 2 inside a light, 1 at its rim
+   * (out to TORCH_LIGHT_RIM × the radius), 0 dark. The lights are the
+   * player's own (a carried Torch or Fire Berry, hasTorchLight) and every lit
+   * Maze Torch fixture. Flood Panels are drawn by it (MazeInteriorOverlay).
+   */
+  torchLightBand(mi, x, y) {
+    const bandFor = (pos, radius) => {
+      const dist = Math.hypot(pos.x - x, pos.y - y);
+      if (dist <= radius) return 2;
+      return dist <= radius * TORCH_LIGHT_RIM ? 1 : 0;
+    };
+    let band = 0;
+    const { player } = this.game;
+    if (player && hasTorchLight(this.game)) band = bandFor(player.position, PLAYER_TORCH_LIGHT_RADIUS);
+    for (const torch of mi.torches) {
+      if (band === 2) break;
+      if (torch.lit && !torch.destroyed) band = Math.max(band, bandFor(torch.position, TORCH_LIGHT_RADIUS));
+    }
+    return band;
   }
 
   _nearCell(player, cellPx, cellPy) {
