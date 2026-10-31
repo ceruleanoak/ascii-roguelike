@@ -14,7 +14,7 @@
  * `inv` rather than duplicated state living here.
  *
  * Offensive effects (explode/curse/slow/poison/jolt/waterBalloon/
- * firecracker/throwSteam) resolve in the switch below. Everything else — heals, buffs,
+ * liquidSplash/firecracker/throwSteam) resolve in the switch below. Everything else — heals, buffs,
  * shields, anything that lands on the player — falls through to
  * ConsumableTriggerSystem.applyEffect, which owns those mutations.
  */
@@ -23,6 +23,7 @@ import { createBurstParticles, createSparkBurst, createExplosionAftermath } from
 import { isInteriorActive } from './PlaneSystem.js';
 import { detonateBomb } from './ExplosionEffects.js';
 import { clearStatusEffect } from './StatusEffects.js';
+import { splashLiquid } from './LiquidSplash.js';
 
 export class ConsumableWindupEffects {
   // Ticks the in-flight windup list (owned by InventorySystem) and resolves
@@ -37,9 +38,10 @@ export class ConsumableWindupEffects {
       const windup = inv.consumableWindups[i];
       windup.timer -= deltaTime;
 
-      // Jolt Jar throw arc: interpolate jar position from player to target,
-      // with a small parabolic lift so it reads as a throw.
-      if (windup.effectType === 'jolt' && windup.targetX != null) {
+      // Targeted throw arc (Jolt Jar, Liquid Splash): interpolate from the
+      // player to the locked target, with a small parabolic lift so it reads
+      // as a throw.
+      if (windup.targetX != null) {
         const t = Math.min(1, Math.max(0, 1 - windup.timer / windup.maxTimer));
         windup.x = windup.startX + (windup.targetX - windup.startX) * t;
         windup.y = windup.startY + (windup.targetY - windup.startY) * t - Math.sin(t * Math.PI) * 22;
@@ -153,6 +155,10 @@ export class ConsumableWindupEffects {
         createBurstParticles(inv.game, particles, px, py, 25, windup.consumable.color);
         break;
       }
+      case 'liquidSplash':
+        // A thrown liquid Bottle lands as a plus of its liquid (LiquidSplash.js).
+        splashLiquid(inv.game, windup.consumable, px, py);
+        break;
       case 'firecracker': {
         const burnRadius = windup.consumable?.data?.radius || 64;
         for (const enemy of enemies) {

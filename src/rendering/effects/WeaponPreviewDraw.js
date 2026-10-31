@@ -29,10 +29,10 @@ export function drawConsumableWindups(renderer, game) {
   for (const windup of game.inventorySystem.consumableWindups) {
     const progress = 1 - (windup.timer / windup.maxTimer);
 
-    // Jolt Jar bakes its own arc lift into windup.y (see InventorySystem
-    // updateConsumableWindups) since it's also interpolating toward a
-    // fixed target — don't double-apply the lift for it.
-    const arcLift = windup.effectType === 'jolt'
+    // A targeted throw (Jolt Jar, Liquid Splash) bakes its own arc lift into
+    // windup.y (ConsumableWindupEffects.tick) since it's also interpolating
+    // toward a fixed target — don't double-apply the lift for it.
+    const arcLift = windup.targetX != null
       ? 0
       : Math.sin(Math.min(1, Math.max(0, progress)) * Math.PI) * THROW_ARC_HEIGHT;
     const spinAngle = progress * Math.PI * 2 * THROW_SPINS;
@@ -50,12 +50,12 @@ export function drawConsumableWindups(renderer, game) {
     const aoeRadius = game.consumableTriggerSystem.getWindupAoeRadius(windup);
 
     // Draw pulsing ring to show AoE damage radius.
-    // Jolt Jar is a thrown projectile — show the ring at the locked impact
-    // target, not around the moving jar.
+    // A targeted throw (Jolt Jar, Liquid Splash) shows the ring at the
+    // locked impact target, not around the moving bottle.
     const pulse = Math.sin(progress * Math.PI * 6) * 0.15; // Subtle pulse
     const displayRadius = aoeRadius * (1 + pulse);
-    const ringX = (windup.effectType === 'jolt' && windup.targetX != null) ? windup.targetX : windup.x;
-    const ringY = (windup.effectType === 'jolt' && windup.targetY != null) ? windup.targetY : windup.y;
+    const ringX = windup.targetX ?? windup.x;
+    const ringY = windup.targetY ?? windup.y;
 
     renderer.fgCtx.save();
     renderer.fgCtx.strokeStyle = windup.consumable.color;

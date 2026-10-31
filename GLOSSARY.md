@@ -1857,6 +1857,20 @@ identity, not standard programming terms.
 - **Not:** the Caldera's Hot Water (`typeId: 'hot_water'`, which heals); not electrified or
   poisoned water (fire steams those but leaves their state alone).
 
+### Liquid Splash
+- **Definition:** A thrown liquid Bottle (Water, Hot Water, Electrified Water, Magma, Mud). It
+  is SPACE only and never fires on its own. It flies four cells along the player's facing and
+  lands as a plus of its liquid: the landing cell and the four beside it, each only on open
+  floor (no wall, no background object). Hot Water lands as Heated Water, and Electrified Water
+  charges its patch and any water it touches. The Bottle leaves an Empty Bottle. Fountain waters
+  don't splash.
+- **In code:** `splash` on the ITEMS entry (`'water'|'heated'|'electrified'|'lava'|'mud'`, with
+  `oneShot`, `manualOnly`, `leavesBottle`). `ConsumableTriggerSystem` `cauldronInput` case →
+  `'liquidSplash'` windup with a `targetX/targetY`. The landing is `splashLiquid` in
+  `src/systems/LiquidSplash.js`, onto `game.activeRoom`.
+- **Not:** the Water Balloon (soaks enemies, places nothing). Throwing is separate from
+  brewing: the same Bottles are still picked at the cauldron menu.
+
 ### Water Balloon
 - **Definition:** A thrown consumable (◒, Bottle of Water + Goo) that bursts over the Bomb's
   radius without a blast: every enemy in the burst gets wet (pip 1, burn put out) and slimes

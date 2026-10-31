@@ -1,7 +1,8 @@
 import { getPotionEffectParams } from '../data/alchemy.js';
-import { GAME_STATES } from '../game/GameConfig.js';
+import { GAME_STATES, GRID } from '../game/GameConfig.js';
 import { clearStatusEffect } from './StatusEffects.js';
 import { FAIRY_HEAL } from '../entities/Fairy.js';
+import { entityCenter } from '../game/Telegraph.js';
 
 // Every consumable use is a throw: the item arcs up and lands before its
 // effect resolves (checkTriggerCondition only gates whether it CAN fire;
@@ -14,6 +15,24 @@ const THROW_DURATION = 0.45;
 // How far a manual Jolt Jar flies along the player's facing when there is no
 // enemy to aim at (px).
 const JOLT_FACING_THROW_DISTANCE = 100;
+
+// How far a thrown liquid Bottle (a Liquid Splash) flies along the player's
+// facing (px) — far enough that the plus it lands as clears the player's cell.
+const LIQUID_SPLASH_THROW_DISTANCE = GRID.CELL_SIZE * 4;
+
+// The point `distance` px along the player's facing, from their true center
+// (a Liquid Splash lands on cells, so the legacy +20 offset would skew it).
+function facingThrowTarget(player, distance) {
+  const c = entityCenter(player);
+  let fx = player.facing?.x ?? 0;
+  let fy = player.facing?.y ?? 1;
+  if (fx === 0 && fy === 0) fy = 1;
+  const len = Math.sqrt(fx * fx + fy * fy);
+  return {
+    targetX: c.x + (fx / len) * distance,
+    targetY: c.y + (fy / len) * distance,
+  };
+}
 
 // Effect types with no AoE landing zone — the windup renderer skips the
 // pulsing radius ring for these (they always resolve on the player).
@@ -338,12 +357,7 @@ export class ConsumableTriggerSystem {
           targetX = nearest.position.x + 20;
           targetY = nearest.position.y + 20;
         } else {
-          let fx = player.facing?.x ?? 0;
-          let fy = player.facing?.y ?? 1;
-          if (fx === 0 && fy === 0) fy = 1;
-          const len = Math.sqrt(fx * fx + fy * fy);
-          targetX = px + (fx / len) * JOLT_FACING_THROW_DISTANCE;
-          targetY = py + (fy / len) * JOLT_FACING_THROW_DISTANCE;
+          ({ targetX, targetY } = facingThrowTarget(player, JOLT_FACING_THROW_DISTANCE));
         }
         return { windup: 0.7, effectType: 'jolt', targetX, targetY };
       }
@@ -354,6 +368,11 @@ export class ConsumableTriggerSystem {
       case 'waterBalloon':
         // Water Balloon: manual-only throw, lands where the Bomb's would
         return manual ? { windup: THROW_DURATION, effectType: 'waterBalloon' } : false;
+      case 'cauldronInput':
+        // A liquid Bottle (`splash`): manual-only throw along the facing,
+        // landing as a Liquid Splash. Fountain waters have no splash.
+        if (!manual || !cd.splash) return false;
+        return { windup: 0.7, effectType: 'liquidSplash', ...facingThrowTarget(player, LIQUID_SPLASH_THROW_DISTANCE) };
       case 'firecracker': {
         const px = player.position.x + 20, py = player.position.y + 20;
         if (manual) return { windup: 0.5, effectType: 'firecracker' };
@@ -526,6 +545,7 @@ export class ConsumableTriggerSystem {
       case 'jolt':        return cd.radius || 80; // Drawn at target position
       case 'throwSteam':  return cd.radius;     // Steam Vial
       case 'panic_blind': return cd.radius ?? 96; // Bone Dust
+      case 'liquidSplash': return GRID.CELL_SIZE * 1.5; // the plus of tiles
       default:            return 40;
     }
   }

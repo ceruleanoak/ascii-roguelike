@@ -2675,6 +2675,7 @@ export const ITEMS = {
     type: ITEM_TYPES.CONSUMABLE, bottle: true,
     pawnValue: 0, // free to fill from the world, so worth nothing at the counter
     effect: 'cauldronInput',
+    splash: 'water', oneShot: true, manualOnly: true, leavesBottle: true, // thrown: a Liquid Splash (LiquidSplash.js)
     color: '#aaddff'
   },
   // 'Bottle of Hot Water' — filled at the Red Zone caldera's hot spring
@@ -2687,6 +2688,7 @@ export const ITEMS = {
     type: ITEM_TYPES.CONSUMABLE, bottle: true,
     pawnValue: 0, // free to fill from the world, so worth nothing at the counter
     effect: 'cauldronInput',
+    splash: 'heated', oneShot: true, manualOnly: true, leavesBottle: true, // thrown: a Liquid Splash (LiquidSplash.js)
     color: '#ff8855'
   },
   // Starter potions (Alchemy Cauldron stage 1: Bottle of Water + raw
@@ -2716,6 +2718,7 @@ export const ITEMS = {
     type: ITEM_TYPES.CONSUMABLE, bottle: true,
     pawnValue: 0, // free to fill from the world, so worth nothing at the counter
     effect: 'cauldronInput',
+    splash: 'electrified', oneShot: true, manualOnly: true, leavesBottle: true, // thrown: a Liquid Splash (LiquidSplash.js)
     color: '#ffff00'
   },
   '◆': {
@@ -2724,6 +2727,7 @@ export const ITEMS = {
     type: ITEM_TYPES.CONSUMABLE, bottle: true,
     pawnValue: 0, // free to fill from the world, so worth nothing at the counter
     effect: 'cauldronInput',
+    splash: 'lava', oneShot: true, manualOnly: true, leavesBottle: true, // thrown: a Liquid Splash (LiquidSplash.js)
     color: '#ff5500'
   },
   '◐': {
@@ -2732,6 +2736,7 @@ export const ITEMS = {
     type: ITEM_TYPES.CONSUMABLE, bottle: true,
     pawnValue: 0, // free to fill from the world, so worth nothing at the counter
     effect: 'cauldronInput',
+    splash: 'mud', oneShot: true, manualOnly: true, leavesBottle: true, // thrown: a Liquid Splash (LiquidSplash.js)
     color: '#6b4423'
   },
 
