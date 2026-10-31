@@ -275,6 +275,10 @@ export class PolymorphSystem {
     if (keys.d) dx += 1;
     if (keys.w) dy -= 1;
     if (keys.s) dy += 1;
+    // The frog has no roll; the roll input runs its land gait at double time.
+    const roll = game.getDodgeRollDirection();
+    const rolling = roll.x !== 0 || roll.y !== 0;
+    if (rolling) { dx = roll.x; dy = roll.y; }
     const hasInput = dx !== 0 || dy !== 0;
     if (!hasInput) { dx = player.facing?.x ?? 0; dy = player.facing?.y ?? 1; }
     const len = Math.sqrt(dx * dx + dy * dy) || 1;
@@ -316,14 +320,15 @@ export class PolymorphSystem {
     const JUMP_INTERVAL = 0.85 / 3;
     const JUMP_SPEED    = 130;
     const JUMP_DURATION = 0.17;
+    const pace = rolling ? 2 : 1;
     if (!player._frogJumpActive) {
       player._frogJumpTimer -= dt;
       if (player._frogJumpTimer <= 0) {
-        player.velocity.vx = dx * JUMP_SPEED;
-        player.velocity.vy = dy * JUMP_SPEED;
+        player.velocity.vx = dx * JUMP_SPEED * pace;
+        player.velocity.vy = dy * JUMP_SPEED * pace;
         player._frogJumpActive        = true;
-        player._frogJumpDurationTimer = JUMP_DURATION;
-        player._frogJumpTimer         = JUMP_INTERVAL * (0.7 + Math.random() * 0.6);
+        player._frogJumpDurationTimer = JUMP_DURATION / pace;
+        player._frogJumpTimer         = JUMP_INTERVAL * (0.7 + Math.random() * 0.6) / pace;
       }
     } else {
       player._frogJumpDurationTimer -= dt;
