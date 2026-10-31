@@ -56,14 +56,48 @@ export class BottlesSystem {
       if (!inv.replaceConsumableSlot(ref.index, newChar)) return null;
       return inv.equippedConsumables[ref.index];
     }
+    return this.putAt(ref, new Item(newChar, 0, 0));
+  }
+
+  /**
+   * Put an already-built `item` where the Bottle at `ref` sits (a brewed
+   * potion carrying its ingredient data), and return it. A Bottles ref is
+   * updated to point at the new Item.
+   */
+  putAt(ref, item) {
+    const inv = this.game.inventorySystem;
+    if (ref?.source === 'slot') {
+      if (ref.index < 0 || ref.index >= inv.equippedConsumables.length) return null;
+      inv.equippedConsumables[ref.index] = item;
+      if (this.game.player?.equippedConsumables) this.game.player.equippedConsumables[ref.index] = item;
+      if (inv.spentConsumableSlots) inv.spentConsumableSlots[ref.index] = false;
+      return item;
+    }
     const idx = this.bottles.indexOf(ref?.item);
     if (idx === -1) return null;
-    const replacement = new Item(newChar, 0, 0);
-    this.bottles[idx] = replacement;
+    this.bottles[idx] = item;
     // The armed Bottle follows its contents — a filled bottle stays in hand.
-    if (this.game.player?.armedBottle === ref.item) this.game.player.armedBottle = replacement;
-    ref.item = replacement;
-    return replacement;
+    if (this.game.player?.armedBottle === ref.item) this.game.player.armedBottle = item;
+    ref.item = item;
+    return item;
+  }
+
+  /** A Ref to every Bottle carried — Bottles first, then equipped slot Bottles. */
+  allRefs() {
+    const inv = this.game.inventorySystem;
+    const refs = this.bottles.map(item => ({ source: 'bottles', item }));
+    this.game.player?.equippedConsumables?.forEach((item, index) => {
+      if (item && inv.isBottle(item)) refs.push({ source: 'slot', index });
+    });
+    return refs;
+  }
+
+  /** The Ref for `item` if it is a carried Bottle (in Bottles or a slot), else null. */
+  refOf(item) {
+    if (!item) return null;
+    if (this.bottles.includes(item)) return { source: 'bottles', item };
+    const index = this.game.player?.equippedConsumables?.indexOf(item) ?? -1;
+    return index === -1 ? null : { source: 'slot', index };
   }
 
   /**
@@ -89,11 +123,7 @@ export class BottlesSystem {
    * alike.
    */
   coolHotWater() {
-    const refs = this.bottles.map(item => ({ source: 'bottles', item }));
-    this.game.player?.equippedConsumables?.forEach((item, index) => {
-      if (item) refs.push({ source: 'slot', index });
-    });
-    for (const ref of refs) {
+    for (const ref of this.allRefs()) {
       const item = this.itemAt(ref);
       if (!item || item.hotWaterRoomsLeft === undefined) continue;
       item.hotWaterRoomsLeft -= 1;

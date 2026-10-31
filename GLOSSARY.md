@@ -1292,7 +1292,8 @@ identity, not standard programming terms.
   rides REST↔EXPLORE, cleared on death.
 - **In code:** `inventorySystem.bottles` (cleared in `handleGameOver`). Operations in
   `src/systems/BottlesSystem.js` — `trigger` (drink/throw with `slotIndex: null` on the
-  windup), `replaceAt` (fill in place), `findRef`/`emptyBottleRef`, `coolHotWater`. A Bottle Ref
+  windup), `replaceAt`/`putAt` (fill or brew in place), `findRef`/`emptyBottleRef`/`refOf`,
+  `allRefs` (every carried Bottle, slots included), `coolHotWater`. A Bottle Ref
   names one Bottle wherever it sits: `{ source: 'bottles', item }` or `{ source: 'slot', index }`.
   Routing helpers on InventorySystem (`stashUnequipped`, `removeUnequipped`,
   `allUnequippedConsumables`) pick Bottles or `consumableInventory` per item. A reusable Bottle's
@@ -1308,6 +1309,17 @@ identity, not standard programming terms.
 - **In code:** `src/systems/BottlesColumnSystem.js` (`rows`, `begin`/`stepArrow`/`commit`,
   cursor only); drawn by `InventoryOverlay._renderBottlesColumn`.
 - **Not:** the slot equip menu; not a Frame Pass (HUD on the UI layer).
+
+### Bottle Shelf
+- **Definition:** Inside the Alchemy Lab, a row of every carried Bottle — Bottles and equipped
+  slot Bottles alike — standing above the lab's panel, stacked by glyph with a small count. The
+  collection in view while brewing. The lab's Cauldron and Condenser take any carried Bottle,
+  and a brew lands back where its Bottle came from.
+- **In code:** `drawBottleShelf` (`src/rendering/ui/BottleShelf.js`), called by
+  `HutInteriorOverlay` after the interior clip when `activeFloor.hutKind === 'alchemy'`. The
+  Cauldron's chosen Bottle is `AlchemySystem.cauldronRef` (a Bottle Ref).
+- **Not:** the Bottles column (TAB); not a Frame Pass (drawn outside the panel, where the
+  player never is).
 
 ### Armed Consumable
 - **Definition:** What SPACE uses next instead of the weapon: a consumable slot armed with keys
