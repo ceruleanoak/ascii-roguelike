@@ -935,6 +935,13 @@ export class InteractionSystem {
         }
       }
 
+      // Independent rare finds (Sand): each rolls on its own.
+      for (const find of obj.data?.finds ?? []) {
+        if (Math.random() < find.chance) {
+          game.lootSystem.spawnIngredientDrop(find.char, obj.position.x, obj.position.y, null, obj);
+        }
+      }
+
       // A Shrub holding berries gives them all, apart from its Stick roll above.
       if (Math.random() < (obj.data?.berryChance ?? 0)) {
         for (let i = 0; i < BERRIES_PER_SHRUB; i++) {

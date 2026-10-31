@@ -904,6 +904,12 @@ identity, not standard programming terms.
 - **In code:** rendered as a **letter** (`a–z`, `A–Z`) or **digit** (`0–9`).
 - **Not:** a Crafted item; never a Unicode symbol.
 
+### Clam
+- **Definition:** A raw Ingredient (`C`) found by scooping Sand, with no recipe yet. A scoop
+  finds a Clam 2% of the time and a Pearl Shard (`p`) 1% of the time, apart from the Sand itself.
+- **In code:** the `finds` list on the Sand object in `src/game/GameConfig.js`, rolled in
+  `InteractionSystem.handleObjectEffect`.
+
 ### Crafted item
 - **Definition:** A recipe output — weapon, armor, or consumable.
 - **In code:** rendered as a **Unicode symbol** (non-letter, non-digit, no emoji, no pure

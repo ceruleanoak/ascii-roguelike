@@ -571,9 +571,14 @@ export const BACKGROUND_OBJECTS = {
     hp: 1,
     // Scooped up, not mined: the tile darkens in place (depletedColor) and
     // sometimes leaves Sand, which the hut fireplace melts into an Empty
-    // Bottle (FireplaceSystem).
+    // Bottle (FireplaceSystem). A scoop can also turn up a find, rolled apart
+    // from the Sand; a room holds a lot of tiles, so these stay rare.
     dropEffect: 'destroyObject:spawnIngredient:D',
-    dropChance: 0.20,
+    harvestDropChance: 0.20,
+    finds: [
+      { char: 'C', chance: 0.02 }, // Clam
+      { char: 'p', chance: 0.01 }  // Pearl Shard
+    ],
     depletedColor: '#8a6a50',
     bulletInteraction: 'pass-through',
     flammability: 'none',

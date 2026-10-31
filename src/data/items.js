@@ -3198,9 +3198,10 @@ export const INGREDIENTS = {
   'ł': { char: 'ł', name: 'Pollen',    color: '#ffe566' },
   'ψ': { char: 'ψ', name: 'Grain',     color: '#d8b860' }, // grass cut (shares Pollen's band); a lit fireplace bakes it into Bread
 
-  // Sea ingredients. Drop sources: 'p' from Ocean fishing (rare), 'n' from
-  // Sea Snake (rare).
+  // Sea ingredients. Drop sources: 'p' from Ocean fishing (rare) and Sand finds,
+  // 'n' from Sea Snake (rare), 'C' from Sand finds.
   'p': { char: 'p', name: 'Pearl Shard',    color: '#ddeeff' },
+  'C': { char: 'C', name: 'Clam',           color: '#c8b89a' },
   'n': { char: 'n', name: 'Sharkbone',      color: '#ccd8e8' },
 
   // Huntable game (HuntingSystem) — rare Moose drop.
