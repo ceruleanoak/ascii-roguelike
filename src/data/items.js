@@ -857,7 +857,7 @@ export const ITEMS = {
     weaponLevel: 2,
     color: '#bb9966'
   },
-  // Ice Hammer: the shockwave freezes what it strikes, and a blow that lands
+  // Ice Hammer: the blow freezes what it strikes, and a blow that lands
   // on an already-Frozen enemy shatters it, spraying a freeze pip onto
   // everything nearby (folded in from the cut Glacier Hammer).
   'ᛜ': {
@@ -871,6 +871,8 @@ export const ITEMS = {
     windup: 0.6,
     recovery: 1.0,
     range: 18,
+    attackPattern: 'hammerRing',
+    locksMovement: true,
     onHit: 'freeze',
     knockback: 250,
     shattersFrozen: true,
