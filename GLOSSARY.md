@@ -1920,9 +1920,11 @@ identity, not standard programming terms.
 - **Definition:** A Consumable that crows and rats seek out and eat once it lies on the ground.
   Throwing (SHIFT) or dropping Feed is how crows are befriended and rats tamed into
   Companions. Feed can also have its own SPACE effect: Bread (⌬) has none, while the Sandwich
-  (☰, Bread + Meat) heals 3 when eaten.
+  (☰, Bread + Meat) heals 3 when eaten. The Forest Berry (⁖) is Feed for rats alone: a 1-in-10
+  Shrub holds three of them, and crows pass them by.
 - **In code:** the `feed: true` flag on the item's data in `src/data/items.js`; test it with
-  `isFeed(item)` (`src/systems/feed.js`). Never compare against a Bread char. Consumers:
+  `isFeed(item)` (`src/systems/feed.js`), or `isCrowFeed(item)` for what a crow will eat
+  (`crowsRefuse` opts out). Never compare against a Bread char. Consumers:
   `CompanionSystem` (rat bread-seek, crow targeting, crow loot exclusion),
   `Crow._closestPickable` exclusion, and `CampNPC.acceptsHeal`.
 - **Not:** "bread" as a category (Bread is one Feed item); "bait" or "lure" (Lure is the

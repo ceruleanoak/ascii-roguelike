@@ -207,7 +207,8 @@ export const BACKGROUND_OBJECTS = {
     color: '#228822',
     hp: 3,
     dropEffect: 'destroyObject:spawnIngredient:|',
-    dropChance: 0.25,
+    harvestDropChance: 0.25,
+    berryChance: 0.1, // the shrub holds BERRIES_PER_SHRUB Forest Berries (InteractionSystem)
     flammability: 'high',
     conductivity: 'none',
     slowing: 0.8,

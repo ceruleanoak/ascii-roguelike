@@ -26,6 +26,7 @@ const SMASH_REFUSED_UNLESS_BURNED = Object.freeze({ fireBypass: true });
 const PICKAXE_ROCK_MULT = 2;
 const ROCK_CHARS = new Set(['0', '9', 'Q']);
 const isRock = obj => ROCK_CHARS.has(obj.char) || !!obj.data?.glitteringRock;
+const BERRIES_PER_SHRUB = 3;
 
 // Reach for the armed-Bottle fairy catch (InteractionSystem.tryBottleFairy).
 // Wider than AlchemySystem's one-cell liquid radius: a liquid tile sits still
@@ -931,6 +932,13 @@ export class InteractionSystem {
           game.lootSystem.spawnIngredientDrop(ingredientChar, obj.position.x, obj.position.y, null, obj);
         } else {
           game.lootSystem.spawnItemDrop(ingredientChar, obj.position.x, obj.position.y, null, obj);
+        }
+      }
+
+      // A Shrub holding berries gives them all, apart from its Stick roll above.
+      if (Math.random() < (obj.data?.berryChance ?? 0)) {
+        for (let i = 0; i < BERRIES_PER_SHRUB; i++) {
+          game.lootSystem.spawnItemDrop('⁖', obj.position.x, obj.position.y, null, obj);
         }
       }
 

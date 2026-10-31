@@ -2806,6 +2806,18 @@ export const ITEMS = {
     feed: true,      // crows and rats seek it on the ground — see systems/feed.js
     color: '#daa520'
   },
+  // Forest Berry: found in Shrubs (GameConfig berryChance), never crafted. Feed
+  // for rats alone: crows pass it by, so it tames but never befriends.
+  '⁖': {
+    char: '⁖',
+    name: 'Forest Berry',
+    type: ITEM_TYPES.CONSUMABLE,
+    oneShot: true,
+    stackable: true,
+    feed: true,
+    crowsRefuse: true,
+    color: '#7755dd'
+  },
   // Sandwich (Bread + Meat): Feed like Bread — SHIFT throws it and crows/rats
   // eat it exactly as they eat a loaf — but SPACE eats it for a bigger heal
   // than Meat Jerky, and it auto-eats at low HP the same way.
