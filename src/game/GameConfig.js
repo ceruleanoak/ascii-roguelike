@@ -1262,6 +1262,30 @@ export const BACKGROUND_OBJECT_VARIANTS = {
     slowing:     false,
     environmental: true, // terrain, not a hittable prop — see BackgroundObject.isEnvironmental()
   },
+  // The Alchemy Lab's 2×2 trough (HutSystem). It used to borrow the '≈'
+  // Cave River entry, which is plane-1-only, so on the hut floor (plane 0)
+  // neither a weapon nor the GETWATER flood could see it. Still water, not
+  // a '~' tile: nothing soaks the player, freezes or conducts, but fire heats it
+  // (WaterLavaHitMechanic.burnWater → troughHeated).
+  'water_trough': {
+    char: '≈',
+    name: 'Water Trough',
+    color: '#5588dd',
+    bulletInteraction: 'pass-through',
+    flammability: 'none',
+    indestructible: true,
+    solid: false,
+    makesWet:    false,
+    steamOnFire: false,
+    conductivity: 'none',
+    damaging:    false,
+    damage:      0,
+    slowing:     false,
+    environmental: true,
+    interactions: {
+      default: { animation: 'ripple', message: null }
+    }
+  },
   'lava': {
     char: '~',
     name: 'Lava',
@@ -1687,12 +1711,17 @@ export const WATER_COLORS = {
   frozen:      '#ffffff',
   poisoned:    '#44bb44',
   electrified: '#cccc00',
+  heated:      '#99ccff', // Heated Water — a fire-struck tile, pale as steam (HEATED_WATER_DURATION)
   deep:        '#0a1a55'  // Deep water (BackgroundObject.deepWater) — darker tint, drowning hazard
 };
 
 // Seconds a poison hit (melee or projectile) keeps one water tile poisoned
 // before it reverts to normal. Was 8s; poisoned water lingered too long.
 export const POISONED_WATER_DURATION = 4.0;
+// Heated Water: how long a fire-struck water tile stays hot before cooling
+// back to normal (WaterLavaHitMechanic.burnWater). The Alchemy Lab trough,
+// once heated, never cools.
+export const HEATED_WATER_DURATION = 60.0;
 
 export const WATER_STRUCTURES = {
   CHANNEL: {

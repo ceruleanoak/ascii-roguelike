@@ -170,7 +170,7 @@ export class HutSystem {
       // Create 2x2 trough with still water appearance
       for (let ty = 0; ty < 2; ty++) {
         for (let tx = 0; tx < 2; tx++) {
-          const trough = new BackgroundObject('≈', (2 + tx) * GRID.CELL_SIZE, (2 + ty) * GRID.CELL_SIZE);
+          const trough = new BackgroundObject('≈', (2 + tx) * GRID.CELL_SIZE, (2 + ty) * GRID.CELL_SIZE, { typeId: 'water_trough' });
           trough.isTrough = true;
           // Gentle still water: light blue with subtle white tint for reflection
           trough.color = '#5588dd';

@@ -1,4 +1,4 @@
-import { GRID, BACKGROUND_OBJECT_VARIANTS, POISONED_WATER_DURATION } from '../game/GameConfig.js';
+import { GRID, BACKGROUND_OBJECT_VARIANTS, POISONED_WATER_DURATION, HEATED_WATER_DURATION, WATER_COLORS } from '../game/GameConfig.js';
 import { isInteriorActive } from './PlaneSystem.js';
 
 // Water/lava elemental reactions to a projectile hit — split out of
@@ -24,23 +24,10 @@ export const WaterLavaHitMechanic = {
         combat.game?.electricitySystem?.seedFromWeapon(obj, backgroundObjects, proj,
           { tileDuration: 4.0, hutPlane: isInteriorActive(combat.game) });
       } else if (proj.onHit === 'burn') {
-        if (obj.getWaterState() === 'frozen') {
-          // Fire melts ice, the same thaw a burning melee swing gives
-          // (CombatSystem's melee water branch). This used to spawn an obsidian
-          // '0' on the tile instead — and since water is pass-through, a fire
-          // arrow crossing the Frosted Maw's frozen sheet dropped a rock on the
-          // first frozen tile it touched and then stopped dead against it.
-          obj.setWaterState('normal', 0);
-        } else {
-          // Fire hits liquid water → steam cloud
-          combat.newSteamClouds.push({
-            x: obj.position.x + GRID.CELL_SIZE / 2,
-            y: obj.position.y + GRID.CELL_SIZE / 2,
-            radius: GRID.CELL_SIZE * 3,
-            timer: 7.0
-          });
-        }
+        this.burnWater(obj, backgroundObjects, combat);
       }
+    } else if (obj.isTrough && proj.onHit === 'burn') {
+      this.burnWater(obj, backgroundObjects, combat);
     }
 
     // Fire projectile hits Barricade ice → melt it, the same one-hit thaw a
@@ -65,6 +52,46 @@ export const WaterLavaHitMechanic = {
     // Water attack hits lava → solidify to rock (shared with the melee path,
     // see freezeLava below).
     this.freezeLava(obj, proj.onHit, combat);
+  },
+
+  // Fire hits water — shared by a fire projectile (applyHit above) and a
+  // burning melee swing (CombatSystem's melee water branch).
+  //   frozen → melts (this used to spawn an obsidian '0' on the tile instead —
+  //            and since water is pass-through, a fire arrow crossing the
+  //            Frosted Maw's frozen sheet dropped a rock on the first frozen
+  //            tile it touched and then stopped dead against it);
+  //   normal → a steam cloud, and the tile is Heated Water for
+  //            HEATED_WATER_DURATION: it fills a Bottle of Hot Water and does
+  //            not heal (the Caldera's hot_water heals; this is not that);
+  //   heated → nothing: hot water has already given its steam.
+  // Poisoned/electrified water still steams but keeps its own state.
+  // The Alchemy Lab trough (isTrough, '≈' — not isWater) heats the same way,
+  // all of its cells at once, and never cools.
+  burnWater(obj, backgroundObjects, combat) {
+    if (obj.isTrough) {
+      if (obj.troughHeated) return;
+      this._puffSteam(obj, combat);
+      for (const cell of backgroundObjects) {
+        if (!cell.isTrough) continue;
+        cell.troughHeated = true;
+        cell.color = cell.animationColor = WATER_COLORS.heated;
+      }
+      return;
+    }
+    const state = obj.getWaterState();
+    if (state === 'frozen') { obj.setWaterState('normal', 0); return; }
+    if (state === 'heated') return;
+    this._puffSteam(obj, combat);
+    if (state === 'normal') obj.setWaterState('heated', HEATED_WATER_DURATION);
+  },
+
+  _puffSteam(obj, combat) {
+    combat.newSteamClouds.push({
+      x: obj.position.x + GRID.CELL_SIZE / 2,
+      y: obj.position.y + GRID.CELL_SIZE / 2,
+      radius: GRID.CELL_SIZE * 3,
+      timer: 7.0
+    });
   },
 
   // Fire hits deep snow → melt it into a water tile, the same permanent

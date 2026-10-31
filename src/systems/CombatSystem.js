@@ -936,18 +936,10 @@ export class CombatSystem {
                   this.game?.electricitySystem?.seedFromWeapon(obj, backgroundObjects, attack,
                     { tileDuration: 4.0, hutPlane: isInteriorActive(this.game) });
                 } else if (attack.onHit === 'burn') {
-                  if (obj.getWaterState() === 'frozen') {
-                    obj.setWaterState('normal', 0); // Melt ice
-                  } else {
-                    // Fire hits liquid water → steam cloud
-                    this.newSteamClouds.push({
-                      x: obj.position.x + GRID.CELL_SIZE / 2,
-                      y: obj.position.y + GRID.CELL_SIZE / 2,
-                      radius: GRID.CELL_SIZE * 3,
-                      timer: 7.0
-                    });
-                  }
+                  WaterLavaHitMechanic.burnWater(obj, backgroundObjects, this); // melt / steam → Heated Water
                 }
+              } else if (obj.isTrough && attack.onHit === 'burn') {
+                WaterLavaHitMechanic.burnWater(obj, backgroundObjects, this); // the Alchemy Lab trough heats for good
               }
 
               // Water attack hits lava → solidify to rock

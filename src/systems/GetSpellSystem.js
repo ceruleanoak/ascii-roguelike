@@ -22,9 +22,9 @@ const BESIDE = [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]];
  *
  * The liquids fill an Empty Bottle — one in Bottles first, else an
  * equipped one (BottlesSystem.emptyBottleRef). GETWATER takes the best
- * water in reach: a hot spring, then the fountain's pool (fairy water,
- * flavoured by attunement), then the hut trough or plain water, then
- * electrified water. GETFAIRY needs no bottle: with one carried the fairy is
+ * water in reach: a hot spring or Heated Water (a fire-heated trough or
+ * tile), then the fountain's pool (fairy water, flavoured by attunement),
+ * then the hut trough or plain water, then electrified water. GETFAIRY needs no bottle: with one carried the fairy is
  * caught in it; without one it heals the player, or at full health blesses
  * them (+1 max HP), as touch and the full-health SPACE do. The Fairy King
  * only goes into a bottle.
@@ -82,6 +82,8 @@ export class GetSpellSystem {
         const poolBottle = game.fountainSystem?.poolBottleChar();
         return [
           { is: obj => obj.typeId === 'hot_water', fill: ref => alchemy.fillHotWaterBottle(ref) },
+          { is: obj => game.player.inHut && obj.isTrough && obj.troughHeated, fill: ref => alchemy.fillHotWaterBottle(ref) },
+          { is: obj => bottleOf(obj) === '🜊', fill: fillWith('🜊') },
           { is: obj => !!poolBottle && !!obj.fountainWater, fill: fillWith(poolBottle) },
           { is: obj => game.player.inHut && obj.char === '≈', fill: ref => alchemy.fillBottle(ref) },
           { is: obj => bottleOf(obj) === '🜉', fill: fillWith('🜉') },

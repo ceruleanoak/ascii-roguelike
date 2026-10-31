@@ -62,6 +62,7 @@ const DEMO_SUPPLIED_BASE = 'h'; // Herb — the Alchemist's own, when the player
 const LIQUID_TILE_TO_BOTTLE = {
   'normal': '🜉',        // Normal water → Bottle of Water
   'electrified': 'ε',    // Electrified water → Bottle of Electrified Water
+  'heated': '🜊',        // Heated Water → Bottle of Hot Water (WaterLavaHitMechanic.burnWater)
   'lava': '◆',          // Magma/Lava → Bottle of Magma
   'mud_wet': '◐',       // Mud → Bottle of Mud
   'mud_dry': '◐'        // Dry mud → Bottle of Mud
@@ -166,7 +167,7 @@ export class AlchemySystem {
     if (ref?.item.char !== 'B') return false;
 
     let filled = !!game.fountainSystem?.tryFillArmedBottle(ref);
-    if (!filled && this.nearTrough()) filled = this.fillBottle(ref);
+    if (!filled && this.nearTrough()) filled = this.fillTroughBottle(ref);
     if (!filled && this.nearHotSpring()) filled = this.fillHotWaterBottle(ref);
     if (!filled) {
       const worldLiquid = this._nearWorldLiquid();
@@ -196,7 +197,7 @@ export class AlchemySystem {
     if (obj.destroyed) return null;
     if (obj.isLava?.()) return 'lava';
     if (obj.isMud?.()) return obj.typeId === 'mud_dry' ? 'mud_dry' : 'mud_wet';
-    if (obj.isWater?.()) return obj.waterState === 'electrified' ? 'electrified' : 'normal';
+    if (obj.isWater?.()) return obj.waterState === 'electrified' || obj.waterState === 'heated' ? obj.waterState : 'normal';
     return null;
   }
 
@@ -222,6 +223,8 @@ export class AlchemySystem {
   // return whether they filled it.
   fillLiquidBottle(ref, liquidChar) {
     const game = this.game;
+    // Heated Water bottles the same Hot Water the hot spring gives, cooling and all.
+    if (liquidChar === '🜊') return this.fillHotWaterBottle(ref);
     if (!game.bottlesSystem.replaceAt(ref, liquidChar)) return false;
     game.menuSystem.announceItem(liquidChar, LIQUID_BOTTLE_NAMES[liquidChar]);
     game.audioSystem?.playSFX?.('pickup');
@@ -230,6 +233,16 @@ export class AlchemySystem {
   }
 
   // ─── Trough ──────────────────────────────────────────────────────────────
+
+  // Whether fire has heated the Alchemy Lab trough (WaterLavaHitMechanic.burnWater).
+  troughHeated() {
+    return !!this.game.activeFloor?.backgroundObjects?.some(obj => obj.isTrough && obj.troughHeated);
+  }
+
+  // The trough's water: Hot Water once fire has heated it, else plain water.
+  fillTroughBottle(ref) {
+    return this.troughHeated() ? this.fillHotWaterBottle(ref) : this.fillBottle(ref);
+  }
 
   fillBottle(ref) {
     const game = this.game;

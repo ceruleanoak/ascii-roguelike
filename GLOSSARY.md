@@ -1788,7 +1788,8 @@ identity, not standard programming terms.
   from anywhere in the room the player could walk to, without touching it (lava doesn't burn,
   water doesn't wet). The liquids fill an Empty Bottle — one in Bottles first, else an equipped
   one; GETWATER takes the best
-  water in reach: a hot spring, then the fountain's pool, then the hut trough or plain water,
+  water in reach: a hot spring or Heated Water, then the fountain's pool, then the hut trough
+  or plain water,
   then electrified water. GETFAIRY needs no bottle: with one carried the fairy is caught,
   without one it heals the player, or blesses them (+1 max HP) at full health. "Could walk to"
   is a flood over the player's steering terrain: walls, solid objects, lava and deep water stop
@@ -1841,6 +1842,20 @@ identity, not standard programming terms.
 - **In code:** `ITEMS['⏣']` (`effect: 'heal'`, `feed: true`); baked through `FIRE_BAKES` in
   `FireplaceSystem` (Slurry `⚗` → `⏣`).
 - **Not:** Bread (⌬, baked from Grain, no SPACE effect); "green bread" as a category.
+
+### Heated Water
+- **Definition:** Water that fire has struck. A fire hit (melee or projectile) on a water tile
+  puffs one steam cloud and leaves the tile Heated Water for 60 seconds. While it stays hot it
+  fills a Bottle of Hot Water (🜊), but it does not heal and it does not steam again. After that
+  it cools back to plain water. Fire heats the Alchemy Lab's trough the same way, all four of
+  its cells at once, and the trough never cools.
+- **In code:** `waterState === 'heated'` on a water tile (`HEATED_WATER_DURATION`,
+  `WATER_COLORS.heated` in GameConfig); `troughHeated` on the trough cells
+  (`typeId: 'water_trough'`, `isTrough`). Set by `WaterLavaHitMechanic.burnWater`, which both
+  burn paths call. Bottled by AlchemySystem (`LIQUID_TILE_TO_BOTTLE.heated`,
+  `fillTroughBottle`) and GETWATER.
+- **Not:** the Caldera's Hot Water (`typeId: 'hot_water'`, which heals); not electrified or
+  poisoned water (fire steams those but leaves their state alone).
 
 ### Water Balloon
 - **Definition:** A thrown consumable (◒, Bottle of Water + Goo) that bursts over the Bomb's
