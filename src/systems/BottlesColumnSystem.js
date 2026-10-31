@@ -2,12 +2,14 @@
  * BottlesColumnSystem.js
  *
  * The Bottles column — the BOTTLES column of the TAB overlay (InventoryOverlay
- * draws it). While TAB is held the arrow keys walk a cursor over Bottles,
- * stacked by glyph; releasing TAB arms the first Bottle of the highlighted
- * stack, so the Armed Glyph rises over the player and SPACE uses it. With a
- * consumable slot free, the Bottle moves into it and the slot is armed
- * (InventorySystem.equipBottleIntoFreeSlot); with none, it is armed straight
- * from Bottles (ConsumableTriggerSystem.armBottle). No equip menu.
+ * draws it). While TAB is held the arrow keys walk a cursor over every
+ * carried Bottle — Bottles and equipped slot Bottles alike — stacked by
+ * glyph; releasing TAB arms the highlighted stack, so the Armed Glyph rises
+ * over the player and SPACE uses it. An equipped stack arms its slot.
+ * Otherwise, with a consumable slot free, the Bottle moves into it and the
+ * slot is armed (InventorySystem.equipBottleIntoFreeSlot); with none, it is
+ * armed straight from Bottles (ConsumableTriggerSystem.armBottle). No equip
+ * menu.
  *
  * A plain TAB peek arms nothing: the release only commits when an arrow moved
  * the cursor during that hold.
@@ -33,22 +35,30 @@ export class BottlesColumnSystem {
   }
 
   /**
-   * Bottles stacked by glyph, in order of first appearance. Hot Water splits
-   * by rooms left, so a nearly-cooled bottle stays its own stack.
-   * Each row: { char, item (first in the stack), items, count }.
+   * Every carried Bottle — equipped slot Bottles first, then Bottles —
+   * stacked by glyph, in order of first appearance. Equipping a Bottle does
+   * not hide it here; a slot Bottle and its Bottles twins share one row.
+   * Hot Water splits by rooms left, so a nearly-cooled bottle stays its own
+   * stack. Each row: { char, item (first in the stack), refs (Bottle Refs),
+   * count }.
    */
   rows() {
+    const bottlesSystem = this.game.bottlesSystem;
+    const all = bottlesSystem.allRefs();
+    const ordered = [...all.filter(r => r.source === 'slot'), ...all.filter(r => r.source === 'bottles')];
     const rows = [];
     const byKey = new Map();
-    for (const item of this.game.inventorySystem.bottles) {
+    for (const ref of ordered) {
+      const item = bottlesSystem.itemAt(ref);
+      if (!item) continue;
       const key = item.hotWaterRoomsLeft === undefined ? item.char : `${item.char}:${item.hotWaterRoomsLeft}`;
       let row = byKey.get(key);
       if (!row) {
-        row = { char: item.char, item, items: [], count: 0 };
+        row = { char: item.char, item, refs: [], count: 0 };
         byKey.set(key, row);
         rows.push(row);
       }
-      row.items.push(item);
+      row.refs.push(ref);
       row.count += item.count || 1;
     }
     return rows.slice(0, BOTTLES_COLUMN_ROWS * BOTTLES_COLUMN_MAX_COLUMNS);
@@ -100,9 +110,11 @@ export class BottlesColumnSystem {
     const row = this.moved ? this.selectedRow() : null;
     this.begin();
     if (!row || this.game.player?.polymorphed) return;
-    // A free slot takes the chosen Bottle and arms it there; full slots arm
-    // it straight from Bottles.
+    // An equipped stack arms its slot. Otherwise a free slot takes the
+    // chosen Bottle and arms it there; full slots arm it straight from Bottles.
     const { game } = this;
+    const slotRef = row.refs.find(r => r.source === 'slot');
+    if (slotRef) { game.consumableTriggerSystem.selectSlot(slotRef.index); return; }
     const slot = game.inventorySystem.equipBottleIntoFreeSlot(row.item, game.player);
     if (slot !== -1) game.consumableTriggerSystem.selectSlot(slot);
     else game.consumableTriggerSystem.armBottle(row.item);

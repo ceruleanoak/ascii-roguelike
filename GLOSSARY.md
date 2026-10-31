@@ -1305,10 +1305,12 @@ identity, not standard programming terms.
 
 ### Bottles column
 - **Definition:** The `↕ BOTTLES` column of the TAB overlay, under the run timer: one glyph per
-  stack of Bottles (stacked by glyph; Hot Water by rooms left), a label under the title naming
-  the highlighted stack, wrapping into a second column when long. While TAB is held the arrow
-  keys walk it instead of dodging; releasing TAB arms the highlighted Bottle, moving it into a
-  free consumable slot first when one can take it (that slot is armed). A TAB peek with no
+  stack of every carried Bottle — Bottles and equipped slot Bottles alike (stacked by glyph; Hot
+  Water by rooms left) — a label under the title naming the highlighted stack, wrapping into a
+  second column when long. While TAB is held the arrow keys walk it instead of dodging;
+  releasing TAB arms the highlighted stack: an equipped one arms its slot, otherwise the Bottle
+  moves into a free consumable slot first when one can take it (that slot is armed), else it is
+  armed from Bottles. A TAB peek with no
   arrow press arms nothing. No equip menu.
 - **In code:** `src/systems/BottlesColumnSystem.js` (`rows`, `begin`/`stepArrow`/`commit`,
   cursor only); drawn by `InventoryOverlay._renderBottlesColumn`.
