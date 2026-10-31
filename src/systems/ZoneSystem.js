@@ -11,7 +11,7 @@ export function hazardStep(depth) {
 }
 
 // Utility function to blend two hex colors
-function blendColors(color1, color2, percent) {
+export function blendColors(color1, color2, percent) {
   // percent = 0 means 100% color1, percent = 1 means 100% color2
   const parseHex = (hex) => {
     const clean = hex.replace('#', '');

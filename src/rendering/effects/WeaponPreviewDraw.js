@@ -1,5 +1,6 @@
 import { GRID, COLORS } from '../../game/GameConfig.js';
 import { ConsumableTriggerSystem } from '../../systems/ConsumableTriggerSystem.js';
+import { blendColors } from '../../systems/ZoneSystem.js';
 
 /**
  * WeaponPreviewDraw — held-weapon and thrown-consumable render passes that
@@ -21,6 +22,10 @@ import { ConsumableTriggerSystem } from '../../systems/ConsumableTriggerSystem.j
 // heal potions and bombs read as the same "thrown object" motion.
 const THROW_ARC_HEIGHT = 46;
 const THROW_SPINS = 2;
+
+// How many times a second a thrown consumable's AoE ring cycles from its own
+// color to white and back.
+const AOE_RING_FLASH_HZ = 8;
 
 /** Every consumable throw arcs up and spins before landing, where its effect
  * resolves (ConsumableTriggerSystem). Self-only effects (heal, buffs, ...)
@@ -49,27 +54,27 @@ export function drawConsumableWindups(renderer, game) {
 
     const aoeRadius = game.consumableTriggerSystem.getWindupAoeRadius(windup);
 
-    // Draw pulsing ring to show AoE damage radius.
+    // Draw ring to show AoE damage radius, cycling consumable color ↔ white.
     // A targeted throw (Jolt Jar, Liquid Splash) shows the ring at the
     // locked impact target, not around the moving bottle.
-    const pulse = Math.sin(progress * Math.PI * 6) * 0.15; // Subtle pulse
-    const displayRadius = aoeRadius * (1 + pulse);
+    const elapsed = windup.maxTimer - windup.timer;
+    const flash = (1 - Math.cos(elapsed * Math.PI * 2 * AOE_RING_FLASH_HZ)) / 2;
     const ringX = windup.targetX ?? windup.x;
     const ringY = windup.targetY ?? windup.y;
 
     renderer.fgCtx.save();
-    renderer.fgCtx.strokeStyle = windup.consumable.color;
-    renderer.fgCtx.globalAlpha = 0.4 + Math.sin(progress * Math.PI * 8) * 0.2;
+    renderer.fgCtx.strokeStyle = blendColors(windup.consumable.color, '#ffffff', flash);
+    renderer.fgCtx.globalAlpha = 0.5;
     renderer.fgCtx.lineWidth = 2;
     renderer.fgCtx.beginPath();
-    renderer.fgCtx.arc(ringX, ringY, displayRadius, 0, Math.PI * 2);
+    renderer.fgCtx.arc(ringX, ringY, aoeRadius, 0, Math.PI * 2);
     renderer.fgCtx.stroke();
 
     // Draw inner ring at 50% radius for better depth perception
     renderer.fgCtx.globalAlpha = 0.2;
     renderer.fgCtx.lineWidth = 1;
     renderer.fgCtx.beginPath();
-    renderer.fgCtx.arc(ringX, ringY, displayRadius * 0.5, 0, Math.PI * 2);
+    renderer.fgCtx.arc(ringX, ringY, aoeRadius * 0.5, 0, Math.PI * 2);
     renderer.fgCtx.stroke();
 
     renderer.fgCtx.restore();
