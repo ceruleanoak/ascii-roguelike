@@ -46,7 +46,18 @@ import { MazeTrapSystem } from './MazeTrapSystem.js';
  *   - Once all 5 are lit, every tomb's blink persists 3x as long (same
  *     flicker cadence, 3x the completed blinks per tick) before conversion.
  *   - Ghosts destroy any torch they touch — snuffed out for the rest of the
- *     run, losing its shielding/all-lit contribution.
+ *     run, losing its shielding/all-lit contribution. So does the flood
+ *     (deep water destroys torches).
+ *
+ * Shared lists: mazeInterior.backgroundObjects and mazeInterior.enemies are
+ * what InteriorManager.activeBackgroundObjects()/activeEnemies() return while
+ * the player is inside, so the flood's deep water and the Maze Rats run
+ * through the shared physics, combat and enemy pipelines. Ghosts stay
+ * MazeSystem's own (mazeInterior.ghosts), ticked here.
+ *
+ * Deep Maze traps (zone Depth ≥ 6): the Wellspring and its Torch, Flood
+ * Panels and the flood, Rat Nests and their Maze Rats — seeded and ticked by
+ * MazeTrapSystem (this.trapSystem), with state on the mazeInterior.
  *
  * Re-entry: once the player exits the maze door is permanently sealed.
  */

@@ -102,9 +102,15 @@ identity, not standard programming terms.
 - **Definition:** An Interior built from a single continuous DFS-generated corridor. Loot hides
   behind cipher-covered breakable objects; one blinks a warning at a time, and letting it
   expire spawns a Ghost. Clearing every object and collecting every dropped Ingredient without
-  ever spawning a Ghost grants Spectacles at the maze center.
+  ever spawning a Ghost grants Spectacles at the maze center. A deep Maze (zone Depth ≥ 6) adds
+  traps: the Wellspring and its Torch, Flood Panels and the flood they raise, and Rat Nests
+  that release Maze Rats.
 - **In code:** `MazeSystem` (`generateMazeInterior`, `MazeObject`, `MazeGhost`); interior state
   on `game.mazeInterior` (a deliberate exception to the `activeFloor` convention — see Floor).
+  It holds real `backgroundObjects` and `enemies` lists, which
+  `InteriorManager.activeBackgroundObjects()`/`activeEnemies()` return while the player is
+  inside, so deep water and Maze Rats run through the shared pipelines; Ghosts stay on
+  `mazeInterior.ghosts`, ticked by `MazeSystem`. Traps: `MazeTrapSystem` (`MAZE_TRAP_MIN_DEPTH`).
   Rendered via `MazeInteriorOverlay`.
 - **Not:** the Aquifer or a generic combat Room; re-entry is permanently sealed after exit.
 
