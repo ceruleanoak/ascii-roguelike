@@ -507,7 +507,9 @@ export class TrapSystem {
       const t = game.inFlightTraps[i];
       if ((t.interior === true) !== playerInInterior) continue;
       const speed = Math.sqrt(t.vx * t.vx + t.vy * t.vy);
-      const decelThisFrame = t.decel * deltaTime;
+      // Slopes only bend weapons; a deployed trap or wire end flies to its mark.
+      const decel = t.kind === 'weapon' ? game.slopeFlightSystem.throwDecel(t) : t.decel;
+      const decelThisFrame = decel * deltaTime;
       // Thrown weapons and wire ends both stop dead at walls — a weapon would
       // otherwise land off-screen, and a wire end is meant to bite into the wall
       // it hits. Deployed traps still sail over and arm at the target.
@@ -550,8 +552,10 @@ export class TrapSystem {
 
       if (decelThisFrame >= speed) {
         const prevX = t.x, prevY = t.y;
-        t.x = t.targetX;
-        t.y = t.targetY;
+        if (!t.slopeBent) {
+          t.x = t.targetX;
+          t.y = t.targetY;
+        }
         // Snap to target, but don't land weapons or wire ends inside walls
         if (stopsAtWalls && this._spearHitsWall(t)) {
           t.x = prevX;

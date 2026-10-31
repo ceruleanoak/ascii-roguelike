@@ -1307,6 +1307,8 @@ identity, not standard programming terms.
 - **In code:** `BackgroundObject.slope` + `slopeDirection`, built by
   `roomFeatures.makeSlopeTile()`. The push is a constant `SLOPE_ACCEL` in `PhysicsSystem`.
   `stampSlopeBelt()` lays the plateau belt, and `stampPit()` lays a Pit's ring.
+  `SlopeFlightSystem` bends what flies over a Slope: flying downhill, arrows gain speed, bullets
+  gain range and thrown weapons slow less; uphill is the reverse, and crossing it does nothing.
 - **Not:** the yellow zone's river Current, which also pushes but is water.
 
 ### Pit

@@ -18,6 +18,7 @@ import { InventorySystem } from './systems/InventorySystem.js';
 import { captureExploreRoomForRest, captureNeutralEntryRoomForRest } from './systems/RoomStatePersistence.js';
 import { ArmorEffectsSystem } from './systems/ArmorEffectsSystem.js';
 import { WingsSystem } from './systems/WingsSystem.js';
+import { SlopeFlightSystem } from './systems/SlopeFlightSystem.js';
 import { FloatingBootsSystem } from './systems/FloatingBootsSystem.js';
 import { BottlesSystem } from './systems/BottlesSystem.js';
 import { BottlesColumnSystem } from './systems/BottlesColumnSystem.js';
@@ -208,6 +209,7 @@ class Game {
     this.inventorySystem = new InventorySystem();
     this.armorEffectsSystem = new ArmorEffectsSystem(this);
     this.wingsSystem = new WingsSystem(this);
+    this.slopeFlightSystem = new SlopeFlightSystem(this);
     this.inventorySystem.onArmorEquipped = (item) => this.armorEffectsSystem.announceFlavor(item);
     this.floatingBootsSystem = new FloatingBootsSystem(this);
     this.audioSystem = new AudioSystem();

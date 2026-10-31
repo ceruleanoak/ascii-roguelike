@@ -182,6 +182,8 @@ export class CombatSystem {
       }
     }
 
+    this.game?.slopeFlightSystem.refresh();
+
     // Update projectiles
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const proj = this.projectiles[i];
@@ -291,6 +293,7 @@ export class CombatSystem {
 
       // Wind Fields (Storm Eye) bend shots in flight
       this.game?.bossSystem?.windFieldSystem.pushProjectile(proj, deltaTime);
+      this.game?.slopeFlightSystem.bendProjectile(proj, deltaTime);
 
       // Move projectile
       proj.position.x += proj.velocity.vx * deltaTime;
@@ -1250,6 +1253,7 @@ export class CombatSystem {
       }
 
       this.game?.bossSystem?.windFieldSystem.pushProjectile(proj, deltaTime);
+      this.game?.slopeFlightSystem.bendProjectile(proj, deltaTime);
 
       // Move projectile
       proj.position.x += proj.velocity.vx * deltaTime;
