@@ -3223,14 +3223,12 @@ class Game {
         this.mistBattleSystem.onAttackPress(); // Flanks fire with the Primary
         this.dragonSpiritSystem.onAttackPress();
       } else {
-        // Unarmed and no item nearby: interact with background object if
-        // present; with nothing usable in hand and nothing to touch, Punch.
+        // Nothing to swing: touch a background object in reach (a shake, the
+        // Leshy's bush), and with nothing usable in hand the Punch is the
+        // attack, at the same priority as a weapon. A touch never replaces it.
         const nearbyObject = this.findNearbyBackgroundObject();
-        if (nearbyObject) {
-          this.interactWithObject(nearbyObject);
-        } else if (!armed) {
-          this.punchSystem.tryPunch();
-        }
+        if (nearbyObject) this.interactWithObject(nearbyObject);
+        if (!armed) this.punchSystem.handleEmptyHandedPress();
       }
     } else if (state === GAME_STATES.NEUTRAL) {
       // Item pickup has priority over grass interaction (same as EXPLORE)

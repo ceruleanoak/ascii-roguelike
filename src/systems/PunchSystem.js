@@ -16,7 +16,7 @@ const PUNCH_ACCURACY = 0.5;   // half the punches whiff (CombatSystem shows MISS
 
 /**
  * PunchSystem — SPACE with no weapon held (or a spent one, Item.isSpent): a 1-damage, 50%-accuracy Punch with
- * the Slime's windup and projection, in yellow.
+ * the Slime's windup and projection, in yellow. The hand then returns to any slot that can still fight.
  *
  * The windup is the Slime's Telegraph lifecycle, stepped by the same Telegraph
  * helpers on the same double-second clock as an enemy melee attack, so it
@@ -91,6 +91,36 @@ export class PunchSystem {
       hutPlane: this.game.combatSystem.activeHutPlane(),
     });
     return true;
+  }
+
+  /**
+   * SPACE with nothing usable in hand. Empty slots stay selectable, but one is
+   * a passing choice while another slot can fight: the first press Punches and
+   * the hand goes straight back to the weapon.
+   */
+  handleEmptyHandedPress() {
+    this.tryPunch();
+    this._returnToFilledSlot();
+  }
+
+  // Same search order as FightSystem._swapFromSpent, without its last resort:
+  // a weapon first, then anything unspent. No such slot leaves the hand alone,
+  // and the Punch stays the attack. Goes through the number-key path
+  // (handleSelectSlot), so the old item's charge and reload are cancelled.
+  _returnToFilledSlot() {
+    const game = this.game;
+    const player = game.player;
+    if (!player || player.polymorphed) return;
+    // A wire end still in flight anchors only while the wire is in hand.
+    if (game.wireSystem.flyingEnd) return;
+    const slots = player.quickSlots;
+    const order = [];
+    for (let i = 1; i < slots.length; i++) {
+      const idx = (player.activeSlotIndex + i) % slots.length;
+      if (slots[idx] && !player.destroyedSlots?.[idx] && !slots[idx].isSpent()) order.push(idx);
+    }
+    const pick = order.find(i => slots[i].data?.type === 'WEAPON') ?? order[0];
+    if (pick !== undefined) game.handleSelectSlot(pick);
   }
 
   update(deltaTime) {

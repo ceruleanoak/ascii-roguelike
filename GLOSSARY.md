@@ -1778,11 +1778,14 @@ identity, not standard programming terms.
 - **Definition:** The attack SPACE makes in EXPLORE with no weapon held, or with a spent one
   in hand (a trap with no charges left, a gun or bow out of ammo that never reloads): 1 damage at 50%
   accuracy (a miss shows MISS), thrown with the Slime's windup, cooldown and one-cell blinking
-  Telegraph, in yellow. Skips Background Objects and a Maze's cover objects (an unarmed SPACE
-  beside one interacts instead; a cover object still recovering from a hit swallows the press rather
-  than letting a Punch through). Not thrown at REST or in NEUTRAL rooms. Armor can harden it:
+  Telegraph, in yellow. It holds a weapon's priority on SPACE: a Background Object in reach is
+  touched by the same press but never takes the Punch's place (only a Maze cover object still
+  recovering from a hit swallows the press). Its hit skips Background Objects and a Maze's cover
+  objects. An empty slot may be selected while another slot can fight, but the first SPACE there
+  Punches once and returns the hand to that slot, a weapon first. So the Punch stays the attack
+  only when no slot can fight. Not thrown at REST or in NEUTRAL rooms. Armor can harden it:
   the Dragon Gauntlets (𐤕, Scale + Scale at the Dragon Forge) raise its damage and give it knockback.
-- **In code:** `src/systems/PunchSystem.js` — `tryPunch()` (spent check: `Item.isSpent()`), `update(dt)` (the windup on the
+- **In code:** `src/systems/PunchSystem.js` — `handleEmptyHandedPress()` (the SPACE entry), `tryPunch()` (spent check: `Item.isSpent()`), `update(dt)` (the windup on the
   enemy-melee clock, read straight off `ENEMIES.o`), `reset()` (Reset Registry, room scope).
   The landed blow is a player melee hitbox via `CombatSystem.createAttack` with `accuracy`
   (rolled per swing as `attack.missed`), `telegraphDrawn` and `isPunch` (MazeSystem's cover-object
