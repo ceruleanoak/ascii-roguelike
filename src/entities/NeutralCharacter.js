@@ -114,13 +114,14 @@ export class NeutralCharacter {
 
     // Render indicator if present
     if (this.indicator) {
+      const indicatorY = centerPixelPos.y + GRID.CELL_SIZE / 2 + this.indicator.offsetY;
       ctx.globalAlpha = 1.0;
+      // A black cell behind the glyph: an NPC at the room's edge (Charon at the
+      // north exit) has its indicator over the bright border wall.
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(centerPixelPos.x, indicatorY - GRID.CELL_SIZE / 2, GRID.CELL_SIZE, GRID.CELL_SIZE);
       ctx.fillStyle = this.indicator.color;
-      ctx.fillText(
-        this.indicator.char,
-        centerPixelPos.x + GRID.CELL_SIZE / 2,
-        centerPixelPos.y + GRID.CELL_SIZE / 2 + this.indicator.offsetY
-      );
+      ctx.fillText(this.indicator.char, centerPixelPos.x + GRID.CELL_SIZE / 2, indicatorY);
     }
 
     ctx.restore();
