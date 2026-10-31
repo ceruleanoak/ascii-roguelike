@@ -1,7 +1,7 @@
 import { GRID, ROOM_TYPES } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { BARRICADE_FAMILIES, FAMILY_BY_COLOR } from '../data/barricades.js';
-import { tickTriggers, setTriggerVisual } from './triggerMachine.js';
+import { tickTriggers, setTriggerVisual, readTrigger, overlapsCell } from './triggerMachine.js';
 import { isExitLetterTile } from './ExitSystem.js';
 import { createBurstParticles } from './WorldEffectsSystem.js';
 import { isCellProtected } from './roomFeatures.js';
@@ -26,6 +26,10 @@ const BARRICADEABLE = ['north', 'east', 'west'];
 // lands in raises a Barricade across that same way out. Turning aside starts
 // the count over — the streak is about one direction, not about depth.
 const INSISTENCE_TO_BARRICADE = 2;
+
+// The Race Flag lands at random among this many of the open cells farthest from
+// the player, so it can't be waited at and its corner can't be learned.
+const FLAG_CELL_POOL = 12;
 
 /**
  * BarricadeSystem — raises and owns Barricades: the things stamped across an
@@ -215,10 +219,17 @@ export class BarricadeSystem {
       liveColor: descriptor.liveColor || null,
       // 'circuit' only: an electric hit landed on the dead pole (receiveCurrent).
       poleStruck: false,
+      // 'footrace' only: the Race Button, the standing Race Flag, the seconds
+      // left to reach it, and the px/s that sets those seconds.
+      button: null,
+      flag: null,
+      raceTimer: 0,
+      clearSpeed: descriptor.clearSpeed || 0,
       cleared: false
     };
     if (descriptor.shape === 'trigger') this._placeTriggers(room, direction, descriptor);
     if (descriptor.shape === 'circuit') this._placePoles(room, direction, descriptor);
+    if (descriptor.shape === 'footrace') this._placeRaceButton(room, direction);
     if (descriptor.rollables) this._placeRollables(room, direction, descriptor);
   }
 
@@ -238,7 +249,7 @@ export class BarricadeSystem {
       obj.structural = true;
       return obj;
     }
-    if (descriptor.shape === 'trigger' || descriptor.shape === 'circuit') {
+    if (descriptor.shape === 'trigger' || descriptor.shape === 'circuit' || descriptor.shape === 'footrace') {
       const obj = BackgroundObject.createVariant('barricade_wall', col * cs, row * cs);
       obj.color = descriptor.plugColor;
       obj.animationColor = descriptor.plugColor;
@@ -357,6 +368,107 @@ export class BarricadeSystem {
     room.backgroundObjects.push(obj);
     room.barricade.triggers.push(obj);
     return obj;
+  }
+
+  // The Race Button replaces the block in the middle of the plug's face, where
+  // the lane meets it. It stays part of the plug: as solid as the block it
+  // replaced, and lifted with the rest. kind 'switch' is what lets the
+  // triggerMachine read its strikes and a boomerang bounce off it.
+  _placeRaceButton(room, direction) {
+    const barricade = room.barricade;
+    const cs = GRID.CELL_SIZE;
+    const { col, row } = laneCell(direction, 2, 0);
+    this._clearCell(room, col, row);
+    const button = BackgroundObject.createVariant('race_button', col * cs, row * cs);
+    button.kind = 'switch';
+    button.puzzleSignal = true;
+    button.structural = true;
+    setTriggerVisual(button, false);
+    barricade.objects = barricade.objects.filter(o => room.backgroundObjects.includes(o));
+    barricade.objects.push(button);
+    barricade.button = button;
+    room.backgroundObjects.push(button);
+  }
+
+  // A strike on the Race Button starts the race. While one runs, further strikes
+  // are spent on nothing: the clock is not restarted by pressing again.
+  _tickRace(room, barricade, deltaTime) {
+    const player = this.game.player;
+    const struck = readTrigger(barricade.button, deltaTime, player);
+    if (!barricade.flag) {
+      if (struck) this._raiseFlag(room, barricade);
+      return;
+    }
+    if (overlapsCell(player, barricade.flag.position.x, barricade.flag.position.y)) {
+      this._lowerFlag(room, barricade);
+      this._lift(room, barricade);
+      return;
+    }
+    barricade.raceTimer -= deltaTime;
+    if (barricade.raceTimer <= 0) this._lowerFlag(room, barricade);
+  }
+
+  _raiseFlag(room, barricade) {
+    const cs = GRID.CELL_SIZE;
+    const player = this.game.player;
+    const { col, row, dist } = this._pickFlagCell(room);
+    const flag = BackgroundObject.createVariant('race_flag', col * cs, row * cs);
+    flag.structural = true;
+    room.backgroundObjects.push(flag);
+    barricade.flag = flag;
+    barricade.raceTimer = dist / barricade.clearSpeed;
+    setTriggerVisual(barricade.button, true);
+    createBurstParticles(this.game, this.game.particles, player.position.x + cs / 2, player.position.y + cs / 2, 4, flag.color);
+    this.game.renderer?.markBackgroundDirty?.();
+  }
+
+  _lowerFlag(room, barricade) {
+    const objs = room.backgroundObjects;
+    const i = objs.indexOf(barricade.flag);
+    if (i !== -1) objs.splice(i, 1);
+    barricade.flag = null;
+    setTriggerVisual(barricade.button, false);
+    this.game.renderer?.markBackgroundDirty?.();
+  }
+
+  // Measured from the player rather than the button, so a shot from across the
+  // room doesn't stand them beside the finish. Walks the floor from the player's
+  // cell, so the flag is never behind a wall, then takes the far end of it.
+  // Falls back to any floor reached if every far cell holds something.
+  _pickFlagCell(room) {
+    const cs = GRID.CELL_SIZE;
+    const player = this.game.player;
+    const px = player.position.x + cs / 2;
+    const py = player.position.y + cs / 2;
+    const start = { col: Math.floor(px / cs), row: Math.floor(py / cs) };
+    const occupied = new Set();
+    const solid = new Set();
+    for (const o of room.backgroundObjects || []) {
+      const key = `${Math.floor(o.position.x / cs)},${Math.floor(o.position.y / cs)}`;
+      occupied.add(key);
+      if (o.data?.solid || o.data?.bulletInteraction === 'block') solid.add(key);
+    }
+    const seen = new Set([`${start.col},${start.row}`]);
+    const queue = [start];
+    for (let i = 0; i < queue.length; i++) {
+      const { col, row } = queue[i];
+      for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const next = { col: col + dc, row: row + dr };
+        const key = `${next.col},${next.row}`;
+        // Border cells are skipped along with the walls: an exit gap is floor
+        // the collision map leaves open, and the room's way out is no finish.
+        const onBorder = next.col < 1 || next.row < 1 || next.col > GRID.COLS - 2 || next.row > GRID.ROWS - 2;
+        if (onBorder || seen.has(key) || solid.has(key) || this._isStructureCell(room, next.col, next.row)) continue;
+        seen.add(key);
+        queue.push(next);
+      }
+    }
+    const measured = queue.map(({ col, row }) => ({
+      col, row, dist: Math.hypot(col * cs + cs / 2 - px, row * cs + cs / 2 - py)
+    }));
+    const empty = measured.filter(c => !occupied.has(`${c.col},${c.row}`) && !isExitLetterTile(c.col, c.row));
+    const far = (empty.length > 0 ? empty : measured).sort((a, b) => b.dist - a.dist);
+    return far[Math.floor(Math.random() * Math.min(FLAG_CELL_POOL, far.length))];
   }
 
   /**
@@ -482,6 +594,10 @@ export class BarricadeSystem {
     const room = this.game?.currentRoom;
     const barricade = room?.barricade;
     if (!barricade || barricade.cleared) return;
+    if (barricade.shape === 'footrace') {
+      this._tickRace(room, barricade, deltaTime);
+      return;
+    }
     if (barricade.shape === 'trigger') {
       const world = {
         collisionMap: room.collisionMap,
@@ -536,12 +652,17 @@ export class BarricadeSystem {
   /**
    * A rolling rock ran into a Rubble Wall (BoulderSystem._strikeFixtures), or
    * a Punch landed on a Brick Wall (PunchSystem._land). If the block is part of
-   * this room's plug, the whole plug comes down.
+   * this room's plug, the whole plug comes down. A Punch on a Race Button is a
+   * press like any other strike, not a blow to the plug.
    */
   strikePlug(obj) {
     const room = this.game?.currentRoom;
     const barricade = room?.barricade;
     if (!barricade || barricade.cleared || !barricade.objects.includes(obj)) return;
+    if (obj === barricade.button) {
+      obj.takeDamage(1);
+      return;
+    }
     this._lift(room, barricade);
   }
 

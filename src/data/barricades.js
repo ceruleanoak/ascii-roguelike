@@ -59,6 +59,14 @@ import { ZONE_COLORS } from './zones.js';
  *              both poles once the circuit closes
  *   poles      two placements in the same lane coordinates the triggers use
  *
+ * shape 'footrace' — an unbreakable plug with a Race Button set in its face.
+ * Striking the button raises a Race Flag on the open floor far from the player;
+ * touching it in time lifts the plug, and otherwise it vanishes and the button
+ * can be struck again.
+ *   plugColor   as for 'trigger'
+ *   clearSpeed  px/s the player must average to the flag; the time allowed is
+ *               the straight-line distance over this
+ *
  * Every shape may also set the plug's own footprint, which otherwise defaults
  * to the 3-wide, 2-deep block that fills an exit gap:
  *   deep    how many cells inward from the wall the plug reaches (never fewer
@@ -330,10 +338,22 @@ const PUNCH_LOCK = {
   typeId: 'brick_wall'
 };
 
+// A button in the plug and a flag across the room. Friction, not PLAYER_SPEED,
+// sets the true foot speed: a weapon in hand walks at 87 px/s and chained rolls
+// average 83, so neither gets there. An empty hand walks at 131 and rolls at
+// 124, so the race asks the player to put the weapon away. A speed potion on
+// chained rolls (100 armed) and the Green Ranger's slide can also just make it.
+const FOOT_RACE = {
+  id: 'foot_race',
+  shape: 'footrace',
+  plugColor: ZONE_COLORS.red,
+  clearSpeed: 105
+};
+
 export const BARRICADE_FAMILIES = {
   green: [ROCKS, PETRIFIED_TREES, WHIP_LOCK, BOOMERANG_LOCK, SPEAR_LOCK, GRASS_LOCK, PUSH_LOCK],
   yellow: [LAVA_MOAT, ICE_BLOCKS, ELECTRIC_POLES],
-  red: [HAMMER_LOCK, EYE_LOCK, GAP_LOCK, PUNCH_LOCK],
+  red: [HAMMER_LOCK, EYE_LOCK, GAP_LOCK, PUNCH_LOCK, FOOT_RACE],
   cyan: [TARGETS]
 };
 

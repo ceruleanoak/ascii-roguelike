@@ -2429,7 +2429,8 @@ identity, not standard programming terms.
 - **In code:** `BARRICADE_FAMILIES` keyed by family name, `FAMILY_BY_COLOR` mapping a `ZONE_COLORS`
   value onto one. A family that is empty raises nothing rather than borrowing another family's
   question. Red's members: the Rubble Wall (`hammer_lock`), the Watcher Eye
-  (`eye_lock`), the Chasm the Pole Vault crosses (`gap_lock`) and the Brick Wall (`punch_lock`). Cyan's only member so far is the Barricade Target, which asks for a gun or a
+  (`eye_lock`), the Chasm the Pole Vault crosses (`gap_lock`), the Brick Wall (`punch_lock`) and
+  the Foot Race (`foot_race`). Cyan's only member so far is the Barricade Target, which asks for a gun or a
   bow rather than a sacrifice.
 - **Not:** "barricade type", "gate category", "tier", "colour group".
 
@@ -2462,6 +2463,17 @@ identity, not standard programming terms.
   `punchBreakable` flag in the active layer's objects, and the hit goes to
   `BarricadeSystem.strikePlug`. `indestructible` is what turns everything else away.
 - **Not:** the Rubble Wall (a rolling rock's), the Barricade Wall (answers only to its fixtures).
+
+### Foot Race
+- **Definition:** A red Barricade: a sealed plug with a Race Button set in its face. Striking the
+  button raises a Race Flag on open floor far from the player, and touching it in time lifts the
+  plug. Walking or chaining rolls with a weapon in hand can't get there; an empty hand's sprint
+  can. If time runs out the flag vanishes and the button can be struck again.
+- **In code:** the `foot_race` entry in `barricades.js` (shape `footrace`, `clearSpeed` in px/s),
+  run by `BarricadeSystem._tickRace`, with the `race_button` and `race_flag` Background Object
+  variants. The allowance is the straight-line distance over `clearSpeed`. The race lives on
+  `room.barricade` (`button`, `flag`, `raceTimer`).
+- **Not:** the Flag weapon (`⚑`, a crafted item with the same glyph).
 
 ### Watcher Eye
 - **Definition:** The red roll Barricade's trigger: an eye in the lane in front of a sealed plug.

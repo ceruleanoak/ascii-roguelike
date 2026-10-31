@@ -1500,6 +1500,39 @@ export const BACKGROUND_OBJECT_VARIANTS = {
       default: { animation: 'bounce', message: null }
     }
   },
+  // Race Button — set into the Foot Race's plug (barricades.js FOOT_RACE). A
+  // solid block of the plug that a strike presses, so a pressed or unpressed
+  // button never opens the lane on its own. hp is real for the puzzleSignal
+  // contract, and punchBreakable lets a Punch reach it. Its glyph is the
+  // switch's (triggerMachine.setTriggerVisual).
+  'race_button': {
+    char: '○',
+    name: 'Race Button',
+    color: '#888888',
+    bulletInteraction: 'block',
+    flammability: 'none',
+    conductivity: 'none',
+    punchBreakable: true,
+    hp: 1,
+    solid: true,
+    interactions: {
+      default: { animation: 'shake', message: null }
+    }
+  },
+  // Race Flag — where the Foot Race ends. Touching it is all it asks.
+  'race_flag': {
+    char: '⚑',
+    name: 'Race Flag',
+    color: '#ff2222',
+    bulletInteraction: 'pass-through',
+    flammability: 'none',
+    conductivity: 'none',
+    indestructible: true,
+    hp: null,
+    interactions: {
+      default: { animation: 'none', message: null }
+    }
+  },
   // Watcher Eye — the red roll gate's trigger (barricades.js EYE_LOCK; the
   // rules live in src/systems/WatcherEye.js). It shuts when it sees the player
   // come near and only a melee hit on it open counts, so its data is a wall's:
