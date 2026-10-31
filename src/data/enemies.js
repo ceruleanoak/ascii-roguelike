@@ -1619,6 +1619,10 @@ export const ENEMIES = {
       retreatThreshold: GRID.CELL_SIZE * 3, // Retreat if player within 3 units during hover
     },
     packCoordination: true,  // Shares detection & memory marks with all wolves in room
+    // Aggro doubles its pace: the chase (Approach) and the run to a memory
+    // mark (Search) move at 2× speed; the wander stays at its base 60.
+    approach: { speed: 2 },
+    search: { speed: 2 },
     elementalAffinity: {
       weakness: { 'burn': 1.8 }
     },

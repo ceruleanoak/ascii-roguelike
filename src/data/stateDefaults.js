@@ -99,7 +99,7 @@ export function defaultStates(data) {
     states.recover = { duration: 0.4, variant: 'retreat', speed: 0.5 };
   }
 
-  // The other four shorthands, same shape as `data.recover` above but with no
+  // The other shorthands, same shape as `data.recover` above but with no
   // non-empty baseline to merge onto — `anticipate` and `withdraw` are absent
   // until opted into (nothing hesitates or disengages on purpose today), and
   // `search`/`strike` are already the empty object every enemy gets, so
@@ -108,6 +108,10 @@ export function defaultStates(data) {
   // form field with nowhere for its value to land is worse than no field at
   // all, because it looks authorable and silently isn't.
   if (data.anticipate) states.anticipate = { ...data.anticipate };
+  // Approach is the one shorthand that merges rather than replaces: its
+  // baseline carries the archetype's verb, which a tuning field (`speed`, the
+  // Frost Wolf's doubled chase) should not have to restate.
+  if (data.approach) Object.assign(states.approach, data.approach);
   if (data.search) states.search = { ...data.search };
   if (data.withdraw) states.withdraw = { ...data.withdraw };
   if (data.strike) states.strike = { ...data.strike };
