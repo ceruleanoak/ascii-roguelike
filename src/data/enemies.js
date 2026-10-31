@@ -512,7 +512,7 @@ export const ENEMIES = {
     spellDescription: 'WANTS YOUR LOOT.',
     trueName: 'GRABEN',
     hp: 7,
-    speed: 35,
+    speed: 70,
     damage: 2,
     attackRange: GRID.CELL_SIZE * 6,  // 6 units (ranged)
     aggroRange: GRID.CELL_SIZE * 10,  // 10 units (ranged awareness)
@@ -605,7 +605,7 @@ export const ENEMIES = {
     trueName: 'BOLVERK',
     mass: 2,
     hp: 22,
-    speed: 22,                       // Slow — the "player is distant" trigger fires often
+    speed: 44,                       // Slow — the "player is distant" trigger fires often
     acceleration: 70,
     damage: 3,
     attackRange: GRID.CELL_SIZE * 2.5,
