@@ -14,17 +14,28 @@ const BOB_PX = 2;
 const BOB_PERIOD_MS = 500;
 const GLYPH_SCALE = 0.8;
 
-export function drawArmedGlyph(renderer, game) {
-  const player = game.player;
-  const armed = game.consumableTriggerSystem?.armed();
-  if (!player || !armed) return;
+function drawHoverGlyph(renderer, player, item) {
   const C = GRID.CELL_SIZE;
   const bob = Math.sin(performance.now() / BOB_PERIOD_MS) * BOB_PX;
   renderer.drawEntityScaled(
     player.position.x + C / 2,
     player.position.y + C / 2 - C * HOVER_CELLS + bob,
-    armed.item.char,
-    armed.item.color || armed.item.data.color,
+    item.char,
+    item.color || item.data.color,
     GLYPH_SCALE
   );
+}
+
+export function drawArmedGlyph(renderer, game) {
+  const armed = game.consumableTriggerSystem?.armed();
+  if (!game.player || !armed) return;
+  drawHoverGlyph(renderer, game.player, armed.item);
+}
+
+// Held Glyph (HeldGlyphSystem): the same hover, briefly, for a newly held
+// weapon. An Armed Glyph owns the spot, so it wins.
+export function drawHeldGlyph(renderer, game) {
+  const item = game.heldGlyphSystem.shown();
+  if (!item || game.consumableTriggerSystem?.armed()) return;
+  drawHoverGlyph(renderer, game.player, item);
 }

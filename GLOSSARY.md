@@ -1416,6 +1416,13 @@ identity, not standard programming terms.
   `drawArmedGlyph` (`src/rendering/effects/ArmedGlyphDraw.js`).
 - **Not:** a HUD slot highlight (the blinking slot box still marks an armed slot).
 
+### Held Glyph
+- **Definition:** A newly held weapon's glyph hovering over the player for a moment, at the Armed
+  Glyph's spot. It ends early when the weapon does anything else, and an Armed Glyph hides it.
+- **In code:** `HeldGlyphSystem` (`src/systems/HeldGlyphSystem.js`) → the `heldGlyph` Frame Pass →
+  `drawHeldGlyph` (`src/rendering/effects/ArmedGlyphDraw.js`).
+- **Not:** the Armed Glyph (always shown while a consumable is armed).
+
 ### Scripted Event
 - **Definition:** A short scene an NPC plays out in front of the player — RPG Maker style. An
   actor, a condition, and a list of Event Commands run one after another, started by SPACE

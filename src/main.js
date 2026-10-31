@@ -70,6 +70,7 @@ import { PushRockSystem } from './systems/PushRockSystem.js';
 import { ReloadAudioSystem } from './systems/ReloadAudioSystem.js';
 import { ThreeRoomSystem } from './systems/ThreeRoomSystem.js';
 import { BarricadeSystem } from './systems/BarricadeSystem.js';
+import { HeldGlyphSystem } from './systems/HeldGlyphSystem.js';
 import { UndeadSystem } from './systems/UndeadSystem.js';
 import { CursedRunSystem } from './systems/CursedRunSystem.js';
 import { RestSystem } from './systems/RestSystem.js';
@@ -296,6 +297,7 @@ class Game {
     this.runTimerSystem = new RunTimerSystem();
     this.fountainSystem = new FountainSystem(this);
     this.puzzleSystem = new PuzzleSystem(this);
+    this.heldGlyphSystem = new HeldGlyphSystem(this);
     this.barricadeSystem = new BarricadeSystem(this);  // exit-lane Barricades: the streak's rocks/trees, and what else asks a room a question
     this.chiBladeSystem = new ChiBladeSystem(this);
     this.lightningStrikeSystem = new LightningStrikeSystem(this);
@@ -2028,6 +2030,8 @@ class Game {
 
     // Bat windup visual + charge lifecycle (batCharge weapons, all states)
     this.batSystem.update(deltaTime);
+
+    this.heldGlyphSystem.update(deltaTime);
 
     // Frog form (hop/swim movement, tongue attacks, cure Rusalka contact, Lake
     // room spawn). State-shared because the curse follows the player home:
