@@ -171,6 +171,38 @@ export const ENEMIES = {
     tameableByBread: true
   },
 
+  '7': {
+    char: '7',
+    // The Rat family's 'r', tinted the Maze's water-blue (see Plague Rat).
+    // Only ever released by a Rat Nest in a deep Maze (MazeTrapSystem) —
+    // no zone spawn table lists it.
+    displayChar: 'r',
+    name: 'Maze Rat',
+    description: 'A rat of the deep Maze. It swims, and its bite festers.',
+    spellDescription: 'IT WILL SWIM.',
+    trueName: 'NATATOR',
+    mass: 0.5,
+    hp: 3,
+    speed: 75,
+    acceleration: 400,
+    damage: 1,
+    attackRange: GRID.CELL_SIZE * 1.75,
+    aggroRange: GRID.CELL_SIZE * 8,
+    attackCooldown: 1.0,
+    attackWindup: 1.1,
+    attackType: 'melee',
+    decisionInterval: 0.4,
+    color: '#5fa8b8',
+    telegraph: { area: 'box', animation: 'clap', attackShape: 'v' },
+    recover: { variant: 'jumpBack' },
+    affinities: ['beast', 'venom'],
+    tier: 'normal',
+    onHit: 'poison',
+    poisonDuration: 3.0,
+    swimAffinity: true,   // the flood doesn't drown it, and water doesn't slow it
+    mazePathing: true     // runs the corridors cell by cell (MazePathingMechanic)
+  },
+
   '3': {
     char: '3',
     name: 'Monkey',

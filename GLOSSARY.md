@@ -155,6 +155,32 @@ identity, not standard programming terms.
 - **Not:** the Dungeon Branch floor's paired panels (`▭`, a companion puzzle,
   `DungeonPuzzleSystem`), though it shares their glyph.
 
+### Rat Nest
+- **Definition:** A nest (`%`) set into a wall cell of a deep Maze where the wall divides two
+  corridors. It is a wall to the player, the Ghosts and the flood, and a passage to Maze Rats, who
+  run through it between the two corridors. It shakes while the player stands near it on either
+  side; lingering there releases three Maze Rats, once. SPACE breaks it in three hits, like a
+  tomb, and a broken nest is plain wall to everything, rats included.
+- **In code:** `RatNest` (`col`/`row`/`linger`/`released`/`hp`/`destroyed`) in `MazeTrapSystem.js`,
+  on `mazeInterior.ratNests`; placed by `_placeRatNests`, released by `_releaseRats`, chipped by
+  `hitRatNest` (from `MazeSystem.handleSpacePress`). Rats walk `mazeInterior.ratCollisionMap` —
+  the Maze's `collisionMap` with every standing nest opened; breaking a nest closes its cell
+  there. Tunables `RAT_NEST_*`.
+- **Not:** a Maze object (tomb) — it holds no loot and never blinks into a Ghost; not a spawner
+  that refills.
+
+### Maze Rat
+- **Definition:** The rat a Rat Nest releases: a poison bite, it swims (the flood doesn't drown
+  or slow it), and it runs the Maze cell by cell along the corridors — and through Rat Nests —
+  rather than straight at the player. Drawn as the Rat family's `r` in water-blue.
+- **In code:** `ENEMIES['7']` (`displayChar: 'r'`, `onHit: 'poison'`, `swimAffinity`,
+  `mazePathing`); a real Enemy in `mazeInterior.enemies`, ticked by the shared enemy pipeline.
+  `mazePathing` is `enemyMechanics/MazePathingMechanic` (BFS via `mazePath.bfsPath` over the
+  enemy's own collision map while its spine State is `approach` or `search`; it also sets
+  `slipsCorners`). On no zone spawn table.
+- **Not:** the Rat (`r`, the coin thief) or the Plague Rat (`P`) — no thief or bread-taming
+  mechanics; not a Ghost.
+
 ### Pond
 - **Definition:** The small round body of shallow water in a Quagmire whose center tile is the
   Whirlpool — plain-looking water until the Quagmire's rounds are cleared.

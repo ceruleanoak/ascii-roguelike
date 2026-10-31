@@ -5,6 +5,7 @@ import {
   TORCH_LIGHT_RADIUS, TORCH_ALPHA_HIGH, TORCH_ALPHA_LOW,
   TORCH_PULSE_SPEED, TORCH_LIT_COLOR, TORCH_UNLIT_COLOR,
 } from '../../systems/MazeSystem.js';
+import { RAT_NEST_LINGER } from '../../systems/MazeTrapSystem.js';
 import { drawInteriorVisionFogOverlay } from './torchLight.js';
 import { drawFramePasses } from '../framePasses.js';
 
@@ -17,7 +18,7 @@ import { drawFramePasses } from '../framePasses.js';
  * Rendering layers (all in interior-translated coordinates):
  *   1. Dim exterior + floor panel
  *   2. Wall cells
- *   2a. Flood Panels (dark until torch light), then deep-water tiles
+ *   2a. Flood Panels (dark until torch light), then deep-water tiles, then Rat Nests
  *   2b. Maze torches (fixture glyph + pulsing light when lit)
  *   3. Exit indicator
  *   4. Maze objects (3-hit breakables, hit flash, blink warning)
@@ -44,6 +45,10 @@ const WALL_GLYPH_COLOR = '#3a3040';
 // drops below the rim shade.
 const FLOOD_PANEL_GLYPH = '▭';
 const PANEL_COLORS = ['#1c1826', '#4a4258', '#8a80a0'];
+const RAT_NEST_GLYPH = '%';
+const RAT_NEST_COLOR = '#8a6a4a';
+const RAT_NEST_EMPTY_COLOR = '#4a3a2a';
+const RAT_NEST_SHAKE_HZ = 10;
 
 export class MazeInteriorOverlay {
   constructor(renderer, renderController) {
@@ -66,6 +71,9 @@ export class MazeInteriorOverlay {
     });
 
     // ── 2. Wall cells ──────────────────────────────────────────────────────
+    // A standing Rat Nest keeps its wall's fill but not its glyph (2a3 draws
+    // the nest there); a broken one is drawn as the plain wall it became.
+    const nestCells = new Set(mi.ratNests.filter(n => !n.destroyed).map(n => `${n.row},${n.col}`));
     for (let r = 0; r < mi.gridRows; r++) {
       for (let c = 0; c < mi.gridCols; c++) {
         if (!mi.collisionMap[r][c]) continue;
@@ -73,6 +81,7 @@ export class MazeInteriorOverlay {
         if (r === mi.exitRow && c === mi.exitCol) continue;
         ctx.fillStyle = WALL_COLOR;
         ctx.fillRect(c * CS, r * CS, CS, CS);
+        if (nestCells.has(`${r},${c}`)) continue;
         ctx.fillStyle = WALL_GLYPH_COLOR;
         ctx.fillText(WALL_GLYPH, c * CS + CS / 2, r * CS + CS / 2);
       }
@@ -91,6 +100,28 @@ export class MazeInteriorOverlay {
       const renderData = obj.getRenderPosition();
       ctx.fillStyle = renderData.color;
       ctx.fillText(renderData.char, renderData.x + CS / 2, renderData.y + CS / 2);
+    }
+
+    // ── 2a3. Rat Nests (shake while the player lingers; dim once emptied) ──
+    for (const nest of mi.ratNests) {
+      if (nest.destroyed) continue;
+      // A 1 px side-to-side shake that widens to 2 px past half the linger.
+      let dx = 0;
+      if (nest.shaking) {
+        const amplitude = nest.linger >= RAT_NEST_LINGER / 2 ? 2 : 1;
+        dx = (Math.floor(nest.linger * RAT_NEST_SHAKE_HZ) % 2 ? 1 : -1) * amplitude;
+      }
+      const cx = nest.col * CS + CS / 2;
+      const cy = nest.row * CS + CS / 2;
+      ctx.fillStyle = nest.hitFlash > 0 ? '#ffffff'
+        : nest.released ? RAT_NEST_EMPTY_COLOR : RAT_NEST_COLOR;
+      ctx.fillText(RAT_NEST_GLYPH, cx + dx, cy);
+      if (nest.hp < nest.maxHp) {
+        for (let i = 0; i < nest.maxHp; i++) {
+          ctx.fillStyle = i < nest.hp ? RAT_NEST_COLOR : '#333333';
+          ctx.fillRect(cx - 4 + i * 4, cy - CS - 2, 3, 3);
+        }
+      }
     }
 
     // ── 2b. Maze torches (fixture glyph + pulsing light) ───────────────────

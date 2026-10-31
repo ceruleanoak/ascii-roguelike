@@ -296,6 +296,9 @@ export class MazeSystem {
       wellspring: null,     // { col, row } at depth ≥ 6 (MazeTrapSystem.seed), else null
       floodPanels: [],      // FloodPanel[] (MazeTrapSystem)
       flood: null,          // { open, rate, progress, next, order } once seeded
+      ratNests: [],         // RatNest[] (MazeTrapSystem)
+      ratCollisionMap: null, // collisionMap with standing Rat Nests opened — the Maze Rats' map
+      trapDepth: 0,         // zone depth the traps were seeded at — the Maze Rats' depth
       spawnCount: 0,        // cumulative ghosts spawned via blink expiry
       blinkCooldown: 0,     // s before the next single candidate may blink
       disturbed: false,     // true once the first object is broken open — arms the blink system
@@ -723,12 +726,25 @@ export class MazeSystem {
       }
     }
 
+    // A standing Rat Nest is chipped the same way, and the closer of the two wins.
+    for (const nest of this.trapSystem.nestsInReach(mi, px, py, CS * 1.5)) {
+      const dist = Math.hypot(nest.col * CS + CS / 2 - px, nest.row * CS + CS / 2 - py);
+      if (dist < closestDist) {
+        closest = nest;
+        closestDist = dist;
+      }
+    }
+
     if (!closest) return false;
     // A tomb in reach owns SPACE even while it is still recovering from the
     // last hit: the press is consumed without a chip rather than falling
     // through to the unarmed Punch (interaction always wins over a Punch).
     if (closest.hitCooldown > 0) return true;
 
+    if (mi.ratNests.includes(closest)) {
+      this.trapSystem.hitRatNest(mi, closest);
+      return true;
+    }
     closest.hp--;
     closest.hitFlash = 0.12;
     closest.hitCooldown = 0.2;

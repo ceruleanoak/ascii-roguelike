@@ -38,6 +38,7 @@ import { WeaponConversion } from './enemyMechanics/weaponConversion.js';
 import { QuiverRechargeMechanic } from './enemyMechanics/QuiverRechargeMechanic.js';
 import { WaterBoundMechanic } from './enemyMechanics/WaterBoundMechanic.js';
 import { LavaShyMechanic } from './enemyMechanics/LavaShyMechanic.js';
+import { MazePathingMechanic } from './enemyMechanics/MazePathingMechanic.js';
 import { BumpMechanic } from './enemyMechanics/BumpMechanic.js';
 import { CloseQuartersMechanic } from './enemyMechanics/CloseQuartersMechanic.js';
 import { BreadSeekMechanic } from './enemyMechanics/BreadSeekMechanic.js';
@@ -441,6 +442,7 @@ export class Enemy {
     if (QuiverRechargeMechanic.isEnabled(this)) QuiverRechargeMechanic.init(this);
     if (WaterBoundMechanic.isEnabled(this)) WaterBoundMechanic.init(this);
     if (LavaShyMechanic.isEnabled(this)) LavaShyMechanic.init(this);
+    if (MazePathingMechanic.isEnabled(this)) MazePathingMechanic.init(this);
     if (BumpMechanic.isEnabled(this)) BumpMechanic.init(this);
 
     if (SlimeTrailDropMechanic.isEnabled(this)) SlimeTrailDropMechanic.init(this);
@@ -1072,6 +1074,7 @@ export class Enemy {
     // Runs after the regular AI so it can stamp final velocity for formation orbit.
     LeaderFollowerMechanic.update(this, { deltaTime });
     CloseQuartersMechanic.update(this, { distance });
+    MazePathingMechanic.update(this);
     WaterBoundMechanic.update(this);
     LavaShyMechanic.update(this);
 

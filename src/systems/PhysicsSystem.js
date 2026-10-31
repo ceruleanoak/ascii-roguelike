@@ -739,8 +739,8 @@ export class PhysicsSystem {
       }
       // A one-cell corridor or gap is exactly one body wide, so entering it
       // otherwise needs pixel-perfect alignment. Everything in the Maze slips;
-      // elsewhere only the player (`slipsCorners`), since enemies and NPCs
-      // route through their own pathing.
+      // elsewhere only the player and the Maze-Pathing enemies (`slipsCorners`),
+      // since other enemies and NPCs route through their own pathing.
       if ((entity.inMaze || entity.slipsCorners) && entity.collisionMap) {
         if (collision.x && intendedVx !== 0 && Math.abs(intendedVy) < 1) {
           this._slipAroundCorner(entity, 'x', intendedVx, deltaTime * velocityMultiplier, room);
