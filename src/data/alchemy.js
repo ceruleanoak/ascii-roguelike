@@ -17,6 +17,11 @@ export const STARTER_POTION_CHARS = new Set(['🜄', '🜅', '🜆']);
 // char never drifts between the two "currently carrying" checks.
 export const HOT_WATER_CHAR = '🜊';
 
+// The Alchemist's own stock for the Hot Water demo (scriptedEvents.js). Bone
+// in plain Water brews a Base Potion, so the Hot Water is what purifies it.
+export const DEMO_BASE = 'b';
+export const DEMO_SUPPLEMENT = 'm';
+
 // Union of every raw ingredient that can seed a starter potion — the
 // "1st ingredients" the Quagmire's decor drops from. Shared between
 // AlchemySystem (cauldron ingredient menu) and the Quagmire drop override.

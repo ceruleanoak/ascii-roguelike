@@ -63,6 +63,8 @@ export class NeutralCharacter {
   // Speaking NPCs (those with getDialogueLines) call this each frame: shows a
   // '!' affordance in talk range, hidden while the dialogue box is open.
   updateTalkIndicator(game, range = NPC_INTERACTION_RANGE) {
+    // A Scripted Event's `hold` owns its actor's indicator.
+    if (game?.scriptedEventSystem?.run?.actor === this) return;
     const player = game?.player;
     if (this.isInRange(player, range) && !game.dialogueSystem?.isOpen()) {
       this.setIndicator('!', '#ffffff');

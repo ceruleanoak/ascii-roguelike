@@ -20,10 +20,10 @@ import { NeutralCharacter } from './NeutralCharacter.js';
  *      red-L/yellow-O/cyan-T (see setLocation()).
  *   4. Hut, carrying Hot Water, first time after the lesson — SPACE starts
  *      the Scripted Event `alchemist_hot_water_demo` (data/scriptedEvents.js)
- *      ahead of his dialogue: he takes the Hot Water, brews a Purified Potion,
- *      reads it at the condenser, hands it over and unlocks "the Alchemist's
- *      Path" (purified potions are devoid of color but still
- *      condenser-detectable). The event sets pathUnlocked.
+ *      ahead of his dialogue: he takes the Hot Water, brews a finished
+ *      purified potion from his own stock, reads it at the condenser, hands
+ *      it over and unlocks "the Alchemist's Path" (purified potions are devoid
+ *      of color but still condenser-detectable). The event sets pathUnlocked.
  */
 export class AlchemistNPC extends NeutralCharacter {
   constructor(x, y) {

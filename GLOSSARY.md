@@ -1478,8 +1478,8 @@ identity, not standard programming terms.
 ### Event Command
 - **Definition:** One step of a Scripted Event: `say` (the actor speaks, one line per SPACE),
   `moveTo` (walk to a cell, or beside the player), `wait`, `take` (a carried Bottle leaves the
-  player), `give` (an item dropped at the player's feet), `call` (anything a system owns),
-  `setFlag`. Commands only sequence; rules stay in their systems.
+  player), `give` (an item dropped at the player's feet), `hold` (the actor shows a glyph above
+  its head), `call` (anything a system owns), `setFlag`. Commands only sequence; rules stay in their systems.
 - **In code:** `{ type, ... }` objects in an event's `commands`; executed by
   `ScriptedEventSystem._execute`.
 - **Not:** an AnimationSystem step (`moveTo` compiles onto one).

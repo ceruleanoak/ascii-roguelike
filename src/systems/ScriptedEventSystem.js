@@ -2,6 +2,8 @@ import { GRID } from '../game/GameConfig.js';
 import { Item } from '../entities/Item.js';
 import { inSamePlane, tagLootLayer } from './PlaneSystem.js';
 import { SCRIPTED_EVENTS } from '../data/scriptedEvents.js';
+import { ITEMS } from '../data/items.js';
+import { INGREDIENTS } from '../data/ingredients.js';
 
 // Cells per second an actor walks during a moveTo Event Command.
 const WALK_SPEED = 4;
@@ -29,6 +31,9 @@ const WALK_SPEED = 4;
  *                                (BottlesSystem.takeAt) into `run.vars.taken`
  *   give    { item }           — `item(game, run)` → Item or char, dropped as
  *                                ground loot at the player's feet
+ *   hold    { item }           — the actor holds up an Item or char (or
+ *                                `item(game, run)` → one) above its head;
+ *                                null puts it away
  *   call    { fn }             — fn(game, run), for anything a system owns
  *   setFlag { name }           — adds an Event Flag
  *
@@ -99,6 +104,7 @@ export class ScriptedEventSystem {
     for (const k of ['w', 'a', 's', 'd', 'space', 'shift', 'tab']) game.keys[k] = false;
     for (const k of Object.keys(game.arrowKeys)) game.arrowKeys[k] = false;
     if (game.player?.velocity) { game.player.velocity.vx = 0; game.player.velocity.vy = 0; }
+    actor.clearIndicator();
     this._next();
   }
 
@@ -163,6 +169,9 @@ export class ScriptedEventSystem {
       case 'give':
         this._give(command.item(game, run));
         return true;
+      case 'hold':
+        this._hold(typeof command.item === 'function' ? command.item(game, run) : command.item, run);
+        return true;
       case 'call':
         command.fn(game, run);
         return true;
@@ -179,11 +188,7 @@ export class ScriptedEventSystem {
     const C = GRID.CELL_SIZE;
     let x, y;
     if (command.toPlayer) {
-      // The cell beside the player on the actor's side, so he stops facing them.
-      const player = this.game.player;
-      const side = actor.position.x <= player.position.x ? -1 : 1;
-      x = player.position.x + side * C;
-      y = player.position.y;
+      ({ x, y } = this._cellBesidePlayer(actor));
     } else {
       x = command.col * C;
       y = command.row * C;
@@ -193,6 +198,25 @@ export class ScriptedEventSystem {
     this.game.animationSystem.play(actor, [
       { type: 'moveTo', x, y, duration: Math.max(0.1, cells / WALK_SPEED), easing: 'easeInOut' }
     ], { onComplete: () => { if (this.run === run) run.waiting = false; } });
+  }
+
+  /** The nearest side of the player with no object on it, so the actor stops facing them. */
+  _cellBesidePlayer(actor) {
+    const { game } = this;
+    const C = GRID.CELL_SIZE;
+    const { x, y } = game.player.position;
+    const near = (a, b) => Math.hypot(a.x - actor.position.x, a.y - actor.position.y)
+      - Math.hypot(b.x - actor.position.x, b.y - actor.position.y);
+    const sides = [{ x: x - C, y }, { x: x + C, y }, { x, y: y - C }, { x, y: y + C }].sort(near);
+    const free = sides.find(side => !game._activeBackgroundObjects().some(obj =>
+      !obj.destroyed && Math.hypot(obj.position.x - side.x, obj.position.y - side.y) < C));
+    return free ?? sides[0];
+  }
+
+  _hold(item, run) {
+    if (!item) { run.actor.clearIndicator(); return; }
+    const char = item.char ?? item;
+    run.actor.setIndicator(char, item.color ?? ITEMS[char]?.color ?? INGREDIENTS[char]?.color);
   }
 
   _give(item) {

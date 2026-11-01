@@ -5,7 +5,10 @@ import {
   ALL_STARTER_INGREDIENTS,
   starterPotionForIngredient,
   ingredientToGreek,
-  applyPotionModifierColor
+  applyPotionModifierColor,
+  HOT_WATER_CHAR,
+  DEMO_BASE,
+  DEMO_SUPPLEMENT
 } from '../data/alchemy.js';
 
 /**
@@ -28,7 +31,7 @@ import {
  *
  *   BREW   (liquid path — makes a starter potion and stops there)
  *   'mode'    — top choice: BREW
- *   'input'   — select a liquid Bottle (Water/Electrified/Magma/Mud)
+ *   'input'   — select a liquid Bottle (Water/Hot Water/Electrified/Magma/Mud)
  *   'starter' — select a held ingredient to brew a starter potion (Base /
  *               Purified / Unstable / Charged / Burning / Primal); it replaces
  *               the liquid where it sat, the pickup box names it, and the
@@ -54,9 +57,9 @@ const LIQUID_SOURCE_RADIUS = GRID.CELL_SIZE;
 // Base / Purified / Unstable (plain water) and Charged / Burning / Primal
 // (electrified water, magma, mud) — every BREW result INFUSE can finish.
 const STARTER_POTION_CHARS = new Set(['🜄', '🜅', '🜆', '!', '«', '¿']);
-const LIQUID_BOTTLE_CHARS = new Set(['🜉', 'ε', '◆', '◐']);  // Water, Electrified, Magma, Mud
+const LIQUID_BOTTLE_CHARS = new Set(['🜉', HOT_WATER_CHAR, 'ε', '◆', '◐']);  // Water, Hot Water, Electrified, Magma, Mud
 const PURIFIED_POTION_CHAR = '🜅';
-const DEMO_SUPPLIED_BASE = 'h'; // Herb — the Alchemist's own, when the player carries no base
+const CAULDRON_COLOR = '#ffffff';
 
 // Map liquid tile states to liquid bottle types
 const LIQUID_TILE_TO_BOTTLE = {
@@ -475,6 +478,9 @@ export class AlchemySystem {
       if (this.cauldronLiquidType === '🜉') {
         // Plain Water: category-aware — Base/Purified/Unstable depends on the ingredient
         starterChar = starterPotionForIngredient(ingredientChar);
+      } else if (this.cauldronLiquidType === HOT_WATER_CHAR) {
+        // Hot Water purifies any base — the Alchemist's lesson.
+        starterChar = PURIFIED_POTION_CHAR;
       } else {
         // Electrified/Magma/Mud: still liquid-determined, ingredient-agnostic
         const liquidToStarter = { 'ε': '!', '◆': '«', '◐': '¿' };
@@ -513,17 +519,7 @@ export class AlchemySystem {
 
     game.removeIngredient(ingredientChar);
 
-    const result = new Item(recipe.result, game.player.position.x, game.player.position.y);
-
-    // The Alchemist's Path — color/purity is fixed at the starter tier and
-    // persists to the true potion, rather than resetting to a static color.
-    applyPotionModifierColor(result, this.cauldronStarterChar);
-
-    // Carry the starter potion's own ingredient data onto the result.
-    result.hiddenIngredient = starterPotion?.hiddenIngredient || null;
-    result.baseIngredient = starterPotion?.baseIngredient || null;
-
-    result.secondaryIngredient = ingredientChar;
+    const result = this._finishPotion(recipe, starterPotion, ingredientChar);
 
     // The true potion takes the starter's place
     game.bottlesSystem.putAt(this.cauldronRef, result);
@@ -533,6 +529,23 @@ export class AlchemySystem {
     this._resetCauldron();
     game.closeMenu();
     game.updateUI();
+  }
+
+  /** The true potion `recipe` makes of `starterPotion` and its supplement. */
+  _finishPotion(recipe, starterPotion, supplementChar) {
+    const { position } = this.game.player;
+    const result = new Item(recipe.result, position.x, position.y);
+
+    // The Alchemist's Path — color/purity is fixed at the starter tier and
+    // persists to the true potion, rather than resetting to a static color.
+    applyPotionModifierColor(result, starterPotion.char);
+
+    // Carry the starter potion's own ingredient data onto the result.
+    result.hiddenIngredient = starterPotion.hiddenIngredient || null;
+    result.baseIngredient = starterPotion.baseIngredient || null;
+
+    result.secondaryIngredient = supplementChar;
+    return result;
   }
 
   _resetCauldron() {
@@ -575,22 +588,25 @@ export class AlchemySystem {
     }
   }
 
+  /** Color the Cauldron with what's in it, or back to its own white. */
+  tintCauldron(color = CAULDRON_COLOR) {
+    const cauldron = this.game.activeFloor.backgroundObjects.find(o => o.char === 'Ω' && !o.destroyed);
+    if (cauldron) cauldron.animationColor = color;
+  }
+
   /**
-   * The Alchemist's brew in his Hot Water demo (scriptedEvents.js): Hot Water
-   * purifies any base, so the result is always a Purified Potion carrying the
-   * base it was brewed from. The base is the first starter ingredient the
-   * player carries (spent), or Herb from his own stock. Returns the Item,
-   * unplaced — the event hands it over.
+   * The Alchemist's brew in the Hot Water demo (scriptedEvents.js): the BREW
+   * and INFUSE the player does at this Cauldron, from the Alchemist's own
+   * stock — Hot Water purifies the base, the supplement finishes it. Returns
+   * the finished potion, unplaced — the event hands it over.
    */
   brewForDemo() {
-    const game = this.game;
-    const base = game.getIngredients().find(ch => ALL_STARTER_INGREDIENTS.has(ch)) ?? null;
-    if (base) game.removeIngredient(base);
-    const potion = new Item(PURIFIED_POTION_CHAR, 0, 0);
-    potion.baseIngredient = base ?? DEMO_SUPPLIED_BASE;
-    potion.hiddenIngredient = potion.baseIngredient;
-    game.audioSystem?.playSFX?.('craft');
-    return potion;
+    const starter = new Item(PURIFIED_POTION_CHAR, 0, 0);
+    starter.baseIngredient = DEMO_BASE;
+    starter.hiddenIngredient = DEMO_BASE;
+    this.tintCauldron();
+    this.game.audioSystem?.playSFX?.('craft');
+    return this._finishPotion(findRecipe(PURIFIED_POTION_CHAR, DEMO_SUPPLEMENT), starter, DEMO_SUPPLEMENT);
   }
 
   /** Float `potion`'s base ingredient, as its Greek letter, up off the Condenser. */
