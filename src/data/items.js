@@ -2242,6 +2242,19 @@ export const ITEMS = {
     autoTriggerHP: 0.18,
     color: '#aa4422'
   },
+  // Cooked Clam: a lit fireplace bakes a raw Clam (FireplaceSystem FIRE_BAKES).
+  // Eaten for +1 HP, like Forest Berry; raw Clams are never eaten.
+  '⌓': {
+    rarity: 'common',
+    char: '⌓',
+    name: 'Cooked Clam',
+    type: ITEM_TYPES.CONSUMABLE,
+    effect: 'heal',
+    amount: 1,
+    oneShot: true,
+    stackable: true, // shares one quick slot by count — see InventorySystem.mergeStackableConsumable
+    color: '#e8d8c0'
+  },
   // Granted by the "Fish" fishing catch (all zones except Fountain) via SPACE
   // pickup — see FishingSystem.trySpacePickup / fishingTables.js's
   // directPickupItem. The one catch that skips "a blade opens the catch":

@@ -48,7 +48,8 @@ const FIRE_BAKES = {
   'm': 'ᒧ',          // Meat   → Meat Jerky
   [GRAIN_CHAR]: '⌬', // Grain  → Bread
   [SAND_CHAR]: EMPTY_BOTTLE_CHAR, // Sand → Empty Bottle
-  [SLURRY_CHAR]: '⏣' // Slurry → Lembas
+  [SLURRY_CHAR]: '⏣', // Slurry → Lembas
+  'C': '⌓'           // Clam   → Cooked Clam
 };
 // Ingredients a bake consumes per output when it is more than one (default 1).
 const FIRE_BAKE_COST = { [SAND_CHAR]: 5 };
@@ -136,6 +137,11 @@ export class FireplaceSystem {
       if (oreCount > 0) {
         counts.set('2', oreCount);
         items.push('2');
+      }
+      const clamCount = game.inventorySystem.countIngredient('C');
+      if (clamCount > 0) {
+        counts.set('C', clamCount);
+        items.push('C');
       }
       const sandCount = game.inventorySystem.countIngredient(SAND_CHAR);
       if (sandCount >= FIRE_BAKE_COST[SAND_CHAR]) {
