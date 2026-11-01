@@ -30,11 +30,11 @@ const LIT_COLOR = '#ff6622';
 
 // Sticks fed to an already-burning fireplace: roll for a byproduct, in order.
 // Neither hits → the stick just feeds the fire, no output.
-const STOKE_ASH_CHANCE = 0.60;
+export const STOKE_ASH_CHANCE = 0.60;
 const STOKE_ESSENCE_CHANCE = 0.10;
 
 // Ore fed to an already-burning fireplace: smelting roll, Metal or a Slag whiff.
-const ORE_METAL_CHANCE = 0.30;
+export const ORE_METAL_CHANCE = 0.30;
 
 const INTERACT_RADIUS = GRID.CELL_SIZE * 1.2;
 const SAND_CHAR = 'D';

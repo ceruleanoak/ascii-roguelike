@@ -1,6 +1,7 @@
 import { GRID } from '../game/GameConfig.js';
 import { Item } from '../entities/Item.js';
 import { INGREDIENTS } from '../data/items.js';
+import { ORE_METAL_CHANCE, STOKE_ASH_CHANCE } from './FireplaceSystem.js';
 
 /**
  * PressSystem — operates the oil press inside huts.
@@ -8,7 +9,9 @@ import { INGREDIENTS } from '../data/items.js';
  * Players walk up to a `⊓` press, hit SPACE, and pick a raw oil from the
  * pop-up list. The raw is consumed and a pressed oil is added to the
  * consumable inventory. Some outputs are ingredients instead (Slurry → Paper);
- * those go back to the ingredient pouch.
+ * those go back to the ingredient pouch. A Clam rolls its own pearls (PRESS_ROLLS):
+ * each output rolls independently at the same chance the fireplace gives Metal
+ * from Ore and Ash from sticks.
  */
 
 const PRESS_TABLE = {
@@ -17,6 +20,15 @@ const PRESS_TABLE = {
   'ş': '❄',  // Frost Sap  → Frost Oil
   'ł': '🜔',  // Pollen     → Drowse Oil
   '⚗': 'N',  // Slurry     → Paper (ingredient)
+};
+
+// Raws that press into several independent ingredients. Each entry rolls on its
+// own; a miss on every roll presses out nothing.
+const PRESS_ROLLS = {
+  'C': [
+    { char: '●', chance: ORE_METAL_CHANCE },  // Pearl (Metal's roll)
+    { char: 'p', chance: STOKE_ASH_CHANCE }   // Pearl Shard (Ash's roll)
+  ]
 };
 
 const INTERACT_RADIUS = GRID.CELL_SIZE * 1.2;
@@ -55,7 +67,7 @@ export class PressSystem {
     const counts = new Map();
     const pressable = [];
     for (const ch of game.getIngredients()) {
-      if (!PRESS_TABLE[ch]) continue;
+      if (!PRESS_TABLE[ch] && !PRESS_ROLLS[ch]) continue;
       counts.set(ch, (counts.get(ch) ?? 0) + 1);
       if (!pressable.includes(ch)) pressable.push(ch);
     }
@@ -78,9 +90,22 @@ export class PressSystem {
   commitSelection(rawChar) {
     const game = this.game;
     const outChar = PRESS_TABLE[rawChar];
-    if (!outChar) return;
+    const rolls = PRESS_ROLLS[rawChar];
+    if (!outChar && !rolls) return;
 
     if (!game.removeIngredient(rawChar)) return;
+
+    if (rolls) {
+      for (const { char, chance } of rolls) {
+        if (Math.random() >= chance) continue;
+        game.addIngredient(char);
+        game.menuSystem.announceCrafted(char);
+      }
+      game.audioSystem?.playSFX?.('craft');
+      game.closeMenu();
+      game.updateUI();
+      return;
+    }
 
     if (INGREDIENTS[outChar]) {
       game.addIngredient(outChar);
