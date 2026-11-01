@@ -1184,8 +1184,9 @@ export class ExitSystem {
           game.zoneSystem.applyPreMinibossGate(game);
         }
 
-        // Unlock exits (letters are already generated)
-        room.exitsLocked = false;
+        // Unlock exits (letters are already generated). A captive still in
+        // its cage keeps them shut: rescue it first, then leave.
+        room.exitsLocked = game.captives?.some(c => !c.freed && !c.cageDestroyed) ?? false;
         // Update collision map to open exits
         game.updateExitCollisions();
       } // end finalize (no pending wave)
