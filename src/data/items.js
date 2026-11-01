@@ -1447,7 +1447,7 @@ export const ITEMS = {
   '⟡': {
     char: '⟡', tier: 2, name: 'Diamond Longsword',
     type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.MELEE, weaponSubtype: 'sword',
-    damage: 2, windup: 0.5, recovery: 0.95, patternSpeed: 0.07, range: 30,
+    damage: 3, windup: 0.5, recovery: 0.8, patternSpeed: 0.07, range: 30,
     drawScale: 1.3, critChance: 0.4,
     color: '#ccffff'
   },
@@ -2774,18 +2774,23 @@ export const ITEMS = {
     oneShot: true,
     stackable: true, // shares one quick slot by count — see InventorySystem.mergeStackableConsumable
     feed: true,      // crows and rats seek it on the ground — see systems/feed.js
+    pawnValue: 0,
     color: '#daa520'
   },
   // Forest Berry: found in Shrubs (GameConfig berryChance), never crafted. Feed
-  // for rats alone: crows pass it by, so it tames but never befriends.
+  // for rats alone: crows pass it by, so it tames but never befriends. SPACE
+  // eats it for +1 HP.
   '⁖': {
     char: '⁖',
     name: 'Forest Berry',
     type: ITEM_TYPES.CONSUMABLE,
+    effect: 'heal',
+    amount: 1,
     oneShot: true,
     stackable: true,
     feed: true,
     crowsRefuse: true,
+    pawnValue: 0,
     color: '#7755dd'
   },
   // Sandwich (Bread + Meat): Feed like Bread — SHIFT throws it and crows/rats
@@ -2817,6 +2822,7 @@ export const ITEMS = {
     stackable: true,
     autoTriggerHP: 0.18,
     feed: true,
+    pawnValue: 1,
     color: '#7fbf3f'
   },
 
