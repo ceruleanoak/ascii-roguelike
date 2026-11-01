@@ -470,7 +470,8 @@ export const SPELLS = {
   // CHOP / MINE / HARVEST / OPEN — farm the room's Trees (axe), Rocks
   // (pickaxe or hammer), or its containers (Barrels, Chests, Crates, Metal
   // Boxes, opened by hand); HARVEST opens the containers first, then does
-  // trees and rocks, then its grass (any blade) and sand, swapping tools
+  // trees, rocks and every other ingredient source (MATERIALS in
+  // HarvestSystem), then its grass (any blade) and sand, swapping tools
   // between them, until none are left or the next keypress (HarvestSystem).
   // Silent when it starts.
   'CHOP':    { response: (game) => game.harvestSystem.cast(['tree']) },

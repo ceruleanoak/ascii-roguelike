@@ -51,6 +51,9 @@ function inExitLane(spot) {
   return (inMidCol && nearTopOrBottom) || (inMidRow && nearLeftOrRight);
 }
 
+// Stump, Bush, Ember Bush, Mushroom, Bones, Crystal, Ice.
+const FORAGE_CHARS = new Set(['ŋ', '&', 'e', 'n', '8', '*', 'i']);
+
 // What each Spell farms, and the tool it takes (`tool(item, obj)`; `obj` is
 // left out when the question is whether the player carries a tool for the
 // material at all). Trees fall only to an axe; rocks to the pickaxe, a
@@ -58,17 +61,18 @@ function inExitLane(spot) {
 // Rock is a rock too, but takes only the pickaxe or a hammer of its
 // minHammerLevel (InteractionSystem.resolveGlitteringRockDamage).
 // HARVEST works them in `stage` order: containers first, then trees, rocks and
-// Brush together, then grass (any blade, richest cell first), then sand (any
-// melee weapon a blunt one excepted: CombatSystem lets a blunt swing rustle
-// but never spend an object).
+// Brush, Boulders and the forage together, then grass (any blade, richest
+// cell first), then sand (any melee weapon a blunt one excepted: CombatSystem
+// lets a blunt swing rustle but never spend an object).
 const MATERIALS = {
   // OPEN: the containers SPACE opens by hand (Barrels, Chests, Crates, Metal
   // Boxes), opened through InteractionSystem.openContainer from the cell
   // beside each, as SPACE opens one: no tool, no swing (`byHand`). A Tomb is
   // left shut: it is SPACE-openable too, but what it lets out (a Tomb Ghost)
-  // is not a harvest.
+  // is not a harvest. A Stick Bundle (`pickupItem`) is taken whole, the same.
   container: {
-    is: obj => !!obj.data?.dropEffect?.startsWith('destroyObject:') && !!obj.acceptsInteraction?.('spacebar'),
+    is: obj => !!(obj.data?.dropEffect?.startsWith('destroyObject:') || obj.data?.pickupItem)
+      && !!obj.acceptsInteraction?.('spacebar'),
     tool: () => true,
     byHand: true,
     stage: -1,
@@ -110,6 +114,25 @@ const MATERIALS = {
     stage: 0,
     with: 'grass',
   },
+  // A Boulder takes the pickaxe or a level 2+ hammer
+  // (InteractionSystem.resolveSmashRefusal).
+  boulder: {
+    is: obj => obj.char === 'Q',
+    tool: item => !!item?.data?.isPickaxe
+      || (item?.data?.weaponSubtype === 'hammer' && (item.data.weaponLevel ?? 0) >= 2),
+    stage: 0,
+    with: 'grass',
+  },
+  // Every other ingredient source: no tool gate, so any swing a blunt weapon's
+  // excepted (see sand). A whip grabs hold of a Stump instead of striking it
+  // (CombatSystem's melee loop).
+  forage: {
+    is: obj => FORAGE_CHARS.has(obj.char),
+    tool: (item, obj) => item?.data?.weaponType === 'MELEE' && !item.data.isBlunt
+      && !(obj?.char === 'ŋ' && item.data.weaponSubtype === 'whip'),
+    stage: 0,
+    with: 'grass',
+  },
   grass: {
     is: obj => !!(obj.data?.cuttable && obj.data.cutState),
     tool: item => !!item?.data?.isBlade,
@@ -131,9 +154,9 @@ const MATERIALS = {
  * HarvestSystem — the CHOP, MINE, HARVEST and OPEN Spells: the player farms the
  * room's Trees (CHOP, with an axe) or Rocks (MINE, with the pickaxe or a
  * hammer; a Glittering Rock with the pickaxe alone), or both and the room's
- * Shrubs and Brambles with any melee weapon (HARVEST), until none are left
- * or the player's next letter, SPACE, Shift or Enter. OPEN walks to each of
- * the room's Barrels, Chests, Crates and Metal Boxes in turn and opens it by
+ * Shrubs, Brambles, Boulders and forage (HARVEST), until none are left or the
+ * player's next letter, SPACE, Shift or Enter. OPEN walks to each of the
+ * room's Barrels, Chests, Crates and Metal Boxes in turn and opens it by
  * hand, as SPACE does; HARVEST does that first. Once HARVEST has none of
  * those left it cuts the room's grass with any blade, a cell at a time, the
  * cell that cuts the most blades per second of walking and swinging first,
