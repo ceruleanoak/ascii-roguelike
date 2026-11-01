@@ -117,6 +117,26 @@ export class AlchemySystem {
   nearCauldron() { return this._nearStation('Ω'); }
   nearCondenser() { return this._nearStation('Ψ'); }
 
+  // A potion with ingredient data, starter or true: what the Condenser reads.
+  _isPotion(item) {
+    return !!item && !!(item.baseIngredient || (item.hiddenIngredient && STARTER_POTION_CHARS.has(item.char)));
+  }
+
+  /**
+   * An Armed Consumable that is a potion, while the player stands in the
+   * Alchemy Lab; else null. A potion armed here is for the Condenser: it
+   * neither fires (ConsumableTriggerSystem.fireSelected) nor tosses
+   * (TossSystem.handleShiftPress).
+   */
+  armedPotionInLab() {
+    const game = this.game;
+    if (!game.player?.inHut || !game.activeFloor) return null;
+    const inLab = game.activeFloor.backgroundObjects.some(o => (o.char === 'Ω' || o.char === 'Ψ') && !o.destroyed);
+    if (!inLab) return null;
+    const item = game.consumableTriggerSystem.armed()?.item;
+    return this._isPotion(item) ? item : null;
+  }
+
   /**
    * SPACE near a station → cauldron opens its menu, condenser reveals.
    * Bottle-filling is NOT handled here — it requires the Bottle slot to be
@@ -533,10 +553,15 @@ export class AlchemySystem {
   revealCondenser() {
     const game = this.game;
 
+    // The potion the player armed goes in without asking which.
+    const armedPotion = this.armedPotionInLab();
+    if (armedPotion) {
+      this.revealPotion(armedPotion);
+      return;
+    }
+
     // Every carried potion with ingredient data (starter or true potions)
-    const potionsWithData = this._bottleChoices(s =>
-      s && (s.baseIngredient || (s.hiddenIngredient && ['🜄', '🜅', '🜆'].includes(s.char)))
-    );
+    const potionsWithData = this._bottleChoices(s => this._isPotion(s));
 
     if (potionsWithData.length === 0) {
       game.menuSystem.showPickupMessage('NO POTION');

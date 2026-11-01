@@ -35,6 +35,8 @@ export class TossSystem {
   // dispatch of its own — both are 'drop'-mode trapCharging, fired by
   // Game.handleShiftRelease.
   handleShiftPress() {
+    // Alchemy Lab: an armed potion stays in hand, and still outranks the weapon.
+    if (this.game.alchemySystem?.armedPotionInLab()) return;
     if (this.startToss()) return;
     if (this.game.player?.heldItem) this.game.trapSystem.startTrapCharge('drop');
   }

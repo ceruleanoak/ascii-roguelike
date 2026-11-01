@@ -126,6 +126,10 @@ export class ConsumableTriggerSystem {
       return false;
     }
 
+    // Alchemy Lab: an armed potion is not drunk here. Declining lets SPACE
+    // reach the stations, the Condenser reading the armed potion first.
+    if (game.alchemySystem?.armedPotionInLab()) return false;
+
     // Gold Breath curse: the slots are coins now — SPACE flips one instead of
     // firing the remedy behind it (consumable use suspended, ratified). The
     // curse owner performs the discharge; an empty wallet spends nothing but

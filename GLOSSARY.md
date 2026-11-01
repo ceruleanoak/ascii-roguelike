@@ -1386,7 +1386,8 @@ identity, not standard programming terms.
   mode extended with a source descriptor carrying the Armed Consumable's Bottle Ref — a slot
   or a Bottle in Bottles). Lands via the standard
   pickup path with its cooldown. Weapon-held SHIFT behavior (drop) is unchanged — the Toss
-  exists only with hands free.
+  exists only with hands free. In the Alchemy Lab an armed potion neither tosses nor fires
+  (`AlchemySystem.armedPotionInLab`); the Condenser reads it instead.
 - **Not:** the held-item SHIFT drop; a trap deploy (that's SPACE); the Gold Breath coin
   discharge (which reuses the same gesture while cursed).
 
