@@ -256,8 +256,8 @@ export const ZONES = {
     // Depth-1 weapon offering pool — one floating pickup per L1 room (RoomGenerator).
     l1WeaponPool: ['/', 'Ⲯ', '≋', '¬', '↑'], // staff, thick staff, whip, gun, spear
     bossDepth: 10,
-    // Yellow's Giant Slime fights in the Imbue Pool room (roomFeatures.seedImbuePools).
-    bossPool: ['giant_slime'],
+    // Yellow's alternate Giant Slime fights in the Imbue Pool room (roomFeatures.seedImbuePools).
+    bossPool: ['imbue_slime'],
     environmentColors: {
       grass: '#888844',
       tree: '#666633',

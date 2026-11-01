@@ -2782,6 +2782,15 @@ export const BOSS_ENCOUNTERS = {
     ],
     arenaSpacing: 'center'
   },
+  // Yellow's alternate Giant Slime — its own encounter id so defeating green's
+  // giant_slime doesn't lock yellow's B room out of its boss (per-run lockout
+  // is keyed on the encounter id). Fights in the Imbue Pool room.
+  imbue_slime: {
+    spawns: [
+      { char: 'M', count: 1, role: 'boss' }
+    ],
+    arenaSpacing: 'center'
+  },
   sniper: {
     spawns: [
       { char: '1', count: 1, role: 'boss' }

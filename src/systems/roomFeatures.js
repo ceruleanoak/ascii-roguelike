@@ -2155,7 +2155,7 @@ export function spawnMinibossOrFallback(gen, room) {
       const encounter = BOSS_ENCOUNTERS[encounterId];
       // Yellow's Giant Slime fights beside its three Imbue Pools. Seeded before
       // the spawn so the pool cells are settled terrain when the boss arrives.
-      if (encounterId === 'giant_slime' && room.zone === 'yellow') seedImbuePools(room);
+      if (encounterId === 'imbue_slime') seedImbuePools(room);
       if (encounter) spawnBossEncounter(gen, room, encounter);
     }
     return;
