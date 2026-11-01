@@ -55,7 +55,7 @@ const FIRE_BAKES = {
 const FIRE_BAKE_COST = { [SAND_CHAR]: 5 };
 // Fish is a carried consumable, not an ingredient, so it bakes through its own
 // branch in commitSelection (like the Forest Berry) rather than FIRE_BAKES.
-const FISH_CHAR = '♓';
+const FISH_CHAR = '∝';
 const COOKED_FISH_CHAR = '⍟';
 
 export class FireplaceSystem {

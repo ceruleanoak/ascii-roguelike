@@ -2272,9 +2272,9 @@ export const ITEMS = {
   // pickup — see FishingSystem.trySpacePickup / fishingTables.js's
   // directPickupItem. Cutting a fish with a blade opens its table drops instead.
   // No effect yet — carried like a Stick Bundle until a use is designed.
-  '♓': {
+  '∝': {
     rarity: 'common',
-    char: '♓',
+    char: '∝',
     name: 'Fish',
     type: ITEM_TYPES.CONSUMABLE,
     oneShot: true,
