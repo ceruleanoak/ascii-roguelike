@@ -181,10 +181,12 @@ export class HutSystem {
 
       const cauldron = new BackgroundObject('Ω', Math.floor(cols / 2) * GRID.CELL_SIZE, Math.floor(rows / 2) * GRID.CELL_SIZE);
       cauldron.color = '#ffffff';
+      cauldron.animationColor = '#ffffff'; // what actually renders (getRenderPosition)
       backgroundObjects.push(cauldron);
 
       const condenser = new BackgroundObject('Ψ', 2 * GRID.CELL_SIZE, (rows - 4) * GRID.CELL_SIZE);
       condenser.color = '#cc88ff';
+      condenser.animationColor = '#cc88ff';
       backgroundObjects.push(condenser);
     }
 
