@@ -275,6 +275,13 @@ export class BoulderSystem {
 
       this._crushLightweight(r);
 
+      // A rolling rock that reaches a Shed's small door breaks it open and
+      // is spent on it, like the Vault wall below.
+      if (game.hutSystem?.tryBreakShedDoor(r.x, r.y, GRID.CELL_SIZE / 2)) {
+        this.rocks.splice(i, 1);
+        continue;
+      }
+
       // A rolling rock breaks anything a bomb breaks (Bombable Rocks and
       // Walls, a bombable Vault wall), strikes a Puzzle Room switch, and
       // brings down a Rubble Wall, which nothing else breaks; any way, the

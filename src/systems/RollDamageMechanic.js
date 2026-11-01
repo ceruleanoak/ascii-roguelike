@@ -28,10 +28,12 @@ export function updateRollDamage(combatSystem, player, enemies, backgroundObject
   // Red zone Vault: the Red Warrior's damage roll breaks the wall on
   // contact, same as a boulder or bomb. Idempotent (checks vault.unlocked)
   // so no per-roll hit-tracking is needed here.
-  combatSystem.game?.interactionSystem?.tryBreakVaultWall(
-    hitbox.x + hitbox.width / 2, hitbox.y + hitbox.height / 2,
-    Math.max(hitbox.width, hitbox.height) / 2
-  );
+  const rollCx = hitbox.x + hitbox.width / 2;
+  const rollCy = hitbox.y + hitbox.height / 2;
+  const rollRadius = Math.max(hitbox.width, hitbox.height) / 2;
+  combatSystem.game?.interactionSystem?.tryBreakVaultWall(rollCx, rollCy, rollRadius);
+  // Same contact rule for a Shed's small door (HutSystem.tryBreakShedDoor).
+  combatSystem.game?.hutSystem?.tryBreakShedDoor(rollCx, rollCy, rollRadius);
 
   // Damage enemies on contact (once per enemy per roll)
   for (const enemy of enemies) {

@@ -724,9 +724,37 @@ export class HutSystem {
       game.combatSystem.createDamageNumber('LOCKED', door.position.x, door.position.y - GRID.CELL_SIZE * 0.5, '#eeeeee');
       return true;
     }
-    shed.unlocked = true;
-    door.becomeHutDoor();
+    this._openShed(shed);
     return true;
+  }
+
+  /**
+   * A rolling rock or the Red Warrior's damage roll that reaches a Shed's
+   * small door breaks it open, the same unlock the Shed Key gives without
+   * spending the key. Pixel-space, like tryBreakVaultWall. The reach is one
+   * cell past the caller's footprint, because a solid door stops the player
+   * a cell short of its center. Surface only: the huts list is the surface
+   * room's, so a Shed never answers to a strike from inside an interior.
+   */
+  tryBreakShedDoor(x, y, radius = GRID.CELL_SIZE / 2) {
+    const { game } = this;
+    if (!game.player || isInteriorActive(game)) return false;
+    const reach = GRID.CELL_SIZE + radius;
+    const shed = (game.currentRoom?.huts ?? []).find(hut => {
+      if (hut.hutKind !== 'shed' || hut.unlocked) return false;
+      const cx = hut.doorPosition.col * GRID.CELL_SIZE + GRID.CELL_SIZE / 2;
+      const cy = hut.doorPosition.row * GRID.CELL_SIZE + GRID.CELL_SIZE / 2;
+      return Math.hypot(x - cx, y - cy) <= reach;
+    });
+    if (!shed) return false;
+    this._openShed(shed);
+    game.audioSystem?.playSFX?.('vault_wall_break');
+    return true;
+  }
+
+  _openShed(shed) {
+    shed.unlocked = true;
+    shed.doorObject.becomeHutDoor();
   }
 
   // ─── Entry / Exit ────────────────────────────────────────────────────────
