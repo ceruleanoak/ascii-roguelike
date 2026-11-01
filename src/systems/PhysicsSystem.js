@@ -1921,13 +1921,15 @@ export class PhysicsSystem {
         entity.applyStatusEffect('wet', 6.0);
         const wet = entity.statusEffects?.wet;
         if (wet?.stacks !== undefined) wet.stacks = wetPipCount(entity); // pips, not per-frame applications
-        // Water extinguishes burn. clearStatusEffect also drops the stale
-        // effectApplicationOrder entry — leaving it survives to the next
-        // ignite, since only an inactive→active transition re-pushes it
-        // (bug #301: a burn/wet/burn cycle left duplicate 'burn' entries,
-        // each contributing its own full pip row once burn reactivated).
-        if (entity.statusEffects?.burn?.active) clearStatusEffect(entity, 'burn');
       }
+
+      // Water extinguishes burn for any wader, wet-immune or not — a Flippers
+      // wearer in deep water must still put the fire out. clearStatusEffect also
+      // drops the stale effectApplicationOrder entry — leaving it survives to the
+      // next ignite, since only an inactive→active transition re-pushes it
+      // (bug #301: a burn/wet/burn cycle left duplicate 'burn' entries, each
+      // contributing its own full pip row once burn reactivated).
+      if (entity.statusEffects?.burn?.active) clearStatusEffect(entity, 'burn');
 
       // Apply water state effects (skip if immune)
       if (!isImmune) {
