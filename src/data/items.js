@@ -1047,7 +1047,7 @@ export const ITEMS = {
   },
 
   // ── MELEE / spear — Tier 2 ────────────────────────────────────────────────
-  // Spear + Jaw or Spear + Sharkbone. The spear's non-elemental tier-2 rung,
+  // Spear + Jaw. The spear's non-elemental tier-2 rung,
   // so an unattuned fountain has something to hand back for a Spear.
   'ⲯ': {
     rarity: 'common',
@@ -3754,7 +3754,7 @@ export const AFFINITY_POOLS = {
     ingredients: {
       [RARITY.COMMON]:   ['g', 'w'],         // Goo, Wing (fins/webbing)
       [RARITY.UNCOMMON]: ['e', 'p'],         // Eye, Pearl Shard
-      [RARITY.RARE]:     ['k', 'n'],         // Silk, Sharkbone
+      [RARITY.RARE]:     ['k'],              // Silk
       [RARITY.EPIC]:     ['s'],              // Scale
     },
     weapons: {

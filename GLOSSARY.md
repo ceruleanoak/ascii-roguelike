@@ -240,7 +240,7 @@ identity, not standard programming terms.
 - **Definition:** A twinkle out on the deep water of a green-Zone Ocean (`O`) Room, the same
   "something is hidden here" sparkle that loot in tall grass gives off. Reaching it means
   swimming deep enough to risk drowning. What it hides (a coin 80% of the time, otherwise a sea
-  find: Pearl Shard, Sharkbone) is rolled when the glint is seeded, and only shows, as a
+  find: Pearl Shard) is rolled when the glint is seeded, and only shows, as a
   darkened glyph in place of the twinkle, through Goggles. Only with Goggles equipped does
   SPACE in range bring it up; without them the glint can't be collected. Every
   green Ocean Room holds 1–2, in the outer half of the deep band. A discovered glint is spent.

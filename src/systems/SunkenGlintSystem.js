@@ -24,8 +24,7 @@ const COIN_CHANCE = 0.8;
 // table hauls up (fishingTables.js `ocean`), weighted the same way. Pearl
 // itself stays out — the fisherman's legend is its only way in.
 const SEA_FINDS = [
-  { char: 'p', weight: 12 },  // Pearl Shard (Oyster)
-  { char: 'n', weight: 5 }    // Sharkbone
+  { char: 'p', weight: 12 }   // Pearl Shard (Oyster)
 ];
 
 /**

@@ -21,10 +21,8 @@ export const FISHING_TABLES = {
       { name: 'Giant Turtle',char: 'ծ', color: '#88cc44', drops: ['b', 'm'],        weight: 10 },
       { name: 'Fish',        char: 'ծ', color: '#7ec8e3', drops: [], directPickupItem: '♓', weight: 20 },
       { name: 'Empty Bottle',char: 'ծ', color: '#aaccee', drops: [], specialDrops: ['B'], weight: 4 },
-      // Sea supply line: rare catches for the pearl and sharkbone recipes
-      // (Pearl weapons, Trident).
-      { name: 'Oyster Husk', char: 'ծ', color: '#ddeeff', drops: ['p'],             weight: 3 },
-      { name: 'Sharkbone',   char: 'ծ', color: '#ccd8e8', drops: ['n'],             weight: 1 }
+      // Sea supply line: rare catches for the pearl recipes (Pearl weapons).
+      { name: 'Oyster Husk', char: 'ծ', color: '#ddeeff', drops: ['p'],             weight: 3 }
     ]
   },
 
@@ -38,7 +36,6 @@ export const FISHING_TABLES = {
       { name: 'Blue Crab',    char: 'ծ', color: '#4477cc', drops: ['b', 'g'],       weight: 22 },
       { name: 'Jellyfish',    char: 'ծ', color: '#ccaaff', drops: ['v', 'g'],       weight: 18 },
       { name: 'Oyster',       char: 'ծ', color: '#ddeeff', drops: ['p'],            weight: 12 },
-      { name: 'Sharkbone',    char: 'ծ', color: '#ccd8e8', drops: ['n'],            weight: 5 },
       { name: 'Fish',         char: 'ծ', color: '#7ec8e3', drops: [], directPickupItem: '♓', weight: 20 },
       { name: 'Empty Bottle', char: 'ծ', color: '#aaccee', drops: [], specialDrops: ['B'], weight: 4 }
     ]

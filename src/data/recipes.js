@@ -149,7 +149,6 @@ export const RECIPES = [
   // Utility
   { left: 't', right: '|', result: '↑', name: 'Spear' },         // Teeth + Stick = Spear
   { left: '↑', right: 'j', result: 'ⲯ', name: 'Trident' },      // Spear + Jaw = Trident (jaw-bone prongs)
-  { left: '↑', right: 'n', result: 'ⲯ', name: 'Trident' },      // Spear + Sharkbone = Trident (second route)
   { left: '↑', right: 'M', result: '⇑', name: 'War Spear' },    // Spear + Metal = War Spear
 
   // Secret recipes
