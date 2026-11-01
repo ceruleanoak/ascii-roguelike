@@ -23,6 +23,7 @@ import {
   ITEM_TYPES,
   INGREDIENTS,
   AFFINITY_POOLS,
+  RARITY,
   RARITY_PROFILES,
   getRandomDrop,
   TREASURE_CHARS,
@@ -111,18 +112,27 @@ function computeCoinPrice(ingredientCost) {
 // see ShopSystem's 'pawn' mode). Ingredients are never pawned; their `value`
 // is the currency an item's worth is accumulated from.
 
+// Recipe inputs that are Items rather than Ingredients have no `value` of their
+// own, so each is worth a flat amount by its rarity. An Item with no `rarity`
+// field reads as common.
+const ITEM_INPUT_VALUE = {
+  [RARITY.COMMON]: 0,
+  [RARITY.UNCOMMON]: 1,
+  [RARITY.RARE]: 3,
+  [RARITY.EPIC]: 6,
+};
+
 /**
- * Fractional worth of one unit of `char`, read from its explicit INGREDIENTS
- * record. A char that is not an ingredient (a crafted intermediate with no
- * record of its own) is worth whatever its recipe's two inputs are worth,
- * recursively. A missing value counts as 0 (check:data fails on it).
+ * Fractional worth of one unit of recipe input `char`: an Ingredient's explicit
+ * `value` (missing counts as 0 — check:data fails on it), or an Item's
+ * rarity-based flat value. Anything else is worth 0.
  */
 function ingredientWorth(char) {
   const ingredient = INGREDIENTS[char];
   if (ingredient) return ingredient.value ?? 0;
-  const recipe = findRecipeByResult(char);
-  if (!recipe) return 0;
-  return ingredientWorth(recipe.left) + ingredientWorth(recipe.right);
+  const item = ITEMS[char];
+  if (item) return ITEM_INPUT_VALUE[item.rarity ?? RARITY.COMMON];
+  return 0;
 }
 
 /**
