@@ -422,7 +422,7 @@ identity, not standard programming terms.
 
 ### Passive Indicator
 - **Definition:** The floating word unique to one passive item, shown over the player each time
-  that passive acts. No two passives share one. The Compass's is `FIND IT`, with every beep.
+  that passive acts. No two passives share one. The Compass's is `?`, with every beep.
 - **In code:** `passiveIndicator` on the item's `ITEMS` entry, drawn with
   `combatSystem.createDamageNumber` (Compass: `CompassSystem.announceFind`).
 - **Not:** an Armor Flavor word (said once, on equip, for an armor family); a pickup message;

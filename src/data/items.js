@@ -3077,7 +3077,7 @@ export const ITEMS = {
   // Compass: armor, worn for what it finds rather than for defense (none).
   // Legend of Three green-zone "Truth" item (claudedocs/legend-of-three.md),
   // granted by the green P room (the Compass Rose), and the Pyramid's Truth
-  // slot. Its Passive Indicator is "FIND IT" (CompassSystem.announceFind),
+  // slot. Its Passive Indicator is "?" (CompassSystem.announceFind),
   // floated over the player with every beep. Two behavior surfaces:
   // - Dungeon (DungeonPuzzleSystem.updateCompassBeep): beeps only for the
   //   skull key (whichever floor interiorState.keySkullNode rolled) and
@@ -3099,7 +3099,7 @@ export const ITEMS = {
     name: 'Compass',
     type: ITEM_TYPES.ARMOR,
     passive: true,
-    passiveIndicator: 'FIND IT',
+    passiveIndicator: '?',
     color: '#66ccff'
   },
 

@@ -18,7 +18,7 @@ export function refillQuiversForNewRoom(player) {
 }
 
 // The Fletch's Passive Indicator, floated over the player the way the
-// Compass floats FIND IT (CompassSystem.announceFind).
+// Compass floats ? (CompassSystem.announceFind).
 export function announceQuiverFull(game, fletch) {
   const player = game.player;
   if (!player) return;

@@ -21,7 +21,6 @@ const INTERACT_RADIUS = GRID.CELL_SIZE * 2;
 // Solver (dungeon/progressionSolver.js LOCK_REACH_CELLS) assumes the same.
 const LOCK_BLOCK_REACH = GRID.CELL_SIZE * 1.5;
 
-const SFX_BEEP_INTERVAL = 2.0; // Compass ping throttle, seconds
 
 /**
  * DungeonPuzzleSystem — gating and puzzle logic for the 6-floor dungeon
@@ -37,14 +36,15 @@ const SFX_BEEP_INTERVAL = 2.0; // Compass ping throttle, seconds
 export class DungeonPuzzleSystem {
   constructor(game) {
     this.game = game;
-    this._compassBeepTimer = 0;
+    // The floor the Compass last beeped on, so it beeps once per arrival.
+    this._compassBeepFloor = null;
   }
 
   // ─── Per-tick update ──────────────────────────────────────────────────────
 
   update(floor, dt) {
     if (!floor) return;
-    this.updateCompassBeep(floor, dt);
+    this.updateCompassBeep(floor);
     if (this._floorCleared(floor)) {
       this._updateShutters(floor);
       this.revealEdges(floor, 'clear');
@@ -87,15 +87,15 @@ export class DungeonPuzzleSystem {
     return opened;
   }
 
-  // Compass (⌖) — dungeon-only beep, narrowed (2026-08-25) to exactly the
+  // Compass (⌖) — dungeon-only beep, once per arrival, narrowed (2026-08-25) to exactly the
   // two dungeon secrets it's meant to flag: the skull key (wherever
   // interiorState.keySkullNode rolled it — a floor before the key's door) and the Branch's
   // companion-panel puzzle. Generic floor loot (Pyramid slots, Puzzle Room
   // triggers, plain chests) no longer beeps. The full Explore-mode mechanic
   // (secret-reveal beep + directional arrow) lives in CompassSystem.js.
-  updateCompassBeep(floor, dt) {
+  updateCompassBeep(floor) {
     const { game } = this;
-    if (!game.compassSystem?.isWorn()) { this._compassBeepTimer = 0; return; }
+    if (!game.compassSystem?.isWorn()) { this._compassBeepFloor = null; return; }
 
     // Skull key: pending only while unfound. hasKeyItem alone can't tell
     // "not yet found" apart from "already spent" (both read false once the
@@ -106,13 +106,11 @@ export class DungeonPuzzleSystem {
       && !hasKeyItem(game.inventorySystem, '⚿', game);
     const branchPending = floor.puzzle === 'panels' && !floor.puzzleSolved;
 
-    if (!skullPending && !branchPending) { this._compassBeepTimer = 0; return; }
+    if (!skullPending && !branchPending) { this._compassBeepFloor = null; return; }
+    if (this._compassBeepFloor === floor) return;
 
-    this._compassBeepTimer += dt;
-    if (this._compassBeepTimer >= SFX_BEEP_INTERVAL) {
-      this._compassBeepTimer = 0;
-      game.compassSystem.announceFind();
-    }
+    this._compassBeepFloor = floor;
+    game.compassSystem.announceFind();
   }
 
   // Trap Room — sealed enemy gauntlet off Branch's North descent. Exit
