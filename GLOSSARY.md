@@ -34,8 +34,10 @@ identity, not standard programming terms.
   offered this" means, and the Settlement Shop's stock gate is its first consumer.
 - **In code:** `src/data/homeZone.js` — `getHomeZone(char)` returns `{ zone, depth }` or `null`.
   Wholly **derived** from existing data (spawn tables, affinities, rarity profiles, terrain drop
-  effects, recipes), never an authored per-item field, so it can't go stale as content is added.
-  An item with no Home Zone is one the world cannot produce.
+  effects, recipes), so it can't go stale as content is added. Two optional authored fields sit
+  beside it: `zones` on an ITEMS entry restricts which zones may claim the item (an item tied to
+  specific places), and `shopHome` is the escape hatch for items the supply model can't see. An
+  item with no Home Zone is one the world cannot produce.
 - **Not:** "unlock level", "item tier" (see value tier — one of Home Zone's two inputs),
   "native zone", "origin".
 

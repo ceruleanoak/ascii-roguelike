@@ -16,6 +16,13 @@
 // whole point (see CLAUDE.md's "Architectural Maturity" guidance against
 // hand-editing >10 definitions).
 //
+// Two authored inputs sit beside the derivation. `zones` (an ITEMS array of
+// zone keys) limits which zones may claim the item, for items that belong to
+// specific places regardless of what their supply chain reaches. `shopHome`
+// is the escape hatch for items the supply model can't see at all. The
+// derivation's rarity-driven tier floor and drop-table supply both still
+// apply to a `zones`-restricted item.
+//
 // The Settlement Shop is the first consumer: it stocks only listings whose
 // Home Zone the player has actually reached this run (see shopPricing.js's
 // rollShopStock).
@@ -286,9 +293,10 @@ export function getHomeZone(char) {
   }
 
   const tierFloor = data ? TIER_MIN_DEPTH[deriveValueTier(data, data.type)] ?? 1 : 1;
+  const candidateZones = data?.zones ? ZONE_ORDER.filter(zone => data.zones.includes(zone)) : ZONE_ORDER;
 
   let best = null;
-  for (const zone of ZONE_ORDER) {
+  for (const zone of candidateZones) {
     for (const band of zoneBands(zone)) {
       if (!isReachable(char, availableChars(zone, band), new Map(), new Set())) continue;
       const depth = Math.max(band, tierFloor);

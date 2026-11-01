@@ -22,6 +22,7 @@ import { fileURLToPath } from 'node:url';
 
 import { ITEMS, INGREDIENTS, AFFINITY_POOLS, RARITY, RARITY_PROFILES, ITEM_TYPES, getItemData }
   from '../src/data/items.js';
+import { ZONES } from '../src/data/zones.js';
 import { RECIPES } from '../src/data/recipes.js';
 import { ENEMIES } from '../src/data/enemies.js';
 import { BACKGROUND_OBJECTS } from '../src/game/GameConfig.js';
@@ -113,6 +114,16 @@ for (const [char, ingredient] of Object.entries(INGREDIENTS)) {
 for (const [char, item] of Object.entries(ITEMS)) {
   if (!RARITY_VALUES.has(item.rarity)) {
     fail(`ITEMS['${char}'] (${item.name ?? '?'}) has no valid rarity — shop pricing and tier read it`);
+  }
+  // `zones` restricts Home Zone to the listed zone keys; an unknown key or an
+  // empty list would silently strand the item (never stocked).
+  if (item.zones !== undefined) {
+    if (!Array.isArray(item.zones) || item.zones.length === 0) {
+      fail(`ITEMS['${char}'] (${item.name ?? '?'}) zones must be a non-empty array of zone keys`);
+    }
+    for (const zone of item.zones ?? []) {
+      if (!(zone in ZONES)) fail(`ITEMS['${char}'] (${item.name ?? '?'}) zones lists unknown zone '${zone}'`);
+    }
   }
 }
 reportDuplicates((scanLiteralKeys(enemiesSource, 'ENEMIES') ?? []).map(String), 'ENEMIES');
