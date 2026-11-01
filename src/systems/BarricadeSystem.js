@@ -30,6 +30,8 @@ const INSISTENCE_TO_BARRICADE = 2;
 // The Race Flag lands at random among this many of the open cells farthest from
 // the player, so it can't be waited at and its corner can't be learned.
 const FLAG_CELL_POOL = 12;
+// How many cells nearer the player the Race Flag lands than the farthest open cell.
+const FLAG_CLOSER_CELLS = 3;
 
 /**
  * BarricadeSystem — raises and owns Barricades: the things stamped across an
@@ -467,7 +469,12 @@ export class BarricadeSystem {
       col, row, dist: Math.hypot(col * cs + cs / 2 - px, row * cs + cs / 2 - py)
     }));
     const empty = measured.filter(c => !occupied.has(`${c.col},${c.row}`) && !isExitLetterTile(c.col, c.row));
-    const far = (empty.length > 0 ? empty : measured).sort((a, b) => b.dist - a.dist);
+    const pool = (empty.length > 0 ? empty : measured);
+    // The landing reach stops FLAG_CLOSER_CELLS short of the farthest open cell,
+    // so the finish sits that much nearer the player (and the race that much shorter).
+    const farthest = Math.max(...pool.map(c => c.dist));
+    const reach = pool.filter(c => c.dist <= farthest - FLAG_CLOSER_CELLS * cs);
+    const far = (reach.length > 0 ? reach : pool).sort((a, b) => b.dist - a.dist);
     return far[Math.floor(Math.random() * Math.min(FLAG_CELL_POOL, far.length))];
   }
 
