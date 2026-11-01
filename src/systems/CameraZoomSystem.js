@@ -13,8 +13,10 @@ import { isDeathHeldOffSurface, isInteriorActive, activeInteriorFloor } from './
  * ZOOM.RELEASE_RANGE_CELLS (hysteresis, avoids flicker at the boundary)
  * and no threat is left inside the zoomed frame — an enemy the player can
  * still see keeps the frame (and its Motif) engaged.
- * Inside the Maze interior, zoom is forced on permanently regardless of
- * ghost proximity — the corridor is narrow enough that it's always relevant.
+ * Inside the Maze interior, zoom is forced on permanently at the tighter
+ * ZOOM.MAZE_SCALE regardless of ghost proximity — the corridor is narrow enough
+ * that it's always relevant. A worn Compass instead opens the Maze's frame all
+ * the way out to 1.0, and that opening is its Passive Indicator's moment.
  * On the surface with no weapon equipped, the same trigger instead targets
  * ZOOM.HALF_SCALE — still some tension from the nearby threat, but not the
  * full commit of an armed engagement; Interiors are exempt from this
@@ -26,7 +28,7 @@ import { isDeathHeldOffSurface, isInteriorActive, activeInteriorFloor } from './
  * border-wall ring, since those walls occupy the outermost cell of that same
  * grid (RoomGenerator's border-wall pass). The player only ever ends up
  * off-center when the clamp is actively holding the frame against a wall.
- * The clamp is always solved against ZOOM.SCALE (the fully-zoomed-in scale),
+ * The clamp is always solved against the fully-zoomed-in scale (_frameScale),
  * not the live easing value the zoom-in/out transition is currently at —
  * that pivot is provably still in-bounds at every lesser scale too (see
  * _computeClampedOrigin), so the pivot stays put and only the scale eases,
@@ -58,6 +60,7 @@ export class CameraZoomSystem {
     this.originYPercent = 50;
     this._noEnemyElapsedMs = Infinity;
     this._lastState = null;
+    this._compassOpenedMaze = false;
   }
 
   update(deltaTime) {
@@ -92,7 +95,7 @@ export class CameraZoomSystem {
       const roomTopPercent = (offsetY / GRID.HEIGHT) * 100;
       const roomBottomPercent = ((offsetY + gridRows * GRID.CELL_SIZE) / GRID.HEIGHT) * 100;
 
-      // Clamp against the fully-zoomed-in scale (ZOOM.SCALE), not the live
+      // Clamp against the fully-zoomed-in scale (_frameScale), not the live
       // easing value from _tickZoom — that's what "lock to the edge on full
       // zoom-in" actually means, and it's what keeps the pivot stable across
       // the whole transition instead of recomputing a shrinking/growing clamp
@@ -100,10 +103,11 @@ export class CameraZoomSystem {
       // window would still be valid at full zoom, but a pivot solved against
       // the fully-zoomed window is provably still in-bounds at every lesser
       // scale too (the visible window only ever narrows as scale grows), so
-      // fixing on ZOOM.SCALE is the one choice that's smooth at every step:
+      // fixing on that scale is the one choice that's smooth at every step:
       // the pivot barely moves once computed, and only the scale eases.
-      this.originXPercent = this._computeClampedOrigin(desiredXPercent, roomLeftPercent, roomRightPercent, ZOOM.SCALE);
-      this.originYPercent = this._computeClampedOrigin(desiredYPercent, roomTopPercent, roomBottomPercent, ZOOM.SCALE);
+      const frameScale = this._frameScale(player);
+      this.originXPercent = this._computeClampedOrigin(desiredXPercent, roomLeftPercent, roomRightPercent, frameScale);
+      this.originYPercent = this._computeClampedOrigin(desiredYPercent, roomTopPercent, roomBottomPercent, frameScale);
 
       // Hysteresis: once zoomed in, require the enemy to clear the wider
       // release range before we zoom back out, so it doesn't flicker in/out
@@ -130,8 +134,10 @@ export class CameraZoomSystem {
       const wantsZoom = enemyDetected || this._noEnemyElapsedMs < ZOOM.ZOOM_OUT_DELAY_MS;
       desiredScale = wantsZoom ? ZOOM.SCALE : 1;
 
-      // Maze interiors stay permanently zoomed in, regardless of ghost proximity.
-      if (player.inMaze) desiredScale = ZOOM.SCALE;
+      // Maze interiors stay permanently zoomed in, regardless of ghost
+      // proximity, unless a worn Compass opens the whole Maze to view.
+      if (player.inMaze) desiredScale = this._updateMazeCompass() ? 1 : ZOOM.MAZE_SCALE;
+      else this._compassOpenedMaze = false;
 
       // On the surface with no weapon equipped, an aggro'd enemy nearby still
       // reads as some tension, but not a full combat commit — half zoom
@@ -159,6 +165,20 @@ export class CameraZoomSystem {
     }
 
     this._tickZoom(desiredScale, deltaTime, state, justDied);
+  }
+
+  /** The tightest scale this layer's frame can reach. */
+  _frameScale(player) {
+    return player.inMaze ? ZOOM.MAZE_SCALE : ZOOM.SCALE;
+  }
+
+  /** Whether a worn Compass holds the Maze open; floats its word as it opens. */
+  _updateMazeCompass() {
+    const compass = this.game.compassSystem;
+    const worn = compass.isWorn();
+    if (worn && !this._compassOpenedMaze) compass.announceFind();
+    this._compassOpenedMaze = worn;
+    return worn;
   }
 
   /** Live threat list + local grid size for the player's current layer. */
@@ -189,7 +209,7 @@ export class CameraZoomSystem {
   // player sits in canvas-percent (what the frame would center on with no
   // constraint); `roomStartPercent`/`roomEndPercent` bound the room/interior's
   // own rendered rect on this axis (inclusive of its border-wall ring — see
-  // class doc comment); `scale` is always called with ZOOM.SCALE (the target
+  // class doc comment); `scale` is always called with _frameScale (the target
   // fully-zoomed-in scale), never the live easing value — see call site.
   // Returns a CSS transform-origin percent: the point that stays pinned
   // under `scale()` so the clamped center lands at screen-center (50%).
@@ -200,11 +220,11 @@ export class CameraZoomSystem {
   // O = (C*s - 50) / (s - 1). At s == 1 the transform is the identity and O
   // is irrelevant, so it's returned as-is to avoid the s==1 singularity.
   //
-  // Why solving at ZOOM.SCALE stays in-bounds at every lesser scale too:
+  // Why solving at the frame scale stays in-bounds at every lesser scale too:
   // for a fixed O, the visible window at an arbitrary actual scale a is
   // [O*(1 - 1/a), O + (100 - O)/a]. Since O and (100 - O) are both >= 0 and
   // 1/a <= 1 for every a >= 1, the left edge is always >= 0 and the right
-  // edge is always <= 100 — true for any a, not just a == ZOOM.SCALE. So a
+  // edge is always <= 100 — true for any a, not just the frame scale. So a
   // pivot that's correctly clamped for the tightest (most-zoomed-in) window
   // is automatically still fully in-bounds for every wider window the
   // zoom-in/out transition passes through on the way there.

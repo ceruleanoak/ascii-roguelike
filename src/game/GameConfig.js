@@ -67,6 +67,7 @@ export const PHYSICS = {
 // pivoted on the player, eased with a cubic bezier. See CameraZoomSystem.
 export const ZOOM = {
   SCALE: 1.75,                // 175% zoom when triggered
+  MAZE_SCALE: 2.5,            // the Maze's permanent frame, tighter than any fight (a worn Compass opens it to 1.0)
   HALF_SCALE: 1.375,          // halfway between 1.0 and SCALE — used on the surface when an
                                // aggro'd enemy is nearby but the player has no weapon equipped:
                                // still some tension, but not the full combat commit (see CameraZoomSystem)

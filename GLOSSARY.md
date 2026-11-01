@@ -106,7 +106,8 @@ identity, not standard programming terms.
   expire spawns a Ghost. Clearing every object and collecting every dropped Ingredient without
   ever spawning a Ghost grants Spectacles at the maze center. A deep Maze (zone Depth ≥ 6) adds
   traps: the Wellspring and its Torch, Flood Panels and the flood they raise, and Rat Nests
-  that release Maze Rats.
+  that release Maze Rats. The camera holds a tight frame on the player the whole way through; a
+  worn Compass opens it to the whole Maze.
 - **In code:** `MazeSystem` (`generateMazeInterior`, `MazeObject`, `MazeGhost`); interior state
   on `game.mazeInterior` (a deliberate exception to the `activeFloor` convention — see Floor).
   It holds real `backgroundObjects` and `enemies` lists, which
