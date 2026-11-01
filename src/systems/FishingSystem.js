@@ -525,13 +525,13 @@ export class FishingSystem {
     if (!reward.alive) return;
     reward.alive = false;
 
+    // Ingredients fan out in a ring, as a Stick Bundle's break does (dropEffect
+    // spawnMultiple in InteractionSystem).
+    const count = reward.drops.length;
     const scatter = () => (Math.random() - 0.5) * GRID.CELL_SIZE * 2;
-    for (const dropChar of reward.drops) {
-      spawnIngredientFn(
-        dropChar,
-        reward.position.x + scatter(),
-        reward.position.y + scatter()
-      );
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2 + Math.random() * 0.5;
+      spawnIngredientFn(reward.drops[i], reward.position.x, reward.position.y, angle);
     }
     if (spawnSpecialFn && reward.specialDrops) {
       for (const specialKey of reward.specialDrops) {
@@ -550,7 +550,7 @@ export class FishingSystem {
   cutRewardObject(game, reward) {
     this.hitRewardObject(
       reward,
-      (char, x, y) => game.lootSystem.spawnIngredientDrop(char, x, y, null, null),
+      (char, x, y, angle) => game.lootSystem.spawnIngredientDrop(char, x, y, angle, reward),
       (specialKey, x, y) => {
         if (specialKey === 'fairy') {
           if (game.fairiesAngered) return;
