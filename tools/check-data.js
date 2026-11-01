@@ -100,9 +100,19 @@ reportDuplicates(scanLiteralKeys(ingredientsSource, 'INGREDIENTS'), 'INGREDIENTS
 
 // Every ingredient's `value` feeds pawn payouts and shop coin cost — a missing
 // or non-numeric value would silently price every recipe using it at 0.
+const RARITY_VALUES = new Set(Object.values(RARITY));
 for (const [char, ingredient] of Object.entries(INGREDIENTS)) {
   if (!Number.isFinite(ingredient.value) || ingredient.value < 0) {
     fail(`INGREDIENTS['${char}'] (${ingredient.name}) has no valid value — pawn and shop pricing read it`);
+  }
+  if (!RARITY_VALUES.has(ingredient.rarity)) {
+    fail(`INGREDIENTS['${char}'] (${ingredient.name}) has no valid rarity — padding and tier read it`);
+  }
+}
+// Items' rarity drives recipe-input value, shop treasure count and tier.
+for (const [char, item] of Object.entries(ITEMS)) {
+  if (!RARITY_VALUES.has(item.rarity)) {
+    fail(`ITEMS['${char}'] (${item.name ?? '?'}) has no valid rarity — shop pricing and tier read it`);
   }
 }
 reportDuplicates((scanLiteralKeys(enemiesSource, 'ENEMIES') ?? []).map(String), 'ENEMIES');
