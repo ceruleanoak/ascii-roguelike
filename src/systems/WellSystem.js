@@ -98,7 +98,7 @@ export class WellSystem {
     if (dx * dx + dy * dy > PROXIMITY_RADIUS * PROXIMITY_RADIUS) return false;
 
     // Skip if this offering is redundant for the current state.
-    if (offering.type === 'infused' && player.magicMeter?.active) return false;
+    if (offering.type === 'infused' && this._infusedIsRedundant(player)) return false;
     if (offering.type === 'frog'    && player.polymorphed)        return false;
 
     game.wellCoinAnim = {
@@ -173,6 +173,15 @@ export class WellSystem {
   // takes priority when several are equipped (the magic meter is the more
   // central ritual; players who want the lucky blessing can move the coins
   // around), then Lucky Coin, then Frog Coin.
+  // An infused coin adds one mana slot, so it is redundant only once every
+  // consumable slot is already a mana slot. Checking meter.active alone blocked
+  // it for any character whose meter was on — Yellow Mage's free slot
+  // turns the meter on before any ritual has happened.
+  _infusedIsRedundant(player) {
+    const meter = player.magicMeter;
+    return !!meter?.active && (meter.slots?.length ?? 0) >= this.game.inventorySystem.maxConsumableSlots;
+  }
+
   _findOfferingSlot() {
     const inv = this.game.inventorySystem;
     if (!inv) return null;
@@ -316,7 +325,7 @@ export class WellSystem {
     const next = this._findOfferingSlot();
     if (next) {
       const redundant =
-        (next.type === 'infused' && player.magicMeter?.active) ||
+        (next.type === 'infused' && this._infusedIsRedundant(player)) ||
         (next.type === 'frog'    && player.polymorphed);
       if (!redundant) anim.room.well.consumed = false;
     }
