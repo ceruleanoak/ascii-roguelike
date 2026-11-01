@@ -414,6 +414,7 @@ author to pick from (TAUNT and CALM were turned down 2026-10-29):
 |---|---|
 | CHARM *(kept)* | Every enemy in the room fights for you until the room is left (a room-wide, temporary COMMAND without true names) |
 | SLEEP *(kept)* | Every enemy in the room falls asleep until struck |
+| CHAOS *(added 2026-11-01)* | Every enemy in the room takes its own random Hex |
 
 *Built 2026-10-29 (P7c): `InfluenceSystem.charmRoom` / `sleepRoom`. A wish-charmed enemy
 (`Enemy.wishCharmed`) never turns on the player, even as the last one standing. With no enemy

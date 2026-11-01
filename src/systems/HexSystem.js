@@ -52,6 +52,10 @@ const SPELL_HEXES = [
  * The HEX spell (cast()): the nearest enemy in range the spell hasn't touched
  * in the last 5 seconds takes one random Hex from SPELL_HEXES. That cooldown
  * is the enemy's own `hexed` Status Effect, so it needs no reset either.
+ *
+ * The CHAOS Wish Spell (chaosRoom()): every enemy in the room takes its own
+ * random Hex. The wish has paid for it, so it ignores that cooldown and never
+ * backfires.
  */
 export class HexSystem {
   constructor(game) {
@@ -81,8 +85,31 @@ export class HexSystem {
       return 'YOU BECOME A FROG.';
     }
 
+    return this._landSpellHex(enemy) ? 'HEXED.' : '...NOTHING.';
+  }
+
+  /** CHAOS's refusal: nothing to hex. */
+  chaosRefusal() {
+    return this._chaosTargets().length ? null : '...NOTHING.';
+  }
+
+  /** The wish was spent: every enemy in the room takes its own random Hex. */
+  chaosRoom() {
+    for (const enemy of this._chaosTargets()) this._landSpellHex(enemy);
+  }
+
+  /** The room's enemies opposing the player. A copy: a Frog result edits the room's list. */
+  _chaosTargets() {
+    const game = this.game;
+    const commanded = game.commandedEnemies ?? [];
+    return (game._activeEnemies() ?? []).filter(enemy => !enemy.isDying && enemy.hp > 0
+      && !game._isHiddenEnemy(enemy) && !commanded.includes(enemy) && !enemy.isCharmed?.());
+  }
+
+  /** Rolls and lands one Hex on `enemy`; false when it can take none. */
+  _landSpellHex(enemy) {
     const hex = this._rollSpellHex(enemy);
-    if (!hex) return '...NOTHING.';
+    if (!hex) return false;
     if (hex.frog) {
       this.frog(enemy)?.applyStatusEffect('hexed', SPELL_COOLDOWN);
     } else {
@@ -90,7 +117,7 @@ export class HexSystem {
       enemy.applyStatusEffect(hex.effect, hex.duration, MAX_PIPS);
       this._burst(enemy.position);
     }
-    return 'HEXED.';
+    return true;
   }
 
   /** A weighted pick from what `enemy` can actually take; null when it can take nothing. */

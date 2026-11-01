@@ -378,6 +378,12 @@ export const SPELLS = {
     effect: (game) => game.influenceSystem.sleepRoom(),
   }),
 
+  // CHAOS: every enemy in the room takes its own random Hex (HexSystem).
+  'CHAOS': wishSpell('influence', {
+    refusal: (game) => game.hexSystem.chaosRefusal(),
+    effect: (game) => game.hexSystem.chaosRoom(),
+  }),
+
   'REVIVE': {
     wish: 'power',
     response: _reviveResponse,

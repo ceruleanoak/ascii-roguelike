@@ -1791,6 +1791,16 @@ identity, not standard programming terms.
   status at full pips, `Infinity` duration; `Enemy.takeDamage` wakes it).
 - **Not:** the Sleep Bomb, or Drowse tiers 1–2 (a slow, not sleep).
 
+### Chaos (spell)
+- **Definition:** The Influence Wish Spell that hexes a room. After the wish question, YES and
+  every enemy in the room (or floor) takes its own random Hex from the HEX spell's roll. It
+  ignores HEX's 5-second cooldown, has no range limit and never backfires on the caster. Enemies
+  on the player's side and those not yet revealed are spared, and bosses never become Frogs. With
+  no enemy to hex, the THREE answers `...NOTHING.` and no wish is spent.
+- **In code:** `SPELLS.CHAOS` (`src/data/spells.js`) → `HexSystem.chaosRoom`, which lands
+  `SPELL_HEXES` through the same `_landSpellHex` as `HexSystem.cast`.
+- **Not:** the Chaos Wand or Chaos Blade; HEX (one enemy, free, can backfire).
+
 ### Hex (Witch companion)
 - **Definition:** What the hut Witch does as a companion. On a Cursed Run she doesn't curse the
   player; talking to her once is her offer (`YOU CARRY IT. LET ME COME.`), and talking to her again
