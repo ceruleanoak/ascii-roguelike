@@ -263,55 +263,6 @@ export class RestRenderer {
     // Charon barring the north exit, and his toll in flight
     drawCharon(this.renderer, game);
 
-    // The player and everything attached to them (glyph, pips, parry,
-    // Fairy King orbit, facing, known spells) — shared Frame Passes.
-    drawFramePasses(this.renderController, game, 'rest', 'player');
-
-    // Follower flock (persists across rooms after feeding events).
-    if (game.followerCrows && game.followerCrows.length > 0) {
-      for (const f of game.followerCrows) {
-        const fOff = f.getRenderOffsetY();
-        this.renderer.drawEntity(
-          f.position.x + GRID.CELL_SIZE / 2,
-          f.position.y + GRID.CELL_SIZE / 2 + fOff,
-          f.char,
-          f.color
-        );
-      }
-    }
-
-    // Companion crows: persist across states; perch around the player.
-    if (game.companionCrows && game.companionCrows.length > 0) {
-      for (const c of game.companionCrows) {
-        const offY = c.getRenderOffsetY();
-        let color = c.color;
-        if (c.gilded) {
-          color = '#ffd700';
-        } else {
-          const flash = c.getIframeFlashColor?.();
-          const lowHp = c.getLowHealthBlinkColor?.();
-          color = flash ?? lowHp ?? c.color;
-        }
-        this.renderer.drawEntity(
-          c.position.x + GRID.CELL_SIZE / 2,
-          c.position.y + GRID.CELL_SIZE / 2 + offY,
-          c.char,
-          color
-        );
-      }
-    }
-
-    // Golem companions: bug #12 (bug-inbox) — REST previously drew crows but
-    // never golems, even though "all companions should" render there. REST
-    // has no plane-hiding concept for golems, so every golem is visible
-    // (same `() => true` predicate HutInteriorOverlay's PiP path uses).
-    if (game.golems && game.golems.length > 0) {
-      drawGolems(this.renderer, game, () => true);
-    }
-
-    // Bow charge / ranger / rogue readouts — shared indicator Frame Passes.
-    drawFramePasses(this.renderController, game, 'rest', 'indicators');
-
     // Draw contextual floating text above player when near a slot
     if (nearestSlot && activeHint === 'slot') {
       this.renderer.fgCtx.save();
@@ -637,6 +588,56 @@ export class RestRenderer {
         this.renderer.fgCtx.restore();
       }
     }
+
+    // Over every label and key above: nothing in REST draws in front of the
+    // player but a modal. The player and everything attached to them (glyph, pips, parry,
+    // Fairy King orbit, facing, known spells) — shared Frame Passes.
+    drawFramePasses(this.renderController, game, 'rest', 'player');
+
+    // Follower flock (persists across rooms after feeding events).
+    if (game.followerCrows && game.followerCrows.length > 0) {
+      for (const f of game.followerCrows) {
+        const fOff = f.getRenderOffsetY();
+        this.renderer.drawEntity(
+          f.position.x + GRID.CELL_SIZE / 2,
+          f.position.y + GRID.CELL_SIZE / 2 + fOff,
+          f.char,
+          f.color
+        );
+      }
+    }
+
+    // Companion crows: persist across states; perch around the player.
+    if (game.companionCrows && game.companionCrows.length > 0) {
+      for (const c of game.companionCrows) {
+        const offY = c.getRenderOffsetY();
+        let color = c.color;
+        if (c.gilded) {
+          color = '#ffd700';
+        } else {
+          const flash = c.getIframeFlashColor?.();
+          const lowHp = c.getLowHealthBlinkColor?.();
+          color = flash ?? lowHp ?? c.color;
+        }
+        this.renderer.drawEntity(
+          c.position.x + GRID.CELL_SIZE / 2,
+          c.position.y + GRID.CELL_SIZE / 2 + offY,
+          c.char,
+          color
+        );
+      }
+    }
+
+    // Golem companions: bug #12 (bug-inbox) — REST previously drew crows but
+    // never golems, even though "all companions should" render there. REST
+    // has no plane-hiding concept for golems, so every golem is visible
+    // (same `() => true` predicate HutInteriorOverlay's PiP path uses).
+    if (game.golems && game.golems.length > 0) {
+      drawGolems(this.renderer, game, () => true);
+    }
+
+    // Bow charge / ranger / rogue readouts — shared indicator Frame Passes.
+    drawFramePasses(this.renderController, game, 'rest', 'indicators');
 
     // Render tombstone popup
     if (game.tombstonePopup && game.lastDeathCause) {
