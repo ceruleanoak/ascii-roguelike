@@ -2359,7 +2359,7 @@ export class Enemy {
     return item.data.damage ?? 0;
   }
 
-  evaluateItemPickup(items) {
+  evaluateItemPickup(items, pickupRange = this.itemUsage?.pickupRange) {
     if (!this.itemUsage || !this.itemUsage.canPickup) return null;
 
     const hasSpace = this.inventory.length < this.itemUsage.maxItems;
@@ -2374,7 +2374,7 @@ export class Enemy {
         item.position.x - this.position.x,
         item.position.y - this.position.y
       );
-      if (distance > this.itemUsage.pickupRange) continue;
+      if (distance > pickupRange) continue;
       if (!this.itemUsage.preferredItems.includes(item.char)) continue;
 
       const isWeapon = item.data?.type === 'WEAPON';
@@ -2388,7 +2388,7 @@ export class Enemy {
       // Weapon score scales with raw damage so goblins prefer the strongest
       // blade nearby; non-weapons (e.g. health pots) keep a modest baseline.
       let score = isWeapon ? (10 + (item.data.damage ?? 1) * 4) : 5;
-      score *= (1.0 - (distance / this.itemUsage.pickupRange));
+      score *= (1.0 - (distance / pickupRange));
 
       if (score > bestScore) {
         bestScore = score;

@@ -17,8 +17,9 @@
 // State's job anymore — they are their own declared States (`lookback`,
 // `useTrap`), reached via the `next()` branch below. This State only owns the
 // run itself: freezing/refreshing the mark and moving away from it.
-import { applyStateMovement, moveStill } from '../enemyMovement.js';
+import { applyStateMovement, moveChaser, moveStill } from '../enemyMovement.js';
 import { updateFalter, isFaltering, clearFalter } from './falter.js';
+import { QuiverRechargeMechanic } from '../enemyMechanics/QuiverRechargeMechanic.js';
 
 export default {
   id: 'flee',
@@ -82,6 +83,14 @@ export default {
       ? (cfg.lookbackInterval ?? 2.0)
       : enemy.fleeLookbackTimer - ctx.deltaTime;
 
+    // Disarmed with a weapon on the floor: the flight runs at the weapon, with
+    // no Falter, glance back or time limit (see `next`) until it is in hand.
+    const weapon = QuiverRechargeMechanic.weaponToRetrieve(enemy);
+    if (weapon) {
+      moveChaser(enemy, ctx.speedMultiplier, weapon.position, ctx.deltaTime);
+      return;
+    }
+
     // A Falter (falter.js) stops the flight for a beat. The lookback timer
     // above keeps running through it.
     const mark = enemy.lastKnownPosition;
@@ -98,6 +107,8 @@ export default {
 
   next(enemy, ctx, machine) {
     const cfg = machine.configFor('flee') ?? {};
+
+    if (QuiverRechargeMechanic.weaponToRetrieve(enemy)) return null;
 
     if (!enemy.target) return { id: cfg.to ?? 'withdraw', cause: 'lost target while fleeing' };
 

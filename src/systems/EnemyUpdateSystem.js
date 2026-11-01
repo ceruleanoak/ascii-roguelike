@@ -1,5 +1,6 @@
 import { GRID, PHYSICS } from '../game/GameConfig.js';
 import { ThiefMechanic } from '../entities/enemyMechanics/ThiefMechanic.js';
+import { QuiverRechargeMechanic } from '../entities/enemyMechanics/QuiverRechargeMechanic.js';
 import { MAGIC_SFX_NAMES } from '../data/enemies.js';
 import { inSamePlane, tagInteriorPlane, isInteriorActive, lootOnActiveLayer } from './PlaneSystem.js';
 import { CAMP_NPC_STATE } from '../entities/CampNPC.js';
@@ -608,10 +609,17 @@ export class EnemyUpdateSystem {
       // Without this an adjacent enemy re-grabbed a just-dropped weapon the
       // instant it landed, since nothing paced the retry.
       if (!enemy._decisionFrame) continue;
-      if (enemy.itemPickupCooldown > 0) continue;
-      const targetItem = enemy.evaluateItemPickup(game.items.filter(it => lootOnActiveLayer(game, it)));
-      if (!targetItem) continue;
+      // A disarmed Enemy picks its weapon out across the whole room, from the
+      // moment it loses one: Flee runs it there (QuiverRechargeMechanic
+      // .weaponToRetrieve), and only the grab waits out the lockout.
+      const disarmed = QuiverRechargeMechanic.isDisarmed(enemy);
+      if (enemy.itemPickupCooldown > 0 && !disarmed) continue;
+      const onLayer = game.items.filter(it => lootOnActiveLayer(game, it));
+      const targetItem = disarmed
+        ? enemy.evaluateItemPickup(onLayer.filter(it => it.data?.type === 'WEAPON'), Infinity)
+        : enemy.evaluateItemPickup(onLayer);
       enemy.targetItem = targetItem;
+      if (!targetItem || enemy.itemPickupCooldown > 0) continue;
       const dx = targetItem.position.x - enemy.position.x;
       const dy = targetItem.position.y - enemy.position.y;
       if (Math.sqrt(dx * dx + dy * dy) < GRID.CELL_SIZE) {

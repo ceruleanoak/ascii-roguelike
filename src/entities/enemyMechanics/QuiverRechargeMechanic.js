@@ -12,8 +12,10 @@
 //
 // A disarmed archer (whip disarm, or a zap jolt shaking its gear loose) gets
 // the same flip with no clock: its arrows came from the bow, so with nothing
-// in hand it runs until it picks a weapon back up. Its `data.attackType` is
-// still 'ranged', which is why Enemy.createAttack asks `isDisarmed` too.
+// in hand it runs until it picks a weapon back up, and a weapon on the floor
+// is what it runs at (`weaponToRetrieve`, read by Flee). With none in the room
+// it simply runs. Its `data.attackType` is still 'ranged', which is why
+// Enemy.createAttack asks `isDisarmed` too.
 //
 // Unlike the Thief flip, the coward still counts toward room-clear: it will
 // be back, so the room isn't cleared until it's dealt with.
@@ -33,6 +35,12 @@ export const QuiverRechargeMechanic = {
 
   isDisarmed(enemy) {
     return QuiverRechargeMechanic.isEnabled(enemy) && !enemy.equippedWeapon;
+  },
+
+  // The weapon a disarmed Enemy's flight heads for: `targetItem`, picked out
+  // by EnemyUpdateSystem._handleEnemyItemPickup. Null otherwise.
+  weaponToRetrieve(enemy) {
+    return QuiverRechargeMechanic.isDisarmed(enemy) ? enemy.targetItem : null;
   },
 
   init(enemy) {
@@ -56,7 +64,13 @@ export const QuiverRechargeMechanic = {
       return;
     }
 
-    if (disarmed) return;
+    if (disarmed) {
+      // Settled in Alert with nothing to run at, until a weapon lands.
+      if (enemy.stateMachine.current === 'alert' && QuiverRechargeMechanic.weaponToRetrieve(enemy)) {
+        enemy.stateMachine.transition(enemy, ctx, 'flee', 'weapon on the floor');
+      }
+      return;
+    }
 
     if (!hasEmptyBow(enemy)) {
       QuiverRechargeMechanic._rearm(enemy, ctx);
