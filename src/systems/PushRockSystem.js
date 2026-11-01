@@ -173,11 +173,28 @@ export class PushRockSystem {
     }
   }
 
+  // Flippers are unique: every Ocean room carries its own rock, so a second
+  // answer while one is still held (carried, worn, stored) spawns nothing.
+  // Selling it frees the slot, so the next rock answer can produce it again.
+  _ownsFlippers() {
+    const game = this.game;
+    const inv = game.inventorySystem;
+    const held = [
+      ...(game.player?.quickSlots ?? []),
+      inv?.equippedArmor,
+      ...(inv?.itemChest ?? []),
+      ...(inv?.armorInventory ?? []),
+      ...(inv?.pendingChestDeposits ?? []),
+    ];
+    return held.some(item => item?.char === '⚷');
+  }
+
   _answer(entry) {
     const game = this.game;
     const cs = GRID.CELL_SIZE;
     switch (entry.answer) {
       case 'flippers': {
+        if (this._ownsFlippers()) break;
         const flippers = new Item('⚷', entry.col * cs, entry.row * cs);
         game.items.push(flippers);
         game.physicsSystem.addEntity(flippers);
