@@ -91,14 +91,14 @@ export class SinkholeSystem {
 
   // True once a Sinkhole has surfaced, cleared its post-reveal grace period,
   // and SPACE would still take the player somewhere. Which way depends on
-  // where they are: from the surface only an un-dived hole leads anywhere
-  // (down), while from inside the cave the hole is always the way back up.
+  // where they are: from the surface the hole always leads down, and from
+  // inside the cave it is always the way back up.
   // Shared by findNearby() (SPACE dispatch) and ExploreRenderer (the in-range
   // highlight) so both agree on when SPACE would actually do something.
   isInteractable(sink) {
     if (!sink?.revealed || !sink.glyphObj) return false;
     if (performance.now() - sink.revealedAt < REVEAL_COOLDOWN_MS) return false;
-    return this.game.player?.plane === PLANE_TUNNEL ? !!sink.cave : !sink.dived;
+    return this.game.player?.plane === PLANE_TUNNEL ? !!sink.cave : true;
   }
 
   // EXPLORE SPACE dispatch: revealed Sinkholes supersede attacking, same as
@@ -121,18 +121,22 @@ export class SinkholeSystem {
   // SPACE on a revealed Sinkhole, routed here via InteractionSystem's
   // 'sinkholeDive' effect branch.
   dive(room, sink) {
-    if (!sink || !room || !sink.revealed || sink.dived) return;
-    sink.dived = true;
+    if (!sink || !room || !sink.revealed) return;
 
     const { game } = this;
 
-    // Lightweight local reset: only this room's plane-0 enemies clear. This
-    // is layer 1 of the current room, not a new room — no full regeneration.
-    for (let i = room.enemies.length - 1; i >= 0; i--) {
-      const enemy = room.enemies[i];
-      if (enemy.plane !== 0) continue;
-      game.physicsSystem.removeEntity(enemy);
-      room.enemies.splice(i, 1);
+    // Lightweight local reset: only this room's plane-0 enemies clear, and
+    // only on the first descent — re-entering the hole must not let the
+    // player farm a fresh wave every trip. This is layer 1 of the current
+    // room, not a new room — no full regeneration.
+    if (!sink.enemiesCleared) {
+      sink.enemiesCleared = true;
+      for (let i = room.enemies.length - 1; i >= 0; i--) {
+        const enemy = room.enemies[i];
+        if (enemy.plane !== 0) continue;
+        game.physicsSystem.removeEntity(enemy);
+        room.enemies.splice(i, 1);
+      }
     }
 
     if (!sink.cave) sink.cave = this._generateSinkholeCave(room, sink);
@@ -148,10 +152,9 @@ export class SinkholeSystem {
   // that only make sense going down — the cave is already carved and cached on
   // sink.cave, and nothing is reset on the way up.
   //
-  // sink.dived deliberately stays true, so this is a way back rather than a
-  // ladder: the descent keeps its one-shot plane-0 enemy wipe, which hopping in
-  // and out would otherwise let the player farm on every room's worth of
-  // enemies. Once out, the hole is spent and reads as ordinary scenery.
+  // The hole stays open after climbing out: the cave is cached on sink.cave,
+  // so the next dive() re-enters it. The one-shot plane-0 enemy wipe is
+  // guarded by sink.enemiesCleared, so hopping in and out cannot farm it.
   surface(sink) {
     if (!sink?.cave || !sink.glyphObj) return;
 
