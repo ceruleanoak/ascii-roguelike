@@ -2255,6 +2255,19 @@ export const ITEMS = {
     stackable: true, // shares one quick slot by count — see InventorySystem.mergeStackableConsumable
     color: '#e8d8c0'
   },
+  // Cooked Fish: a lit fireplace bakes a Fish (FireplaceSystem commitSelection).
+  // Eaten for +3 HP and stacks; a raw Fish is carried, never eaten.
+  '⍟': {
+    rarity: 'common',
+    char: '⍟',
+    name: 'Cooked Fish',
+    type: ITEM_TYPES.CONSUMABLE,
+    effect: 'heal',
+    amount: 3,
+    oneShot: true,
+    stackable: true, // shares one quick slot by count — see InventorySystem.mergeStackableConsumable
+    color: '#f0b080'
+  },
   // Granted by every fish-type catch (all zones except Fountain) via SPACE
   // pickup — see FishingSystem.trySpacePickup / fishingTables.js's
   // directPickupItem. Cutting a fish with a blade opens its table drops instead.

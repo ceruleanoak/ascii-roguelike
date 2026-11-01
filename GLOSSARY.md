@@ -1920,6 +1920,21 @@ identity, not standard programming terms.
 - **Not:** an Ingredient (raw drop) or an equipped weapon/armor. Consumables are crafted via
   recipes.
 
+### Fish
+- **Definition:** The whole catch (♓) a fishing line lands. Every fish-type catch grants it
+  on SPACE; a blade cut opens its table drops instead. A carried Consumable with no effect of
+  its own; a lit fireplace bakes it into Cooked Fish (⍟).
+- **In code:** `ITEMS['♓']` (`src/data/items.js`); `directPickupItem` on each fish entry in
+  `src/data/fishingTables.js`; baked in `FireplaceSystem.commitSelection` (`FISH_CHAR`).
+- **Not:** a Fishing Table name or a rendered label (every fish is just "Fish"); Fish in a
+  Bottle (⍾), which is the catch taken into an armed Empty Bottle.
+
+### Cooked Fish
+- **Definition:** The fireplace bake of a Fish (⍟). Stackable, heals 3 when eaten.
+- **In code:** `ITEMS['⍟']` (`effect: 'heal'`, `amount: 3`); `COOKED_FISH_CHAR` in
+  `FireplaceSystem`.
+- **Not:** Cooked Clam (⌓, heals 1, baked from a raw Clam); a raw Fish, which is never eaten.
+
 ### Exclusive Group
 - **Definition:** A set of Consumables that can't be equipped side by side, so only one member
   sits in the consumable slots at a time. Boots, Floating Boots and Rubber Boots form the

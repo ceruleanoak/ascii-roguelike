@@ -53,6 +53,10 @@ const FIRE_BAKES = {
 };
 // Ingredients a bake consumes per output when it is more than one (default 1).
 const FIRE_BAKE_COST = { [SAND_CHAR]: 5 };
+// Fish is a carried consumable, not an ingredient, so it bakes through its own
+// branch in commitSelection (like the Forest Berry) rather than FIRE_BAKES.
+const FISH_CHAR = '♓';
+const COOKED_FISH_CHAR = '⍟';
 
 export class FireplaceSystem {
   constructor(game) {
@@ -143,6 +147,11 @@ export class FireplaceSystem {
         counts.set('C', clamCount);
         items.push('C');
       }
+      const fishCount = game.inventorySystem.consumableInventory.filter(it => it.char === FISH_CHAR).length;
+      if (fishCount > 0) {
+        counts.set(FISH_CHAR, fishCount);
+        items.push(FISH_CHAR);
+      }
       const sandCount = game.inventorySystem.countIngredient(SAND_CHAR);
       if (sandCount >= FIRE_BAKE_COST[SAND_CHAR]) {
         counts.set(SAND_CHAR, sandCount);
@@ -212,6 +221,13 @@ export class FireplaceSystem {
       if (!fireplace.burning) return;
       this.openOreQuantityMenu(fireplace);
       return;
+    } else if (rawChar === FISH_CHAR) {
+      if (!fireplace.burning) return;
+      const fish = game.inventorySystem.consumableInventory.find(it => it.char === FISH_CHAR);
+      if (!fish || !game.inventorySystem.removeFromConsumableInventory(fish)) return;
+      const cooked = new Item(COOKED_FISH_CHAR, game.player.position.x, game.player.position.y);
+      const stacked = game.inventorySystem.stowConsumable(cooked, game.player);
+      game.menuSystem.announceCrafted(cooked.char, stacked);
     } else if (rawChar === '❋') {
       if (!fireplace.burning) return;
       const berry = game.inventorySystem.consumableInventory.find(it => it.char === '❋');
