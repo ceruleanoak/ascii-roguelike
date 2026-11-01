@@ -11,7 +11,7 @@ import { Item } from '../entities/Item.js';
  * (100% → Meat Jerky), Grain (100% → Bread), Slurry (100% → Lembas), a held Fire Berry (100% → Mana), an equipped Bottle of
  * Water (100% → Bottle of Hot Water — a fourth parallel path to hot water
  * alongside the Caldera fill, the Fire Essence recipe, and the Fire Berry
- * recipe in recipes.js), Sand (100% → Empty Bottle), and Ore and Sticks,
+ * recipe in recipes.js), Sand (5 Sand → Empty Bottle), and Ore and Sticks,
  * both of which open a quantity submenu asking how many to feed at once,
  * then roll each independently for
  * a byproduct: Ore rolls Metal (30%) / Slag (rest, a whiff); Sticks roll Ash
@@ -50,6 +50,8 @@ const FIRE_BAKES = {
   [SAND_CHAR]: EMPTY_BOTTLE_CHAR, // Sand → Empty Bottle
   [SLURRY_CHAR]: '⏣' // Slurry → Lembas
 };
+// Ingredients a bake consumes per output when it is more than one (default 1).
+const FIRE_BAKE_COST = { [SAND_CHAR]: 5 };
 
 export class FireplaceSystem {
   constructor(game) {
@@ -136,7 +138,7 @@ export class FireplaceSystem {
         items.push('2');
       }
       const sandCount = game.inventorySystem.countIngredient(SAND_CHAR);
-      if (sandCount > 0) {
+      if (sandCount >= FIRE_BAKE_COST[SAND_CHAR]) {
         counts.set(SAND_CHAR, sandCount);
         items.push(SAND_CHAR);
       }
@@ -192,7 +194,9 @@ export class FireplaceSystem {
         return;
       }
     } else if (FIRE_BAKES[rawChar]) {
-      if (!fireplace.burning || !game.removeIngredient(rawChar)) return;
+      const cost = FIRE_BAKE_COST[rawChar] ?? 1;
+      if (!fireplace.burning || game.inventorySystem.countIngredient(rawChar) < cost) return;
+      for (let i = 0; i < cost; i++) game.removeIngredient(rawChar);
       const baked = new Item(FIRE_BAKES[rawChar], game.player.position.x, game.player.position.y);
       const stacked = game.inventorySystem.stowConsumable(baked, game.player);
       game.menuSystem.announceCrafted(baked.char, stacked);
