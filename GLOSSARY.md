@@ -1938,10 +1938,10 @@ identity, not standard programming terms.
   recipes.
 
 ### Fish
-- **Definition:** The whole catch (♓) a fishing line lands. Every fish-type catch grants it
+- **Definition:** The whole catch (∝) a fishing line lands. Every fish-type catch grants it
   on SPACE; a blade cut opens its table drops instead. A carried Consumable with no effect of
   its own; a lit fireplace bakes it into Cooked Fish (⍟).
-- **In code:** `ITEMS['♓']` (`src/data/items.js`); `directPickupItem` on each fish entry in
+- **In code:** `ITEMS['∝']` (`src/data/items.js`); `directPickupItem` on each fish entry in
   `src/data/fishingTables.js`; baked in `FireplaceSystem.commitSelection` (`FISH_CHAR`).
 - **Not:** a Fishing Table name or a rendered label (every fish is just "Fish"); Fish in a
   Bottle (⍾), which is the catch taken into an armed Empty Bottle.
@@ -2039,14 +2039,14 @@ identity, not standard programming terms.
   tips have been heard, a coin buys his one Fishing Pole, set down beside him. Whenever a catch
   that needs a blade lands by the player, he walks over, cuts it open, and walks back to his
   spot. He leaves a Fish alone (the player grabs it whole). The hut Fisherman instead sells
-  the cutting demonstration. Every fisherman, hut or shore, buys carried Clams (`C`) at one
-  coin each, the whole pile in one press, once the tips have been heard.
+  the cutting demonstration. Every fisherman, hut or shore, buys carried Clams (`C`) and Fish
+  (∝) at one coin each, everything in one press, once the tips have been heard.
 - **In code:** `room.lakeFisherman` (a `Fisherman` with `sellsRod`, placed by
   `roomFeatures.spawnShoreFisherman`); `ShoreFishermanSystem` (`trySpacePress` from the EXPLORE
   SPACE dispatch, `update` from `updateExploreState`); the cut is
   `FishingSystem.cutRewardObject`, shared with the player's blade; coin arc is the
-  `shoreFishermanCoin` Frame Pass. The Clam sale is `sellClamsToFisherman`
-  (`src/systems/fishermanClamTrade.js`), called from both this and `FishermanDemoSystem`.
+  `shoreFishermanCoin` Frame Pass. The sale is `sellCatchToFisherman`
+  (`src/systems/fishermanTrade.js`), called from both this and `FishermanDemoSystem`.
 - **Not:** the hut Fisherman (`FishermanDemoSystem`, a paid demonstration, no rod).
 
 ### Bomb Bag

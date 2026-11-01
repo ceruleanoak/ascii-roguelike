@@ -1,7 +1,7 @@
 import { GRID } from '../game/GameConfig.js';
 import { pickRandomCatch } from '../data/fishingTables.js';
 import { Fisherman } from '../entities/Fisherman.js';
-import { sellClamsToFisherman } from './fishermanClamTrade.js';
+import { sellCatchToFisherman } from './fishermanTrade.js';
 
 const COIN_ARC_DURATION = 0.55; // matches the well/camp-NPC coin arcs
 const CAST_DELAY = 0.9;  // coin lands → fish appears
@@ -50,7 +50,7 @@ export class FishermanDemoSystem {
 
     // First interaction is always the tips; the trades unlock after.
     if (!fisherman.spokenOnce) return false;
-    if (sellClamsToFisherman(game)) return true;
+    if (sellCatchToFisherman(game)) return true;
     if (!game.inventorySystem?.hasCoin()) return false;
 
     // Pay: the coin arcs from player to fisherman (well/camp-NPC ritual);

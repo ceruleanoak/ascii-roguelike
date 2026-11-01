@@ -1,7 +1,7 @@
 import { GRID } from '../game/GameConfig.js';
 import { steerToward } from './npcSteering.js';
 import { isInteriorActive } from './PlaneSystem.js';
-import { sellClamsToFisherman } from './fishermanClamTrade.js';
+import { sellCatchToFisherman } from './fishermanTrade.js';
 
 const COIN_ARC_DURATION = 0.55; // matches the well/camp-NPC/hut-fisherman coin arcs
 const FISHING_POLE = 'ߒ';
@@ -48,7 +48,7 @@ export class ShoreFishermanSystem {
     if (this.coinAnim) return true;
     // First interaction is always the tips; the trades unlock after.
     if (!fisherman.spokenOnce) return false;
-    if (sellClamsToFisherman(game)) return true;
+    if (sellCatchToFisherman(game)) return true;
     if (!fisherman.sellsRod || fisherman.rodSold) return false;
     if (!game.inventorySystem?.hasCoin()) return false;
 
