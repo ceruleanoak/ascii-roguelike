@@ -113,10 +113,16 @@ function computeCoinPrice(ingredientCost) {
 // see ShopSystem's 'pawn' mode). Ingredients are never pawned; their `value`
 // is the currency an item's worth is accumulated from.
 
+/**
+ * An Item's rarity: its explicit `rarity` field wins; without one, the
+ * pool-derived lookup (homeZone getIngredientRarity) supplies it.
+ */
+function itemRarity(char) {
+  return ITEMS[char]?.rarity ?? getIngredientRarity(char);
+}
+
 // Recipe inputs that are Items rather than Ingredients have no `value` of their
-// own, so each is worth a flat amount by its rarity. An Item's explicit `rarity`
-// field wins; without one, the rarity falls back to the pool-derived lookup
-// (homeZone getIngredientRarity).
+// own, so each is worth a flat amount by its rarity.
 const ITEM_INPUT_VALUE = {
   [RARITY.COMMON]: 0,
   [RARITY.UNCOMMON]: 1,
@@ -133,7 +139,7 @@ function ingredientWorth(char) {
   const ingredient = INGREDIENTS[char];
   if (ingredient) return ingredient.value ?? 0;
   const item = ITEMS[char];
-  if (item) return ITEM_INPUT_VALUE[item.rarity ?? getIngredientRarity(char)];
+  if (item) return ITEM_INPUT_VALUE[itemRarity(char)];
   return 0;
 }
 
@@ -178,11 +184,11 @@ const SHOP_TREASURE_CHARS = [...TREASURE_CHARS].filter(c => c !== '⚜');
  * never a candidate — it isn't in TREASURE_CHARS; that's the separate Coins
  * lane.
  *
- * Which gem gets picked doesn't track the listing's tier — how much of it is
- * required does (see buildListing's treasureCount, and TIER_TREASURE_COUNT
- * below). Scaling quantity instead of hunting for a rarer gem per tier keeps
- * this to one rarity axis (the existing ingredient rarities) instead of
- * inventing a second one across only 8 treasure chars.
+ * Which gem gets picked doesn't track the item's rarity — how many copies are
+ * required does (see buildListing's treasureCount and TREASURE_COUNT_BY_RARITY
+ * below). Scaling quantity instead of hunting for a rarer gem per rarity keeps
+ * this to one rarity axis instead of inventing a second one across only 8
+ * treasure chars.
  */
 function pickTreasureChar(itemData, role) {
   if (role === 'WEAPON') {
@@ -194,11 +200,15 @@ function pickTreasureChar(itemData, role) {
 }
 
 // How many copies of the same treasure char a listing's Treasure lane
-// requires, indexed by tier. Tier 0 has no entry — see buildListing, which
-// omits the Treasure lane entirely below tier 1: a single gem is
-// disproportionate collateral for the cheapest items, so there's nothing to
-// require a copy count of.
-const TIER_TREASURE_COUNT = [0, 1, 2, 3];
+// requires, by the item's rarity. Common has no Treasure lane at all — see
+// buildListing: a single gem is disproportionate collateral for the most
+// common items.
+const TREASURE_COUNT_BY_RARITY = {
+  [RARITY.COMMON]: 0,
+  [RARITY.UNCOMMON]: 1,
+  [RARITY.RARE]: 2,
+  [RARITY.EPIC]: 3,
+};
 
 // ============================================================================
 // LISTING / STOCK
@@ -209,8 +219,8 @@ function buildListing(itemData, role) {
   const tier = deriveValueTier(itemData, role);
   const padding = pickPaddingIngredients(tier, [recipe.left, recipe.right]);
 
-  // Tier 0 has no Treasure lane at all (see TIER_TREASURE_COUNT); tier 1-3
-  // require 1/2/3 copies of the same picked treasure char respectively.
+  // Common has no Treasure lane at all (see TREASURE_COUNT_BY_RARITY); uncommon,
+  // rare and epic require 1/2/3 copies of the same picked treasure char.
   // A listing whose ingredient price already holds a gem (a gem recipe like
   // Infused Whip + Ruby, or a gem rolled as padding) gets no Treasure lane either:
   // the outright gem buy would undercut the listing's own recipe — Ruby ×1
@@ -218,7 +228,7 @@ function buildListing(itemData, role) {
   const ingredientCost = [recipe.left, recipe.right, ...padding];
   const { baseCoins, coinFloor } = computeCoinPrice(ingredientCost);
   const gemInPrice = ingredientCost.some(char => TREASURE_CHARS.has(char));
-  const treasureCount = gemInPrice ? 0 : (TIER_TREASURE_COUNT[tier] ?? 0);
+  const treasureCount = gemInPrice ? 0 : TREASURE_COUNT_BY_RARITY[itemRarity(itemData.char)];
   const treasureChar = treasureCount > 0 ? pickTreasureChar(itemData, role) : null;
 
   return {
