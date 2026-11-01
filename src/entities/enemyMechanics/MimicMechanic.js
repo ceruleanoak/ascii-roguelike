@@ -1,7 +1,7 @@
 import { GRID } from '../../game/GameConfig.js';
 
-// Mimic: object-disguise enemy that reveals when the player gets too close,
-// re-disguises if the player backs off, and fires a sticky tongue to reel the
+// Mimic: object-disguise enemy that reveals when the player gets too close or
+// lands a blow on it, re-disguises if the player backs off, and fires a sticky tongue to reel the
 // player in. Three call sites in Enemy.update():
 //   - updateReveal(): flash → enraged transition; fires from idle
 //   - updateRedisguise(): countdown to revert; only ticks while revealed
@@ -125,8 +125,17 @@ export const MimicMechanic = {
     }
   },
 
-  // Called from Enemy.takeDamage: the tongue releases on any damage taken.
+  // Called from Enemy.takeDamage: a blow breaks the disguise at once, with no
+  // reveal flash, from any range; the tongue releases on any damage taken.
   onDamaged(enemy) {
+    const cfg = enemy.data.mimicMechanic;
+    if (cfg?.enabled && !enemy.mimicRevealed) {
+      enemy.mimicRevealed = true;
+      enemy.mimicFlashTimer = 0;
+      enemy.state = 'chase';
+      enemy.stateMachine?.transition(enemy, null, 'approach', 'disguise broken by a blow');
+    }
+    if (cfg?.redisguiseCooldown) enemy.redisguiseTimer = cfg.redisguiseCooldown.redisguiseDuration;
     if (enemy.mimicTongue?.phase === 'hooked' && enemy.target) {
       enemy.target.hookedByMimic = null;
       enemy.mimicTongue = null;
