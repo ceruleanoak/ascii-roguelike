@@ -2,7 +2,6 @@ import { GRID } from '../game/GameConfig.js';
 
 const HOME_SPEED = 80;        // px/s toward player
 const ARRIVE_RADIUS = GRID.CELL_SIZE * 0.6;
-const MESSAGE_DURATION = 2.0; // seconds to show "CAUGHT: NAME"
 
 /**
  * Flying catch reward that homes toward the player after a successful catch.
@@ -14,7 +13,6 @@ export class RewardObject {
     this.position = { x, y };
     this.char = catchData.char;
     this.color = catchData.color;
-    this.name = catchData.name;
     this.drops = catchData.drops; // array of ingredient chars
     // ITEMS key for catches that skip the "a blade opens the catch" rule
     // (currently just Fish) — grabbed directly via FishingSystem.trySpacePickup
@@ -24,13 +22,10 @@ export class RewardObject {
     this.canPickUp = false;       // Excluded from magnet / pickup loops
     this.velocity = { x: 0, y: 0 };
     this.arrived = false;
-    this.messageTimer = MESSAGE_DURATION;
   }
 
   update(dt, playerPos) {
     if (!this.alive) return;
-
-    this.messageTimer = Math.max(0, this.messageTimer - dt);
 
     if (this.arrived || !playerPos) return;
 

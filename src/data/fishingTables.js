@@ -1,6 +1,7 @@
 // Zone-specific fishing catch tables for the Lake ('L') room
 // Each catch: { name, char, color, drops[], weight }
-// 'char' is always 'ծ' (Armenian Da) — name/color distinguish catches visually
+// 'char' is always 'ծ' (Armenian Da). Every fish is just 'Fish' — one name, one
+// color; a table's drops are the only thing that tells catches apart.
 // 'drops' are ingredient chars spawned when the reward object is melee-hit
 // 'specialDrops' (optional) are ITEMS keys spawned alongside ingredient drops —
 // FishingSystem looks these up via spawnItemFn so non-ingredient items (e.g.
@@ -14,15 +15,15 @@ export const FISHING_TABLES = {
   green: {
     rusalkaChance: 0.04,
     catches: [
-      { name: 'Frog',        char: 'ծ', color: '#66ff44', drops: ['g', 'v'],        weight: 30 },
-      { name: 'Perch',       char: 'ծ', color: '#aaddff', drops: ['m'],             weight: 25 },
-      { name: 'Crayfish',    char: 'ծ', color: '#ff9966', drops: ['b'],             weight: 20 },
-      { name: 'Newt',        char: 'ծ', color: '#44ffaa', drops: ['v'],             weight: 15 },
-      { name: 'Giant Turtle',char: 'ծ', color: '#88cc44', drops: ['b', 'm'],        weight: 10 },
+      { name: 'Fish',        char: 'ծ', color: '#7ec8e3', drops: ['g', 'v'],        weight: 30 },
+      { name: 'Fish',       char: 'ծ', color: '#7ec8e3', drops: ['m'],             weight: 25 },
+      { name: 'Fish',    char: 'ծ', color: '#7ec8e3', drops: ['b'],             weight: 20 },
+      { name: 'Fish',        char: 'ծ', color: '#7ec8e3', drops: ['v'],             weight: 15 },
+      { name: 'Fish',char: 'ծ', color: '#7ec8e3', drops: ['b', 'm'],        weight: 10 },
       { name: 'Fish',        char: 'ծ', color: '#7ec8e3', drops: [], directPickupItem: '♓', weight: 20 },
       { name: 'Empty Bottle',char: 'ծ', color: '#aaccee', drops: [], specialDrops: ['B'], weight: 4 },
       // Sea supply line: rare catches for the pearl recipes (Pearl weapons).
-      { name: 'Oyster Husk', char: 'ծ', color: '#ddeeff', drops: ['p'],             weight: 3 }
+      { name: 'Fish', char: 'ծ', color: '#7ec8e3', drops: ['p'],             weight: 3 }
     ]
   },
 
@@ -32,10 +33,10 @@ export const FISHING_TABLES = {
   ocean: {
     rusalkaChance: 0,
     catches: [
-      { name: 'Mackerel',     char: 'ծ', color: '#88bbee', drops: ['m'],            weight: 30 },
-      { name: 'Blue Crab',    char: 'ծ', color: '#4477cc', drops: ['b', 'g'],       weight: 22 },
-      { name: 'Jellyfish',    char: 'ծ', color: '#ccaaff', drops: ['v', 'g'],       weight: 18 },
-      { name: 'Oyster',       char: 'ծ', color: '#ddeeff', drops: ['p'],            weight: 12 },
+      { name: 'Fish',     char: 'ծ', color: '#7ec8e3', drops: ['m'],            weight: 30 },
+      { name: 'Fish',    char: 'ծ', color: '#7ec8e3', drops: ['b', 'g'],       weight: 22 },
+      { name: 'Fish',    char: 'ծ', color: '#7ec8e3', drops: ['v', 'g'],       weight: 18 },
+      { name: 'Fish',       char: 'ծ', color: '#7ec8e3', drops: ['p'],            weight: 12 },
       { name: 'Fish',         char: 'ծ', color: '#7ec8e3', drops: [], directPickupItem: '♓', weight: 20 },
       { name: 'Empty Bottle', char: 'ծ', color: '#aaccee', drops: [], specialDrops: ['B'], weight: 4 }
     ]
@@ -44,10 +45,10 @@ export const FISHING_TABLES = {
   red: {
     rusalkaChance: 0,
     catches: [
-      { name: 'Salamander',  char: 'ծ', color: '#ff6600', drops: ['F', 'a'],        weight: 30 },
-      { name: 'Lava Eel',    char: 'ծ', color: '#ff3300', drops: ['F'],             weight: 25 },
-      { name: 'Charfish',    char: 'ծ', color: '#cc4400', drops: ['a', 'm'],        weight: 25 },
-      { name: 'Ember Toad',  char: 'ծ', color: '#ff8800', drops: ['F', 'g'],        weight: 20 },
+      { name: 'Fish',  char: 'ծ', color: '#7ec8e3', drops: ['F', 'a'],        weight: 30 },
+      { name: 'Fish',    char: 'ծ', color: '#7ec8e3', drops: ['F'],             weight: 25 },
+      { name: 'Fish',    char: 'ծ', color: '#7ec8e3', drops: ['a', 'm'],        weight: 25 },
+      { name: 'Fish',  char: 'ծ', color: '#7ec8e3', drops: ['F', 'g'],        weight: 20 },
       { name: 'Fish',        char: 'ծ', color: '#7ec8e3', drops: [], directPickupItem: '♓', weight: 20 },
       { name: 'Empty Bottle',char: 'ծ', color: '#aaccee', drops: [], specialDrops: ['B'], weight: 4 }
     ]
@@ -56,10 +57,10 @@ export const FISHING_TABLES = {
   cyan: {
     rusalkaChance: 0,
     catches: [
-      { name: 'Ice Fish',       char: 'ծ', color: '#aaddff', drops: ['i'],          weight: 30 },
-      { name: 'Frost Crab',     char: 'ծ', color: '#cceeff', drops: ['i', 'b'],     weight: 25 },
-      { name: 'Glacial Carp',   char: 'ծ', color: '#88ccff', drops: ['m'],          weight: 25 },
-      { name: 'Snow Salamander',char: 'ծ', color: '#eeeeff', drops: ['i', 'v'],     weight: 20 },
+      { name: 'Fish',       char: 'ծ', color: '#7ec8e3', drops: ['i'],          weight: 30 },
+      { name: 'Fish',     char: 'ծ', color: '#7ec8e3', drops: ['i', 'b'],     weight: 25 },
+      { name: 'Fish',   char: 'ծ', color: '#7ec8e3', drops: ['m'],          weight: 25 },
+      { name: 'Fish',char: 'ծ', color: '#7ec8e3', drops: ['i', 'v'],     weight: 20 },
       { name: 'Fish',           char: 'ծ', color: '#7ec8e3', drops: [], directPickupItem: '♓', weight: 20 },
       { name: 'Empty Bottle',   char: 'ծ', color: '#aaccee', drops: [], specialDrops: ['B'], weight: 4 }
     ]
@@ -68,10 +69,10 @@ export const FISHING_TABLES = {
   yellow: {
     rusalkaChance: 0,
     catches: [
-      { name: 'Storm Eel',      char: 'ծ', color: '#ffff44', drops: ['1'],          weight: 30 },
-      { name: 'Thunder Toad',   char: 'ծ', color: '#ffffaa', drops: ['g', '1'],     weight: 25 },
-      { name: 'Charged Catfish',char: 'ծ', color: '#ffee00', drops: ['1'],          weight: 25 },
-      { name: 'Spark Minnow',   char: 'ծ', color: '#ccff44', drops: ['k', '1'],     weight: 20 },
+      { name: 'Fish',      char: 'ծ', color: '#7ec8e3', drops: ['1'],          weight: 30 },
+      { name: 'Fish',   char: 'ծ', color: '#7ec8e3', drops: ['g', '1'],     weight: 25 },
+      { name: 'Fish',char: 'ծ', color: '#7ec8e3', drops: ['1'],          weight: 25 },
+      { name: 'Fish',   char: 'ծ', color: '#7ec8e3', drops: ['k', '1'],     weight: 20 },
       { name: 'Fish',           char: 'ծ', color: '#7ec8e3', drops: [], directPickupItem: '♓', weight: 20 },
       { name: 'Empty Bottle',   char: 'ծ', color: '#aaccee', drops: [], specialDrops: ['B'], weight: 4 }
     ]
@@ -80,10 +81,10 @@ export const FISHING_TABLES = {
   gray: {
     rusalkaChance: 0,
     catches: [
-      { name: 'Bone Fish',   char: 'ծ', color: '#dddddd', drops: ['b', 'b'],        weight: 30 },
-      { name: 'Soul Carp',   char: 'ծ', color: '#aaaacc', drops: ['e', 'b'],        weight: 25 },
-      { name: 'Phantom Eel', char: 'ծ', color: '#8888aa', drops: ['d', 'e'],        weight: 25 },
-      { name: 'Dead Weight', char: 'ծ', color: '#666677', drops: ['b', 'd'],        weight: 20 },
+      { name: 'Fish',   char: 'ծ', color: '#7ec8e3', drops: ['b', 'b'],        weight: 30 },
+      { name: 'Fish',   char: 'ծ', color: '#7ec8e3', drops: ['e', 'b'],        weight: 25 },
+      { name: 'Fish', char: 'ծ', color: '#7ec8e3', drops: ['d', 'e'],        weight: 25 },
+      { name: 'Fish', char: 'ծ', color: '#7ec8e3', drops: ['b', 'd'],        weight: 20 },
       { name: 'Fish',        char: 'ծ', color: '#7ec8e3', drops: [], directPickupItem: '♓', weight: 20 },
       { name: 'Empty Bottle', char: 'ծ', color: '#aaccee', drops: [], specialDrops: ['B'], weight: 4 }
     ]

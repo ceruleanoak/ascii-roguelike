@@ -96,22 +96,5 @@ export function renderFishingPasses(renderer, game) {
       reward.char,
       reward.color
     );
-
-    // "CAUGHT: NAME" text above the char (fades out after 2s)
-    if (reward.messageTimer > 0) {
-      const ctx = renderer.fgCtx;
-      ctx.save();
-      ctx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'bottom';
-      ctx.fillStyle = reward.color;
-      ctx.globalAlpha = Math.min(0.9, reward.messageTimer); // fade in last second
-      ctx.fillText(
-        `CAUGHT: ${reward.name}`,
-        reward.getRenderX(),
-        reward.getRenderY() - GRID.CELL_SIZE / 2 - 2
-      );
-      ctx.restore();
-    }
   }
 }
