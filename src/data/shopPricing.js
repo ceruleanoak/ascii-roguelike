@@ -21,6 +21,7 @@
 import {
   ITEMS,
   ITEM_TYPES,
+  INGREDIENTS,
   AFFINITY_POOLS,
   RARITY_PROFILES,
   getRandomDrop,
@@ -82,12 +83,10 @@ function pickPaddingIngredients(T, excludeChars) {
 // (b) COIN PRICE
 // ============================================================================
 
-// Every existing coin-spend in the game is a flat 1, occasionally 2 — this is
-// the game's first real multi-coin price ladder. Sized deliberately per the
-// "significantly more resources" framing; these four constants are isolated
-// and trivial to retune after a playtest.
-const BASE_COIN = { WEAPON: 4, ARMOR: 5, CONSUMABLE: 2 };
-const COIN_PER_TIER = { WEAPON: 3, ARMOR: 3, CONSUMABLE: 2 };
+// Coin price = the summed ingredient value of the listing's ingredient cost,
+// marked up, rounded up. The markup is the shop's margin over raw ingredient
+// value (ingredients themselves carry none). Placeholder — tune after playtest.
+const SHOP_COIN_MARKUP = 1.5;
 
 /**
  * baseCoins is the full coin price with zero ingredients toggled in.
@@ -95,8 +94,9 @@ const COIN_PER_TIER = { WEAPON: 3, ARMOR: 3, CONSUMABLE: 2 };
  * listing down to zero coins. ShopSystem computes the live remaining price by
  * taking one coin off per toggled ingredient lane.
  */
-function computeCoinPrice(T, role) {
-  const baseCoins = BASE_COIN[role] + T * COIN_PER_TIER[role];
+function computeCoinPrice(ingredientCost) {
+  const worth = ingredientCost.reduce((sum, char) => sum + ingredientWorth(char), 0);
+  const baseCoins = Math.max(1, Math.ceil(worth * SHOP_COIN_MARKUP));
   const coinFloor = Math.max(1, Math.ceil(baseCoins * 0.2));
   return { baseCoins, coinFloor };
 }
@@ -105,25 +105,39 @@ function computeCoinPrice(T, role) {
 // PAWN SELL VALUE
 // ============================================================================
 
-// Flat per-tier coin payout for the Shopkeeper's Pawn side (selling FROM the
+// What the Shopkeeper's Pawn side pays for one owned Item (selling FROM the
 // player's own loadout and storage — quick slots, worn armor, itemChest plus
-// its not-yet-flushed deferred deposits, armorInventory, consumableInventory — see ShopSystem's
-// 'pawn' mode), as opposed to the WARES buy side above. One flat scale
-// regardless of role: a payout doesn't need the WARES side's per-role skew,
-// just "worth more if rarer."
-const PAWN_SELL_BASE = 1;
-const PAWN_SELL_PER_TIER = 1;
+// its not-yet-flushed deferred deposits, armorInventory, consumableInventory —
+// see ShopSystem's 'pawn' mode). Ingredients are never pawned; their `value`
+// is the currency an item's worth is accumulated from.
+
+/**
+ * Fractional worth of one unit of `char`, read from its explicit INGREDIENTS
+ * record. A char that is not an ingredient (a crafted intermediate with no
+ * record of its own) is worth whatever its recipe's two inputs are worth,
+ * recursively. A missing value counts as 0 (check:data fails on it).
+ */
+function ingredientWorth(char) {
+  const ingredient = INGREDIENTS[char];
+  if (ingredient) return ingredient.value ?? 0;
+  const recipe = findRecipeByResult(char);
+  if (!recipe) return 0;
+  return ingredientWorth(recipe.left) + ingredientWorth(recipe.right);
+}
 
 /**
  * Coins paid out for selling one owned Item (weapon/armor/consumable/trap).
- * An item's own `pawnValue` overrides the tier scale — the Empty Bottle and
+ * An item's own `pawnValue` overrides the computed value — the Empty Bottle and
  * the raw liquid Bottles are free to fill from the world, so pawning them at
- * 1+ coin turned every Bottle drop into a coin.
+ * 1+ coin turned every Bottle drop into a coin. Otherwise the payout is the
+ * accumulated ingredient value of the item's recipe, rounded down to whole
+ * coins. An item with neither a recipe nor an override pays 0.
  */
 export function computePawnSellValue(itemData) {
   if (itemData.pawnValue !== undefined) return itemData.pawnValue;
-  const tier = deriveValueTier(itemData, itemData.type);
-  return PAWN_SELL_BASE + tier * PAWN_SELL_PER_TIER;
+  const recipe = findRecipeByResult(itemData.char);
+  if (!recipe) return 0;
+  return Math.floor(ingredientWorth(recipe.left) + ingredientWorth(recipe.right));
 }
 
 // ============================================================================
@@ -182,7 +196,6 @@ function buildListing(itemData, role) {
   const recipe = findRecipeByResult(itemData.char); // guaranteed by rollShopStock's filter
   const tier = deriveValueTier(itemData, role);
   const padding = pickPaddingIngredients(tier, [recipe.left, recipe.right]);
-  const { baseCoins, coinFloor } = computeCoinPrice(tier, role);
 
   // Tier 0 has no Treasure lane at all (see TIER_TREASURE_COUNT); tier 1-3
   // require 1/2/3 copies of the same picked treasure char respectively.
@@ -191,6 +204,7 @@ function buildListing(itemData, role) {
   // the outright gem buy would undercut the listing's own recipe — Ruby ×1
   // for a Ruby Whip costs less than the Infused Whip + Ruby.
   const ingredientCost = [recipe.left, recipe.right, ...padding];
+  const { baseCoins, coinFloor } = computeCoinPrice(ingredientCost);
   const gemInPrice = ingredientCost.some(char => TREASURE_CHARS.has(char));
   const treasureCount = gemInPrice ? 0 : (TIER_TREASURE_COUNT[tier] ?? 0);
   const treasureChar = treasureCount > 0 ? pickTreasureChar(itemData, role) : null;

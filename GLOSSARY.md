@@ -900,8 +900,11 @@ identity, not standard programming terms.
 - **Not:** an ingredient he refuses outright; scorned ones still settle the toll last.
 
 ### Ingredient
-- **Definition:** A raw drop from enemies/environment. Never crafted.
-- **In code:** rendered as a **letter** (`a–z`, `A–Z`) or **digit** (`0–9`).
+- **Definition:** A raw drop from enemies/environment. Never crafted. Carries an explicit `value`
+  (fractional worth of one unit) that prices the items built from it; never pawned directly.
+- **In code:** rendered as a **letter** (`a–z`, `A–Z`) or **digit** (`0–9`). Records live in
+  `src/data/ingredients.js` (`INGREDIENTS`, re-exported from `items.js`); `value` is read by
+  `shopPricing.js` for pawn payouts and shop coin cost.
 - **Not:** a Crafted item; never a Unicode symbol.
 
 ### Clam
