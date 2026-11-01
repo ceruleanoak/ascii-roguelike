@@ -7,8 +7,6 @@ import { isIngredient, isItem, generateEnemyDrops } from '../data/items.js';
 import { pickQuagmireIngredient } from '../data/alchemy.js';
 import { getZoneRandomEnemy, ENEMIES } from '../data/enemies.js';
 import { ZONE_MINERALS } from '../data/zones.js';
-import { CHARACTER_TYPES } from '../data/characters.js';
-import { createDebris } from '../entities/Debris.js';
 import { createIceBurst, Particle } from '../entities/Particle.js';
 import { INTERACTION_RANGE, OBJECT_ANIMATIONS, GRID, GAME_STATES } from '../game/GameConfig.js';
 import { inSamePlane, planeOf, objectOnPlane, tagInteriorPlane, tagLootLayer } from './PlaneSystem.js';
@@ -1279,48 +1277,5 @@ export class InteractionSystem {
         game.particles.push(tagInteriorPlane(game, particle));
       }
     }
-  }
-
-  checkCaptiveInteraction() {
-    const game = this.game;
-    if (!game.captives || game.captives.length === 0) return false;
-
-    for (const captive of game.captives) {
-      if (captive.freed) continue;
-
-      const dist = Math.hypot(
-        game.player.position.x - captive.position.x,
-        game.player.position.y - captive.position.y
-      );
-
-      if (dist < INTERACTION_RANGE * 2) {
-        if (!captive.cageDestroyed) {
-          // First interaction: destroy the cage
-          captive.cageDestroyed = true;
-
-          const cageDebris = createDebris(
-            captive.position.x,
-            captive.position.y,
-            12,
-            '#ffaa00'
-          );
-          for (const piece of cageDebris) game.debris.push(tagInteriorPlane(game, piece));
-
-          game.captiveInteractionThisFrame = true;
-          return true;
-        } else {
-          // Second interaction: recruit the character
-          captive.freed = true;
-          game.unlockedCharacters.push(captive.characterType);
-          const charData = CHARACTER_TYPES[captive.characterType];
-          game.showPickupMessage(`${charData.name} obtained`);
-          game.saveGameState();
-
-          game.captiveInteractionThisFrame = true;
-          return true;
-        }
-      }
-    }
-    return false;
   }
 }

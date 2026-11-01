@@ -1171,6 +1171,23 @@ identity, not standard programming terms.
   `BackgroundObject.ratDug` marks a dug tile; `CompanionSystem.updateTamedRats` spawns the find.
 - **Not:** a harvest (no tool, no player action); not an Enemy State (NPCRat has its own FSM).
 
+### Captive
+- **Definition:** The unlockable character a zone's first Miniboss room gives up: an `@` in that
+  character's color, held in a 5x5 Cage that lands near the room's center when the room clears. It
+  paces inside, leaning toward the player. The room's exits stay shut while the Cage stands. The
+  first SPACE breaks the Cage; the second recruits the character.
+- **In code:** `Captive` (`src/entities/Captive.js`); `CaptiveSystem` places it and resolves both
+  interactions; `game.captives` holds the room's Captives.
+- **Not:** a Companion (a Captive joins the playable roster); a Neutral Room NPC.
+
+### Cage Drop
+- **Definition:** A Captive's arrival. The Cage appears five cells above its landing spot, already
+  moving down, accelerates, and slams into the floor with a dust cloud and a screen shake. It can't
+  be interacted with until it lands.
+- **In code:** `Captive.updateFall` (`falling`, `fallOffset`, `fallVelocity`);
+  `CaptiveSystem._onCageLanded`.
+- **Not:** a Boss's Telegraph; the Cage does no damage and stays non-solid.
+
 ### Boss
 - **Definition:** An Enemy that appears at a zone-specific depth threshold and must be defeated
   to progress deeper. Bosses have enhanced drops (guaranteed Mana) and special behavior.

@@ -41,6 +41,7 @@ import { TossSystem } from './systems/TossSystem.js';
 import { WireSystem } from './systems/WireSystem.js';
 import { InteractionSystem } from './systems/InteractionSystem.js';
 import { CharacterSystem } from './systems/CharacterSystem.js';
+import { CaptiveSystem } from './systems/CaptiveSystem.js';
 import { MenuSystem } from './systems/MenuSystem.js';
 import { AnimationSystem } from './systems/AnimationSystem.js';
 import { EnemySpawnSystem } from './systems/EnemySpawnSystem.js';
@@ -225,6 +226,7 @@ class Game {
     this.wireSystem = new WireSystem(this);
     this.interactionSystem = new InteractionSystem(this);
     this.characterSystem = new CharacterSystem(this);
+    this.captiveSystem = new CaptiveSystem(this);
     this.menuSystem = new MenuSystem(this);
     this.animationSystem = new AnimationSystem(this);
     this.enemySpawnSystem = new EnemySpawnSystem(this);
@@ -1112,7 +1114,7 @@ class Game {
   }
 
   checkCaptiveInteraction() {
-    return this.interactionSystem.checkCaptiveInteraction();
+    return this.captiveSystem.checkCaptiveInteraction();
   }
 
   checkPathAmulet() {
@@ -2271,10 +2273,8 @@ class Game {
     this.electricitySystem.update(deltaTime);
     this.fireSystem.update(deltaTime);
 
-    // Update captives (pulsing animation)
-    for (const captive of this.captives) {
-      captive.update(deltaTime);
-    }
+    // Update captives (Cage Drop, pacing, pulsing animation)
+    this.captiveSystem.update(deltaTime);
 
     // Close errand confirm popup when player walks out of interaction range
     if (explore && this.errandSystem.isMenuOpen() && this.errandSystem.isOutOfRange(this.player, this.interiorManager.activeNpcs())) {

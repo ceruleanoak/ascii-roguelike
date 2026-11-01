@@ -191,6 +191,30 @@ export function createExplosionAftermath(game, x, y, { shake = 8, shakeDuration 
   }
 }
 
+// Dust cloud — a low ring kicked outward from something heavy hitting the
+// ground (a cage slamming down). Unlike the Explosion aftermath's plume it
+// hugs the floor: squashed vertically, barely rising, gone quickly.
+const DUST_CHARS = ['.', ':', "'", '~', 'o'];
+export function createDustCloud(game, x, y, { count = 20, spread = GRID.CELL_SIZE * 2 } = {}) {
+  const VERTICAL_SQUASH = 0.5;
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 30 + Math.random() * 50;
+    const shade = Math.floor(150 + Math.random() * 50);
+    const life = 0.5 + Math.random() * 0.4;
+    game.particles.push(tagInteriorPlane(game, {
+      x: x + Math.cos(angle) * spread,
+      y: y + Math.sin(angle) * spread * VERTICAL_SQUASH,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed * VERTICAL_SQUASH - 8,
+      life,
+      maxLife: life,
+      char: DUST_CHARS[Math.floor(Math.random() * DUST_CHARS.length)],
+      color: `rgb(${shade},${shade - 15},${shade - 45})`
+    }));
+  }
+}
+
 // Goo burst — `count` goo blobs launched at even angles from (x, y), each
 // sliding to a stop and laying slime trail as it goes (GooBlob + the blob
 // ticker below). Slime Bomb's blast: 8 blobs, one per compass direction.

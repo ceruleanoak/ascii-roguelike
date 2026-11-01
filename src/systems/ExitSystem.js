@@ -1148,7 +1148,7 @@ export class ExitSystem {
 
           // Check if we should spawn a captive (miniboss just defeated in this zone)
           if (game.zoneSystem.shouldSpawnCaptive(currentZone, room)) {
-            const captive = game.characterSystem.spawnCaptive(currentZone); // Spawn captive matching zone
+            const captive = game.captiveSystem.spawnCaptive(currentZone); // Spawn captive matching zone
             if (captive) {
               game.captives.push(captive);
               game.zoneSystem.markZoneCleared(currentZone);

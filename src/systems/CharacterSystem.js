@@ -3,8 +3,6 @@ import { CHARACTER_TYPES } from '../data/characters.js';
 import { TRAINING_TECHNIQUES } from '../data/items.js';
 import { GRID, NPC_INTERACTION_RANGE, GAME_STATES } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
-import { Captive } from '../entities/Captive.js';
-import { isCellProtected } from './roomFeatures.js';
 import { tagInteriorPlane } from './PlaneSystem.js';
 import { StatusEffectSystem } from './StatusEffectSystem.js';
 import { isInputCaptured } from '../game/inputCapture.js';
@@ -71,68 +69,6 @@ export class CharacterSystem {
     // over immediately — the maze track would audibly keep playing past
     // death until its loop finished. Bug #184.
     game.stateMachine.transition(GAME_STATES.REST);
-  }
-
-  spawnCaptive(characterType) {
-    const game = this.game;
-    if (!game.currentRoom) return null;
-
-    const centerX = GRID.WIDTH / 2;
-    const centerY = GRID.HEIGHT / 2;
-
-    // Fast path: two tries to find a clear cell — open in the collision map,
-    // outside every protected structure region (hut/maze/dungeon footprints,
-    // well ring, fountain pool, ravine band, wall blocks), and away from the
-    // player.
-    for (let attempt = 0; attempt < 2; attempt++) {
-      // Random position in the center area of the room
-      const spawnX = centerX + (Math.random() - 0.5) * GRID.WIDTH * 0.5;
-      const spawnY = centerY + (Math.random() - 0.5) * GRID.HEIGHT * 0.5;
-      const gridX = Math.floor(spawnX / GRID.CELL_SIZE);
-      const gridY = Math.floor(spawnY / GRID.CELL_SIZE);
-
-      if (gridX <= 0 || gridX >= GRID.COLS - 1 || gridY <= 0 || gridY >= GRID.ROWS - 1) continue;
-      if (game.currentRoom.collisionMap[gridY][gridX]) continue;
-      if (isCellProtected(game.currentRoom, gridX, gridY)) continue;
-
-      const distToPlayer = Math.hypot(
-        game.player.position.x - spawnX,
-        game.player.position.y - spawnY
-      );
-      if (distToPlayer <= GRID.CELL_SIZE * 5) continue;
-
-      return new Captive(characterType, spawnX, spawnY);
-    }
-
-    // Guaranteed fallback: the miniboss reward must appear this room, since
-    // zone-cleared tracking is keyed off a captive actually spawning. Scan
-    // every interior cell for open, unprotected floor and place the captive
-    // at whichever one is farthest from the player — covers the cluttered
-    // small-room case where two random tries can both whiff.
-    let bestCell = null;
-    let bestDist = -1;
-    for (let gridY = 1; gridY < GRID.ROWS - 1; gridY++) {
-      for (let gridX = 1; gridX < GRID.COLS - 1; gridX++) {
-        if (game.currentRoom.collisionMap[gridY][gridX]) continue;
-        if (isCellProtected(game.currentRoom, gridX, gridY)) continue;
-
-        const cellX = gridX * GRID.CELL_SIZE + GRID.CELL_SIZE / 2;
-        const cellY = gridY * GRID.CELL_SIZE + GRID.CELL_SIZE / 2;
-        const distToPlayer = Math.hypot(game.player.position.x - cellX, game.player.position.y - cellY);
-        if (distToPlayer > bestDist) {
-          bestDist = distToPlayer;
-          bestCell = { x: cellX, y: cellY };
-        }
-      }
-    }
-
-    if (bestCell) {
-      console.log('[Captive] fallback: placed at farthest open cell after random tries failed');
-      return new Captive(characterType, bestCell.x, bestCell.y);
-    }
-
-    console.log('[Captive] no open cell found anywhere in room — could not spawn captive');
-    return null;
   }
 
   // REST: swap with the first character NPC within interaction range.

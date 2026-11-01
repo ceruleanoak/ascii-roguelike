@@ -1545,6 +1545,8 @@ export class AudioSystem {
     this.loadSFX('melee_charge', null);
     this.loadSFX('sword_draw', null);    // § drawn from the islet stone
     this.loadSFX('cavern_reveal', null); // a bomb opens a Bombable Rock onto a Cavern door
+    this.loadSFX('cage_slam', null);     // a Captive's cage lands (Cage Drop)
+    this.loadSFX('cage_break', null);    // a Captive's cage is broken apart
     // Hoardmaw (green dungeon boss) — placeholder names, no assets yet. Every
     // beat of the encounter is already wired to these, so authoring the audio
     // later is a drop-in with no code change: grep loadSFX(.*null.
