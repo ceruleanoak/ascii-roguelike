@@ -209,6 +209,9 @@ export const BACKGROUND_OBJECTS = {
     dropEffect: 'destroyObject:spawnIngredient:|',
     harvestDropChance: 0.25,
     berryChance: 0.1, // the shrub holds BERRIES_PER_SHRUB Forest Berries (InteractionSystem)
+    finds: [
+      { char: 'l', chance: 0.05 }  // Leaf — uncommon shrub find, rolls independently
+    ],
     flammability: 'high',
     conductivity: 'none',
     slowing: 0.8,
