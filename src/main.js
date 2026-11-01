@@ -2961,7 +2961,7 @@ class Game {
     if (this.alchemySystem?.tryFillArmedBottle()) return;
 
     // Fairy gesture: armed Bottle catches it, else full-health blessing (+1 max HP).
-    if (this.interactionSystem?.tryBottleFairy() || this.interactionSystem?.tryFairyBlessing()) return;
+    if (this.interactionSystem?.tryBottleFairy() || this.interactionSystem?.tryBottleFish() || this.interactionSystem?.tryFairyBlessing()) return;
 
     // Armed Infused/Lucky Coin near a well — precedes fireSelected() (WellSystem.tryOfferArmedSlot).
     if (this.wellSystem?.tryOfferArmedSlot()) return;

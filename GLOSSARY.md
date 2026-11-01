@@ -1376,8 +1376,8 @@ identity, not standard programming terms.
 ### Bottle
 - **Definition:** Any consumable that is a bottle: the Empty Bottle, the liquid bottles
   (Water, Hot Water, Electrified Water, Magma, Mud, Fairy/Ember/Frost/Blight Water), the starter
-  and finished potions, Poison Flask, Steam Vial, Tonic, Venom Vial, Fairy in a Bottle and
-  Fairy King in a Bottle. What the Alchemy Lab brews with and fills.
+  and finished potions, Poison Flask, Steam Vial, Tonic, Venom Vial, Fairy in a Bottle,
+  Fairy King in a Bottle and Fish in a Bottle. What the Alchemy Lab brews with and fills.
 - **In code:** `bottle: true` on the ITEMS entry (`src/data/items.js`);
   `InventorySystem.isBottle(item)`. `npm run check:data` fails any `leavesBottle`,
   `emptyBottle` or `cauldronInput` item that isn't flagged.

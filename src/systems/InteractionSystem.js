@@ -662,6 +662,30 @@ export class InteractionSystem {
   }
 
   /**
+   * SPACE with an Empty Bottle armed and a fish catch within grab reach → the
+   * bottle becomes a Fish in a Bottle (⍾) and the catch is taken, not grabbed.
+   * Same gesture and priority as tryBottleFairy; the catch itself is what
+   * goes in the bottle, so the Fish item is never granted.
+   */
+  tryBottleFish() {
+    const game = this.game;
+    const bottle = this._armedEmptyBottle();
+    if (!bottle || !game.player) return false;
+
+    const fishing = game.fishingSystem;
+    const reward = fishing?.reachableFishReward(game.player);
+    if (!reward) return false;
+    if (!game.bottlesSystem.replaceAt(bottle, '⍾')) return false;
+
+    fishing.takeReward(reward);
+    game.consumableTriggerSystem.disarm();
+    game.menuSystem?.announceItem?.('⍾');
+    game.audioSystem?.playSFX?.('fairy_pickup');
+    game.menuSystem?.updateUI?.();
+    return true;
+  }
+
+  /**
    * SPACE with no Bottle armed, next to a fairy, at full health — permanent
    * +1 max HP. Counterpart to checkFairyTouch's walk-up heal: touch stands
    * down once the player is topped off (see the gate there), so this is the

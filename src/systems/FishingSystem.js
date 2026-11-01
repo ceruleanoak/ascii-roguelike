@@ -584,22 +584,31 @@ export class FishingSystem {
   // Returns the granted ITEMS key, or null if nothing was in range.
   trySpacePickup(game) {
     if (!game.player) return false;
-    const px = game.player.position.x, py = game.player.position.y;
+    const reward = this.reachableFishReward(game.player);
+    if (!reward) return false;
+    this.takeReward(reward);
+    const grabbed = tagLootLayer(game, new Item(reward.directPickupItem, game.player.position.x, game.player.position.y));
+    game.items.push(grabbed);
+    game.physicsSystem.addEntity(grabbed);
+    game.tryPickupItem();
+    return true;
+  }
+
+  /** The first direct-pickup catch within grab reach of `player`, or null. Not removed. */
+  reachableFishReward(player) {
     const radius = GRID.CELL_SIZE * 1.5;
-    for (let i = 0; i < this.rewardObjects.length; i++) {
-      const reward = this.rewardObjects[i];
+    for (const reward of this.rewardObjects) {
       if (!reward.alive || !reward.directPickupItem) continue;
-      const dx = reward.position.x - px, dy = reward.position.y - py;
-      if (dx * dx + dy * dy > radius * radius) continue;
-      reward.alive = false;
-      this.rewardObjects.splice(i, 1);
-      const grabbed = tagLootLayer(game, new Item(reward.directPickupItem, game.player.position.x, game.player.position.y));
-      game.items.push(grabbed);
-      game.physicsSystem.addEntity(grabbed);
-      game.tryPickupItem();
-      return true;
+      const dx = reward.position.x - player.position.x, dy = reward.position.y - player.position.y;
+      if (dx * dx + dy * dy <= radius * radius) return reward;
     }
-    return false;
+    return null;
+  }
+
+  /** Removes a catch from the water and the roster, whether grabbed or bottled. */
+  takeReward(reward) {
+    reward.alive = false;
+    this.rewardObjects.splice(this.rewardObjects.indexOf(reward), 1);
   }
 
   resetForNewRoom(player = null) {

@@ -2268,6 +2268,16 @@ export const ITEMS = {
     stackable: true, // shares one quick slot by count — see InventorySystem.mergeStackableConsumable
     color: '#7ec8e3'
   },
+  // A Fish caught in an armed Empty Bottle (InteractionSystem.tryBottleFish).
+  // Like the Fairy in a Bottle it lives in the Bottles store. No effect yet.
+  '⍾': {
+    rarity: 'common',
+    char: '⍾',
+    name: 'Fish in a Bottle',
+    type: ITEM_TYPES.CONSUMABLE, bottle: true,
+    oneShot: true,
+    color: '#7ec8e3'
+  },
   // Dropped by cutting a Red Zone caldera Ember Bush. Unicode/CONSUMABLE
   // (not the letter/digit ingredient tier) because it needs full consumable
   // behavior: passive torch-light while equipped+unspent (fireBerryLight,
