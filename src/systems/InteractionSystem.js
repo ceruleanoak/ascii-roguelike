@@ -68,7 +68,7 @@ export class InteractionSystem {
   // path. Brush always dies in one hit to a blunt or axe strike. Cuttable
   // growth (grass) is choosy about its cutters: axes deal half damage
   // against it — they're blades, but clumsy ones for trimming; true blades
-  // (sword, scythe, spear, dagger — isBlade) never call this for cuttable
+  // (sword, spear, dagger — isBlade) never call this for cuttable
   // objects at all, since CombatSystem routes them to an instant cutGrass()
   // cut in BackgroundObject.takeDamage regardless of the damage number;
   // hammers thump it for zero — a smashing tool has no business trimming or
@@ -1050,12 +1050,12 @@ export class InteractionSystem {
           // and the stick/rock/pollen+grain/axe-head/arrowhead bands keep their width.
           // Fully respects the zone's normal depth-gated spawn table — no
           // separate/guaranteed roll. If the roll happens to land on Goblin,
-          // it carries a Scythe (the item's sole source, since Goblin no
+          // it carries a Longsword (the item's sole source, since Goblin no
           // longer drops it as a ground spawn).
           if (game._activeEnemies().length < 10) {
             const beastChar = getZoneRandomEnemy(game.getCurrentZoneDepth(), game.currentRoom?.zone);
             const dataOverride = beastChar === 'G'
-              ? { ...ENEMIES['G'], spawnEquipment: { chance: 1.0, weapons: ['Ƨ'] } }
+              ? { ...ENEMIES['G'], spawnEquipment: { chance: 1.0, weapons: ['⫯'] } }
               : undefined;
             const spawned = game.roomGenerator.spawnEnemiesFrom(game, obj, {
               spawnChar: beastChar,

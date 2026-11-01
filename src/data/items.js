@@ -979,27 +979,6 @@ export const ITEMS = {
     color: '#88eeff'
   },
 
-  // ── MELEE / scythe ────────────────────────────────────────────────────────
-  // Slow, wide reaper sweep. Wide-arc cleave (sweep pattern), modest damage.
-  // Also craftable. Guaranteed drop of the grass-cut-only grass-Goblin
-  // encounter (InteractionSystem's cutGrass branch) — no longer a ground
-  // spawn. Cuts grass like any blade — that's the trick to revealing what's
-  // concealed beneath it (see GLOSSARY.md "Sinkhole").
-  'Ƨ': {
-    char: 'Ƨ',
-    name: 'Scythe',
-    type: ITEM_TYPES.WEAPON,
-    weaponType: WEAPON_TYPES.MELEE,
-    weaponSubtype: 'scythe',
-    damage: 2,
-    windup: 0.7,
-    recovery: 1.95,
-    patternSpeed: 0.03,
-    range: 26,
-    drawScale: 1.25,
-    color: '#aabb77'
-  },
-
   // ── MELEE / spear ─────────────────────────────────────────────────────────
   '↑': {
     char: '↑',
@@ -1526,15 +1505,6 @@ export const ITEMS = {
     meleeChar: '|', range: 28, blockReleaseDamage: 1,
     rootDuration: 2.0,
     color: '#77aa44'
-  },
-  // Reaper's Scythe (Scythe + Dust): a killing blow restores 1 HP. Untiered
-  // like the Scythe.
-  '⸕': {
-    char: '⸕', name: "Reaper's Scythe",
-    type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.MELEE, weaponSubtype: 'scythe',
-    damage: 3, windup: 0.7, recovery: 1.95, patternSpeed: 0.03, range: 26,
-    drawScale: 1.25, healOnKill: 1,
-    color: '#999999'
   },
   // Bullwhip (Whip + Thick Fur): plain tier 2, a longer, harder crack.
   '⥊': {
@@ -3106,7 +3076,7 @@ export const ITEMS = {
 // table: { family: [ [tier-1 chars], [tier-2 chars], ... ] }, where family is
 // the weapon's subtype (or weaponType for GUN/BOW/WAND). Grouping by subtype
 // keeps two staffs from producing a sword result. A weapon with no `tier`
-// (gem wands, pickaxe, scythe, fishing pole, …) is absent here, so it
+// (gem wands, pickaxe, fishing pole, …) is absent here, so it
 // has no upgrade path and the fountain hands it back. Tier gaps collapse, so
 // the "next tier" is always the next populated rung.
 function buildWeaponTiers() {
@@ -3224,7 +3194,6 @@ export const INGREDIENTS = {
 export const SUBTYPE_DEFAULTS = {
   sword:   { attackPattern: 'arc',       isBlade: true },
   axe:     { attackPattern: 'sweep' },
-  scythe:  { attackPattern: 'sweep',     isBlade: true },
   spear:   { attackPattern: 'thrust',    isBlade: true, range: 28, distanceCrit: true },
   dagger:  { attackPattern: 'multistab', isBlade: true, range: 16 },
   hammer:  { attackPattern: 'shockwave', canSmash: true },

@@ -21,7 +21,7 @@
  * Melee-hit flags (onMeleeHit, injected onto attacks by Item.createMeleeAttack):
  *   shattersFrozen    — hitting a Frozen enemy sprays one freeze pip onto
  *                       every enemy nearby (Ice Hammer)
- *   healOnKill        — HP restored to the wielder on a killing blow (Reaper's Scythe)
+ *   healOnKill        — HP restored to the wielder on a killing blow (no current weapon)
  *   pullsDisarmedGear — a whip disarm flings the gear toward the wielder
  *                       instead of scattering it (Vine Whip)
  *   rootDuration      — seconds the hit roots the enemy in place, reusing the

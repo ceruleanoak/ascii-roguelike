@@ -151,7 +151,6 @@ export const RECIPES = [
   { left: '↑', right: 'j', result: 'ⲯ', name: 'Trident' },      // Spear + Jaw = Trident (jaw-bone prongs)
   { left: '↑', right: 'n', result: 'ⲯ', name: 'Trident' },      // Spear + Sharkbone = Trident (second route)
   { left: '↑', right: 'M', result: '⇑', name: 'War Spear' },    // Spear + Metal = War Spear
-  { left: '/', right: 'M', result: 'Ƨ', name: 'Scythe' },        // Staff + Metal = Scythe (long handle + curved blade)
 
   // Secret recipes
   { left: '♥', right: 's', result: '♦', name: 'Dragon Heart' },  // Heart + Scale = Dragon Heart
@@ -251,7 +250,6 @@ export const RECIPES = [
   { left: '↾', right: '↾', result: '⚲', name: 'Kunai' },             // Dagger + Dagger (pre-empts the dagger's tier-up cycle)
   { left: '⊦', right: 'i', result: '⍑', name: 'Ice Axe' },           // Axe + Ice
   { left: '↩', right: 'M', result: '⌾', name: 'Chakram' },           // Boomerang + Metal (damages every bounce, no stun)
-  { left: 'Ƨ', right: 'd', result: '⸕', name: "Reaper's Scythe" },   // Scythe + Dust
   // Tier-2 → tier-3
   { left: 'ƒ', right: 'v', result: '⌭', name: 'Plague Gun' },        // Fester's Gun + Venom
   { left: '⋔', right: 'p', result: '⑂', name: 'Pearl Slingshot' },   // Keen Slingshot + Pearl Shard

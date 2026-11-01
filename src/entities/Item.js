@@ -917,7 +917,7 @@ export class Item {
       if (this.data.cyclesExitColor) props.cyclesExitColor = this.data.cyclesExitColor;
       if (this.data.poisonStacks) props.poisonStacks = true;
       if (this.data.randomOnHit) props.randomOnHit = this.data.randomOnHit;
-      // WeaponEffectsSystem.onMeleeHit flags (Ice Hammer, Reaper's Scythe, Vine Whip, Rootstaff)
+      // WeaponEffectsSystem.onMeleeHit flags (Ice Hammer, Vine Whip, Rootstaff)
       if (this.data.shattersFrozen) props.shattersFrozen = true;
       if (this.data.healOnKill) props.healOnKill = this.data.healOnKill;
       if (this.data.pullsDisarmedGear) props.pullsDisarmedGear = true;
