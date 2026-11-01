@@ -1222,7 +1222,7 @@ export class CombatSystem {
               // not at the box's top-left corner.
               if (attack.explode) {
                 const inset = ((attack.width || GRID.CELL_SIZE) - GRID.CELL_SIZE) / 2;
-                this.createExplosion(attack.position.x + inset, attack.position.y + inset, attack.explodeRadius || 40, attack.damage, enemies, backgroundObjects, 0, attack.shooterPlane ?? 0);
+                this.createExplosion(attack.position.x + inset, attack.position.y + inset, attack.explodeRadius || 40, attack.damage, enemies, backgroundObjects, 0, attack.shooterPlane ?? 0, attack.explodeLabel);
               }
               this.game?.weaponEffectsSystem?.onMeleeHit(attack, enemy, isFrozen);
             }
@@ -1928,8 +1928,8 @@ export class CombatSystem {
     return applyAOEStatusImpl(position, radius, statusType, duration, enemies, sourcePlane);
   }
 
-  createExplosion(x, y, radius, damage, enemies, backgroundObjects = [], damageMin = 0, sourcePlane = 0) {
-    return createExplosionImpl(this, x, y, radius, damage, enemies, backgroundObjects, damageMin, sourcePlane);
+  createExplosion(x, y, radius, damage, enemies, backgroundObjects = [], damageMin = 0, sourcePlane = 0, label) {
+    return createExplosionImpl(this, x, y, radius, damage, enemies, backgroundObjects, damageMin, sourcePlane, label);
   }
 
   createDamageNumber(damage, x, y, color, scale = 1, duration = 1.0) {

@@ -73,7 +73,7 @@ export function detonateBombArrow(game, proj, enemies) {
   });
 }
 
-export function createExplosion(combatSystem, x, y, radius, damage, enemies, backgroundObjects = [], damageMin = 0, sourcePlane = 0) {
+export function createExplosion(combatSystem, x, y, radius, damage, enemies, backgroundObjects = [], damageMin = 0, sourcePlane = 0, label = 'BOOM!') {
   // Damage enemies in blast radius
   // damageMin: minimum damage multiplier at edge (0 = full falloff, 0.25 = 25% damage at edge)
   for (const enemy of enemies) {
@@ -140,7 +140,7 @@ export function createExplosion(combatSystem, x, y, radius, damage, enemies, bac
   }
 
   // Create visual effect (you can enhance this later)
-  combatSystem.createDamageNumber('BOOM!', x, y, '#ff4400');
+  combatSystem.createDamageNumber(label, x, y, '#ff4400');
   // Explosive weapon hits fire this every hit, so the shake is lighter than a Bomb's.
   if (combatSystem.game) createExplosionAftermath(combatSystem.game, x, y, { shake: 4, shakeDuration: 0.25, smoke: 6, spread: radius * 0.4 });
 

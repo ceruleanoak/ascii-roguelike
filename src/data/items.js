@@ -1496,7 +1496,7 @@ export const ITEMS = {
     char: '⁂', tier: 3, name: 'Spore Mace',
     type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.MELEE, weaponSubtype: 'hammer',
     damage: 4, windup: 0.6, recovery: 0.3, patternSpeed: 0.1, range: 20,
-    explode: true, explodeRadius: 45, weaponLevel: 3,
+    explode: true, explodeRadius: 45, explodeLabel: 'PUFF!', weaponLevel: 3,
     dustBurst: { status: 'sleep', duration: 3.0, color: '#ffe566' },
     color: '#ddcc44'
   },
@@ -2067,7 +2067,7 @@ export const ITEMS = {
   '⚷': {
     char: '⚷', name: 'Flippers', type: ITEM_TYPES.ARMOR,
     defense: 1,
-    deepWaterImmune: true, // never wet, never drowns, no extra deep-water slow, dodge roll works (matches frog form); found only under the Sunken Ship's Push Rock
+    deepWaterImmune: true, // never wet, never drowns, no extra deep-water slow, dodge roll works (matches frog form); found under an Ocean room's Push Rock; unique, so only one is held at a time
     spellDescription: 'THE DEEP HOLDS NO CLAIM.',
     color: '#3399cc'
   },

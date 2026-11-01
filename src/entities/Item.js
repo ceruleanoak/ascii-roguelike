@@ -1178,6 +1178,7 @@ export class Item {
       knockback: this.data.knockback || 150,
       explode: this.data.explode,
       explodeRadius: this.data.explodeRadius,
+      explodeLabel: this.data.explodeLabel,
       owner: player,
       shooterPlane: player.plane,
       triggerShockwave: true,
