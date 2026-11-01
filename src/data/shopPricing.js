@@ -52,9 +52,11 @@ const PADDING_BY_RARITY = {
 };
 
 // Raw ingredients only: a char with no recipe of its own. Crafted
-// intermediates are never drops, so they never pad a price.
+// intermediates are never drops, so they never pad a price. Coin is currency,
+// not a padding pull; a recipe that names coin still lists it as a real input
+// (left/right), which pickPaddingIngredients never draws from.
 function rawIngredientChars() {
-  return Object.keys(INGREDIENTS).filter(char => !findRecipeByResult(char));
+  return Object.keys(INGREDIENTS).filter(char => char !== 'c' && !findRecipeByResult(char));
 }
 
 function shuffled(list) {
