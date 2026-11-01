@@ -30,7 +30,7 @@ const INSISTENCE_TO_BARRICADE = 2;
 // The Race Flag lands at random among this many of the open cells farthest from
 // the player, so it can't be waited at and its corner can't be learned.
 const FLAG_CELL_POOL = 12;
-// How many cells nearer the player the Race Flag lands than the farthest open cell.
+// How many cells of walk nearer the player the Race Flag lands than the farthest open cell.
 const FLAG_CLOSER_CELLS = 3;
 
 /**
@@ -436,7 +436,9 @@ export class BarricadeSystem {
   // Measured from the player rather than the button, so a shot from across the
   // room doesn't stand them beside the finish. Walks the floor from the player's
   // cell, so the flag is never behind a wall, then takes the far end of it.
-  // Falls back to any floor reached if every far cell holds something.
+  // Falls back to any floor reached if every far cell holds something. The
+  // distance returned is the walk, not the straight line: the race clock
+  // (_raiseFlag) runs against the way the player has to go.
   _pickFlagCell(room) {
     const cs = GRID.CELL_SIZE;
     const player = this.game.player;
@@ -450,7 +452,8 @@ export class BarricadeSystem {
       occupied.add(key);
       if (o.data?.solid || o.data?.bulletInteraction === 'block') solid.add(key);
     }
-    const seen = new Set([`${start.col},${start.row}`]);
+    // Cell -> steps walked from the player's cell.
+    const walked = new Map([[`${start.col},${start.row}`, 0]]);
     const queue = [start];
     for (let i = 0; i < queue.length; i++) {
       const { col, row } = queue[i];
@@ -460,13 +463,13 @@ export class BarricadeSystem {
         // Border cells are skipped along with the walls: an exit gap is floor
         // the collision map leaves open, and the room's way out is no finish.
         const onBorder = next.col < 1 || next.row < 1 || next.col > GRID.COLS - 2 || next.row > GRID.ROWS - 2;
-        if (onBorder || seen.has(key) || solid.has(key) || this._isStructureCell(room, next.col, next.row)) continue;
-        seen.add(key);
+        if (onBorder || walked.has(key) || solid.has(key) || this._isStructureCell(room, next.col, next.row)) continue;
+        walked.set(key, walked.get(`${col},${row}`) + 1);
         queue.push(next);
       }
     }
     const measured = queue.map(({ col, row }) => ({
-      col, row, dist: Math.hypot(col * cs + cs / 2 - px, row * cs + cs / 2 - py)
+      col, row, dist: walked.get(`${col},${row}`) * cs
     }));
     const empty = measured.filter(c => !occupied.has(`${c.col},${c.row}`) && !isExitLetterTile(c.col, c.row));
     const pool = (empty.length > 0 ? empty : measured);
