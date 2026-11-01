@@ -2777,6 +2777,21 @@ export const ITEMS = {
     pawnValue: 0,
     color: '#daa520'
   },
+  // Stick Bundle: three Sticks tied together. SPACE on the hut-floor bundle
+  // picks it up as this consumable (InteractionSystem._pickUpBundle); using it
+  // from a slot releases the Sticks at your feet (ConsumableTriggerSystem).
+  // Never sold for money: a stack of bundles is firewood, not a purse.
+  '⋕': {
+    char: '⋕',
+    name: 'Stick Bundle',
+    type: ITEM_TYPES.CONSUMABLE,
+    effect: 'releaseSticks',
+    manualOnly: true,
+    oneShot: true,
+    stackable: true,
+    pawnValue: 0,
+    color: '#8b4513'
+  },
   // Forest Berry: found in Shrubs (GameConfig berryChance), never crafted. Feed
   // for rats alone: crows pass it by, so it tames but never befriends. SPACE
   // eats it for +1 HP.

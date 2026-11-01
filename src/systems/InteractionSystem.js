@@ -745,6 +745,12 @@ export class InteractionSystem {
   // any object whose acceptsInteractions includes 'spacebar' or 'all'.
   openContainer(obj) {
     if (!obj || obj.destroyed || obj.destroyAfterAnimation) return;
+    // A pickup object (the Stick Bundle) is taken whole into the consumable
+    // stores, not burst open, and skips the drop roll: nothing is lost.
+    if (obj.data.pickupItem) {
+      this._pickUpBundle(obj);
+      return;
+    }
     const effect = obj.data.dropEffect;
     if (!effect) return;
 
@@ -764,6 +770,18 @@ export class InteractionSystem {
       this.handleObjectEffect(effect, obj);
     }
     this.game.renderer.markBackgroundDirty();
+  }
+
+  // SPACE on a pickup object: it goes into the consumable stores the way a
+  // crafted item does (stowConsumable), then the object is removed.
+  _pickUpBundle(obj) {
+    const game = this.game;
+    const item = new Item(obj.data.pickupItem, obj.position.x, obj.position.y);
+    obj.destroyAfterAnimation = true;
+    obj._playAnimation('shake');
+    game.inventorySystem.stowConsumable(item, game.player);
+    game.menuSystem.announceItem(item.char);
+    game.renderer.markBackgroundDirty();
   }
 
   // Flush the Leshy out of its shaking bush (once per bush). Every discovery

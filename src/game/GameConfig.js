@@ -612,14 +612,15 @@ export const BACKGROUND_OBJECTS = {
     }
   },
   // Stick Bundle: three Sticks tied together on a hut floor (HutSystem). SPACE
-  // beside it bursts it and the Sticks fly out (InteractionSystem.openContainer
-  // → spawnMultiple); weapons and bullets leave it alone, so it is always
-  // opened by hand.
+  // beside it picks it up as the ⋕ consumable (pickupItem, read by
+  // InteractionSystem.openContainer). A melee hit breaks it apart into three
+  // Sticks (dropEffect); bullets pass it by.
   '/': {
     name: 'Stick Bundle',
     color: '#8b4513',
-    indestructible: true,
-    acceptsInteractions: ['spacebar'],
+    hp: 1,
+    pickupItem: '⋕',
+    acceptsInteractions: ['blade', 'blunt', 'spacebar'],
     dropEffect: 'spawnMultiple:|:3',
     bulletInteraction: 'pass-through',
     flammability: 'none',

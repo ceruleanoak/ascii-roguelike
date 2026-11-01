@@ -365,6 +365,9 @@ export class ConsumableTriggerSystem {
         // Steam Vial: creates a steam cloud — START WINDUP
         return { windup: 0.6, effectType: 'throwSteam' };
       }
+      case 'releaseSticks':
+        // Stick Bundle: manual-only; the Sticks spill out where you stand.
+        return manual ? { windup: 0.4, effectType: 'releaseSticks' } : false;
       case 'waterBalloon':
         // Water Balloon: manual-only throw, lands where the Bomb's would
         return manual ? { windup: THROW_DURATION, effectType: 'waterBalloon' } : false;
@@ -454,6 +457,13 @@ export class ConsumableTriggerSystem {
     const params = () => getPotionEffectParams(consumable?.char || cd.char, modifier);
 
     switch (windup.effectType) {
+      case 'releaseSticks':
+        // Three Sticks fan out around the player, as a bundle's melee break does.
+        for (let i = 0; i < 3; i++) {
+          const angle = (i / 3) * Math.PI * 2 + Math.random() * 0.5;
+          this.game.lootSystem.spawnIngredientDrop('|', player.position.x, player.position.y, angle, player);
+        }
+        break;
       case 'heal': {
         const p = params();
         // An Unstable roll is whole HP: 0+ heals that much, below 0 hurts by

@@ -17,8 +17,8 @@ import { HOT_WATER_CHAR } from '../data/alchemy.js';
 import { hasKeyItem } from './keyItems.js';
 
 // A Stick Bundle turns up in most huts, so a run that needs firewood or a
-// handle knows where to look. It is a SPACE-opened container (the '/' entry
-// in BACKGROUND_OBJECTS): the Sticks come out only once it is burst.
+// handle knows where to look. It is the '/' entry in BACKGROUND_OBJECTS: SPACE
+// picks it up as a consumable, and a melee hit breaks it into Sticks.
 const STICK_BUNDLE_CHAR = '/';
 const STICK_BUNDLE_CHANCE = 0.6;
 // A paid shop doesn't leave goods on its floor; the shed is the Frog Coin's.
@@ -415,8 +415,8 @@ export class HutSystem {
       }
     }
 
-    // Stick Bundle: one cell, kept clear of everything placed above. Opening
-    // it is InteractionSystem.openContainer's (SPACE beside it), like a barrel.
+    // Stick Bundle: one cell, kept clear of everything placed above. SPACE
+    // beside it picks it up (InteractionSystem.openContainer).
     if (!NO_STICK_BUNDLE_KINDS.has(hutKind) && Math.random() < STICK_BUNDLE_CHANCE) {
       for (let attempt = 0; attempt < 16; attempt++) {
         const col = 2 + Math.floor(Math.random() * (cols - 4));
