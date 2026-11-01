@@ -1,4 +1,4 @@
-import { GRID, HEATED_WATER_DURATION } from '../game/GameConfig.js';
+import { GRID, HEATED_WATER_DURATION, POISONED_WATER_DURATION } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { planeOf, PLANE_SURFACE, isInteriorActive } from './PlaneSystem.js';
 import { createBurstParticles } from './WorldEffectsSystem.js';
@@ -9,10 +9,12 @@ const C = GRID.CELL_SIZE;
 const PLUS = [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]];
 
 // What each liquid Bottle's `splash` lays down: the tile variant, and the
-// state a water tile takes (Heated Water, electrified) once it is placed.
+// state a water tile takes (Heated Water, poisoned, electrified) once it is
+// placed, for how long.
 const SPLASH_TILES = {
   water:       { typeId: 'water' },
-  heated:      { typeId: 'water', waterState: 'heated' },
+  heated:      { typeId: 'water', waterState: 'heated', duration: HEATED_WATER_DURATION },
+  poisoned:    { typeId: 'water', waterState: 'poisoned', duration: POISONED_WATER_DURATION },
   electrified: { typeId: 'water', electrified: true },
   lava:        { typeId: 'lava' },
   mud:         { typeId: 'mud_wet' },
@@ -23,7 +25,7 @@ const SPLASH_TILES = {
 const ELECTRIFIED_TILE_DURATION = 4.0;
 
 /**
- * Liquid Splash — a thrown liquid Bottle (🜉 🜊 ε ◆ ◐, `splash` on its ITEMS
+ * Liquid Splash — a thrown liquid Bottle (🜉 🜊 🜋 ε ◆ ◐, `splash` on its ITEMS
  * entry) lands as a plus of that liquid: its landing cell and the four beside
  * it, each only where the floor is open (inside the grid, no wall, no live
  * background object). The Bottle itself leaves an Empty Bottle
@@ -55,7 +57,7 @@ export function splashLiquid(game, consumable, x, y) {
     if (collisionMap?.[row]?.[col]) continue;
     if (occupied.has(`${col},${row}`)) continue;
     const tile = BackgroundObject.createVariant(spec.typeId, col * C, row * C);
-    if (spec.waterState) tile.setWaterState(spec.waterState, HEATED_WATER_DURATION);
+    if (spec.waterState) tile.setWaterState(spec.waterState, spec.duration);
     room.backgroundObjects.push(tile);
     placed.push(tile);
   }

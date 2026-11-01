@@ -1,4 +1,5 @@
 import { GRID, GAME_STATES } from '../game/GameConfig.js';
+import { POISONED_WATER_CHAR } from '../data/alchemy.js';
 import { buildTerrainGrid, cellCost, BLOCKED, HAZARD } from './steeringTerrain.js';
 import { entityCenter } from '../game/Telegraph.js';
 import { FairyKing } from '../entities/FairyKing.js';
@@ -82,12 +83,12 @@ export class GetSpellSystem {
         const poolBottle = game.fountainSystem?.poolBottleChar();
         return [
           { is: obj => obj.typeId === 'hot_water', fill: ref => alchemy.fillHotWaterBottle(ref) },
-          { is: obj => game.player.inHut && obj.isTrough && obj.troughHeated, fill: ref => alchemy.fillHotWaterBottle(ref) },
           { is: obj => bottleOf(obj) === '🜊', fill: fillWith('🜊') },
           { is: obj => !!poolBottle && !!obj.fountainWater, fill: fillWith(poolBottle) },
-          { is: obj => game.player.inHut && obj.char === '≈', fill: ref => alchemy.fillBottle(ref) },
+          { is: obj => game.player.inHut && obj.char === '≈' && !obj.isTrough, fill: ref => alchemy.fillBottle(ref) },
           { is: obj => bottleOf(obj) === '🜉', fill: fillWith('🜉') },
           { is: obj => bottleOf(obj) === 'ε', fill: fillWith('ε') },
+          { is: obj => bottleOf(obj) === POISONED_WATER_CHAR, fill: fillWith(POISONED_WATER_CHAR) },
         ];
       }
       default: return [];

@@ -944,6 +944,8 @@ export class CombatSystem {
                 }
               } else if (obj.isTrough && attack.onHit === 'burn') {
                 WaterLavaHitMechanic.burnWater(obj, backgroundObjects, this); // the Alchemy Lab trough heats for good
+              } else if (obj.isTrough && attack.onHit === 'poison') {
+                WaterLavaHitMechanic.poisonTrough(backgroundObjects); // and poisons for good
               }
 
               // Water attack hits lava → solidify to rock

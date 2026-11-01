@@ -2861,6 +2861,18 @@ export const ITEMS = {
     splash: 'heated', oneShot: true, manualOnly: true, leavesBottle: true, // thrown: a Liquid Splash (LiquidSplash.js)
     color: '#ff8855'
   },
+  // 'Bottle of Poisoned Water' — filled from poisoned water or a poisoned
+  // Alchemy Lab trough. Any ingredient brewed in it is an Unstable Potion.
+  '🜋': {
+    rarity: 'common',
+    char: '🜋',
+    name: 'Bottle of Poisoned Water',
+    type: ITEM_TYPES.CONSUMABLE, bottle: true,
+    pawnValue: 0, // free to fill from the world, so worth nothing at the counter
+    effect: 'cauldronInput',
+    splash: 'poisoned', oneShot: true, manualOnly: true, leavesBottle: true, // thrown: a Liquid Splash (LiquidSplash.js)
+    color: '#44bb44'
+  },
   // Starter potions (Alchemy Cauldron stage 1: Bottle of Water + raw
   // ingredient). Base Potion '🜄' (above, in the main potion block) is the
   // third starter. potionModifier carries through to the true potion made

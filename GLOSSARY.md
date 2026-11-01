@@ -2007,23 +2007,37 @@ identity, not standard programming terms.
   puffs one steam cloud and leaves the tile Heated Water for 60 seconds. While it stays hot it
   fills a Bottle of Hot Water (🜊), but it does not heal and it does not steam again. After that
   it cools back to plain water. Fire heats the Alchemy Lab's trough the same way, all four of
-  its cells at once, and the trough never cools.
+  its cells at once, and the trough never cools. It drives out the trough's poison.
 - **In code:** `waterState === 'heated'` on a water tile (`HEATED_WATER_DURATION`,
-  `WATER_COLORS.heated` in GameConfig); `troughHeated` on the trough cells
+  `WATER_COLORS.heated` in GameConfig); `troughState === 'heated'` on the trough cells
   (`typeId: 'water_trough'`, `isTrough`). Set by `WaterLavaHitMechanic.burnWater`, which both
   burn paths call. Bottled by AlchemySystem (`LIQUID_TILE_TO_BOTTLE.heated`,
   `fillTroughBottle`) and GETWATER.
 - **Not:** the Caldera's Hot Water (`typeId: 'hot_water'`, which heals); not electrified or
   poisoned water (fire steams those but leaves their state alone).
 
+### Poisoned Water
+- **Definition:** Water that poison has struck. A poison hit (melee or projectile) leaves a water
+  tile poisoned for 4 seconds. While it lasts, the tile poisons what stands in it and fills a
+  Bottle of Poisoned Water (🜋). Poison turns the Alchemy Lab's trough all four cells at once and
+  for good, until fire heats it again: the last hit decides what water the trough holds. Any
+  ingredient brewed in a Bottle of Poisoned Water at the Cauldron makes an Unstable Potion.
+- **In code:** `waterState === 'poisoned'` on a water tile (`POISONED_WATER_DURATION`,
+  `WATER_COLORS.poisoned` in GameConfig); `troughState === 'poisoned'` on the trough cells, set by
+  `WaterLavaHitMechanic.poisonTrough`. `ITEMS['🜋']`, `POISONED_WATER_CHAR` (`src/data/alchemy.js`).
+  Bottled by AlchemySystem (`LIQUID_TILE_TO_BOTTLE.poisoned`, `fillTroughBottle`) and GETWATER.
+  Brewed in `AlchemySystem._commitStarter`.
+- **Not:** the Poison Flask (thrown at enemies, no water) or the Venom Vial (a weapon Oil).
+
 ### Liquid Splash
-- **Definition:** A thrown liquid Bottle (Water, Hot Water, Electrified Water, Magma, Mud). It
+- **Definition:** A thrown liquid Bottle (Water, Hot Water, Poisoned Water, Electrified Water,
+  Magma, Mud). It
   is SPACE only and never fires on its own. It flies four cells along the player's facing and
   lands as a plus of its liquid: the landing cell and the four beside it, each only on open
-  floor (no wall, no background object). Hot Water lands as Heated Water, and Electrified Water
-  charges its patch and any water it touches. The Bottle leaves an Empty Bottle. Fountain waters
+  floor (no wall, no background object). Hot Water lands as Heated Water, Poisoned Water lands
+  poisoned, and Electrified Water charges its patch and any water it touches. The Bottle leaves an Empty Bottle. Fountain waters
   don't splash.
-- **In code:** `splash` on the ITEMS entry (`'water'|'heated'|'electrified'|'lava'|'mud'`, with
+- **In code:** `splash` on the ITEMS entry (`'water'|'heated'|'poisoned'|'electrified'|'lava'|'mud'`, with
   `oneShot`, `manualOnly`, `leavesBottle`). `ConsumableTriggerSystem` `cauldronInput` case →
   `'liquidSplash'` windup with a `targetX/targetY`. The landing is `splashLiquid` in
   `src/systems/LiquidSplash.js`, onto `game.activeRoom`.

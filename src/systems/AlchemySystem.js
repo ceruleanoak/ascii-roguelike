@@ -7,6 +7,7 @@ import {
   ingredientToGreek,
   applyPotionModifierColor,
   HOT_WATER_CHAR,
+  POISONED_WATER_CHAR,
   DEMO_BASE,
   DEMO_SUPPLEMENT
 } from '../data/alchemy.js';
@@ -31,7 +32,8 @@ import {
  *
  *   BREW   (liquid path — makes a starter potion and stops there)
  *   'mode'    — top choice: BREW
- *   'input'   — select a liquid Bottle (Water/Hot Water/Electrified/Magma/Mud)
+ *   'input'   — select a liquid Bottle (Water/Hot Water/Poisoned Water/
+ *               Electrified/Magma/Mud)
  *   'starter' — select a held ingredient to brew a starter potion (Base /
  *               Purified / Unstable / Charged / Burning / Primal); it replaces
  *               the liquid where it sat, the pickup box names it, and the
@@ -57,8 +59,9 @@ const LIQUID_SOURCE_RADIUS = GRID.CELL_SIZE;
 // Base / Purified / Unstable (plain water) and Charged / Burning / Primal
 // (electrified water, magma, mud) — every BREW result INFUSE can finish.
 const STARTER_POTION_CHARS = new Set(['🜄', '🜅', '🜆', '!', '«', '¿']);
-const LIQUID_BOTTLE_CHARS = new Set(['🜉', HOT_WATER_CHAR, 'ε', '◆', '◐']);  // Water, Hot Water, Electrified, Magma, Mud
+const LIQUID_BOTTLE_CHARS = new Set(['🜉', HOT_WATER_CHAR, POISONED_WATER_CHAR, 'ε', '◆', '◐']);  // Water, Hot Water, Poisoned Water, Electrified, Magma, Mud
 const PURIFIED_POTION_CHAR = '🜅';
+const UNSTABLE_POTION_CHAR = '🜆';
 const CAULDRON_COLOR = '#ffffff';
 
 // Map liquid tile states to liquid bottle types
@@ -66,10 +69,14 @@ const LIQUID_TILE_TO_BOTTLE = {
   'normal': '🜉',        // Normal water → Bottle of Water
   'electrified': 'ε',    // Electrified water → Bottle of Electrified Water
   'heated': '🜊',        // Heated Water → Bottle of Hot Water (WaterLavaHitMechanic.burnWater)
+  'poisoned': POISONED_WATER_CHAR, // Poisoned water → Bottle of Poisoned Water
   'lava': '◆',          // Magma/Lava → Bottle of Magma
   'mud_wet': '◐',       // Mud → Bottle of Mud
   'mud_dry': '◐'        // Dry mud → Bottle of Mud
 };
+
+// Water states that bottle as their own liquid; any other bottles plain.
+const BOTTLED_WATER_STATES = new Set(['electrified', 'heated', 'poisoned']);
 
 const STARTER_NAMES = {
   '🜄': 'BASE POTION',
@@ -85,6 +92,7 @@ const STARTER_NAMES = {
 // _discoverLiquidBottle (the old heldItem-based bottling path this replaces).
 const LIQUID_BOTTLE_NAMES = {
   '🜉': 'BOTTLE OF WATER',
+  [POISONED_WATER_CHAR]: 'BOTTLE OF POISONED WATER',
   'ε': 'BOTTLE OF ELECTRIFIED WATER',
   '◆': 'BOTTLE OF MAGMA',
   '◐': 'BOTTLE OF MUD'
@@ -218,9 +226,10 @@ export class AlchemySystem {
 
   _liquidStateOf(obj) {
     if (obj.destroyed) return null;
+    if (obj.isTrough) return obj.troughState;
     if (obj.isLava?.()) return 'lava';
     if (obj.isMud?.()) return obj.typeId === 'mud_dry' ? 'mud_dry' : 'mud_wet';
-    if (obj.isWater?.()) return obj.waterState === 'electrified' || obj.waterState === 'heated' ? obj.waterState : 'normal';
+    if (obj.isWater?.()) return BOTTLED_WATER_STATES.has(obj.waterState) ? obj.waterState : 'normal';
     return null;
   }
 
@@ -257,14 +266,11 @@ export class AlchemySystem {
 
   // ─── Trough ──────────────────────────────────────────────────────────────
 
-  // Whether fire has heated the Alchemy Lab trough (WaterLavaHitMechanic.burnWater).
-  troughHeated() {
-    return !!this.game.activeFloor?.backgroundObjects?.some(obj => obj.isTrough && obj.troughHeated);
-  }
-
-  // The trough's water: Hot Water once fire has heated it, else plain water.
+  // The Alchemy Lab trough's water: what fire or poison last made of it
+  // (WaterLavaHitMechanic), else plain water.
   fillTroughBottle(ref) {
-    return this.troughHeated() ? this.fillHotWaterBottle(ref) : this.fillBottle(ref);
+    const trough = this.game.activeFloor?.backgroundObjects?.find(obj => obj.isTrough);
+    return trough ? this.fillLiquidBottle(ref, this.liquidBottleFor(trough)) : this.fillBottle(ref);
   }
 
   fillBottle(ref) {
@@ -481,6 +487,9 @@ export class AlchemySystem {
       } else if (this.cauldronLiquidType === HOT_WATER_CHAR) {
         // Hot Water purifies any base — the Alchemist's lesson.
         starterChar = PURIFIED_POTION_CHAR;
+      } else if (this.cauldronLiquidType === POISONED_WATER_CHAR) {
+        // Poison guarantees Unstable, whatever the ingredient.
+        starterChar = UNSTABLE_POTION_CHAR;
       } else {
         // Electrified/Magma/Mud: still liquid-determined, ingredient-agnostic
         const liquidToStarter = { 'ε': '!', '◆': '«', '◐': '¿' };

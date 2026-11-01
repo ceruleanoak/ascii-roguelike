@@ -16,6 +16,7 @@ export const STARTER_POTION_CHARS = new Set(['🜄', '🜅', '🜆']);
 // and roomFeatures (roaming-placement gate). Single source of truth so the
 // char never drifts between the two "currently carrying" checks.
 export const HOT_WATER_CHAR = '🜊';
+export const POISONED_WATER_CHAR = '🜋';
 
 // The Alchemist's own stock for the Hot Water demo (scriptedEvents.js). Bone
 // in plain Water brews a Base Potion, so the Hot Water is what purifies it.

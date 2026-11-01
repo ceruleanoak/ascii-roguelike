@@ -28,6 +28,8 @@ export const WaterLavaHitMechanic = {
       }
     } else if (obj.isTrough && proj.onHit === 'burn') {
       this.burnWater(obj, backgroundObjects, combat);
+    } else if (obj.isTrough && proj.onHit === 'poison') {
+      this.poisonTrough(backgroundObjects);
     }
 
     // Fire projectile hits Barricade ice → melt it, the same one-hit thaw a
@@ -66,16 +68,12 @@ export const WaterLavaHitMechanic = {
   //   heated → nothing: hot water has already given its steam.
   // Poisoned/electrified water still steams but keeps its own state.
   // The Alchemy Lab trough (isTrough, '≈' — not isWater) heats the same way,
-  // all of its cells at once, and never cools.
+  // all of its cells at once, and never cools; heat drives out its poison.
   burnWater(obj, backgroundObjects, combat) {
     if (obj.isTrough) {
-      if (obj.troughHeated) return;
+      if (obj.troughState === 'heated') return;
       this._puffSteam(obj, combat);
-      for (const cell of backgroundObjects) {
-        if (!cell.isTrough) continue;
-        cell.troughHeated = true;
-        cell.color = cell.animationColor = WATER_COLORS.heated;
-      }
+      this._setTroughState(backgroundObjects, 'heated');
       return;
     }
     const state = obj.getWaterState();
@@ -83,6 +81,20 @@ export const WaterLavaHitMechanic = {
     if (state === 'heated') return;
     this._puffSteam(obj, combat);
     if (state === 'normal') obj.setWaterState('heated', HEATED_WATER_DURATION);
+  },
+
+  // Poison hits the Alchemy Lab trough: all of its cells at once, for good,
+  // and over any heat. The last hit decides what water it holds.
+  poisonTrough(backgroundObjects) {
+    this._setTroughState(backgroundObjects, 'poisoned');
+  },
+
+  _setTroughState(backgroundObjects, state) {
+    for (const cell of backgroundObjects) {
+      if (!cell.isTrough) continue;
+      cell.troughState = state;
+      cell.color = cell.animationColor = WATER_COLORS[state];
+    }
   },
 
   _puffSteam(obj, combat) {

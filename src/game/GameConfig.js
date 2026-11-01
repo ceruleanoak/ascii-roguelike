@@ -1277,7 +1277,7 @@ export const BACKGROUND_OBJECT_VARIANTS = {
   // Cave River entry, which is plane-1-only, so on the hut floor (plane 0)
   // neither a weapon nor the GETWATER flood could see it. Still water, not
   // a '~' tile: nothing soaks the player, freezes or conducts, but fire heats it
-  // (WaterLavaHitMechanic.burnWater → troughHeated).
+  // and poison poisons it (WaterLavaHitMechanic → troughState).
   'water_trough': {
     char: '≈',
     name: 'Water Trough',
