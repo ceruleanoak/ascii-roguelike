@@ -4,11 +4,18 @@ import { ZONES, ZONE_COLORS } from '../data/zones.js';
 import { GRID } from '../game/GameConfig.js';
 import { isInteriorActive } from './PlaneSystem.js';
 import { hasLuckBlessing } from './luck.js';
+import { INGREDIENT_STACK_CAP } from './IngredientPile.js';
 
 // Letters whose weights get boosted when the player has the well-vested luck
 // blessing. V (Vault), ? (Mystery), C (Camp) — all desirable stops that make
 // luck feel like it's reshaping the run, not just fattening the loot table.
 const LUCKY_BOOST = { 'V': 2.5, '?': 2.0, 'C': 1.5 };
+
+// Ridge is the rock-and-metal route: a full pile (INGREDIENT_STACK_CAP) of
+// Rock, Stick, or Metal makes it x10 likely. One full pile is enough; a second
+// full pile does not compound the boost.
+const RIDGE_FULL_PILE_CHARS = ['0', '|', 'M'];
+const RIDGE_FULL_PILE_BOOST = 10;
 
 // Green is the starting zone — it always dangles an alternative-color exit to
 // teach the player that color = destination. Every other zone tempts more
@@ -844,9 +851,16 @@ export class ExitSystem {
     this._pointNorthAtGray(room.exits, zone);
   }
 
+  // True when any Rock, Stick, or Metal pile sits at its stack cap.
+  _ridgePileFull() {
+    const inv = this.game?.inventorySystem;
+    return !!inv && RIDGE_FULL_PILE_CHARS.some(char => inv.countIngredient(char) >= INGREDIENT_STACK_CAP);
+  }
+
   getLetterWeightsForZone(zoneType, depth) {
     const weights = {};
     const blessed = hasLuckBlessing(this.game?.player);
+    const ridgePileFull = this._ridgePileFull();
 
     // Build weights from EXIT_LETTERS
     for (const [letter, data] of Object.entries(EXIT_LETTERS)) {
@@ -884,6 +898,8 @@ export class ExitSystem {
       if (blessed && LUCKY_BOOST[letter]) {
         weight *= LUCKY_BOOST[letter];
       }
+
+      if (letter === 'R' && ridgePileFull) weight *= RIDGE_FULL_PILE_BOOST;
 
       weights[letter] = weight;
     }
