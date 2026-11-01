@@ -402,7 +402,7 @@ Spell detection scans the buffer's suffixes **longest-first** — "GOWEST" fires
 
 | Word | Learned when | Effect |
 |------|-------------|--------|
-| `HEX` | Hex Witch dies (`learnSpellOnDeath`) | Nearest enemy: brief stun + 5s inverted movement (`_hexed`) |
+| `HEX` | Hex Witch dies (`learnSpellOnDeath`) | Nearest enemy within 6.6 cells not hexed in the last 5s: one random Hex (full-pip status or Frog); 5% backfire = cursed Polymorph |
 | `FROG` | Rusalka cures polymorph | Toggles voluntary frog form |
 
 ### Layer 2 — MagicSystem (gem wands + mana meter)

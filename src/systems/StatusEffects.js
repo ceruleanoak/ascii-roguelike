@@ -129,7 +129,10 @@ const STATUS_EFFECTS = {
     player: { stacks: 0, decayInterval: GOO_CONTACT_STACK, contactStack: GOO_CONTACT_STACK, contactTime: 0, inContact: false },
     immunity: 'slimeImmune'
   },
-  slimeBoost: { player: { speedMult: 2.0 } } // slime puddle while wearing the slime suit; matches the slime enemy's 2x
+  slimeBoost: { player: { speedMult: 2.0 } }, // slime puddle while wearing the slime suit; matches the slime enemy's 2x
+  // Hexed: the HEX spell's per-enemy cooldown. No effect of its own, no pips
+  // and no blink; the Hex it marks is a Status Effect of its own (HexSystem).
+  hexed: { enemy: { cooldown: true } }
 };
 
 /**
@@ -177,6 +180,12 @@ export function clearEffectOrder(entity, effect) {
   if (idx !== -1) order.splice(idx, 1);
 }
 
+/** True when `entity`'s declared immunity field refuses `effect` outright. */
+export function hasStatusImmunity(entity, effect) {
+  const immunity = STATUS_EFFECTS[effect]?.immunity;
+  return !!(immunity && entity[immunity]);
+}
+
 /**
  * Apply `effect` for `duration`. Returns the slot, or null if the entity can't
  * carry it (or is immune, or it's a cooldown effect still running). `pips` raises the Pip track to at least that level
@@ -205,8 +214,7 @@ export function applyStatusEffect(entity, effect, duration = 3.0, pips = null) {
     return null;
   }
 
-  const immunity = STATUS_EFFECTS[effect]?.immunity;
-  if (immunity && entity[immunity]) return null;
+  if (hasStatusImmunity(entity, effect)) return null;
   // A cooldown effect refuses re-application until it has fully drained.
   if (slot.cooldown && slot.active) return null;
 

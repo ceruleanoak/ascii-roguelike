@@ -297,15 +297,7 @@ export const SPELLS = {
   'HEX': {
     response: (game) => {
       if (!game.knownSpells?.has('HEX')) return 'UNKNOWN SPELL.';
-      // HEX curses the nearest enemy: inverts their movement and dims their color for 5s
-      const enemy = _closestEnemy(game);
-      if (!enemy) return 'NO TARGET.';
-      enemy.applyStatusEffect('stun', 0.3);  // Brief stun on cast
-      enemy._hexed = (enemy._hexed || 0) + 5.0;
-      return 'HEXED.';
-    },
-    action: (game) => {
-      if (!game.knownSpells?.has('HEX')) return;
+      return game.hexSystem.cast();
     }
   },
 

@@ -281,7 +281,7 @@ class Game {
     this.wishSystem = new WishSystem();
     this.threeVoiceSystem = new ThreeVoiceSystem(this); // the Three answering for itself in its room
     this.influenceSystem = new InfluenceSystem(this); // Influence Wish Spells on the nearest NPC
-    this.hexSystem = new HexSystem(this); // the Witch companion's Hex: enemies near her become Frogs
+    this.hexSystem = new HexSystem(this); // the Witch companion's Hex and the HEX spell
     this.ridgeSystem = new RidgeSystem(this);
     this.polymorphSystem = new PolymorphSystem();
     this.transmutationSystem = new TransmutationSystem(this);

@@ -1801,9 +1801,21 @@ identity, not standard programming terms.
   `hexesAsCompanion` onto the follower's `CampNPC.hexes`; `HexSystem.update` (called from the
   companion's tick, `hexCooldown` on the companion) → `HexSystem.frog`. Range and interval read
   from `ENEMIES.H`.
-- **Not:** the HEX spell (`SPELLS.HEX`, the Hex Witch's dropped spell, which dims and inverts one
-  enemy); not Polymorph (the player's own frog curse); not Transmutation (the wand's random
-  outcome).
+- **Not:** Hex (spell), which rolls a random Hex and works in any run; not Polymorph (the player's
+  own frog curse); not Transmutation (the wand's random outcome).
+
+### Hex (spell)
+- **Definition:** The Spell learned by killing a Hex Witch. It lands one random Hex on the nearest
+  enemy within 6.6 cells that it hasn't touched in the last 5 seconds: burn, poison, goo, dizzy,
+  blind, stun, sleep, freeze or charm at full pips, or, rarely, a Frog. Rolls skip what the enemy
+  is immune to, and bosses and Frogs never become Frogs. With no enemy in reach, or one immune to
+  every Hex, the THREE answers `...NOTHING.`. One cast in 20 turns on the caster instead: the
+  cursed Polymorph, `YOU BECOME A FROG.` (never while already a frog).
+- **In code:** `SPELLS.HEX` (`src/data/spells.js`) → `HexSystem.cast`; the roll is `SPELL_HEXES`,
+  the range `ZOOM.TRIGGER_RANGE_CELLS`. The 5-second cooldown is the enemy-only `hexed` Status
+  Effect, which does nothing else and draws nothing; a Frog result carries it onto the new Frog.
+- **Not:** Hex (Witch companion); FROG (the Spell that toggles the player's own frog form,
+  uncursed); Transmutation (the wand's random outcome).
 
 ### Beeline
 - **Definition:** An invulnerable rapid run, leaving a trail, from where the player stands to an
