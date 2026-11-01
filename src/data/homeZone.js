@@ -22,7 +22,7 @@
 
 import { ZONES, ZONE_MINERALS } from './zones.js';
 import { ZONE_SPAWN_TABLES, ENEMIES } from './enemies.js';
-import { ITEMS, AFFINITY_POOLS, RARITY_PROFILES, RARITY } from './items.js';
+import { ITEMS, INGREDIENTS, AFFINITY_POOLS, RARITY_PROFILES, RARITY } from './items.js';
 import { RECIPES, findRecipeByResult } from './recipes.js';
 import { BACKGROUND_OBJECTS } from '../game/GameConfig.js';
 
@@ -58,36 +58,12 @@ const RARITY_TO_TIER = {
 };
 
 /**
- * Reverse-lookup an ingredient char's rarity against AFFINITY_POOLS (scanning
- * all 5 sub-categories per affinity, not just `ingredients` — a char like a
- * gemstone can be the "weapons" or "armor" pool's rare drop for one affinity
- * while being common elsewhere isn't a concern here; the first match wins).
- *
- * Falls back to recursing through the char's own recipe for crafted
- * intermediates (e.g. '⊿' Axe head) that aren't placed in any pool directly —
- * such a char's rarity is the higher of its two components' rarities.
- * Depth-capped so a malformed/cyclical recipe chain can't recurse forever;
- * an unresolvable char reads as common rather than throwing.
+ * A char's authored rarity: an Ingredient's `rarity` field, or an Item's.
+ * Nothing is derived from the drop tables. A record without one reads as
+ * common (check:data fails on it).
  */
-export function getIngredientRarity(char, _depth = 0) {
-  for (const pool of Object.values(AFFINITY_POOLS)) {
-    for (const category of Object.values(pool)) {
-      for (const rarity of RARITY_ORDER) {
-        if (category[rarity]?.includes(char)) return rarity;
-      }
-    }
-  }
-
-  if (_depth < 6) {
-    const recipe = findRecipeByResult(char);
-    if (recipe) {
-      const leftIdx = RARITY_ORDER.indexOf(getIngredientRarity(recipe.left, _depth + 1));
-      const rightIdx = RARITY_ORDER.indexOf(getIngredientRarity(recipe.right, _depth + 1));
-      return RARITY_ORDER[Math.max(leftIdx, rightIdx)];
-    }
-  }
-
-  return RARITY.COMMON;
+export function getRarity(char) {
+  return INGREDIENTS[char]?.rarity ?? ITEMS[char]?.rarity ?? RARITY.COMMON;
 }
 
 /**
@@ -103,8 +79,8 @@ export function deriveValueTier(itemData, role) {
   }
   const recipe = findRecipeByResult(itemData.char);
   if (!recipe) return 0;
-  const leftTier = RARITY_TO_TIER[getIngredientRarity(recipe.left)] ?? 0;
-  const rightTier = RARITY_TO_TIER[getIngredientRarity(recipe.right)] ?? 0;
+  const leftTier = RARITY_TO_TIER[getRarity(recipe.left)] ?? 0;
+  const rightTier = RARITY_TO_TIER[getRarity(recipe.right)] ?? 0;
   return Math.max(leftTier, rightTier);
 }
 

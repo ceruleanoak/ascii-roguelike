@@ -905,8 +905,9 @@ identity, not standard programming terms.
 - **In code:** rendered as a **letter** (`a–z`, `A–Z`) or **digit** (`0–9`). Records live in
   `src/data/ingredients.js` (`INGREDIENTS`, re-exported from `items.js`); `value` is read by
   `shopPricing.js` for pawn payouts and shop coin cost.
-  Shop padding draws raw Ingredients (no recipe of their own) whose rarity matches the zone's depth
-  progress; an optional `rarity` field overrides the pool-derived lookup, as for Items.
+  Its `rarity` field (`common`/`uncommon`/`rare`/`epic`) sets the padding and tier it contributes to
+  shop listings. Shop padding draws raw Ingredients (no recipe of their own) whose rarity matches the
+  zone's depth progress.
 - **Not:** a Crafted item; never a Unicode symbol.
 
 ### Clam
@@ -920,8 +921,8 @@ identity, not standard programming terms.
 - **In code:** rendered as a **Unicode symbol** (non-letter, non-digit, no emoji, no pure
   box-drawing, literal glyphs only). Recipes in `src/data/recipes.js`.
   Its `rarity` field on its `ITEMS` entry values it as a recipe input when that input is an Item
-  rather than an Ingredient: common 0, uncommon 1, rare 3, epic 6. With no `rarity` field, the
-  pool-derived lookup (`homeZone.getIngredientRarity`) supplies it.
+  rather than an Ingredient: common 0, uncommon 1, rare 3, epic 6. Shop code never reads rarity from
+  the drop tables (`AFFINITY_POOLS`); those stay the source for drops only.
 - **Not:** an Ingredient; never a letter/digit char.
 
 ### Spawned Items

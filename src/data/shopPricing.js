@@ -31,7 +31,7 @@ import { findRecipeByResult } from './recipes.js';
 import {
   deriveValueTier,
   getHomeZone,
-  getIngredientRarity,
+  getRarity,
   getAdvancement,
   isUnlocked,
   progressRarity,
@@ -57,10 +57,6 @@ function rawIngredientChars() {
   return Object.keys(INGREDIENTS).filter(char => !findRecipeByResult(char));
 }
 
-function ingredientRarity(char) {
-  return INGREDIENTS[char].rarity ?? getIngredientRarity(char);
-}
-
 function shuffled(list) {
   const copy = [...list];
   for (let i = copy.length - 1; i > 0; i--) {
@@ -79,7 +75,7 @@ function pickPaddingIngredients(count, rarity, excludeChars) {
   const excluded = new Set(excludeChars);
   const raw = rawIngredientChars().filter(char => !excluded.has(char));
   for (let i = RARITY_ORDER.indexOf(rarity); i >= 0; i--) {
-    const pool = raw.filter(char => ingredientRarity(char) === RARITY_ORDER[i]);
+    const pool = raw.filter(char => getRarity(char) === RARITY_ORDER[i]);
     if (pool.length > 0) return shuffled(pool).slice(0, count);
   }
   return [];
@@ -111,7 +107,7 @@ const SHOP_COIN_MARKUP = 1.5;
  */
 function computeCoinPrice(ingredientCost) {
   const worth = ingredientCost.reduce((sum, char) => sum + ingredientWorth(char), 0);
-  const baseCoins = Math.max(1, Math.ceil(worth * SHOP_COIN_MARKUP));
+  const baseCoins = Math.max(1, Math.ceil(roundFloat(worth * SHOP_COIN_MARKUP)));
   const coinFloor = Math.max(1, Math.ceil(baseCoins * 0.2));
   return { baseCoins, coinFloor };
 }
@@ -126,12 +122,11 @@ function computeCoinPrice(ingredientCost) {
 // see ShopSystem's 'pawn' mode). Ingredients are never pawned; their `value`
 // is the currency an item's worth is accumulated from.
 
-/**
- * An Item's rarity: its explicit `rarity` field wins; without one, the
- * pool-derived lookup (homeZone getIngredientRarity) supplies it.
- */
-function itemRarity(char) {
-  return ITEMS[char]?.rarity ?? getIngredientRarity(char);
+// Values are floats, so sums and products can land a hair off a whole number
+// (2.9999999999999996, 2.0000000000000004). Round to 1e-9 before any floor or
+// ceil so a whole-coin total isn't pushed to the wrong coin.
+function roundFloat(n) {
+  return Math.round(n * 1e9) / 1e9;
 }
 
 // Recipe inputs that are Items rather than Ingredients have no `value` of their
@@ -152,7 +147,7 @@ function ingredientWorth(char) {
   const ingredient = INGREDIENTS[char];
   if (ingredient) return ingredient.value ?? 0;
   const item = ITEMS[char];
-  if (item) return ITEM_INPUT_VALUE[itemRarity(char)];
+  if (item) return ITEM_INPUT_VALUE[getRarity(char)];
   return 0;
 }
 
@@ -168,7 +163,7 @@ export function computePawnSellValue(itemData) {
   if (itemData.pawnValue !== undefined) return itemData.pawnValue;
   const recipe = findRecipeByResult(itemData.char);
   if (!recipe) return 0;
-  return Math.floor(ingredientWorth(recipe.left) + ingredientWorth(recipe.right));
+  return Math.floor(roundFloat(ingredientWorth(recipe.left) + ingredientWorth(recipe.right)));
 }
 
 // ============================================================================
@@ -231,7 +226,7 @@ function buildListing(itemData, role, paddingRarity) {
   const recipe = findRecipeByResult(itemData.char); // guaranteed by rollShopStock's filter
   const tier = deriveValueTier(itemData, role);
   const padding = pickPaddingIngredients(
-    PADDING_BY_RARITY[itemRarity(itemData.char)],
+    PADDING_BY_RARITY[getRarity(itemData.char)],
     paddingRarity,
     [recipe.left, recipe.right],
   );
@@ -246,7 +241,7 @@ function buildListing(itemData, role, paddingRarity) {
   const ingredientCost = shuffled([recipe.left, recipe.right, ...padding]);
   const { baseCoins, coinFloor } = computeCoinPrice(ingredientCost);
   const gemInPrice = ingredientCost.some(char => TREASURE_CHARS.has(char));
-  const treasureCount = gemInPrice ? 0 : TREASURE_COUNT_BY_RARITY[itemRarity(itemData.char)];
+  const treasureCount = gemInPrice ? 0 : TREASURE_COUNT_BY_RARITY[getRarity(itemData.char)];
   const treasureChar = treasureCount > 0 ? pickTreasureChar(itemData, role) : null;
 
   return {
