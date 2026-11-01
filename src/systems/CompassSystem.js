@@ -67,6 +67,21 @@ export class CompassSystem {
     const candidates = MARKABLE_DIRECTIONS.filter(dir => room?.exits?.[dir]?.letter);
     if (candidates.length === 0) { this.markedDirection = null; return; }
 
+    // A D room never offers D (ExitSystem.generateExits): the contract waits
+    // for the next room.
+    if (room.exitLetter === 'D') {
+      this.markedDirection = candidates[Math.floor(Math.random() * candidates.length)];
+      return;
+    }
+
+    // A room offers one D. Where it already has one, that one pays the contract.
+    const openD = candidates.find(dir => room.exits[dir].letter === 'D');
+    if (this._pendingForceD && openD) {
+      this._pendingForceD = false;
+      this.markedDirection = openD;
+      return;
+    }
+
     // The forced 'D' never takes an east exit owed to the Ocean (the third
     // east in a row, ExitSystem._eastOwesOcean) — the cardinal rule wins.
     const dCandidates = this._pendingForceD ? candidates.filter(d => !room.exits[d].oceanOwed) : candidates;
