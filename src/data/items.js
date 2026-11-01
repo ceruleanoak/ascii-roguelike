@@ -1062,7 +1062,6 @@ export const ITEMS = {
     recovery: 1.2,
     patternSpeed: 0.05,
     range: 32,
-    knockback: 350,
     pinning: true,
     color: '#88aaff'
   },
@@ -3396,7 +3395,7 @@ export { INGREDIENTS } from './ingredients.js';
 export const SUBTYPE_DEFAULTS = {
   sword:   { attackPattern: 'arc',       isBlade: true },
   axe:     { attackPattern: 'sweep' },
-  spear:   { attackPattern: 'thrust',    isBlade: true, range: 28, distanceCrit: true },
+  spear:   { attackPattern: 'thrust',    isBlade: true, range: 28, distanceCrit: true, knockback: 0 },
   dagger:  { attackPattern: 'multistab', isBlade: true, range: 16 },
   hammer:  { attackPattern: 'shockwave', canSmash: true },
   whip:    { attackPattern: 'whipcrack', disarm: true },

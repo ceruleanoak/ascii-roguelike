@@ -1172,7 +1172,7 @@ export class CombatSystem {
                 }
               }
 
-              // Apply knockback — spear uses exact facing direction, others use positional
+              // Apply knockback — a thrust uses exact facing direction, others use positional
               if (attack.knockback) {
                 if (attack.facing) {
                   this.physicsSystem.applyKnockbackDir(enemy, attack.facing.x, attack.facing.y, attack.knockback * knockbackTakenScale(enemy, attack));

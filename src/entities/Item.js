@@ -1223,7 +1223,7 @@ export class Item {
         color: this.color,
         onHit: primaryOnHit,
         extraOnHit,
-        knockback: this.data.knockback || 300,
+        knockback: this.data.knockback ?? 300, // a spear's is 0 (SUBTYPE_DEFAULTS)
         facing: { x: facingX, y: facingY },
         distanceCrit: i === 3 && (this.data.distanceCrit || false),
         owner: player,
