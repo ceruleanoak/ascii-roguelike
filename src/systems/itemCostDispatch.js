@@ -20,6 +20,8 @@ import { isIngredient } from '../data/items.js';
 
 /** How many of `char` the player holds right now — ingredient or crafted item. */
 export function countItemChar(inv, char, player) {
+  // Coins ('c') live in the wallet, not the ingredient pile (IngredientPile.js).
+  if (char === 'c') return inv.getCoinCount();
   if (isIngredient(char)) return inv.countIngredient(char);
   return ownedCraftedItems(inv, player).filter(item => item.char === char).length;
 }
@@ -45,6 +47,7 @@ function ownedCraftedItems(inv, player) {
  * carried slot when no spare exists. Returns whether a match was removed.
  */
 export function removeItemChar(inv, char, player) {
+  if (char === 'c') return inv.removeCoin();
   if (isIngredient(char)) return inv.removeIngredient(char);
 
   const chestMatch = inv.itemChest.find(item => item.char === char);
