@@ -905,6 +905,8 @@ identity, not standard programming terms.
 - **In code:** rendered as a **letter** (`a–z`, `A–Z`) or **digit** (`0–9`). Records live in
   `src/data/ingredients.js` (`INGREDIENTS`, re-exported from `items.js`); `value` is read by
   `shopPricing.js` for pawn payouts and shop coin cost.
+  Shop padding draws raw Ingredients (no recipe of their own) whose rarity matches the zone's depth
+  progress; an optional `rarity` field overrides the pool-derived lookup, as for Items.
 - **Not:** a Crafted item; never a Unicode symbol.
 
 ### Clam

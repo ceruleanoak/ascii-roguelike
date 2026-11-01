@@ -8,7 +8,7 @@
 // or a single specific Treasure item as a full-price substitute.
 //
 // Every price is derived algorithmically from data that already exists
-// (recipe pairs, AFFINITY_POOLS rarity, weapon .tier) rather than a new
+// (recipe pairs, ingredient rarity, weapon .tier) rather than a new
 // manually-authored field on 25+ items — see CLAUDE.md's "Architectural
 // Maturity" guidance against >10-item manual edits.
 //
@@ -22,10 +22,7 @@ import {
   ITEMS,
   ITEM_TYPES,
   INGREDIENTS,
-  AFFINITY_POOLS,
   RARITY,
-  RARITY_PROFILES,
-  getRandomDrop,
   TREASURE_CHARS,
   TREASURE_OFFERINGS,
   weaponElement,
@@ -37,48 +34,64 @@ import {
   getIngredientRarity,
   getAdvancement,
   isUnlocked,
+  progressRarity,
+  RARITY_ORDER,
 } from './homeZone.js';
-
-function clamp(n, min, max) {
-  return Math.min(max, Math.max(min, n));
-}
 
 // ============================================================================
 // (a) PADDING INGREDIENTS
 // ============================================================================
 
-// T → RARITY_PROFILES key: reuses the same weak/normal/elite/boss weighting
-// curve enemy drops already use (see generateEnemyDrops), skewed toward the
-// listing's own tier rather than reimplementing a weighting scheme.
-const TIER_PROFILE = ['weak', 'normal', 'elite', 'boss'];
+// Padding ingredients per listing, by the item's own rarity. A common item's
+// recipe is free: no padding at all.
+const PADDING_BY_RARITY = {
+  [RARITY.COMMON]: 0,
+  [RARITY.UNCOMMON]: 1,
+  [RARITY.RARE]: 2,
+  [RARITY.EPIC]: 3,
+};
+
+// Raw ingredients only: a char with no recipe of its own. Crafted
+// intermediates are never drops, so they never pad a price.
+function rawIngredientChars() {
+  return Object.keys(INGREDIENTS).filter(char => !findRecipeByResult(char));
+}
+
+function ingredientRarity(char) {
+  return INGREDIENTS[char].rarity ?? getIngredientRarity(char);
+}
+
+function shuffled(list) {
+  const copy = [...list];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
 
 /**
- * Picks `clamp(T, 1, 3)` padding ingredient chars, deduped against the real
- * recipe pair and each other, drawn across every affinity's ingredient pool
- * (padding is a generic "resources" sink, not themed to one affinity).
- * Combined with the real 2-ingredient recipe pair, totals run 3/3/4/5 across
- * T0-T3 — always ≥3, matching the "3-5" spec exactly.
+ * Picks up to `count` raw ingredient chars of `rarity` (the rarity the zone's
+ * depth progress unlocks), deduped against the recipe pair. A rarity with no
+ * raw ingredients left steps down to the next lower one.
  */
-function pickPaddingIngredients(T, excludeChars) {
-  const count = clamp(T, 1, 3);
-  const profile = RARITY_PROFILES[TIER_PROFILE[T]] || RARITY_PROFILES.normal;
-  const affinities = Object.keys(AFFINITY_POOLS);
+function pickPaddingIngredients(count, rarity, excludeChars) {
   const excluded = new Set(excludeChars);
-  const picks = [];
-
-  // Bounded retry loop, not a while(true): a bad roll (duplicate/excluded
-  // char) just retries a capped number of times rather than risking an
-  // infinite loop if the pool is nearly exhausted of eligible chars.
-  let attempts = 0;
-  while (picks.length < count && attempts < count * 20) {
-    attempts++;
-    const char = getRandomDrop(affinities, 'ingredients', profile);
-    if (char && !excluded.has(char)) {
-      picks.push(char);
-      excluded.add(char);
-    }
+  const raw = rawIngredientChars().filter(char => !excluded.has(char));
+  for (let i = RARITY_ORDER.indexOf(rarity); i >= 0; i--) {
+    const pool = raw.filter(char => ingredientRarity(char) === RARITY_ORDER[i]);
+    if (pool.length > 0) return shuffled(pool).slice(0, count);
   }
-  return picks;
+  return [];
+}
+
+/**
+ * The padding rarity for one shop: its own zone's depth progress, or the
+ * furthest Depth banked anywhere when the Settlement has no zone.
+ */
+function paddingRarityFor(zoneDepths, zone) {
+  const depth = zone ? (zoneDepths[zone] ?? 0) : Math.max(0, ...Object.values(zoneDepths));
+  return progressRarity(depth);
 }
 
 // ============================================================================
@@ -214,10 +227,14 @@ const TREASURE_COUNT_BY_RARITY = {
 // LISTING / STOCK
 // ============================================================================
 
-function buildListing(itemData, role) {
+function buildListing(itemData, role, paddingRarity) {
   const recipe = findRecipeByResult(itemData.char); // guaranteed by rollShopStock's filter
   const tier = deriveValueTier(itemData, role);
-  const padding = pickPaddingIngredients(tier, [recipe.left, recipe.right]);
+  const padding = pickPaddingIngredients(
+    PADDING_BY_RARITY[itemRarity(itemData.char)],
+    paddingRarity,
+    [recipe.left, recipe.right],
+  );
 
   // Common has no Treasure lane at all (see TREASURE_COUNT_BY_RARITY); uncommon,
   // rare and epic require 1/2/3 copies of the same picked treasure char.
@@ -225,7 +242,8 @@ function buildListing(itemData, role) {
   // Infused Whip + Ruby, or a gem rolled as padding) gets no Treasure lane either:
   // the outright gem buy would undercut the listing's own recipe — Ruby ×1
   // for a Ruby Whip costs less than the Infused Whip + Ruby.
-  const ingredientCost = [recipe.left, recipe.right, ...padding];
+  // Shuffled so the lanes don't show which two chars are the real recipe.
+  const ingredientCost = shuffled([recipe.left, recipe.right, ...padding]);
   const { baseCoins, coinFloor } = computeCoinPrice(ingredientCost);
   const gemInPrice = ingredientCost.some(char => TREASURE_CHARS.has(char));
   const treasureCount = gemInPrice ? 0 : TREASURE_COUNT_BY_RARITY[itemRarity(itemData.char)];
@@ -238,7 +256,7 @@ function buildListing(itemData, role) {
     color: itemData.color,
     tier,
     home: getHomeZone(itemData.char),  // {zone, depth} — why this row is stockable
-    ingredientCost,               // 3-5 chars
+    ingredientCost,               // recipe pair + 0-3 padding, shuffled
     baseCoins,
     coinFloor,
     treasureChar,
@@ -331,9 +349,10 @@ function pickAdvanced(pool, n) {
  *   different counters instead of drawing from one shared catalogue.
  */
 export function rollShopStock(zoneDepths = {}, zone = null) {
+  const paddingRarity = paddingRarityFor(zoneDepths, zone);
   return [
-    ...pickAdvanced(unlockedPool(ITEM_TYPES.ARMOR, zoneDepths, zone), 1).map(d => buildListing(d, 'ARMOR')),
-    ...pickAdvanced(unlockedPool(ITEM_TYPES.WEAPON, zoneDepths, zone), 2).map(d => buildListing(d, 'WEAPON')),
-    ...pickAdvanced(unlockedPool(ITEM_TYPES.CONSUMABLE, zoneDepths, zone), 3).map(d => buildListing(d, 'CONSUMABLE')),
+    ...pickAdvanced(unlockedPool(ITEM_TYPES.ARMOR, zoneDepths, zone), 1).map(d => buildListing(d, 'ARMOR', paddingRarity)),
+    ...pickAdvanced(unlockedPool(ITEM_TYPES.WEAPON, zoneDepths, zone), 2).map(d => buildListing(d, 'WEAPON', paddingRarity)),
+    ...pickAdvanced(unlockedPool(ITEM_TYPES.CONSUMABLE, zoneDepths, zone), 3).map(d => buildListing(d, 'CONSUMABLE', paddingRarity)),
   ];
 }

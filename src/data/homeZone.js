@@ -49,7 +49,7 @@ const LOTTERY_POOL = 'generic';
 // are pure item-data derivations. shopPricing still owns pricing and imports
 // these.
 
-const RARITY_ORDER = [RARITY.COMMON, RARITY.UNCOMMON, RARITY.RARE, RARITY.EPIC];
+export const RARITY_ORDER = [RARITY.COMMON, RARITY.UNCOMMON, RARITY.RARE, RARITY.EPIC];
 const RARITY_TO_TIER = {
   [RARITY.COMMON]: 0,
   [RARITY.UNCOMMON]: 1,
@@ -272,6 +272,17 @@ function isReachable(char, available, memo, resolving) {
 // boss. These four numbers are the shop's pacing dial — retune them, not the
 // derivation, after a playtest.
 const TIER_MIN_DEPTH = [1, 5, 10, 14];
+
+/**
+ * The rarity a zone's depth progress unlocks for shop padding: the highest
+ * tier whose TIER_MIN_DEPTH the depth has reached, read as a RARITY. Items
+ * get pricier as the zone is pushed deeper.
+ */
+export function progressRarity(zoneDepth) {
+  let tier = 0;
+  TIER_MIN_DEPTH.forEach((minDepth, t) => { if (zoneDepth >= minDepth) tier = t; });
+  return RARITY_ORDER[tier];
+}
 
 const homeZoneCache = new Map();
 
