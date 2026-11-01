@@ -150,7 +150,7 @@ export const FRAME_PASSES = {
     { id: 'particles', on: everywhere, draw: (rc, game, owner) => er(rc).drawParticles(game, isInterior(owner)) },
     { id: 'steamClouds', on: everywhere, draw: (rc, game, owner) => er(rc).drawSteamClouds(game, isInterior(owner)) },
     // Wind Field motes (Storm Eye): swirl, gust streaks, suction spirals.
-    // Shore Fisherman coin pay — the arc from player to him on the bank.
+    // Shore Fisherman's pay — the arc from player to him on the bank.
     { id: 'shoreFishermanCoin', on: surfaceOnly(SHORE_FISHERMAN_ONLY), draw: (rc, game) => drawShoreFishermanCoin(rc.renderer, game) },
     { id: 'windField', on: surfaceOnly(STORM_EYE_ONLY), draw: (rc, game) => game.bossSystem?.windFieldSystem.render(rc.renderer.fgCtx) },
   ],

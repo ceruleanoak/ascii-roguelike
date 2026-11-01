@@ -5,6 +5,8 @@ import { sellCatchToFisherman } from './fishermanTrade.js';
 
 const COIN_ARC_DURATION = 0.55; // matches the well/camp-NPC/hut-fisherman coin arcs
 const FISHING_POLE = 'ߒ';
+const ROD_COIN_PRICE = 2;
+const PEARL = '●';
 const WALK_SPEED = 55;                    // px/s — an unhurried stroll down the bank
 const CUT_REACH = GRID.CELL_SIZE * 1.2;   // close enough to bring the blade down
 const CUT_DELAY = 0.5;                    // arrives → cuts
@@ -14,9 +16,10 @@ const HOME_REACH = GRID.CELL_SIZE * 0.4;
  * ShoreFishermanSystem — the Fisherman on a peaceful Lake/Ocean shore
  * (roomFeatures.spawnShoreFisherman, `room.lakeFisherman`).
  *
- * - Trade: once his tips have been heard, SPACE near him spends a wallet
- *   coin, which arcs to him, and he sets a Fishing Pole down beside him. One
- *   rod per fisherman.
+ * - Trade: once his tips have been heard, SPACE near him spends two wallet
+ *   coins, or a Pearl when the wallet is short (a Pearl has the Ocean pedestal
+ *   to answer to, so coins go first). The payment arcs to him and he sets a
+ *   Fishing Pole down beside him. One rod per fisherman.
  * - Cutting: whenever a catch that needs a blade has landed by the player
  *   (FishingSystem reward objects), he walks over and cuts it open, then
  *   walks back to his spot. A catch the player can grab whole (a
@@ -27,7 +30,7 @@ const HOME_REACH = GRID.CELL_SIZE * 0.4;
 export class ShoreFishermanSystem {
   constructor(game) {
     this.game = game;
-    this.coinAnim = null; // { startX, startY, endX, endY, t, spinPhase, fisherman }
+    this.coinAnim = null; // { startX, startY, endX, endY, t, spinPhase, fisherman, pearl }
   }
 
   getCoinAnim() {
@@ -50,9 +53,9 @@ export class ShoreFishermanSystem {
     if (!fisherman.spokenOnce) return false;
     if (sellCatchToFisherman(game)) return true;
     if (!fisherman.sellsRod || fisherman.rodSold) return false;
-    if (!game.inventorySystem?.hasCoin()) return false;
+    const payment = this._takeRodPrice();
+    if (!payment) return false;
 
-    game.inventorySystem.removeCoin();
     fisherman.rodSold = true;
     this.coinAnim = {
       startX: player.position.x + GRID.CELL_SIZE / 2,
@@ -60,9 +63,24 @@ export class ShoreFishermanSystem {
       endX: fisherman.position.x + GRID.CELL_SIZE / 2,
       endY: fisherman.position.y + GRID.CELL_SIZE / 2,
       t: 0, spinPhase: 0,
-      fisherman
+      fisherman,
+      pearl: payment === PEARL
     };
     return true;
+  }
+
+  /** Takes the rod's price from the player; returns what was paid, or null if they can't. */
+  _takeRodPrice() {
+    const inv = this.game.inventorySystem;
+    if (inv?.hasCoin(ROD_COIN_PRICE)) {
+      inv.removeCoin(ROD_COIN_PRICE);
+      return 'coins';
+    }
+    if (inv?.countIngredient(PEARL) > 0) {
+      inv.removeIngredient(PEARL);
+      return PEARL;
+    }
+    return null;
   }
 
   update(dt) {
@@ -100,7 +118,7 @@ export class ShoreFishermanSystem {
     return fisherman.rodSold ? 'I HAVE NOTHING.' : null;
   }
 
-  /** The rod, without the coin and without hearing his tips first. */
+  /** The rod, without its price and without hearing his tips first. */
   persuade(fisherman) {
     if (fisherman.rodSold) return;
     fisherman.rodSold = true;

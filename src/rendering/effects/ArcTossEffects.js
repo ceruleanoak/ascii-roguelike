@@ -41,10 +41,12 @@ export function drawCoinArc(renderer, anim) {
   drawArcFrame(renderer.fgCtx, anim, ['c', 'O', '|', 'O'], '#ffcc66', '#ffaa33');
 }
 
-/** The shore Fisherman's coin pay (ShoreFishermanSystem) — a Frame Pass. */
+/** The shore Fisherman's pay (ShoreFishermanSystem), coins or a Pearl — a Frame Pass. */
 export function drawShoreFishermanCoin(renderer, game) {
   const anim = game.shoreFishermanSystem?.getCoinAnim();
-  if (anim) drawCoinArc(renderer, anim);
+  if (!anim) return;
+  if (anim.pearl) drawArcFrame(renderer.fgCtx, anim, ['●', 'O', '|', 'O'], '#f4f4f8', '#ccccdd');
+  else drawCoinArc(renderer, anim);
 }
 
 /**

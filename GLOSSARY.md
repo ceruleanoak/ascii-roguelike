@@ -2066,7 +2066,8 @@ identity, not standard programming terms.
 
 ### Shore Fisherman
 - **Definition:** The Fisherman standing on the bank of a peaceful Lake or Ocean Room. Once his
-  tips have been heard, a coin buys his one Fishing Pole, set down beside him. Whenever a catch
+  tips have been heard, two coins buy his one Fishing Pole, or a Pearl when the wallet is short;
+  he sets it down beside him. Whenever a catch
   that needs a blade lands by the player, he walks over, cuts it open, and walks back to his
   spot. He leaves a Fish alone (the player grabs it whole). The hut Fisherman instead sells
   the cutting demonstration. Every fisherman, hut or shore, buys carried Clams (`C`) and Fish
@@ -2074,7 +2075,7 @@ identity, not standard programming terms.
 - **In code:** `room.lakeFisherman` (a `Fisherman` with `sellsRod`, placed by
   `roomFeatures.spawnShoreFisherman`); `ShoreFishermanSystem` (`trySpacePress` from the EXPLORE
   SPACE dispatch, `update` from `updateExploreState`); the cut is
-  `FishingSystem.cutRewardObject`, shared with the player's blade; coin arc is the
+  `FishingSystem.cutRewardObject`, shared with the player's blade; the coin or Pearl arc is the
   `shoreFishermanCoin` Frame Pass. The sale is `sellCatchToFisherman`
   (`src/systems/fishermanTrade.js`), called from both this and `FishermanDemoSystem`.
 - **Not:** the hut Fisherman (`FishermanDemoSystem`, a paid demonstration, no rod).

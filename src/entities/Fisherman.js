@@ -22,8 +22,8 @@ export class Fisherman extends NeutralCharacter {
     // Hut fishermen trade: a coin buys the cutting demonstration
     // (FishermanDemoSystem).
     this.coinDemoEnabled = false;
-    // Shore fishermen (ShoreFishermanSystem) sell one Fishing Pole for a coin
-    // and walk over to cut open what the player catches, then walk back.
+    // Shore fishermen (ShoreFishermanSystem) trade one Fishing Pole for a Pearl
+    // or two coins and walk over to cut open what the player catches, then walk back.
     this.sellsRod = false;
     this.rodSold = false;
     this.homePosition = { x, y };
@@ -68,7 +68,7 @@ export class Fisherman extends NeutralCharacter {
       lines.push("GOT A COIN? I'LL SHOW YOU THE TRICK.");
     }
     if (sellsRod) {
-      lines.push("GOT A COIN? I'VE A SPARE ROD.");
+      lines.push("A PEARL OR TWO COINS, AND MY SPARE ROD IS YOURS.");
     }
     // One saying per visit (WiseFellow pattern) — rolled once at spawn.
     this.dialogueLines = [lines[Math.floor(Math.random() * lines.length)]];
