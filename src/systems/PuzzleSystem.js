@@ -270,7 +270,8 @@ export class PuzzleSystem {
       // The letter and cycle rings stay plain stone: the exits show them.
       if (ring.kind !== 'symbols') continue;
       ring.markers.forEach((marker, home) => {
-        marker.char = marker.animationChar = ring.tokens[home];
+        // Shown, not become: the stone stays stone, so a `~` token is no water.
+        marker.originalChar = marker.animationChar = ring.tokens[home];
         marker.color = marker.animationColor = puzzle.cfg.markerColor;
       });
     }
