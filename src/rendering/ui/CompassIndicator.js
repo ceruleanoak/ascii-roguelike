@@ -17,8 +17,9 @@
 import { GRID } from '../../game/GameConfig.js';
 import { isInteriorActive } from '../../systems/PlaneSystem.js';
 
-const MARGIN = 16;
 const DIAL_RADIUS = 11;
+// The dial's edge stops one open cell short of the wall, itself one cell thick.
+const DIAL_INSET = GRID.CELL_SIZE * 2 + DIAL_RADIUS;
 
 export class CompassIndicator {
   constructor(renderer) {
@@ -37,8 +38,8 @@ export class CompassIndicator {
     const target = compass.getMarkedTargetPosition();
     if (!target) return;
 
-    const cx = GRID.WIDTH - MARGIN;
-    const cy = GRID.HEIGHT - MARGIN;
+    const cx = GRID.WIDTH - DIAL_INSET;
+    const cy = GRID.HEIGHT - DIAL_INSET;
     const px = player.position.x + (player.width ?? GRID.CELL_SIZE) / 2;
     const py = player.position.y + (player.height ?? GRID.CELL_SIZE) / 2;
     const dx = target.x - px;
