@@ -917,8 +917,9 @@ identity, not standard programming terms.
 - **Definition:** A recipe output — weapon, armor, or consumable.
 - **In code:** rendered as a **Unicode symbol** (non-letter, non-digit, no emoji, no pure
   box-drawing, literal glyphs only). Recipes in `src/data/recipes.js`.
-  An optional `rarity` field on its `ITEMS` entry (missing = common) values it as a recipe input
-  when that input is an Item rather than an Ingredient: common 0, uncommon 1, rare 3, epic 6.
+  Its `rarity` field on its `ITEMS` entry values it as a recipe input when that input is an Item
+  rather than an Ingredient: common 0, uncommon 1, rare 3, epic 6. With no `rarity` field, the
+  pool-derived lookup (`homeZone.getIngredientRarity`) supplies it.
 - **Not:** an Ingredient; never a letter/digit char.
 
 ### Spawned Items

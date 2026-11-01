@@ -34,6 +34,7 @@ import { findRecipeByResult } from './recipes.js';
 import {
   deriveValueTier,
   getHomeZone,
+  getIngredientRarity,
   getAdvancement,
   isUnlocked,
 } from './homeZone.js';
@@ -113,8 +114,9 @@ function computeCoinPrice(ingredientCost) {
 // is the currency an item's worth is accumulated from.
 
 // Recipe inputs that are Items rather than Ingredients have no `value` of their
-// own, so each is worth a flat amount by its rarity. An Item with no `rarity`
-// field reads as common.
+// own, so each is worth a flat amount by its rarity. An Item's explicit `rarity`
+// field wins; without one, the rarity falls back to the pool-derived lookup
+// (homeZone getIngredientRarity).
 const ITEM_INPUT_VALUE = {
   [RARITY.COMMON]: 0,
   [RARITY.UNCOMMON]: 1,
@@ -131,7 +133,7 @@ function ingredientWorth(char) {
   const ingredient = INGREDIENTS[char];
   if (ingredient) return ingredient.value ?? 0;
   const item = ITEMS[char];
-  if (item) return ITEM_INPUT_VALUE[item.rarity ?? RARITY.COMMON];
+  if (item) return ITEM_INPUT_VALUE[item.rarity ?? getIngredientRarity(char)];
   return 0;
 }
 
