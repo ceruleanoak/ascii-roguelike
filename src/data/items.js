@@ -1,5 +1,6 @@
 import { COLORS, GRID } from '../game/GameConfig.js';
 import { isPotionIngredient } from './alchemy.js';
+import { INGREDIENTS } from './ingredients.js';
 
 // Item types
 // The Shed Key's char, shared by the Errand reward and the Shed door check.
@@ -3122,90 +3123,9 @@ function buildWeaponTiers() {
 
 export const WEAPON_TIERS = buildWeaponTiers();
 
-// Ingredients (crafting materials)
-export const INGREDIENTS = {
-  'f': { char: 'f', name: 'Fur', color: '#8b4513' },
-  't': { char: 't', name: 'Teeth', color: '#ffffff' },
-  'g': { char: 'g', name: 'Goo', color: '#00ff00' },
-  'w': { char: 'w', name: 'Wing', color: '#cccccc' },
-  'c': { char: 'c', name: 'Coin', color: '#ffff00' },
-  'b': { char: 'b', name: 'Bone', color: '#eeeeee' },
-  'm': { char: 'm', name: 'Meat', color: '#ff4444' },
-  's': { char: 's', name: 'Scale', color: '#ff00ff' },
-  'F': { char: 'F', name: 'Fire Essence', color: '#ff4400' },
-  'M': { char: 'M', name: 'Metal', color: '#aaaaaa' },
-  // Unrefined ore: a rock-harvest roll alongside Rock (never a red-zone-only
-  // pull like Metal itself), fed to a hut fireplace to smelt — 30% Metal,
-  // rest Slag (a whiff, not a byproduct worth using). See FireplaceSystem.
-  '2': { char: '2', name: 'Ore', color: '#8899aa' },
-  // Fireplace-smelting miss byproduct — see Ore above. Not itself craftable
-  // into anything yet; exists so a bad smelting roll leaves something in
-  // hand rather than nothing.
-  '4': { char: '4', name: 'Slag', color: '#5a4a42' },
-  // Shore sand: breaking a Sand tile (ocean transition strip) can drop it.
-  // A burning hut fireplace melts one into an Empty Bottle — see FireplaceSystem.
-  'D': { char: 'D', name: 'Sand', color: '#d4a896' },
-  // Paper: humanoid enemies carry it, and the hut press turns Slurry into it
-  // (PressSystem). Two sheets make a Field Guide.
-  'N': { char: 'N', name: 'Paper', color: '#f0ead6' },
-  '~': { char: '~', name: 'String', color: '#cccccc' },
-  '|': { char: '|', name: 'Stick', color: '#8b4513' },
-  'a': { char: 'a', name: 'Ash', color: '#888888' },
-  'd': { char: 'd', name: 'Dust', color: '#bbbbaa' },
-  'e': { char: 'e', name: 'Eye', color: '#ffff00' },
-  'h': { char: 'h', name: 'Herb', color: '#44cc44' },
-  'i': { char: 'i', name: 'Ice', color: '#aaddff' },
-  'j': { char: 'j', name: 'Jaw', color: '#cccccc' },
-  'k': { char: 'k', name: 'Silk', color: '#cc88ff' },
-  'l': { char: 'l', name: 'Leaf', color: '#33aa33' },
-  '●': { char: '●', name: 'Pearl', color: '#f4f4f8' },
-  'r': { char: 'r', name: 'Root', color: '#996633' },
-  'v': { char: 'v', name: 'Venom', color: '#00ff44' },
-  '0': { char: '0', name: 'Rock', color: '#888888' },
-  '◇': { char: '◇', name: 'Topaz',    color: '#ffcc00' },
-  '⬥': { char: '⬥', name: 'Garnet',   color: '#cc2222' },
-  '⬦': { char: '⬦', name: 'Emerald',  color: '#00cc44' },
-  '⧫': { char: '⧫', name: 'Diamond',  color: '#eeeeff' },
-  '⬧': { char: '⬧', name: 'Onyx',     color: '#333344' },
-  '◈': { char: '◈', name: 'Ruby',     color: '#ff2244' },
-  '⬨': { char: '⬨', name: 'Sapphire', color: '#2244ff' },
-  '𝑚': { char: '𝑚', name: 'Mana', color: '#8866ff' },
-
-  // Slurry — crafted from Goo + Fur (recipes.js), like Mana above a pure
-  // recipe-intermediate rather than a standalone-use item. Registered as an
-  // Unstable Potion component (alchemy.js) alongside Eye/Venom/Wing.
-  '⚗': { char: '⚗', name: 'Slurry', color: '#6b8e23' },
-
-  // Cloth — String + String. A recipe intermediate like Slurry: Cloth + Fur
-  // = Fur Cloak, Cloth + Cloth = Robe.
-  '▤': { char: '▤', name: 'Cloth', color: '#d8ccb0' },
-
-  // Raw oils — pressed at a hut press into oil consumables (bow/dagger/spear augments).
-  // Sap variants drop from Trees; the rare red/cyan variants only spawn in
-  // their respective zones (resolved in InteractionSystem).
-  'ŝ': { char: 'ŝ', name: 'Sap',       color: '#a07040' },
-  'š': { char: 'š', name: 'Fire Sap',  color: '#ff4400' },
-  'ş': { char: 'ş', name: 'Frost Sap', color: '#88ddff' },
-  'ł': { char: 'ł', name: 'Pollen',    color: '#ffe566' },
-  'ψ': { char: 'ψ', name: 'Grain',     color: '#d8b860' }, // grass cut (shares Pollen's band); a lit fireplace bakes it into Bread
-
-  // Sea ingredients. Drop sources: 'p' from Ocean fishing (rare) and Sand finds,
-  // 'n' from Sea Snake (rare), 'C' from Sand finds.
-  'p': { char: 'p', name: 'Pearl Shard',    color: '#ddeeff' },
-  'C': { char: 'C', name: 'Clam',           color: '#c8b89a' },
-  'n': { char: 'n', name: 'Sharkbone',      color: '#ccd8e8' },
-
-  // Huntable game (HuntingSystem) — rare Moose drop.
-  'K': { char: 'K', name: 'Thick Fur', color: '#c9a876' },
-
-  // Rock-harvest ingredients — drop from `0` Rock bg objects (rock harvest table).
-  // △ Arrowhead also crafts into bows/axes/spears. ⚜ Artifact drops from rocks/chests;
-  // trades to errand NPC (3 coins) or wise fellow (unlocks rare hint). ❦ Moss → Moss Cloak.
-  '⊿': { char: '⊿', name: 'Axe head',        color: '#aaaaaa' },
-  '△': { char: '△', name: 'Arrowhead',       color: '#aaaaaa' },
-  '⚜': { char: '⚜', name: 'Artifact',        color: '#d4af37' },
-  '❦': { char: '❦', name: 'Moss',           color: '#5a8a3a' }
-};
+// Ingredients (crafting materials) live in ingredients.js; re-exported here so
+// existing importers keep one entry point.
+export { INGREDIENTS } from './ingredients.js';
 
 // Subtype defaults — explicit weapon properties override these.
 // The 'multistab' pattern stabs once per swing; add `doubleHit: true` to a

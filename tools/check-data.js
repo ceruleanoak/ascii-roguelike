@@ -36,6 +36,7 @@ import * as LOOK_HERE from '../src/data/lookHereLines.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const itemsSource = readFileSync(join(root, 'src/data/items.js'), 'utf8');
+const ingredientsSource = readFileSync(join(root, 'src/data/ingredients.js'), 'utf8');
 const enemiesSource = readFileSync(join(root, 'src/data/enemies.js'), 'utf8');
 
 let failed = false;
@@ -95,7 +96,15 @@ function reportDuplicates(keys, label, allowlist = {}) {
 reportDuplicates(scanLiteralKeys(itemsSource, 'ITEMS'), 'ITEMS', {
   '∿': '#162 open — Ruby Whip needs re-keying to a free char (authorial call)',
 });
-reportDuplicates(scanLiteralKeys(itemsSource, 'INGREDIENTS'), 'INGREDIENTS');
+reportDuplicates(scanLiteralKeys(ingredientsSource, 'INGREDIENTS'), 'INGREDIENTS');
+
+// Every ingredient's `value` feeds pawn payouts and shop coin cost — a missing
+// or non-numeric value would silently price every recipe using it at 0.
+for (const [char, ingredient] of Object.entries(INGREDIENTS)) {
+  if (!Number.isFinite(ingredient.value) || ingredient.value < 0) {
+    fail(`INGREDIENTS['${char}'] (${ingredient.name}) has no valid value — pawn and shop pricing read it`);
+  }
+}
 reportDuplicates((scanLiteralKeys(enemiesSource, 'ENEMIES') ?? []).map(String), 'ENEMIES');
 
 // ── ITEMS ∩ INGREDIENTS overlap ────────────────────────────────────────────
