@@ -246,7 +246,7 @@ export const ENEMIES = {
       triggerRangeMax: GRID.CELL_SIZE * 7,
       cooldown: 6.0,
       windupTime: 1.0,
-      airTime: 0.6,
+      airTime: 1.2,
       arcLift: GRID.CELL_SIZE * 1.5,
       landRadius: GRID.CELL_SIZE * 1.5
     }
