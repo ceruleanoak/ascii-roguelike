@@ -2255,20 +2255,17 @@ export const ITEMS = {
     stackable: true, // shares one quick slot by count — see InventorySystem.mergeStackableConsumable
     color: '#e8d8c0'
   },
-  // Granted by the "Fish" fishing catch (all zones except Fountain) via SPACE
+  // Granted by every fish-type catch (all zones except Fountain) via SPACE
   // pickup — see FishingSystem.trySpacePickup / fishingTables.js's
-  // directPickupItem. The one catch that skips "a blade opens the catch":
-  // cutting a Fish instead of grabbing it just wastes the catch.
+  // directPickupItem. Cutting a fish with a blade opens its table drops instead.
+  // No effect yet — carried like a Stick Bundle until a use is designed.
   '♓': {
     rarity: 'common',
     char: '♓',
-    name: 'Caught Fish',
+    name: 'Fish',
     type: ITEM_TYPES.CONSUMABLE,
-    effect: 'heal',
-    amount: 3,
     oneShot: true,
     stackable: true, // shares one quick slot by count — see InventorySystem.mergeStackableConsumable
-    autoTriggerHP: 0.12,
     color: '#7ec8e3'
   },
   // Dropped by cutting a Red Zone caldera Ember Bush. Unicode/CONSUMABLE

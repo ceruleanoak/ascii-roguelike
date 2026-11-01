@@ -2006,7 +2006,7 @@ identity, not standard programming terms.
 - **Definition:** The Fisherman standing on the bank of a peaceful Lake or Ocean Room. Once his
   tips have been heard, a coin buys his one Fishing Pole, set down beside him. Whenever a catch
   that needs a blade lands by the player, he walks over, cuts it open, and walks back to his
-  spot. He leaves a Caught Fish alone (a blade would waste it). The hut Fisherman instead sells
+  spot. He leaves a Fish alone (the player grabs it whole). The hut Fisherman instead sells
   the cutting demonstration.
 - **In code:** `room.lakeFisherman` (a `Fisherman` with `sellsRod`, placed by
   `roomFeatures.spawnShoreFisherman`); `ShoreFishermanSystem` (`trySpacePress` from the EXPLORE

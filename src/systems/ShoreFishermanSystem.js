@@ -18,8 +18,8 @@ const HOME_REACH = GRID.CELL_SIZE * 0.4;
  *   rod per fisherman.
  * - Cutting: whenever a catch that needs a blade has landed by the player
  *   (FishingSystem reward objects), he walks over and cuts it open, then
- *   walks back to his spot. A Caught Fish (grabbed by hand, wasted by a
- *   blade) is left alone.
+ *   walks back to his spot. A catch the player can grab whole (a
+ *   Fish) is left alone.
  *
  * The hut Fisherman's paid demonstration is FishermanDemoSystem's.
  */
