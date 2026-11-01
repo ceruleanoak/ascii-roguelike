@@ -59,6 +59,7 @@ Active bugs only. Review at the start of every session. When a bug is fixed, mov
 | 503 | **Red boss head stays hidden after death → REST → re-entry** — head visibility gates on `headState === 'extended'`, which `BossSystem.reactivate` doesn't restore, so a restored rolling shell keeps its head retracted until the next charge stop. Medium confidence; not confirmed in play | bug-inbox 2026-10-31 | open — medium confidence |
 
 ---
+| 504 | **The Fairy Fountain reads as refusing some daggers** — both shapes reproduced headlessly 2026-11-01; the plain Dagger upgrades fine. (1) A Kunai `⚲` with bundle charges left throws a `spent` copy, and `TrapSystem._landThrownWeapon` returns on `t.spent` before `FountainSystem.checkWeaponLanding`, so the throw vanishes in the pool with no fairy; the weapon only reaches the fountain once all 3 room charges are gone. (2) `checkWeaponLanding` tests the charge reticule (`targetX/Y`), and a dagger's 12-cell throw overshoots the 9-cell pool from the near edge past about 70% charge, landing as a plain drop beyond it. A sword's 8-cell throw can't overshoot from there, so this reads as dagger-specific (a spear's 16 cells does it too, sooner). | user report + agent repro 2026-11-01 | open |
 
 ## P2 — Balance / Missing Implementations
 
