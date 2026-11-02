@@ -96,21 +96,26 @@ function paddingRarityFor(zoneDepths, zone) {
 // (b) COIN PRICE
 // ============================================================================
 
-// Coin price = the summed ingredient value of the listing's ingredient cost,
-// marked up, rounded up. The markup is the shop's margin over raw ingredient
-// value (ingredients themselves carry none). Placeholder — tune after playtest.
-const SHOP_COIN_MARKUP = 1.5;
+// Coin price = the listing's worth, marked up, rounded up. That worth is the
+// summed value of its ingredient cost, or the item's own worth where that is
+// higher (a Hammer's tier outweighs its Rock and Stick). The markup is the
+// shop's margin over the pawn side: buying costs double what selling pays.
+const SHOP_COIN_MARKUP = 2;
+
+// Nothing in the shop sells for less, however cheap or discounted.
+const SHOP_MIN_COINS = 2;
 
 /**
  * baseCoins is the full coin price with zero ingredients toggled in.
  * coinFloor is the minimum it can shrink to — ingredients alone never pay a
- * listing down to zero coins. ShopSystem computes the live remaining price by
+ * listing below SHOP_MIN_COINS. ShopSystem computes the live remaining price by
  * taking one coin off per toggled ingredient lane.
  */
-function computeCoinPrice(ingredientCost) {
-  const worth = ingredientCost.reduce((sum, char) => sum + ingredientWorth(char), 0);
-  const baseCoins = Math.max(1, Math.ceil(roundFloat(worth * SHOP_COIN_MARKUP)));
-  const coinFloor = Math.max(1, Math.ceil(baseCoins * 0.2));
+function computeCoinPrice(itemChar, ingredientCost) {
+  const costWorth = ingredientCost.reduce((sum, char) => sum + ingredientWorth(char), 0);
+  const worth = Math.max(costWorth, ingredientWorth(itemChar));
+  const baseCoins = Math.max(SHOP_MIN_COINS, Math.ceil(roundFloat(worth * SHOP_COIN_MARKUP)));
+  const coinFloor = Math.max(SHOP_MIN_COINS, Math.ceil(baseCoins * 0.2));
   return { baseCoins, coinFloor };
 }
 
@@ -243,7 +248,7 @@ function buildListing(itemData, role, paddingRarity) {
   // for a Ruby Whip costs less than the Infused Whip + Ruby.
   // Shuffled so the lanes don't show which two chars are the real recipe.
   const ingredientCost = shuffled([recipe.left, recipe.right, ...padding]);
-  const { baseCoins, coinFloor } = computeCoinPrice(ingredientCost);
+  const { baseCoins, coinFloor } = computeCoinPrice(itemData.char, ingredientCost);
   const gemInPrice = ingredientCost.some(char => TREASURE_CHARS.has(char));
   const treasureCount = gemInPrice ? 0 : TREASURE_COUNT_BY_RARITY[getRarity(itemData.char)];
   const treasureChar = treasureCount > 0 ? pickTreasureChar(itemData, role) : null;
