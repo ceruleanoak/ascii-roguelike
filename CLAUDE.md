@@ -85,6 +85,8 @@ Three tiers — pick the right one; don't reach for the CheatMenu when a headles
 
 **Cosmology doc**: `claudedocs/zone-cosmology.md` — **Read whenever making design decisions** (new content, zone features, enemies, items, endings, narrative beats). It is the decision lens: the Power of 3 layer (experience/instinct/convention + hidden canon, Triangle Room, endings, the Infinite Loop) and each zone's word/verb. A feature that doesn't pass its checks belongs in a different zone — or nowhere.
 
+**Set dressing rulebook**: `claudedocs/set-dressing-rulebook.md` — **Read before authoring or changing any building, room or dungeon dressing.** Testable rules for Silhouette, Exteriors, Interiors, dungeon wear and glyph choice, plus the scorecard and fix order. When the user corrects art, add or amend a rule in the same session (P2); a new building or room adds a scorecard row in the same commit (P3).
+
 Pure roguelike — death is a full reset. The "save file" is mental: recipe memory, zone knowledge, pattern recognition.
 
 **Core principles:**
@@ -134,7 +136,7 @@ All modes share CombatSystem, PhysicsSystem, and entity classes.
 ## Font Rules
 
 - **VentureArcade**: UI labels only (`HP:`, `L`, `Q`, zone exit letters, "GAME OVER"). Limited glyph coverage — never use for item/enemy chars or slot placeholders.
-- **Unifont**: Everything else (all canvas entity rendering, weapon/armor chars, slot placeholders). Complete Unicode coverage; safe default.
+- **Unifont**: Everything else (all canvas entity rendering, weapon/armor chars, slot placeholders). Safe default, BMP only (no glyphs above U+FFFF), and widths vary: verify any new glyph in game (rulebook G3).
 
 ## Input Feedback System (REST Mode)
 
@@ -197,8 +199,9 @@ The project has established patterns and abstractions. Before implementing:
 
 Rules:
 - New ingredients → letter/digit only. New crafted items → Unicode symbol only.
-- No emoji, no pure box-drawing chars, no Unicode escapes (`\uXXXX`) — embed literal glyphs.
-- Background objects, enemies, particles, UI icons → printable ASCII.
+- No emoji, no Unicode escapes (`\uXXXX`) — embed literal glyphs. No pure box-drawing chars on ingredients or crafted items.
+- Enemies, particles, UI icons → printable ASCII.
+- Background objects → any BMP glyph that isn't reserved, box drawing included (`claudedocs/set-dressing-rulebook.md` G1/G2).
 
 See `claudedocs/reference.md` for the legacy violations table and background object char map.
 

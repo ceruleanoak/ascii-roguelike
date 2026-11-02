@@ -2245,6 +2245,32 @@ identity, not standard programming terms.
   by `RoomGenerator` based on zone/depth/special conditions.
 - **Not:** Interior (which are Hut, Dungeon, Maze) or game State.
 
+### Set Dressing
+- **Definition:** The authored visual arrangement of a space: what a building looks like from
+  outside, and the props, glyphs and colours placed in a room to make it feel like somewhere. Set
+  Dressing is judged by the rules in `claudedocs/set-dressing-rulebook.md`.
+- **In code:** no single owner. It's built from Background Objects placed by the room's generator
+  (`stampHutFootprint`, `generateDungeonRoom`, the `neutralRooms.js` entries). Dungeon floors get
+  random decor from `DungeonFloorGenerator._addDecor`, which doesn't meet the rulebook.
+- **Not:** a Background Object (the unit it's made from), or a Floor (the traversable space it
+  sits on). Random decor scatter alone isn't Set Dressing.
+
+### Silhouette
+- **Definition:** The outline of a thing when every one of its cells is a single flat colour. It's
+  the main measure of Set Dressing quality: readable, with interest.
+- **In code:** no representation. It's a property of the authored cells, tested with a solid-fill
+  view (rulebook S4).
+- **Not:** the collision shape or footprint, though they often overlap. A hull can have the same
+  footprint and a far better Silhouette.
+
+### Exterior
+- **Definition:** The outside of a building, as seen in the room it stands in, including its
+  door. A distinct Exterior per building kind is a Set Dressing goal.
+- **In code:** `stampHutFootprint` (`src/systems/roomFeatures.js`) for huts and Sheds;
+  `generateDungeonRoom` and `generateMazeRoom` (`src/systems/RoomGenerator.js`) for Dungeons and
+  Mazes.
+- **Not:** an Interior (the space entered through the door).
+
 ### Background Object
 - **Definition:** A non-entity environmental object that occupies a room tile, can be destroyed
   (by fire, water, impact), and may have interactive effects or drop items.
