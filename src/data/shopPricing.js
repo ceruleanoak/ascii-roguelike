@@ -96,11 +96,12 @@ function paddingRarityFor(zoneDepths, zone) {
 // (b) COIN PRICE
 // ============================================================================
 
-// Coin price = exactly SHOP_COIN_MARKUP times what the Pawn side pays for the
-// same item, so the two counters can't disagree. Priced from the whole-coin
-// payout, never the fractional worth under it: a Sling worth 1.1 pawns for 1,
-// and marking up the 1.1 charged 3. Padding raises a listing's ingredient lanes,
-// not its coins.
+// Coin price = SHOP_COIN_MARKUP times the item's whole-coin worth, read with
+// shop minimums on (see ingredientWorth): the shop charges at least a coin of
+// worth for every crafting step, where Pawn pays only what the chain adds up to.
+// Priced from the whole coins, never the fraction under them: marking up a
+// Sling's 1.1 charged 3. Padding raises a listing's ingredient lanes, not its
+// coins.
 const SHOP_COIN_MARKUP = 2;
 
 // Nothing in the shop sells for less, however cheap or discounted.
@@ -113,7 +114,8 @@ const SHOP_MIN_COINS = 2;
  * taking one coin off per toggled ingredient lane.
  */
 function computeCoinPrice(itemData) {
-  const baseCoins = Math.max(SHOP_MIN_COINS, computePawnSellValue(itemData) * SHOP_COIN_MARKUP);
+  const wholeCoins = itemData.pawnValue ?? Math.round(roundFloat(ingredientWorth(itemData.char, true)));
+  const baseCoins = Math.max(SHOP_MIN_COINS, wholeCoins * SHOP_COIN_MARKUP);
   const coinFloor = Math.max(SHOP_MIN_COINS, Math.ceil(baseCoins * 0.2));
   return { baseCoins, coinFloor };
 }
@@ -143,13 +145,14 @@ function roundFloat(n) {
  * Sword, a Compass) has no inputs to add up, so it is worth its value tier,
  * 1-based.
  *
- * Every Item is worth at least a coin, and so is the raw half of each crafting
+ * Weapons and armor never fall below their tier: a Maul is still a T2 weapon.
+ * With `shopMinimums`, used for the Shop's coin price and never for Pawn, every
+ * Item is also worth at least a coin, and so is the raw half of each crafting
  * step: Goo is worth 0.2 alone, but Boots + Goo is one more step of work, so
- * Rubber Boots land above Boots instead of rounding back down to them. Weapons
- * and armor also never fall below their tier: a Maul is still a T2 weapon.
+ * Rubber Boots price above Boots instead of rounding back down to them.
  * Anything else is worth 0.
  */
-function ingredientWorth(char, visiting = new Set()) {
+function ingredientWorth(char, shopMinimums = false, visiting = new Set()) {
   const ingredient = INGREDIENTS[char];
   if (ingredient) return ingredient.value ?? 0;
   const item = ITEMS[char];
@@ -164,12 +167,14 @@ function ingredientWorth(char, visiting = new Set()) {
   const rawWorth = rawInputs.reduce((sum, input) => sum + ingredientWorth(input), 0);
   const itemWorth = inputs
     .filter(input => !INGREDIENTS[input])
-    .reduce((sum, input) => sum + ingredientWorth(input, visiting), 0);
+    .reduce((sum, input) => sum + ingredientWorth(input, shopMinimums, visiting), 0);
   visiting.delete(char);
 
-  const worth = itemWorth + (rawInputs.length > 0 ? Math.max(1, rawWorth) : 0);
+  const stepWorth = shopMinimums && rawInputs.length > 0 ? Math.max(1, rawWorth) : rawWorth;
+  const worth = itemWorth + stepWorth;
   const isGear = item.type === ITEM_TYPES.WEAPON || item.type === ITEM_TYPES.ARMOR;
-  return Math.max(isGear ? tierWorth : 1, worth);
+  if (isGear) return Math.max(tierWorth, worth);
+  return shopMinimums ? Math.max(1, worth) : worth;
 }
 
 /**
