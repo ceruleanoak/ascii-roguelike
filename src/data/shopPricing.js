@@ -125,32 +125,36 @@ function computeCoinPrice(ingredientCost) {
 // is the currency an item's worth is accumulated from.
 
 // Values are floats, so sums and products can land a hair off a whole number
-// (2.9999999999999996, 2.0000000000000004). Round to 1e-9 before any floor or
+// (2.9999999999999996, 2.0000000000000004). Round to 1e-9 before any round or
 // ceil so a whole-coin total isn't pushed to the wrong coin.
 function roundFloat(n) {
   return Math.round(n * 1e9) / 1e9;
 }
 
-// Recipe inputs that are Items rather than Ingredients have no `value` of their
-// own, so each is worth a flat amount by its rarity.
-const ITEM_INPUT_VALUE = {
-  [RARITY.COMMON]: 0,
-  [RARITY.UNCOMMON]: 1,
-  [RARITY.RARE]: 3,
-  [RARITY.EPIC]: 6,
-};
-
 /**
- * Fractional worth of one unit of recipe input `char`: an Ingredient's explicit
- * `value` (missing counts as 0 — check:data fails on it), or an Item's
- * rarity-based flat value. Anything else is worth 0.
+ * Fractional worth of one unit of `char`, accumulated down its whole recipe
+ * chain: an Ingredient is its explicit `value` (missing counts as 0 — check:data
+ * fails on it), a crafted Item is the worth of its two recipe inputs, so a Flame
+ * Sword carries the Sword it was forged from. An Item no recipe builds (a found
+ * Sword, a Compass) has no inputs to add up, so it is worth its value tier,
+ * 1-based. Weapons and armor never fall below that tier even when crafted from
+ * cheap inputs: a Hammer is still a Hammer. Consumables and traps can, because
+ * they stack, and a tier floor would turn two Fur into a coin at any quantity.
+ * Anything else is worth 0.
  */
-function ingredientWorth(char) {
+function ingredientWorth(char, visiting = new Set()) {
   const ingredient = INGREDIENTS[char];
   if (ingredient) return ingredient.value ?? 0;
   const item = ITEMS[char];
-  if (item) return ITEM_INPUT_VALUE[getRarity(char)];
-  return 0;
+  if (!item || visiting.has(char)) return 0;
+  const tierWorth = deriveValueTier(item, item.type) + 1;
+  const recipe = findRecipeByResult(char);
+  if (!recipe) return tierWorth;
+  visiting.add(char);
+  const worth = ingredientWorth(recipe.left, visiting) + ingredientWorth(recipe.right, visiting);
+  visiting.delete(char);
+  const isGear = item.type === ITEM_TYPES.WEAPON || item.type === ITEM_TYPES.ARMOR;
+  return isGear ? Math.max(tierWorth, worth) : worth;
 }
 
 /**
@@ -158,14 +162,12 @@ function ingredientWorth(char) {
  * An item's own `pawnValue` overrides the computed value — the Empty Bottle and
  * the raw liquid Bottles are free to fill from the world, so pawning them at
  * 1+ coin turned every Bottle drop into a coin. Otherwise the payout is the
- * accumulated ingredient value of the item's recipe, rounded down to whole
- * coins. An item with neither a recipe nor an override pays 0.
+ * item's accumulated worth, rounded to the nearest whole coin: flooring read a
+ * 0.9-worth Bomb as nothing. A consumable under half a coin (Boots) pays 0.
  */
 export function computePawnSellValue(itemData) {
   if (itemData.pawnValue !== undefined) return itemData.pawnValue;
-  const recipe = findRecipeByResult(itemData.char);
-  if (!recipe) return 0;
-  return Math.floor(roundFloat(ingredientWorth(recipe.left) + ingredientWorth(recipe.right)));
+  return Math.round(roundFloat(ingredientWorth(itemData.char)));
 }
 
 // ============================================================================
