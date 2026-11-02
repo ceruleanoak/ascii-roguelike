@@ -42,10 +42,10 @@ import {
 // (a) PADDING INGREDIENTS
 // ============================================================================
 
-// Padding ingredients per listing, by the item's own rarity. A common item's
-// recipe is free: no padding at all.
+// Padding ingredients per listing, by the item's own rarity. Every listing gets
+// at least one, so the lanes never read as the item's real recipe.
 const PADDING_BY_RARITY = {
-  [RARITY.COMMON]: 0,
+  [RARITY.COMMON]: 1,
   [RARITY.UNCOMMON]: 1,
   [RARITY.RARE]: 2,
   [RARITY.EPIC]: 3,
