@@ -96,10 +96,11 @@ function paddingRarityFor(zoneDepths, zone) {
 // (b) COIN PRICE
 // ============================================================================
 
-// Coin price = the listing's worth, marked up, rounded up. That worth is the
-// summed value of its ingredient cost, or the item's own worth where that is
-// higher (a Hammer's tier outweighs its Rock and Stick). The markup is the
-// shop's margin over the pawn side: buying costs double what selling pays.
+// Coin price = exactly SHOP_COIN_MARKUP times what the Pawn side pays for the
+// same item, so the two counters can't disagree. Priced from the whole-coin
+// payout, never the fractional worth under it: a Sling worth 1.1 pawns for 1,
+// and marking up the 1.1 charged 3. Padding raises a listing's ingredient lanes,
+// not its coins.
 const SHOP_COIN_MARKUP = 2;
 
 // Nothing in the shop sells for less, however cheap or discounted.
@@ -111,10 +112,8 @@ const SHOP_MIN_COINS = 2;
  * listing below SHOP_MIN_COINS. ShopSystem computes the live remaining price by
  * taking one coin off per toggled ingredient lane.
  */
-function computeCoinPrice(itemChar, ingredientCost) {
-  const costWorth = ingredientCost.reduce((sum, char) => sum + ingredientWorth(char), 0);
-  const worth = Math.max(costWorth, ingredientWorth(itemChar));
-  const baseCoins = Math.max(SHOP_MIN_COINS, Math.ceil(roundFloat(worth * SHOP_COIN_MARKUP)));
+function computeCoinPrice(itemData) {
+  const baseCoins = Math.max(SHOP_MIN_COINS, computePawnSellValue(itemData) * SHOP_COIN_MARKUP);
   const coinFloor = Math.max(SHOP_MIN_COINS, Math.ceil(baseCoins * 0.2));
   return { baseCoins, coinFloor };
 }
@@ -248,7 +247,7 @@ function buildListing(itemData, role, paddingRarity) {
   // for a Ruby Whip costs less than the Infused Whip + Ruby.
   // Shuffled so the lanes don't show which two chars are the real recipe.
   const ingredientCost = shuffled([recipe.left, recipe.right, ...padding]);
-  const { baseCoins, coinFloor } = computeCoinPrice(itemData.char, ingredientCost);
+  const { baseCoins, coinFloor } = computeCoinPrice(itemData);
   const gemInPrice = ingredientCost.some(char => TREASURE_CHARS.has(char));
   const treasureCount = gemInPrice ? 0 : TREASURE_COUNT_BY_RARITY[getRarity(itemData.char)];
   const treasureChar = treasureCount > 0 ? pickTreasureChar(itemData, role) : null;
