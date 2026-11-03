@@ -1,4 +1,5 @@
 import { GRID } from '../../game/GameConfig.js';
+import { inSamePlane } from '../../systems/PlaneSystem.js';
 
 // Tripline render helpers, split out of ExploreRenderer.js to stay under its
 // architecture budget — a standalone function taking `renderer`, matching the
@@ -41,10 +42,12 @@ export function drawWires(renderer, game, interior = false) {
     ctx.restore();
   };
 
-  for (const seg of triplines) drawSeg(seg, 1.0);
+  // Only the wires on the player's plane: a cave wire is out of sight from the
+  // surface, and a surface wire from the cave.
+  for (const seg of triplines) if (inSamePlane(seg, game.player)) drawSeg(seg, 1.0);
 
   const preview = game.wireSystem?.getPreviewSegment();
-  if (preview) drawSeg(preview, 0.7);
+  if (preview && inSamePlane(preview, game.player)) drawSeg(preview, 0.7);
 
   // Red X above player — flashes when SPACE could neither anchor an end nor throw
   // one (mazes). WireSystem sets a brief timer; it ticks down each frame.

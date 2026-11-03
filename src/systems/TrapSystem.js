@@ -5,7 +5,7 @@ import { GRID, BACKGROUND_OBJECT_VARIANTS } from '../game/GameConfig.js';
 import { applyLavaContact } from './LavaContact.js';
 import { MAX_PIPS } from './StatusEffects.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
-import { isInteriorActive, tagInteriorPlane, planeOf } from './PlaneSystem.js';
+import { isInteriorActive, tagInteriorPlane, planeOf, objectOnPlane } from './PlaneSystem.js';
 import { createLightningSpire } from './LightningSpire.js';
 import { createExplosionAftermath, createGooBurst } from './WorldEffectsSystem.js';
 import { applyExtraOnHitEffects } from './ExtraOnHitEffects.js';
@@ -654,6 +654,9 @@ export class TrapSystem {
     if (!bgObjs) return false;
     for (const obj of bgObjs) {
       if (obj.destroyed || !obj.data?.solid) continue;
+      // A throw underground passes under surface rocks, and one above ground
+      // passes over the cave walls.
+      if (!objectOnPlane(obj, t.plane ?? 0)) continue;
       const box = obj.getHitbox();
       if (t.x >= box.x && t.x < box.x + box.width && t.y >= box.y && t.y < box.y + box.height) return true;
     }

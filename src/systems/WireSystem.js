@@ -20,7 +20,7 @@
 // the switch — no new system needed.
 
 import { GRID } from '../game/GameConfig.js';
-import { activeInteriorFloor } from './PlaneSystem.js';
+import { activeInteriorFloor, planeOf, canInteractWithObject, PLANE_SURFACE } from './PlaneSystem.js';
 
 const ELIGIBLE_ANCHOR_NAMES = new Set([
   'Tree', 'Stump', 'Crystal', 'Boulder', 'Mushroom',
@@ -88,6 +88,8 @@ export class WireSystem {
     const bgs = this.game._activeBackgroundObjects?.() || [];
     for (const obj of bgs) {
       if (obj.destroyed) continue;
+      // Only anchors on the player's plane — a Cave Wall underground, a Tree above.
+      if (!canInteractWithObject(player, obj)) continue;
       if (!ELIGIBLE_ANCHOR_NAMES.has(obj.data?.name)) continue;
       const ox = obj.position.x + halfBg;
       const oy = obj.position.y + halfBg;
@@ -95,15 +97,16 @@ export class WireSystem {
       const dy = Math.max(0, Math.abs(py - oy) - (halfPH + halfBg));
       const gap = Math.hypot(dx, dy);
       if (gap < MAX_GAP && gap < nearestGap) {
-        nearest = { x: ox, y: oy, plane: obj.plane ?? 0, obj };
+        nearest = { x: ox, y: oy, plane: planeOf(obj), obj };
         nearestGap = gap;
       }
     }
 
     // 2. Collision-map walls — interior wall structures + border walls live here,
-    // not as bg-objects. Scan a 3-cell ring around the player.
+    // not as bg-objects. Scan a 3-cell ring around the player. The collision map
+    // is the surface grid; underground, the cave and tunnel walls are bg-objects.
     const layer = this._activeLayer();
-    const cmap = layer?.collisionMap;
+    const cmap = planeOf(player) === PLANE_SURFACE ? layer?.collisionMap : null;
     if (cmap) {
       const pcol = Math.floor(px / C);
       const prow = Math.floor(py / C);
