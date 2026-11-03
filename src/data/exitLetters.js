@@ -175,6 +175,9 @@ export const EXIT_LETTERS = {
     name: 'Ridge',
     roomType: 'RIDGE',
     weight: 0.10,
+    zoneBoosts: {
+      gray: 0
+    },
     spellDescription: 'THE WAY.'
   },
   'S': {
