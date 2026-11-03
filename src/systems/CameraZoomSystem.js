@@ -48,6 +48,10 @@ import { isDeathHeldOffSurface, isInteriorActive, activeInteriorFloor } from './
  * much shorter transition (ZOOM.TRANSITION_DEATH_MS) than a normal combat
  * disengage — the death screen needs to read at 1.0 quickly, not ease out
  * at the same leisurely pace as walking away from a fight.
+ *
+ * A scripted scene can take the frame over with holdZoom(scale, focus) — every
+ * trigger above is ignored until releaseZoom(). The Grasp holds the climb
+ * fully open at 1.0 and ends Act 1 by easing in on the Trine (GraspSystem).
  */
 export class CameraZoomSystem {
   constructor(game) {
@@ -61,6 +65,29 @@ export class CameraZoomSystem {
     this._noEnemyElapsedMs = Infinity;
     this._lastState = null;
     this._compassOpenedMaze = false;
+    // A scripted frame (holdZoom): { scale, focus } where focus() returns the
+    // canvas-pixel point to frame on, or null to keep the player as the focus.
+    this.scripted = null;
+  }
+
+  /**
+   * Take the frame out of the combat trigger's hands: ease to `scale` framed
+   * on `focus()` (canvas pixels; omitted = the player) until releaseZoom().
+   * Scale 1 holds the frame fully open — a scripted scene that needs the
+   * whole room on screen (the Grasp's climb) uses it that way.
+   */
+  holdZoom(scale, focus = null) {
+    this.scripted = { scale, focus };
+  }
+
+  /** Hand the frame back to the combat trigger. */
+  releaseZoom() {
+    this.scripted = null;
+  }
+
+  /** True once the frame has finished easing to its current target. */
+  isZoomSettled() {
+    return this.currentZoom === this.targetZoom;
   }
 
   update(deltaTime) {
@@ -154,6 +181,16 @@ export class CameraZoomSystem {
       // (isEntityOnScreen gates committed attacks) and shrink the player's
       // view of the obstacle field the chain is bouncing around in.
       if (game.currentRoom?.centipedeChains?.length) desiredScale = 1;
+
+      // A scripted frame overrides every trigger above, focus included.
+      if (this.scripted) {
+        desiredScale = this.scripted.scale;
+        const focus = this.scripted.focus?.();
+        if (focus && desiredScale > 1) {
+          this.originXPercent = this._computeClampedOrigin((focus.x / GRID.WIDTH) * 100, roomLeftPercent, roomRightPercent, desiredScale);
+          this.originYPercent = this._computeClampedOrigin((focus.y / GRID.HEIGHT) * 100, roomTopPercent, roomBottomPercent, desiredScale);
+        }
+      }
     } else if (state === GAME_STATES.GAME_OVER && isDeathHeldOffSurface(game)) {
       // Death underground / inside an Interior reads in place first: keep the
       // zoom (and pivot) exactly as it was at the moment of death until the
