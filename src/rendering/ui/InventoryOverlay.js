@@ -40,27 +40,27 @@ const KEY_ITEM_COLOR = '#ff5555';
 const COLUMN_LAYOUTS = {
   2: [
     { iconX: 4, textX: 5 },
-    { iconX: 12, textX: 13 }
+    { iconX: 13, textX: 14 }
   ],
   3: [
     { iconX: 4, textX: 5 },
-    { iconX: 9, textX: 10 },
-    { iconX: 14, textX: 15 }
+    { iconX: 10, textX: 11 },
+    { iconX: 16, textX: 17 }
   ]
 };
 
 // Rightmost cell section content may occupy before it would run into the
 // Bottles column.
-const CONTENT_RIGHT_CELL = 20;
+const CONTENT_RIGHT_CELL = 22;
 
 // ── Bottles column (BottlesColumnSystem owns the cursor) ─────────────────
 // Right-aligned under the run timer: title, a wrapped label naming the
 // highlighted stack, then one glyph per stack, wrapping into a 2nd column.
 const BOTTLES_COLOR = '#aaccee';
 const BOTTLES_RIGHT = GRID.WIDTH - GRID.CELL_SIZE * 3;       // run timer's right edge
-const BOTTLES_GLYPH_X = [GRID.CELL_SIZE * 24.5, GRID.CELL_SIZE * 26.25];
+const BOTTLES_GLYPH_X = [GRID.CELL_SIZE * 25, GRID.CELL_SIZE * 26.5];
 const BOTTLES_LABEL_SCALE = 0.75;
-const BOTTLES_LABEL_WIDTH = GRID.CELL_SIZE * 5.5;            // on-screen px
+const BOTTLES_LABEL_WIDTH = GRID.CELL_SIZE * 4;              // on-screen px
 const BOTTLES_LABEL_LINES = 3;
 const BOTTLES_LABEL_LINE_HEIGHT = GRID.CELL_SIZE * 0.75;
 const BOTTLES_GLYPH_TOP = GRID.CELL_SIZE * 8.5;
@@ -71,18 +71,17 @@ export class InventoryOverlay {
     this.renderer = renderer;
   }
 
-  // Truncates text with an ellipsis so it never crosses maxWidth px — needed
+  // Cuts text off at the last character that fits in maxWidth px — needed
   // for long ingredient names (e.g. "Fire Essence") in the narrower 3-column
   // layout, where a column's text would otherwise run into the next column
   // or past the box border.
   _fitText(text, maxWidth) {
     const ctx = this.renderer.uiCtx;
-    if (ctx.measureText(text).width <= maxWidth) return text;
     let truncated = text;
-    while (truncated.length > 1 && ctx.measureText(truncated + '…').width > maxWidth) {
+    while (truncated.length > 1 && ctx.measureText(truncated).width > maxWidth) {
       truncated = truncated.slice(0, -1);
     }
-    return truncated + '…';
+    return truncated.trimEnd();
   }
 
   // Rows a category section would need (title + content rows + spacer) at
@@ -143,7 +142,10 @@ export class InventoryOverlay {
 
         // Key items pass a nameOverride and, being single one-off pickups,
         // omit the "xN" count suffix used by stackable treasure/components/materials.
-        const text = this._fitText(overrideName ? data.name : `${data.name} x${count}`, maxTextWidth);
+        // The name is cut, never the count.
+        const suffix = overrideName ? '' : ` x${count}`;
+        const fitName = this._fitText(data.name, maxTextWidth - this.renderer.uiCtx.measureText(suffix).width);
+        const text = fitName + suffix;
         this.renderer.uiCtx.fillStyle = COLORS.TEXT;
         this.renderer.uiCtx.textAlign = 'left';
         this.renderer.uiCtx.fillText(spectaclesTransformString(text, spectaclesOn), GRID.CELL_SIZE * textX, y);
@@ -173,7 +175,7 @@ export class InventoryOverlay {
     if (line) lines.push(line);
     if (lines.length > maxLines) {
       lines.length = maxLines;
-      lines[maxLines - 1] = this._fitText(lines[maxLines - 1] + '…', maxWidth);
+      lines[maxLines - 1] = this._fitText(lines[maxLines - 1], maxWidth);
     }
     return lines;
   }
