@@ -644,6 +644,9 @@ When proposing a zone feature, ask:
 4. **Non-instructive?** Teach through behavior, like the crow and the rabbit —
    never through text.
 
+What the player brings in — the conventions they arrive with and what fills
+the silence — is read in [`player-expectations.md`](./player-expectations.md).
+
 **Build-readiness, highest to lowest:** Green (greed economy largely built) →
 Red (only zone with `environmentalFeatures`; kinetic hazards are extensions) →
 Yellow (emergent storm exists; ambient weather on a separate branch) → Cyan
