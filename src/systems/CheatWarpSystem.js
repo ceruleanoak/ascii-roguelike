@@ -154,7 +154,8 @@ export class CheatWarpSystem {
   // grayZoneSystem.onRoomEnter doesn't arm the mist-out mid-test. The Trine
   // is built AFTER applyRoomSwap — the swap's room-scope reset clears physics
   // and the previous Trine, so building it first would lose the Flanks.
-  handleMistBattleTest(game) {
+  // `graspPhase` (optional) skips the warm-up straight to a Grasp phase.
+  handleMistBattleTest(game, graspPhase = null) {
     if (!this._requireExplore(game, 'Mist Battle test')) return;
 
     game.bossSystem.deactivate();
@@ -181,6 +182,7 @@ export class CheatWarpSystem {
     game.applyRoomSwap(newRoom);
 
     game.mistBattleSystem.start();
+    if (graspPhase) game.graspSystem.skipTo(graspPhase);
     game.audioSystem.switchZoneMusic(zone, import.meta.env.BASE_URL);
 
     console.log(`[CHEAT] ✓ Mist Battle: ${game.mistBattleSystem.members.map(m => m.characterType).join(' / ')}`);

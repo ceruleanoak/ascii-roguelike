@@ -75,6 +75,11 @@ export class CheatMenu {
       { char: '⛯', name: 'STORM EYE (yellow)',  type: 'boss_test', zone: 'yellow', color: '#ffff44' },
       // The final fight: a fresh random Trine (3 lost characters) every pick.
       { char: '△', name: 'MIST BATTLE (gray)',  type: 'mist_battle_test',      color: '#888888' },
+      // The Grasp's phases, skipping the warm-up waves (GraspSystem.skipTo).
+      { char: '✋', name: 'GRASP: HANDS',   type: 'mist_battle_test', graspPhase: 'grip',    color: '#d8d0c4' },
+      { char: '☟', name: 'GRASP: CLUTCH',  type: 'mist_battle_test', graspPhase: 'clutch',  color: '#d8d0c4' },
+      { char: '|', name: 'GRASP: FINGERS', type: 'mist_battle_test', graspPhase: 'fingers', color: '#d8d0c4' },
+      { char: '▲', name: 'GRASP: SUMMIT',  type: 'mist_battle_test', graspPhase: 'summit',  color: '#d8d0c4' },
       // The hidden pair: through the Sunken Ship into its Hold, south open.
       { char: 'S', name: 'SEA SERPENTS (hold)', type: 'sea_serpent_test',      color: '#2fbf8f' }
     ] : [];
@@ -396,7 +401,7 @@ export class CheatMenu {
         game.cheatWarpSystem.handleBossTest(game, result.zone);
         break;
       case 'mist_battle_test':
-        game.cheatWarpSystem.handleMistBattleTest(game);
+        game.cheatWarpSystem.handleMistBattleTest(game, result.graspPhase);
         break;
       case 'sea_serpent_test':
         game.cheatWarpSystem.handleSeaSerpentTest(game);
@@ -697,7 +702,7 @@ export class CheatMenu {
     if (selected.type === 'download_death_ledger') return { action: 'download_death_ledger' };
     if (selected.type === 'zone') return { action: 'teleport_zone', zone: selected.zone };
     if (selected.type === 'boss_test') return { action: 'boss_test', zone: selected.zone };
-    if (selected.type === 'mist_battle_test') return { action: 'mist_battle_test' };
+    if (selected.type === 'mist_battle_test') return { action: 'mist_battle_test', graspPhase: selected.graspPhase };
     if (selected.type === 'sea_serpent_test') return { action: 'sea_serpent_test' };
     if (selected.type === 'character') {
       if (selected.disabled) return 'handled';

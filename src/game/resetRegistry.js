@@ -907,6 +907,12 @@ export const RESET_REGISTRY = [
     call: (game) => game.mistBattleSystem.reset(),
     why: "The Mist Battle's Trine (Primary + two Flank bodies) exists only inside its arena room — leaving the room ends the battle. MistBattleSystem.reset() drops the Flank bodies from physics and clears the member ring; the Primary body is game.player, which the room transition rebuilds on its own.",
   },
+  {
+    path: 'graspSystem.reset',
+    scope: 'room',
+    call: (game) => game.graspSystem.reset(),
+    why: "The Grasp (the Mist Battle's boss) exists only inside the Mist Battle arena room — leaving it ends the climb. GraspSystem.reset() lets go of any Trine body a Great Hand holds, hands the scripted camera frame back to CameraZoomSystem (releaseZoom) and clears the phase machine, HP pools and Climb Scenery. Its GraspUnits live in the room's enemy list and die with the room.",
+  },
 
   // ── C. Title-only today (plan §5.C) — STEP 3. These fields/calls, plus
   // everything above (inherited via scopeIncludes('title') === ['room','run',

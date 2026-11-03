@@ -11,6 +11,7 @@ import { RoomGenerator } from './systems/RoomGenerator.js';
 import { ZoneSystem } from './systems/ZoneSystem.js';
 import { CheatWarpSystem } from './systems/CheatWarpSystem.js';
 import { MistBattleSystem } from './systems/MistBattleSystem.js';
+import { GraspSystem } from './systems/GraspSystem.js';
 import { DragonSpiritSystem } from './systems/DragonSpiritSystem.js';
 import { ExitSystem, isPressingIntoExitGap } from './systems/ExitSystem.js';
 import { PersistenceSystem } from './systems/PersistenceSystem.js';
@@ -317,6 +318,7 @@ class Game {
     this.bottlesColumnSystem = new BottlesColumnSystem(this);
     this.campNPCSystem = new CampNPCSystem(this);
     this.mistBattleSystem = new MistBattleSystem(this);
+    this.graspSystem = new GraspSystem(this); // the Mist Battle's boss; driven by mistBattleSystem
     this.dragonSpiritSystem = new DragonSpiritSystem(this);
     this.companionSystem = new CompanionSystem(this);
     this.commandSystem = new CommandSystem(this);
@@ -1945,7 +1947,7 @@ class Game {
       // Lock facing for non-bow weapons during attack; allow aiming while charging bow; lock during trap charge; FIGHT's committed swing
       const lockFacing = !!this.trapCharging || (this.keys.space && this.player.heldItem && this.player.heldItem.data.weaponType !== 'BOW') || this.fightSystem.locksFacing();
       // Lock movement for the TITLE -> REST spawn fade-in, until alpha reaches 1
-      const moveLocked = fishingBlocked || windupLocked || this.player.titleSpawnMovementLocked;
+      const moveLocked = fishingBlocked || windupLocked || this.player.titleSpawnMovementLocked || this.mistBattleSystem.holdsTrine();
       // A curse wander, FIGHT and CHOP/MINE/HARVEST hold the keys while they run; Rusalka and Dizzy act on them either way.
       const keys = this.cursedRunSystem.heldKeys(this) ?? this.fightSystem.heldKeys() ?? this.harvestSystem.heldKeys() ?? this.keys;
       this.player.updateInput(PlayerInputSystem.heldMoveInput(this.player, keys, moveLocked), lockFacing);

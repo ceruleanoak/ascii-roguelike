@@ -21,10 +21,15 @@
 //   armor/consumable stats are projected onto it by briefly loading its gear
 //   (see _projectGear).
 //
-// Today this is reached only from the CheatMenu BOSSES entry (no win state, no
-// Act 2, not yet wired to GrayZoneSystem's mist-out). `start()` takes the same
-// descriptor shape GrayZoneSystem._finalizeMistOut writes to
-// `game.graySnapshots`, so the real wiring can hand those in unchanged.
+// The fight: a warm-up of mixed gray waves (_updateWaves), then the Grasp
+// (GraspSystem) — a climb up a mountain that ends at the Summit, where the
+// camera closes in and startAct2() holds the Trine still. Act 2 itself is
+// unbuilt; startAct2() is its seam.
+//
+// Today this is reached only from the CheatMenu BOSSES entries (not yet wired
+// to GrayZoneSystem's mist-out). `start()` takes the same descriptor shape
+// GrayZoneSystem._finalizeMistOut writes to `game.graySnapshots`, so the real
+// wiring can hand those in unchanged.
 import { GRID, PHYSICS } from '../game/GameConfig.js';
 import { Player } from '../entities/Player.js';
 import { Item } from '../entities/Item.js';
@@ -56,8 +61,9 @@ const ROTATE_DOUBLE_TAP = 0.25;
 // this many seconds, so the triangle turns in place instead of the whole
 // Trine stepping back a corner with every Rotate.
 const ROTATE_GLIDE_TIME = 0.2;
-// Arena waves: when fewer than WAVE_FLOOR enemies remain, WAVE_SIZE more
-// arrive after WAVE_DELAY seconds — the fight never runs dry (no win state yet).
+// Warm-up waves: when fewer than WAVE_FLOOR enemies remain, WAVE_SIZE more
+// arrive after WAVE_DELAY seconds, until the Grasp turns them off
+// (`wavesEnabled`, after its WARMUP_WAVES).
 const WAVE_FLOOR = 3;
 const WAVE_SIZE = 4;
 const WAVE_DELAY = 1.5;
@@ -148,6 +154,12 @@ export class MistBattleSystem {
     this.lastSpacePress = -Infinity;
     this.glide = null; // { x, y, timer } — the new Primary's run to the old apex
     this.waveTimer = 0;
+    // The Grasp ends the warm-up by turning the waves off once it has counted
+    // enough of them.
+    this.wavesEnabled = true;
+    this.wavesSpawned = 0;
+    // 1 = the fight; 2 = held at the Summit for Act 2 (startAct2).
+    this.act = 1;
     // Enemy melee attack → Set of Flank bodies it is done with. CombatSystem
     // marks a still attack `hasHit` after its one Primary test frame, so the
     // Flanks keep their own record instead of reading that flag.
@@ -213,6 +225,55 @@ export class MistBattleSystem {
     for (const member of this.members) this._projectGear(member);
     this._loadGear(this.members[this.primaryIndex]);
     game.updateUI();
+    game.graspSystem.begin(game.currentRoom);
+  }
+
+  /** Every living body, the Primary first. */
+  livingBodies() {
+    const lead = this.primary;
+    if (!lead) return [];
+    const out = lead.body.hp > 0 ? [lead.body] : [];
+    for (const { body } of this.flanks()) out.push(body);
+    return out;
+  }
+
+  /**
+   * Damage on any Trine body from a source CombatSystem doesn't resolve (the
+   * Grasp). Goes through Player.takeDamage, so armor, i-frames and the roll
+   * apply; a Flank that drops falls here, a Primary that drops is caught by
+   * _catchPrimaryDeath.
+   */
+  hurt(body, damage, source, from) {
+    const result = body.takeDamage(damage, source);
+    if (result !== false) reportHit(this.game, body, result, damage, from, 0);
+    if (body !== this.game.player && body.hp <= 0) {
+      const member = this.members.find(m => m.body === body);
+      if (member) this._fall(member);
+    }
+    return result;
+  }
+
+  /**
+   * The Summit: the camera has closed in and Act 1 is over. Act 2 is the
+   * three lost characters' input-less battle (unbuilt — see
+   * claudedocs/planning-inbox.md); until it exists the Trine holds here,
+   * every key released and no body moving.
+   */
+  startAct2() {
+    this.act = 2;
+    const game = this.game;
+    for (const k of ['w', 'a', 's', 'd', 'space', 'shift', 'tab']) game.keys[k] = false;
+    for (const k of Object.keys(game.arrowKeys)) game.arrowKeys[k] = false;
+    for (const body of this.livingBodies()) {
+      body.heldItem?.cancelChargeAndReload?.();
+      body.velocity.vx = 0;
+      body.velocity.vy = 0;
+    }
+  }
+
+  /** Whether the Trine is held still for Act 2 (main.js movement lock). */
+  holdsTrine() {
+    return this.active && this.act === 2;
   }
 
   /**
@@ -372,6 +433,7 @@ export class MistBattleSystem {
    */
   tryRotate() {
     if (!this.active) return false;
+    if (this.act === 2) return true; // held for Act 2: SPACE does nothing
     if (this.clock - this.lastSpacePress > ROTATE_DOUBLE_TAP) {
       this.lastSpacePress = this.clock;
       return false;
@@ -505,6 +567,7 @@ export class MistBattleSystem {
   resolveCombat() {
     if (!this.active) return false;
     this._applyEnemyDamageToFlanks();
+    this.game.graspSystem.resolveContact();
     return this._catchPrimaryDeath();
   }
 
@@ -553,6 +616,7 @@ export class MistBattleSystem {
   // Quagmire's live wave spawner.
   _updateWaves(deltaTime) {
     const room = this.game.currentRoom;
+    if (!this.wavesEnabled) return;
     if (!room || room.enemies.length >= WAVE_FLOOR) {
       this.waveTimer = WAVE_DELAY;
       return;
@@ -561,6 +625,7 @@ export class MistBattleSystem {
     if (this.waveTimer > 0) return;
     this.waveTimer = WAVE_DELAY;
     this.game.roundCombatSystem.spawnWave(room, WAVE_SIZE);
+    this.wavesSpawned++;
   }
 
   // Burn/poison ticks a Flank's own Player.update reports (the Primary's go
@@ -588,6 +653,7 @@ export class MistBattleSystem {
     this._updateGlide(deltaTime, flankSpeed);
 
     this._updateWaves(deltaTime);
+    game.graspSystem.update(deltaTime);
 
     for (let k = 1; k < this.members.length; k++) {
       const member = this.members[(this.primaryIndex + k) % this.members.length];
@@ -597,9 +663,11 @@ export class MistBattleSystem {
       if (body.hp <= 0) continue;
       body.facing.x = lead.facing.x;
       body.facing.y = lead.facing.y;
+      if (this.act === 2) { body.velocity.vx = 0; body.velocity.vy = 0; continue; }
       tickMirroredWeapon(game, body, deltaTime, this._fire);
       mirrorAutoAttack(game, body, this._fire);
       if (body.dodgeRoll.active) continue; // the roll owns velocity; drift back afterward
+      if (body.grabbed) continue; // a Great Hand holds it (GraspSystem)
 
       const slot = this._slotPosition(k);
       const dist = Math.hypot(slot.x - body.position.x, slot.y - body.position.y);

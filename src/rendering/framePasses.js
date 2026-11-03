@@ -42,6 +42,7 @@ import { drawArmedGlyph, drawHeldGlyph } from './effects/ArmedGlyphDraw.js';
 import { drawPlayerFacingIndicator } from './ui/PlayerFacingIndicator.js';
 import { drawKnownSpellHints } from './ui/ContextHints.js';
 import { drawTrine } from './effects/TrineDraw.js';
+import { drawGraspScenery, drawGraspParts } from './effects/GraspDraw.js';
 import { drawEcho } from './effects/EchoDraw.js';
 import { drawMetalPlatform } from './effects/MetalPlatformDraw.js';
 import { hasTorchLight, drawPlayerTorchLight } from './ui/torchLight.js';
@@ -106,6 +107,8 @@ const er = (rc) => rc.exploreRenderer;
 export const FRAME_PASSES = {
   // Lying on the floor: under enemies, attacks and the player.
   ground: [
+    // The Grasp's North Barrier, Climb Scenery and speed streaks (Mist Battle).
+    { id: 'graspScenery', on: surfaceOnly(TRINE_ONLY), draw: (rc, game) => drawGraspScenery(rc.renderer, game) },
     { id: 'metalPlatform', on: surfaceOnly(ISLAND_ONLY), draw: (rc, game) => drawMetalPlatform(rc.renderer, game) },
     { id: 'puddles', on: everywhere, draw: (rc, game, owner) => er(rc).drawPuddles(game, isInterior(owner)) },
     { id: 'gooBlobs', on: everywhere, draw: (rc, game, owner) => er(rc).drawGooBlobs(game, isInterior(owner)) },
@@ -117,6 +120,8 @@ export const FRAME_PASSES = {
 
   // Attacks and their flourish: over enemies, under the player.
   combat: [
+    // The Grasp's Great Hands, Clutch and Fingers — under every attack.
+    { id: 'graspParts', on: surfaceOnly(TRINE_ONLY), draw: (rc, game) => drawGraspParts(rc.renderer, game) },
     { id: 'consumableWindups', on: everywhere, draw: (rc, game) => er(rc).drawConsumableWindups(game) },
     { id: 'projectiles', on: everywhere, draw: (rc, game, owner) => er(rc).drawProjectiles(game, isInterior(owner)) },
     { id: 'enemyProjectiles', on: enemySide, draw: (rc, game, owner) => er(rc).drawEnemyProjectiles(game, isInterior(owner)) },

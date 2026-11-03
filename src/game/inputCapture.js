@@ -10,6 +10,7 @@ export function isInputCaptured(game) {
     game?.menuOpen ||
     game?.pauseSystem?.isPaused() ||
     game?.scriptedEventSystem?.isRunning() || // a Scripted Event locks the player
-    game?.stateMachine?.getCurrentState() === 'CLI' // GAME_STATES.CLI — the CLI owns the keyboard
+    game?.stateMachine?.getCurrentState() === 'CLI' || // GAME_STATES.CLI — the CLI owns the keyboard
+    game?.mistBattleSystem?.holdsTrine() // the Trine is held still for Act 2
   );
 }

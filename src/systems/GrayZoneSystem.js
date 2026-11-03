@@ -237,6 +237,10 @@ export class GrayZoneSystem {
     // from the start. 0 = "not yet entered", so the next gray room lands at L1.
     game.zoneDepths.gray = 0;
 
+    // Not wired yet: the third lost character (`lostCharacters.length === 3`)
+    // is where the Mist Battle begins (MistBattleSystem.start with
+    // `graySnapshots`). That branch belongs here, ahead of the walker switch
+    // below; the arena pins its own depth, so the reset above can stay.
     const living = game.unlockedCharacters.filter(
       type => !game.deadCharacters.includes(type) && !game.lostCharacters.includes(type)
     );
