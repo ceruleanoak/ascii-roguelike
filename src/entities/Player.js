@@ -541,6 +541,9 @@ export class Player {
   }
 
   canAttack() {
+    // A frog attacks with its tongue only (PolymorphSystem.createTongueAttack,
+    // which doesn't come through here) — never with whatever is in the slots.
+    if (this.polymorphed) return false;
     if (this.attackBlockTimer > 0 || this.isLocked()) return false;
     if (this.dodgeRoll.justEnded) return false;
     if (this.characterType === 'green' && this.actionCooldown > 0) return false;
