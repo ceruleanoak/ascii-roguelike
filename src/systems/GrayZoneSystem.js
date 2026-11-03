@@ -323,8 +323,9 @@ export class GrayZoneSystem {
   }
 
   /**
-   * Mist glyph field. Called by ExploreRenderer after entities (so the mist
-   * hangs in front of distant enemies and exit letters), before PiP overlays.
+   * Mist glyph field. Drawn as the `grayMist` Frame Pass, last in the
+   * indicators layer (so the mist hangs in front of distant enemies and exit
+   * letters) — on the surface and inside a hut, dungeon or maze PiP alike.
    * Gates internally: gray-zone room, surface plane only (the cave fog owns
    * plane 1 — the two can never double-apply).
    *

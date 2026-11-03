@@ -613,12 +613,6 @@ export class ExploreRenderer {
     // player's blind status, whichever is tighter.
     drawVisionFogOverlay(this.renderer, game, !ownsSurface);
 
-    // Gray zone mist: surface-plane '~' glyph field (cave fog above owns plane 1).
-    // After entities — mist hangs in front of them — before Tab overlay and PiPs.
-    if (ownsSurface) {
-      game.grayZoneSystem?.renderMist(this.renderer.fgCtx, game);
-    }
-
     // Render the active interior overlay (picture-in-picture). Single dispatch
     // point — routes to hut/dungeon/maze (and future pond) by active kind.
     this.renderController.interiorOverlay.render(game);

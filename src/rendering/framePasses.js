@@ -221,6 +221,18 @@ export const FRAME_PASSES = {
     { id: 'bowChargeIndicator', on: everywhere, draw: (rc, game) => rc.bowChargeIndicator.render(game) },
     { id: 'greenRangerIndicator', on: everywhere, draw: (rc, game) => rc.greenRangerIndicator.render(game) },
     { id: 'cyanRogueIndicator', on: everywhere, draw: (rc, game) => rc.cyanRogueIndicator.render(game) },
+    // Gray zone mist: last, so it hangs in front of everything the owner draws
+    // — over a hut or dungeon interior as well as the surface. renderMist gates
+    // itself to a gray room on Plane 0 (the cave fog owns Plane 1).
+    {
+      id: 'grayMist',
+      on: {
+        surface: true, floor: true, maze: true,
+        rest: 'REST is the safe hub; the gray zone has no REST',
+        neutral: 'Neutral Rooms are scripted rooms with no gray mist',
+      },
+      draw: (rc, game) => game.grayZoneSystem?.renderMist(rc.renderer.fgCtx, game),
+    },
   ],
 };
 
