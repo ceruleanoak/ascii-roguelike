@@ -233,6 +233,10 @@ export class GrayZoneSystem {
     this.mistOutTimer = 0;
     this.currentRadiusCells = this.baseRadiusCells;
 
+    // The mist took this walker at the finish line; the next one walks gray
+    // from the start. 0 = "not yet entered", so the next gray room lands at L1.
+    game.zoneDepths.gray = 0;
+
     const living = game.unlockedCharacters.filter(
       type => !game.deadCharacters.includes(type) && !game.lostCharacters.includes(type)
     );
