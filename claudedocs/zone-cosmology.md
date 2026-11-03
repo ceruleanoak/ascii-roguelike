@@ -167,9 +167,16 @@ are the THREE room — see "Endings" and "Path to Canon" below.)*
   without the player, every swing resolved by code they never touched — and
   when the last one falls, the authors' names appear. The game ends by showing
   its source.
-- **Status (2026-10-03)**: Act 1's mechanics are built (`MistBattleSystem`),
-  reachable only from the CheatMenu BOSSES entry with random characters. Not
-  yet built: the Act 1 end condition, Act 2, and the depth-10 mist-out wiring.
+- **Act 1's foe — the Grasp** (2026-11-03): after the warm-up waves, a climb up
+  a mountain. Great Hands grip the North Barrier and grab at the Trine; when
+  they flee, the barrier breaks and the world scrolls north past a Galaga-style
+  Clutch of small hands, then faster under massive Fingers that must be beaten
+  back above the Trap Line. At the Summit the north wall returns, the south
+  stays open a moment, then closes, and the camera zooms in: Act 2 begins.
+- **Status (2026-11-03)**: Act 1 is built end to end (`MistBattleSystem` +
+  `GraspSystem`), reachable only from the CheatMenu BOSSES entries with random
+  characters. It ends in `MistBattleSystem.startAct2()`, which holds the Trine
+  in the zoomed frame. Not yet built: Act 2 and the depth-10 mist-out wiring.
 
 ### Endings (restated 2026-10-09 — supersedes the Win/Know/Yield list)
 
