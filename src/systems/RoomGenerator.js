@@ -3367,6 +3367,12 @@ export class RoomGenerator {
     // Protect the ring footprint so the cleanup pass strips anything other
     // passes placed inside it — keeps the well silhouette clean.
     protectRegion(room, { kind: 'circle', centerCol, centerRow, radius: ringRadius + 0.5 });
+    // The cells inside the ring are open floor with no walkable route in —
+    // seal them so nothing places the player there (safe spawn, blink).
+    room.sealedRegions = [
+      ...(room.sealedRegions || []),
+      { kind: 'circle', centerCol, centerRow, radius: ringRadius + 0.5 }
+    ];
 
     // Spawn 1-2 zone enemies in the rest of the room — keeps it from being
     // a pure safe-zone before activation, but light so the player can focus

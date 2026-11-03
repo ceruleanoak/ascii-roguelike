@@ -1,5 +1,6 @@
 import { GRID } from '../game/GameConfig.js';
 import { isLavaTile } from './LavaContact.js';
+import { isCellSealed } from './roomFeatures.js';
 
 // Liquid chars enemies never spawn on (water, lava, mud all use '~'; '=' is static water).
 const LIQUID_CHARS = new Set(['~', '=']);
@@ -56,6 +57,9 @@ export function findSafeSpawnPosition(room) {
 
   const isBlocked = (col, row) => {
     if (collisionMap?.[row]?.[col]) return true;
+    // A sealed structure (the Well's ring, the Maze shell) has open floor
+    // inside it but no walkable route in — placing the player there strands them.
+    if (isCellSealed(room, col, row)) return true;
     return backgroundObjects.some(obj =>
       LIQUID_CHARS.has(obj.char) &&
       Math.round(obj.position.x / C) === col &&
