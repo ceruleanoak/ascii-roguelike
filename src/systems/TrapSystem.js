@@ -815,7 +815,7 @@ export class TrapSystem {
     // Let FountainSystem intercept throws aimed at the pool
     if (game.fountainSystem?.checkWeaponLanding(t)) return;
     if (item.data?.throwBurst) this._throwBurst(t, item.data.throwBurst);
-    this._placeOnGround(item, t);
+    this.placeOnGround(item, t);
   }
 
   /**
@@ -836,7 +836,7 @@ export class TrapSystem {
       // Fanned a little apart so the glyphs read as separate things left behind.
       const angle = (i / filled.length) * Math.PI * 2;
       const spread = filled.length > 1 ? C * 0.75 : 0;
-      this._placeOnGround(item, {
+      this.placeOnGround(item, {
         x: cx + Math.cos(angle) * spread,
         y: cy + Math.sin(angle) * spread,
         plane: player.plane ?? 0,
@@ -850,8 +850,9 @@ export class TrapSystem {
   }
 
   // Put a weapon down as a world pickup centred on (t.x, t.y) — the landing
-  // half shared by a thrown weapon coming to rest and a dropped loadout.
-  _placeOnGround(item, t) {
+  // half shared by a thrown weapon coming to rest, a dropped loadout, and a
+  // weapon a Fountain fairy hands back.
+  placeOnGround(item, t) {
     const game = this.game;
     const C = GRID.CELL_SIZE;
     item.position.x = t.x - C / 2;

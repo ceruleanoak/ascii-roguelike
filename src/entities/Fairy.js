@@ -1,6 +1,7 @@
 import { GRID } from '../game/GameConfig.js';
 import { NeutralCharacter } from './NeutralCharacter.js';
 import { getExitSlotPosition, mutateExitLetter } from '../systems/ExitSystem.js';
+import { isInteriorActive } from '../systems/PlaneSystem.js';
 
 // Fairy — emerges from cut fairy-grass, drives the F (Fountain) discovery loop.
 //
@@ -397,15 +398,18 @@ export class Fairy extends NeutralCharacter {
   _dropCarriedItem(game) {
     if (!game) return;
     if (this.carryKind === 'refuse' && this.carriedItem) {
-      const item = this.carriedItem;
-      const C = GRID.CELL_SIZE;
-      item.position.x = this.position.x - C / 2;
-      item.position.y = this.position.y - C / 2;
-      item.velocity = { vx: 0, vy: 0 };
-      item.pickupReadyAt = performance.now() + 400;
-      if (!game.items) game.items = [];
-      game.items.push(item);
-      game.physicsSystem?.addEntity?.(item);
+      // The thrown weapon itself comes back, carrying whatever layer tags it
+      // picked up earlier in the run (an Item picked up in a hut keeps
+      // hutPlane). Land it like any thrown weapon so the tags are rewritten
+      // for where the player stands — a stale tag hides it from the surface.
+      const player = game.player;
+      game.trapSystem.placeOnGround(this.carriedItem, {
+        x: this.position.x,
+        y: this.position.y,
+        plane: player?.plane ?? 0,
+        interior: isInteriorActive(game),
+        inMaze: player?.inMaze === true,
+      });
     } else if (this.carryKind === 'accept' && game.lootSystem?.spawnItemDrop) {
       game.lootSystem.spawnItemDrop(
         this.carriedChar,
