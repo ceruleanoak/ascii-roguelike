@@ -48,7 +48,6 @@ const PADDING_BY_RARITY = {
   [RARITY.COMMON]: 1,
   [RARITY.UNCOMMON]: 1,
   [RARITY.RARE]: 2,
-  [RARITY.EPIC]: 3,
 };
 
 // Raw ingredients only: a char with no recipe of its own. Crafted
@@ -238,7 +237,6 @@ const TREASURE_COUNT_BY_RARITY = {
   [RARITY.COMMON]: 0,
   [RARITY.UNCOMMON]: 1,
   [RARITY.RARE]: 2,
-  [RARITY.EPIC]: 3,
 };
 
 // ============================================================================
@@ -254,8 +252,8 @@ function buildListing(itemData, role, paddingRarity) {
     [recipe.left, recipe.right],
   );
 
-  // Common has no Treasure lane at all (see TREASURE_COUNT_BY_RARITY); uncommon,
-  // rare and epic require 1/2/3 copies of the same picked treasure char.
+  // Common has no Treasure lane at all (see TREASURE_COUNT_BY_RARITY); uncommon
+  // and rare require 1/2 copies of the same picked treasure char.
   // A listing whose ingredient price already holds a gem (a gem recipe like
   // Infused Whip + Ruby, or a gem rolled as padding) gets no Treasure lane either:
   // the outright gem buy would undercut the listing's own recipe — Ruby ×1
@@ -293,11 +291,11 @@ function buildListing(itemData, role, paddingRarity) {
  * 2-ingredient recipe (no hand-curated list to maintain) that also have a
  * derivable Home Zone. Items with no Home Zone — alchemy-only fills, puzzle
  * rewards, anything the world can't supply through drops and recipes — are
- * never shop stock.
+ * never shop stock, and neither is an epic: those are only ever found or crafted.
  */
 function craftablePool(type) {
   return Object.values(ITEMS).filter(
-    d => d.type === type && findRecipeByResult(d.char) && getHomeZone(d.char)
+    d => d.type === type && d.rarity !== RARITY.EPIC && findRecipeByResult(d.char) && getHomeZone(d.char)
   );
 }
 

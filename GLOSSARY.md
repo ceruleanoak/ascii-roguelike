@@ -924,9 +924,9 @@ identity, not standard programming terms.
 - **Definition:** A recipe output — weapon, armor, or consumable.
 - **In code:** rendered as a **Unicode symbol** (non-letter, non-digit, no emoji, no pure
   box-drawing, literal glyphs only). Recipes in `src/data/recipes.js`.
-  Its `rarity` field on its `ITEMS` entry values it as a recipe input when that input is an Item
-  rather than an Ingredient: common 0, uncommon 1, rare 3, epic 6. Shop code never reads rarity from
-  the drop tables (`AFFINITY_POOLS`); those stay the source for drops only.
+  Its `rarity` field on its `ITEMS` entry sets a shop listing's padding and Treasure lane; an epic
+  Item is never stocked. Its worth is accumulated down its recipe chain (`shopPricing.js`). Shop code
+  never reads rarity from the drop tables (`AFFINITY_POOLS`); those stay the source for drops only.
 - **Not:** an Ingredient; never a letter/digit char.
 
 ### Spawned Items
