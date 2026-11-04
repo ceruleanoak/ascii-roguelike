@@ -9,15 +9,16 @@
 //   pickup, interactions, HUD) keeps working untouched. The other two bodies
 //   are Flanks, owned here.
 // - The Trine is a triangle whose apex (the Primary) points where the Primary
-//   faces; Flanks hold the two back corners and copy the Primary's facing so
-//   all three attack in one direction.
-// - Flanks mirror the Primary: same attack press (each with its own weapon),
-//   same slot on 1/2/3, and a roll in the same direction with their own
-//   character's roll type.
-// - Rotate (double-tap SPACE) turns the Trine clockwise: `game.player` is
+//   faces; Flanks hold the two back corners, each facing its own nearest
+//   enemy (_aimFlank).
+// - Flanks mirror the Primary: same attack press (each with its own weapon,
+//   aimed at its own target), same slot on 1/2/3, and a roll in the same
+//   direction with their own character's roll type.
+// - Rotate (triple-tap SPACE) turns the Trine clockwise: `game.player` is
 //   repointed at the back-left body and the gear slots swap with it.
-// - Enemies target and hit Flanks too (resolveCombat). A fallen Primary hands
-//   off to a living Flank; only the last body's death ends the run.
+// - Only the Primary takes damage: enemies target it alone, and nothing hurts
+//   a Flank (hurt, _applyDot). A fallen Primary hands off to a living Flank;
+//   only the last body's death ends the run.
 // - Each body carries its own character type and its own gear. The global
 //   InventorySystem gear slots always mirror the Primary; a Flank's passive
 //   armor/consumable stats are projected onto it by briefly loading its gear
@@ -51,11 +52,11 @@ import { CHARACTER_TYPES } from '../data/characters.js';
 import { PUZZLE_ROOM_TEMPLATES } from '../data/dungeonPuzzleTemplates.js';
 import { steerToward } from './npcSteering.js';
 import { tryDeathSave } from './DeathSaveSystem.js';
-import { canMirror, mirrorPress, mirrorRelease, mirrorAutoAttack, tickMirroredWeapon, resolveEnemyHitsOn, reportHit } from './mirroredWeapon.js';
+import { canMirror, mirrorPress, mirrorRelease, mirrorAutoAttack, tickMirroredWeapon, reportHit } from './mirroredWeapon.js';
 import { createExplosion } from '../entities/Particle.js';
 import { DEATH_CAUSES } from '../data/deathCauses.js';
 import { DemoSystem } from './DemoSystem.js';
-import { createBrain, driveBody, resolveRivalHits } from './mistBattle/autoBattle.js';
+import { createBrain, driveBody, resolveRivalHits, facingToward } from './mistBattle/autoBattle.js';
 
 const CELL = GRID.CELL_SIZE;
 // Trine geometry, in cells, measured from the Primary along its facing.
@@ -70,8 +71,10 @@ const ARRIVE_EPSILON = 1.5;
 // How long each body's newly held weapon glyph shows above it after a 1/2/3
 // swap (seconds).
 const SWAP_FLASH_TIME = 0.6;
-// Two SPACE presses within this many seconds are a Rotate, not two attacks.
-const ROTATE_DOUBLE_TAP = 0.25;
+// ROTATE_TAPS SPACE presses, each within ROTATE_TAP_WINDOW seconds of the
+// last, are a Rotate: the first presses attack, the last one rotates.
+const ROTATE_TAPS = 3;
+const ROTATE_TAP_WINDOW = 0.25;
 // After a Rotate the new Primary glides up into the old apex position over
 // this many seconds, so the triangle turns in place instead of the whole
 // Trine stepping back a corner with every Rotate.
@@ -82,6 +85,9 @@ const ROTATE_GLIDE_TIME = 0.2;
 const WAVE_FLOOR = 3;
 const WAVE_SIZE = 4;
 const WAVE_DELAY = 1.5;
+// Mist clearing (mistClearings): each living body clears the mist this many
+// times the zone's vision radius, so the whole Trine reads at once.
+const BODY_MIST_RADIUS_MULT = 1.5;
 
 /** How many characters the gray mist takes before the Mist Battle begins. */
 export const MIST_BATTLE_LOST = 3;
@@ -187,9 +193,10 @@ export class MistBattleSystem {
     // Last frame's Primary roll state, for the mirrored-dodge edge (_mirrorDodge).
     this.leadRollCooldown = 0;
     this.leadSliding = false;
-    // Game-time clock for the double-tap window (deterministic, pauses with the game).
+    // Game-time clock for the Rotate tap window (deterministic, pauses with the game).
     this.clock = 0;
     this.lastSpacePress = -Infinity;
+    this.spaceTaps = 0;
     this.glide = null; // { x, y, timer } — the new Primary's run to the old apex
     this.waveTimer = 0;
     // The Grasp ends the warm-up by turning the waves off once it has counted
@@ -198,10 +205,6 @@ export class MistBattleSystem {
     this.wavesSpawned = 0;
     // 1 = the Trine's fight; 2 = the lost characters' auto-battle (startAct2).
     this.act = 1;
-    // Enemy melee attack → Set of Flank bodies it is done with. CombatSystem
-    // marks a still attack `hasHit` after its one Primary test frame, so the
-    // Flanks keep their own record instead of reading that flag.
-    this.meleeResolved = new WeakMap();
     // The snapshots this battle was built from (start); Act 2 rebuilds its
     // bodies from them.
     this.snapshots = null;
@@ -285,12 +288,13 @@ export class MistBattleSystem {
   }
 
   /**
-   * Damage on any Trine body from a source CombatSystem doesn't resolve (the
-   * Grasp). Goes through Player.takeDamage, so armor, i-frames and the roll
-   * apply; a Flank that drops falls here, a Primary that drops is caught by
-   * _catchPrimaryDeath.
+   * Damage on a Trine body from a source CombatSystem doesn't resolve (the
+   * Grasp). Only the Primary takes damage: a hit on a Flank passes through
+   * (returns false). Goes through Player.takeDamage, so armor, i-frames and
+   * the roll apply; a Primary that drops is caught by _catchPrimaryDeath.
    */
   hurt(body, damage, source, from) {
+    if (this.act === 1 && body !== this.game.player) return false;
     const result = body.takeDamage(damage, source);
     if (result !== false) reportHit(this.game, body, result, damage, from, 0);
     if (body !== this.game.player && body.hp <= 0) {
@@ -615,6 +619,23 @@ export class MistBattleSystem {
     };
   }
 
+  /**
+   * Where the mist parts, for GrayZoneSystem.renderMist: a circle around every
+   * living body, `radius` (the zone's current vision radius, in pixels) ×
+   * BODY_MIST_RADIUS_MULT, plus the Grasp's parts, scaled by `scale` (the
+   * radius's share of its base) so a closing mist closes over them too.
+   * Empty when no battle is running — the mist parts around the player alone.
+   */
+  mistClearings(radius, scale) {
+    if (!this.active) return [];
+    const out = [];
+    for (const body of this.livingBodies()) {
+      out.push({ x: body.position.x + CELL / 2, y: body.position.y + CELL / 2, r: radius * BODY_MIST_RADIUS_MULT });
+    }
+    out.push(...this.game.graspSystem.mistClearings(scale));
+    return out;
+  }
+
   /** The member whose body is `game.player`. */
   get primary() {
     return this.members[this.primaryIndex] ?? null;
@@ -721,22 +742,23 @@ export class MistBattleSystem {
   }
 
   // ── Rotate ────────────────────────────────────────────────────────────
-  // Double-tap SPACE turns the Trine clockwise one slot: the back-left Flank
+  // Triple-tap SPACE turns the Trine clockwise one slot: the back-left Flank
   // becomes the Primary at the apex, the old Primary drops to back-right. The
-  // first tap of the pair attacks as usual; the second rotates instead.
+  // first two taps attack as usual; the third rotates instead.
 
   /**
    * Called on every EXPLORE SPACE press before the attack. Returns true when
-   * the press completed a double-tap and Rotated (the press is consumed).
+   * the press completed a triple-tap and Rotated (the press is consumed).
    */
   tryRotate() {
     if (!this.active) return false;
     if (this.act === 2) return true; // Act 2 takes no input: SPACE does nothing
-    if (this.clock - this.lastSpacePress > ROTATE_DOUBLE_TAP) {
-      this.lastSpacePress = this.clock;
-      return false;
-    }
-    this.lastSpacePress = -Infinity; // a third tap starts a fresh pair
+    const inWindow = this.clock - this.lastSpacePress <= ROTATE_TAP_WINDOW;
+    this.spaceTaps = inWindow ? this.spaceTaps + 1 : 1;
+    this.lastSpacePress = this.clock;
+    if (this.spaceTaps < ROTATE_TAPS) return false;
+    this.spaceTaps = 0; // the next tap starts a fresh run
+    this.lastSpacePress = -Infinity;
     return this.rotate();
   }
 
@@ -852,10 +874,9 @@ export class MistBattleSystem {
   }
 
   // ── Combat against the Trine ──────────────────────────────────────────
-  // CombatSystem resolves enemy attacks against `game.player` only; this
-  // resolves them against the Flanks, the same poll-after-combat shape as
-  // CompanionSystem.applyEnemyDamageToTamedRats. Damage goes through
-  // Player.takeDamage, so each Flank's own armor, i-frames and roll apply.
+  // Only the Primary takes damage. CombatSystem already resolves enemy attacks
+  // against `game.player` alone, so enemy hits need nothing here; the Grasp's
+  // own damage goes through hurt(), which passes over the Flanks.
 
   /**
    * Called from main.js right after CombatSystem.update, before the death
@@ -871,21 +892,8 @@ export class MistBattleSystem {
       this._resolveAct2();
       return true;
     }
-    this._applyEnemyDamageToFlanks();
     this.game.graspSystem.resolveContact();
     return this._catchPrimaryDeath();
-  }
-
-  _applyEnemyDamageToFlanks() {
-    for (const member of this.flanks()) {
-      const body = member.body;
-      resolveEnemyHitsOn(this.game, body, this.meleeResolved, (damage, source, from, knockbackForce) => {
-        const result = body.takeDamage(damage, source);
-        if (result !== false) reportHit(this.game, body, result, damage, from, knockbackForce);
-        return result;
-      });
-      if (body.hp <= 0) this._fall(member);
-    }
   }
 
   // The Primary is down. With a Flank still standing the Trine doesn't end:
@@ -933,15 +941,42 @@ export class MistBattleSystem {
     this.wavesSpawned++;
   }
 
-  // Burn/poison ticks a Flank's own Player.update reports (the Primary's go
-  // through StatusEffectSystem.applyPlayerDot, which is game.player-bound).
-  // In Act 2 a body burned to 0 HP falls in _resolveAct2, after its death save.
+  // Burn/poison ticks a non-Primary body's own Player.update reports (the
+  // Primary's go through StatusEffectSystem.applyPlayerDot, which is
+  // game.player-bound). Act 2 only: in Act 1 only the Primary takes damage,
+  // so a Flank carrying a burn from its turn at the apex doesn't tick it.
+  // A body burned to 0 HP falls in _resolveAct2, after its death save.
   _applyDot(member, tick) {
-    if (!tick) return;
+    if (!tick || this.act === 1) return;
     const body = member.body;
     if (tick.burnDamage) body.takeDamage(tick.burnDamage, { isBullet: false, element: 'burn', cause: DEATH_CAUSES.burn });
     if (tick.poisonDamage) body.takeDamage(tick.poisonDamage, { isBullet: false, element: 'poison', cause: DEATH_CAUSES.poison });
-    if (body.hp <= 0 && this.act === 1) this._fall(member);
+  }
+
+  // A Flank faces its nearest living enemy (eight directions, the Act 2
+  // bodies' facingToward), so its mirrored attacks fly at its own target.
+  // With nothing to aim at it keeps the Primary's facing.
+  _aimFlank(body, lead) {
+    const cx = body.position.x + CELL / 2;
+    const cy = body.position.y + CELL / 2;
+    let best = null;
+    let bestDist = Infinity;
+    for (const enemy of this.game._activeEnemies()) {
+      if (enemy.hp <= 0 || enemy.isDying || enemy.graspRemoved || (enemy.plane ?? 0) !== 0) continue;
+      const box = enemy.getHitbox?.() ?? { x: enemy.position.x, y: enemy.position.y, width: CELL, height: CELL };
+      const dx = box.x + box.width / 2 - cx;
+      const dy = box.y + box.height / 2 - cy;
+      const dist = Math.hypot(dx, dy);
+      if (dist < bestDist) { bestDist = dist; best = { dx, dy }; }
+    }
+    const facing = best ? facingToward(best.dx, best.dy) : null;
+    if (facing && (facing.x !== 0 || facing.y !== 0)) {
+      body.facing.x = facing.x;
+      body.facing.y = facing.y;
+    } else {
+      body.facing.x = lead.facing.x;
+      body.facing.y = lead.facing.y;
+    }
   }
 
   // rest-parity: absent because the Mist Battle only exists in its EXPLORE arena.
@@ -970,9 +1005,7 @@ export class MistBattleSystem {
       const body = member.body;
       if (body.hp <= 0) continue;
       this._applyDot(member, body.update(deltaTime));
-      if (body.hp <= 0) continue;
-      body.facing.x = lead.facing.x;
-      body.facing.y = lead.facing.y;
+      this._aimFlank(body, lead);
       tickMirroredWeapon(game, body, deltaTime, this._fire);
       mirrorAutoAttack(game, body, this._fire);
       if (body.dodgeRoll.active) continue; // the roll owns velocity; drift back afterward

@@ -69,8 +69,9 @@ function reachOf(item) {
 }
 
 // Eight-direction facing toward (dx, dy): an axis whose share is under half
-// the other's reads as zero, so a nearly straight line faces straight.
-function facingToward(dx, dy) {
+// the other's reads as zero, so a nearly straight line faces straight. Also
+// aims the Act 1 Flanks at their nearest enemy (MistBattleSystem).
+export function facingToward(dx, dy) {
   const ax = Math.abs(dx);
   const ay = Math.abs(dy);
   return {

@@ -6,8 +6,10 @@
  *    out — alpha drops with proximity inside the vision radius
  *    (ZONES.gray.mist.radius cells — "TEN STEPS AND THEN NOTHING.") but is
  *    never fully transparent. Living enemies with `data.mistThicken`
- *    (Mourners) pull the radius in tighter. ExploreRenderer calls
- *    renderMist() once per frame.
+ *    (Mourners) pull the radius in tighter. In the Mist Battle the mist parts
+ *    wider around every Trine body and around every part of the Grasp
+ *    (MistBattleSystem.mistClearings). ExploreRenderer calls renderMist()
+ *    once per frame.
  *
  * 2. Depth-10 finish line: gray has no zone boss. Entering the room at
  *    ZONES.gray.maxDepth arms the mist-out — a short grace, then the circle
@@ -376,8 +378,7 @@ export class GrayZoneSystem {
     if (!this.mistField) this._buildMistField();
 
     const radius = this.currentRadiusCells * GRID.CELL_SIZE;
-    const px = game.player.position.x + GRID.CELL_SIZE / 2;
-    const py = game.player.position.y + GRID.CELL_SIZE / 2;
+    const clearings = this._clearings(game, radius);
     const t = this.mistTime;
     const background = ZONES.gray.environmentColors.background || '#050505';
 
@@ -396,7 +397,7 @@ export class GrayZoneSystem {
     // a per-pixel circle. No rendered radius, no light — just blocky falloff.
     // Cells are bucketed by alpha so each step is one batched fill.
     // Gray Ascent: skip veil over plateau area (fog-free zone).
-    if (radius > 0) {
+    if (clearings.length > 0) {
       const CS = GRID.CELL_SIZE;
       const buckets = new Map(); // quantized alpha → flat [col,row,...] list
       for (let row = 0; row < GRID.ROWS; row++) {
@@ -407,8 +408,7 @@ export class GrayZoneSystem {
             const cellCy = row * CS + CS / 2;
             if (Math.hypot(cellCx - plateauCx, cellCy - plateauCy) < plateauR) continue;
           }
-          const dist = Math.hypot(col * CS + CS / 2 - px, row * CS + CS / 2 - py);
-          const tt = Math.min(1, dist / radius);
+          const tt = this._nearness(col * CS + CS / 2, row * CS + CS / 2, clearings);
           const a = Math.round(VEIL_MAX * tt * tt * 10) / 10;
           if (a < 0.1) continue;
           let cells = buckets.get(a);
@@ -450,8 +450,7 @@ export class GrayZoneSystem {
       }
 
       // Proximity thinning: 0 at the player, 1 at/beyond the vision radius.
-      const dist = Math.hypot(mx - px, my - py);
-      const near = radius > 0 ? Math.min(1, dist / radius) : 1;
+      const near = this._nearness(mx, my, clearings);
       let alpha = ALPHA_NEAR + (ALPHA_FAR - ALPHA_NEAR) * near * near
         + Math.sin(t * 0.8 + m.phase * 3) * m.breath;
 
@@ -461,5 +460,27 @@ export class GrayZoneSystem {
     }
 
     ctx.restore();
+  }
+
+  // Where the mist parts: around the player at the vision radius, or, in the
+  // Mist Battle, around every Trine body and every part of the Grasp
+  // (MistBattleSystem.mistClearings). Each is { x, y, r } in pixels; a
+  // closed radius (r 0) parts nothing.
+  _clearings(game, radius) {
+    if (radius <= 0) return [];
+    const scale = this.baseRadiusCells > 0 ? this.currentRadiusCells / this.baseRadiusCells : 0;
+    const battle = game.mistBattleSystem?.mistClearings(radius, scale) ?? [];
+    if (battle.length > 0) return battle;
+    return [{ x: game.player.position.x + GRID.CELL_SIZE / 2, y: game.player.position.y + GRID.CELL_SIZE / 2, r: radius }];
+  }
+
+  // 0 at the heart of the nearest clearing, 1 at or beyond every clearing's edge.
+  _nearness(x, y, clearings) {
+    let near = 1;
+    for (const c of clearings) {
+      const n = Math.hypot(x - c.x, y - c.y) / c.r;
+      if (n < near) near = n;
+    }
+    return near;
   }
 }

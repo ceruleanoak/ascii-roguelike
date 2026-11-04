@@ -151,9 +151,10 @@ are the THREE room — see "Endings" and "Path to Canon" below.)*
      survivor, the three lost characters appear together in a gray arena with
      their snapshotted equipment, and the player controls all three at once as
      the **Trine**: one **Primary** at the apex (pointing where you face), two
-     **Flanks** behind. Attacks share one direction (Galaga-style), Flanks roll
+     **Flanks** behind. Attacks share one press (Galaga-style; each Flank aims
+     at its nearest enemy), only the Primary takes damage, Flanks roll
      when the Primary rolls (each with its own roll), 1/2/3 swaps all three,
-     double-tap SPACE **Rotates** the Primary clockwise, and only the Primary
+     triple-tap SPACE **Rotates** the Primary clockwise, and only the Primary
      throws, drops or uses consumables. Mixed enemy waves keep coming; a fallen
      Primary hands off to a living Flank.
   2. **Act 2 — the yield.** After Act 1 is complete, a brief delay, then the

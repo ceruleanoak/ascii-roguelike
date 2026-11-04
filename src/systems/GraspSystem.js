@@ -23,8 +23,12 @@
 // camera (climb.js): Climb Scenery is pixel-space rock that travels down and
 // blocks the Trine through resolveContact, never through the collision map.
 //
-// Every Grasp damage source resolves against every living Trine body (the
-// Flanks too — the gap bug #354 names for contact damage).
+// Every Grasp damage source tests every living Trine body, through
+// MistBattleSystem.hurt — which lands only on the Primary (only the Primary
+// takes damage).
+//
+// Every part pushes the gray mist back from itself, in every phase
+// (mistClearings), so the boss is never lost in the fog.
 //
 // Driven by MistBattleSystem: update() from its update, resolveContact() from
 // its resolveCombat (after physics, before the fallen-Primary hand-off).
@@ -38,6 +42,8 @@ import * as clutch from './grasp/clutch.js';
 import * as fingers from './grasp/fingers.js';
 
 const CS = GRID.CELL_SIZE;
+// Cells of clear air each Grasp part holds around its drawn extent.
+const MIST_CLEAR_PAD = 3;
 export const FLOOR_TOP = (GRID.ROWS - 1) * CS;
 
 export class GraspSystem {
@@ -311,6 +317,22 @@ export class GraspSystem {
       clutch.onHit(this, part, amount);
     }
     return true;
+  }
+
+  /**
+   * The circles of clear air around every live part (MistBattleSystem's
+   * mistClearings): each part's drawn extent plus MIST_CLEAR_PAD cells,
+   * times `scale` so a closing mist closes over them too.
+   */
+  mistClearings(scale) {
+    if (!this.active || !this.room) return [];
+    const out = [];
+    for (const unit of this.room.enemies) {
+      if (!unit.isGraspUnit || unit.graspRemoved) continue;
+      const r = (Math.max(unit.width, unit.height) / 2 + MIST_CLEAR_PAD * CS) * scale;
+      out.push({ x: unit.position.x + unit.width / 2, y: unit.position.y + unit.height / 2, r });
+    }
+    return out;
   }
 
   _isVulnerable(unit) {

@@ -2398,7 +2398,7 @@ class Game {
       this.fishingSystem.update(deltaTime, this);
 
       this.dragonSpiritSystem.update(deltaTime); // the Echo fires and is hit (see its rest-parity note)
-      trineCaught = this.mistBattleSystem.resolveCombat(); // Flank hits; a fallen Primary hands off
+      trineCaught = this.mistBattleSystem.resolveCombat(); // Grasp contact; a fallen Primary hands off
     }
 
     // If a heal consumable fired and restored HP, treat the player as alive
@@ -3223,7 +3223,7 @@ class Game {
 
       // If player has a weapon and can attack, attack (gem/bread gating +
       // charge SFX + attack creation live in CombatSystem.tryUseHeldWeapon)
-      if (this.mistBattleSystem.tryRotate()) return; // double-tap SPACE = Rotate
+      if (this.mistBattleSystem.tryRotate()) return; // triple-tap SPACE = Rotate
       // A spent item in hand (Item.isSpent) fights like empty hands.
       const armed = this.player.heldItem && !this.player.heldItem.isSpent();
       if (armed && !this.captiveInteractionThisFrame && this.player.canAttack()) {
