@@ -18,6 +18,8 @@ import { Item } from '../entities/Item.js';
  * (common) / Fire Essence (rare) — a whiff there just feeds the fire.
  * Byproducts pop out of the fireplace as physical drops (LootSystem) rather
  * than landing straight in inventory, same as any other world pickup.
+ * A Stick Bundle burns as its three Sticks, lit or not: one lights an unlit
+ * fire and the other two stoke it, or all three stoke a burning one.
  * `burning` lives on the BackgroundObject instance, so it resets for free
  * every time HutSystem regenerates the hut.
  *
@@ -56,6 +58,9 @@ const FIRE_BAKE_COST = { [SAND_CHAR]: 5 };
 // Fish is a carried consumable, not an ingredient, so it bakes through its own
 // branch in commitSelection (like the Forest Berry) rather than FIRE_BAKES.
 const FISH_CHAR = '∝';
+// Stick Bundle: a carried, stackable consumable of three Sticks.
+const STICK_BUNDLE_CHAR = '⋕';
+const STICKS_PER_BUNDLE = 3;
 const COOKED_FISH_CHAR = '⍟';
 
 export class FireplaceSystem {
@@ -124,6 +129,11 @@ export class FireplaceSystem {
     if (stickCount > 0) {
       counts.set('|', stickCount);
       items.push('|');
+    }
+    const bundleCount = this._bundleStacks().reduce((n, b) => n + (b.count || 1), 0);
+    if (bundleCount > 0) {
+      counts.set(STICK_BUNDLE_CHAR, bundleCount);
+      items.push(STICK_BUNDLE_CHAR);
     }
 
     if (fireplace.burning) {
@@ -198,16 +208,21 @@ export class FireplaceSystem {
     if (rawChar === '|') {
       if (!fireplace.burning) {
         if (!game.removeIngredient('|')) return;
-        fireplace.burning = true;
-        fireplace.color = LIT_COLOR;
-        fireplace.animationColor = LIT_COLOR;
-        game.menuSystem.showPickupMessage('FIREPLACE LIT');
+        this._light(fireplace);
       } else {
         // Already burning — how many sticks to feed it is a separate
         // quantity submenu rather than a single implicit stick.
         this.openStickQuantityMenu(fireplace);
         return;
       }
+    } else if (rawChar === STICK_BUNDLE_CHAR) {
+      if (!this._removeOneBundle()) return;
+      let sticks = STICKS_PER_BUNDLE;
+      if (!fireplace.burning) {
+        this._light(fireplace);
+        sticks -= 1;
+      }
+      for (let i = 0; i < sticks; i++) this._stokeRoll(fireplace);
     } else if (FIRE_BAKES[rawChar]) {
       const cost = FIRE_BAKE_COST[rawChar] ?? 1;
       if (!fireplace.burning || game.inventorySystem.countIngredient(rawChar) < cost) return;
@@ -283,23 +298,62 @@ export class FireplaceSystem {
     const fireplace = this.activeFireplace;
     if (!fireplace || !fireplace.burning) return;
 
-    const C = GRID.CELL_SIZE;
-    const dropX = fireplace.position.x + C / 2;
-    const dropY = fireplace.position.y + C / 2;
-
     for (let i = 0; i < count; i++) {
       if (!game.removeIngredient('|')) break;
-      const roll = Math.random();
-      if (roll < STOKE_ASH_CHANCE) {
-        game.lootSystem.spawnIngredientDrop('a', dropX, dropY);
-      } else if (roll < STOKE_ASH_CHANCE + STOKE_ESSENCE_CHANCE) {
-        game.lootSystem.spawnIngredientDrop('F', dropX, dropY);
-      }
+      this._stokeRoll(fireplace);
     }
 
     game.audioSystem?.playSFX?.('craft');
     game.closeMenu();
     game.updateUI();
+  }
+
+  _light(fireplace) {
+    fireplace.burning = true;
+    fireplace.color = LIT_COLOR;
+    fireplace.animationColor = LIT_COLOR;
+    this.game.menuSystem.showPickupMessage('FIREPLACE LIT');
+  }
+
+  // One stick fed to a burning fire: rolls Ash / Fire Essence / nothing, and
+  // pops a hit out of the fireplace as a physical drop.
+  _stokeRoll(fireplace) {
+    const C = GRID.CELL_SIZE;
+    const dropX = fireplace.position.x + C / 2;
+    const dropY = fireplace.position.y + C / 2;
+    const roll = Math.random();
+    if (roll < STOKE_ASH_CHANCE) {
+      this.game.lootSystem.spawnIngredientDrop('a', dropX, dropY);
+    } else if (roll < STOKE_ASH_CHANCE + STOKE_ESSENCE_CHANCE) {
+      this.game.lootSystem.spawnIngredientDrop('F', dropX, dropY);
+    }
+  }
+
+  // Every carried Stick Bundle stack, the pile first, then the slots — the
+  // order _removeOneBundle spends them in, so a slotted bundle is kept while
+  // a spare sits in the pile.
+  _bundleStacks() {
+    const inv = this.game.inventorySystem;
+    return [
+      ...inv.allUnequippedConsumables().filter(it => it.char === STICK_BUNDLE_CHAR),
+      ...inv.equippedConsumables.filter(it => it?.char === STICK_BUNDLE_CHAR)
+    ];
+  }
+
+  // Spends one bundle off a stack (a stack holds `count` bundles), removing
+  // the item when it was the last one.
+  _removeOneBundle() {
+    const game = this.game;
+    const inv = game.inventorySystem;
+    const stack = this._bundleStacks()[0];
+    if (!stack) return false;
+    if ((stack.count || 1) > 1) {
+      stack.count -= 1;
+      return true;
+    }
+    const slot = inv.equippedConsumables.indexOf(stack);
+    if (slot !== -1) return inv.removeCarriedItem('equippedConsumable', slot, game.player);
+    return inv.removeFromConsumableInventory(stack);
   }
 
   /** How many ore to smelt at once, 1..oreCount. Mirrors openStickQuantityMenu. */
