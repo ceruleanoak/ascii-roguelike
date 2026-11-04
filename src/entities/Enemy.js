@@ -981,7 +981,7 @@ export class Enemy {
           // Weapon windup just resolved — the swing is firing this frame, so
           // burst forward in sync with it. Same swing sound the player's
           // weapon makes when its windup resolves.
-          this._executeLeapAttack();
+          WeaponConversion.leapIntoSwing(this);
           this.game?.playWeaponAttackSFX?.(this.equippedWeapon);
           return {
             dotDamage: dotDamageEvents,
@@ -1488,30 +1488,6 @@ export class Enemy {
     return this.isDizzy() ? (Math.random() - 0.5) * (Math.PI * 4 / 3) : 0; // ±120°
   }
 
-  // Burst forward into the target at the instant a melee swing fires. Called
-  // from both the equipped-weapon swing path (Item.update returns an attack)
-  // and the native createMeleeAttack path so the leap is always coupled to
-  // the actual moment of impact, not the earlier Enemy windup → attack state
-  // transition (which fires before Item.windup on equipped melee).
-  _executeLeapAttack() {
-    if (!this.leapOnAttack || !this.target) return;
-    if (this.isFrozen() || this.isStunned() || this.isZapped()) return;
-    // Knockback freezes _blendVelocity decay, so stamping a leap on top would
-    // glide for the full knockback window. Bail out and let the hit reaction play.
-    if (this.isKnockedBack()) return;
-    const lx = this.target.position.x - this.position.x;
-    const ly = this.target.position.y - this.position.y;
-    const ld = Math.sqrt(lx * lx + ly * ly);
-    if (ld < 1) return;
-    // Distance-clamped impulse: speed scales toward a 1-cell hop so the burst
-    // can never carry past the target. Friction (~0.9/frame) then decays it.
-    const MAX_LEAP_TRAVEL = GRID.CELL_SIZE * 1.25;
-    const desiredTravel = Math.min(ld, MAX_LEAP_TRAVEL);
-    const leapSpeed = Math.min(desiredTravel * 6, 130); // ≈ friction-integrated travel of `desiredTravel`
-    this.velocity.vx = (lx / ld) * leapSpeed;
-    this.velocity.vy = (ly / ld) * leapSpeed;
-  }
-
   // Builds the attack; it does not end the Strike. The cooldown it used to charge
   // here is `resolveStrike()`'s, so that a swing costs the same whether it left
   // as a telegraphed melee visual or as an arrow — see `resolveEnemyAttack` in
@@ -1552,7 +1528,7 @@ export class Enemy {
         this.itemUseCooldown = this.itemUsage.useCooldown;
         // Item.use returns null when a windup is starting; if we got an
         // actual attack here, the swing is firing this frame — leap with it.
-        this._executeLeapAttack();
+        WeaponConversion.leapIntoSwing(this);
         return this.convertToEnemyAttack(attack);
       }
       return null;
@@ -1567,7 +1543,7 @@ export class Enemy {
         } else {
           nativeAttack = this.createMeleeAttack();
           // Native melee swing fires immediately — leap with it.
-          if (nativeAttack) this._executeLeapAttack();
+          if (nativeAttack) WeaponConversion.leapIntoSwing(this);
         }
         return nativeAttack;
       case 'ranged':

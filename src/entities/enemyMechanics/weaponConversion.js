@@ -5,7 +5,8 @@
 // the melee conversion and keeps the weapon in reserve instead.
 //
 // Called from Enemy.equipWeapon (convert), Enemy.resolveStrike
-// (holdStrikeForWeapon) and leaveCowardice (syncApproachToWeapon).
+// (holdStrikeForWeapon), leaveCowardice (syncApproachToWeapon) and the
+// Enemy's melee swing paths (leapIntoSwing).
 import { GRID } from '../../game/GameConfig.js';
 
 export const WeaponConversion = {
@@ -76,6 +77,30 @@ export const WeaponConversion = {
     } else if (enemy._nativeApproachMovement != null) {
       enemy.stateMachine.declared.approach = { ...approach, movement: enemy._nativeApproachMovement };
     }
+  },
+
+  // Burst forward into the target at the instant a melee swing fires. Called
+  // from both the equipped-weapon swing path (Item.update returns an attack)
+  // and the native createMeleeAttack path so the leap is always coupled to
+  // the actual moment of impact, not the earlier Enemy windup → attack state
+  // transition (which fires before Item.windup on equipped melee).
+  leapIntoSwing(enemy) {
+    if (!enemy.leapOnAttack || !enemy.target) return;
+    if (enemy.isFrozen() || enemy.isStunned() || enemy.isZapped()) return;
+    // Knockback freezes _blendVelocity decay, so stamping a leap on top would
+    // glide for the full knockback window. Bail out and let the hit reaction play.
+    if (enemy.isKnockedBack()) return;
+    const lx = enemy.target.position.x - enemy.position.x;
+    const ly = enemy.target.position.y - enemy.position.y;
+    const ld = Math.sqrt(lx * lx + ly * ly);
+    if (ld < 1) return;
+    // Distance-clamped impulse: speed scales toward a 1-cell hop so the burst
+    // can never carry past the target. Friction (~0.9/frame) then decays it.
+    const MAX_LEAP_TRAVEL = GRID.CELL_SIZE * 1.25;
+    const desiredTravel = Math.min(ld, MAX_LEAP_TRAVEL);
+    const leapSpeed = Math.min(desiredTravel * 6, 130); // ≈ friction-integrated travel of `desiredTravel`
+    enemy.velocity.vx = (lx / ld) * leapSpeed;
+    enemy.velocity.vy = (ly / ld) * leapSpeed;
   },
 
   /**
