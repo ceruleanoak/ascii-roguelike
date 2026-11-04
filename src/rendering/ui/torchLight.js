@@ -70,10 +70,57 @@ const FOG_CORE_FRACTION = 0.35;
 // it: light doesn't help eyes that can't see.
 const BLIND_FOG_RADIUS_CELLS = [Infinity, 6, 4.5, 3];
 
+// The Lantern throws its light ahead instead of all around: the lit shape is
+// a small circle around the player plus a cone in the facing direction, its
+// sides the tangents from that circle out to the cone's far arc (the convex
+// hull of the circle and the arc). The cone reaches LANTERN_CONE_REACH times
+// as far as the light's round glow would; the circle is what the player
+// sees unlit, never less than the torch glow.
+const LANTERN_CONE_REACH = 1.5;
+const LANTERN_CONE_HALF_ANGLE = Math.PI / 6;
+
+// The Lantern is the light with a caged flame (`lightsUnderwater`, items.js) —
+// a Torch in any slot still lights all around.
+export function isCarryingLantern(game) {
+  return isLightingUnderwater(game);
+}
+
+// Distance from the player to the lit shape's edge along `angle`: the far arc
+// inside the cone, the tangent line between arc end and circle, else the
+// circle. `cone` = { facing, radius, reach, halfAngle } (radians/px).
+function coneEdgeDistance(cone, angle) {
+  let off = Math.abs(angle - cone.facing) % (Math.PI * 2);
+  if (off > Math.PI) off = Math.PI * 2 - off;
+  if (off <= cone.halfAngle) return cone.reach;
+  // The tangent from the arc's end touches the circle `tangentSpan` further
+  // round; the tangent line sits `radius` from the player, its normal
+  // pointing at the touch point.
+  const tangentSpan = Math.acos(cone.radius / cone.reach);
+  if (off < cone.halfAngle + tangentSpan) {
+    return cone.radius / Math.cos(off - cone.halfAngle - tangentSpan);
+  }
+  return cone.radius;
+}
+
+// The Lantern's cone for a light whose round glow would reach `litRadius`
+// and whose dark leaves `unlitRadius` visible. Facing comes from the player.
+function lanternCone(game, litRadius, unlitRadius) {
+  const facing = game.player.facing;
+  const reach = litRadius * LANTERN_CONE_REACH;
+  return {
+    facing: Math.atan2(facing.y, facing.x),
+    radius: Math.min(reach, Math.max(unlitRadius, PLAYER_TORCH_LIGHT_RADIUS)),
+    reach,
+    halfAngle: LANTERN_CONE_HALF_ANGLE
+  };
+}
+
 // Draw the fog around (px, py) on `ctx`, in whatever coordinate space ctx is
 // currently in (canvas for the surface, interior-translated inside a PiP —
-// the PiP clip bounds the slabs there).
-function drawVisionFog(ctx, px, py, fogRadius) {
+// the PiP clip bounds the slabs there). With a `cone` (Lantern), the lit
+// shape is the cone and `fogRadius` is ignored.
+function drawVisionFog(ctx, px, py, fogRadius, cone = null) {
+  if (cone) fogRadius = cone.reach;
   ctx.save();
   ctx.fillStyle = FOG_COLOR;
 
@@ -94,13 +141,16 @@ function drawVisionFog(ctx, px, py, fogRadius) {
   ctx.fillRect(boxX + boxW, boxY, GRID.WIDTH - (boxX + boxW), boxH);
 
   // Inside the lit square, one wash per cell keyed to that cell's centre.
-  const core = fogRadius * FOG_CORE_FRACTION;
-  const ramp = Math.max(1, fogRadius - core);
+  // The ramp runs to the lit shape's edge in that cell's direction: the
+  // radius itself for a circle, coneEdgeDistance for the Lantern.
   for (let row = minRow; row <= maxRow; row++) {
     for (let col = minCol; col <= maxCol; col++) {
       const dx = col * CS + CS / 2 - px;
       const dy = row * CS + CS / 2 - py;
       const dist = Math.sqrt(dx * dx + dy * dy);
+      const edge = cone ? coneEdgeDistance(cone, Math.atan2(dy, dx)) : fogRadius;
+      const core = edge * FOG_CORE_FRACTION;
+      const ramp = Math.max(1, edge - core);
       const alpha = Math.min(1, Math.max(0, (dist - core) / ramp));
       if (alpha <= 0) continue;
       ctx.globalAlpha = alpha;
@@ -166,9 +216,21 @@ export function drawVisionFogOverlay(renderer, game, playerInInterior) {
   const fogRadius = surfaceVisionRadius(game, playerInInterior);
   if (fogRadius === Infinity) return;
 
+  // The Lantern shapes the dark only while its light is what sets the radius
+  // — blind closes in round, whatever is carried.
+  const blindBinds = !playerInInterior && blindFogRadius(game) <= fogRadius;
+  let cone = null;
+  if (!blindBinds && isCarryingLantern(game)) {
+    if (underwaterRadius === fogRadius) {
+      cone = lanternCone(game, fogRadius, UNDERWATER_FOG_RADIUS_CELLS * CS);
+    } else if (torchLit) {
+      cone = lanternCone(game, fogRadius, (game.currentRoom.underground.caveFogRadius || 5) * CS);
+    }
+  }
+
   const px = player.position.x + CS / 2;
   const py = player.position.y + CS / 2;
-  drawVisionFog(renderer.fgCtx, px, py, fogRadius);
+  drawVisionFog(renderer.fgCtx, px, py, fogRadius, cone);
   const lanternLit = underwaterRadius !== Infinity && isLightingUnderwater(game);
   if (torchLit || lanternLit) drawPlayerTorchLight(renderer, px, py);
 }
@@ -180,8 +242,12 @@ export function drawVisionFogOverlay(renderer, game, playerInInterior) {
 export function drawInteriorVisionFogOverlay(renderer, game) {
   const caveCells = game.activeFloor?.caveFogRadius;
   const caveRadius = caveCells ? caveCells * CS * (hasTorchLight(game) ? 1.5 : 1) : Infinity;
-  const fogRadius = Math.min(caveRadius, blindFogRadius(game));
+  const blindRadius = blindFogRadius(game);
+  const fogRadius = Math.min(caveRadius, blindRadius);
   if (fogRadius === Infinity) return;
+  const cone = blindRadius > caveRadius && isCarryingLantern(game)
+    ? lanternCone(game, caveRadius, caveCells * CS)
+    : null;
   const player = game.player;
-  drawVisionFog(renderer.fgCtx, player.position.x + CS / 2, player.position.y + CS / 2, fogRadius);
+  drawVisionFog(renderer.fgCtx, player.position.x + CS / 2, player.position.y + CS / 2, fogRadius, cone);
 }
