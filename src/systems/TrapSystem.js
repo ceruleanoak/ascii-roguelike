@@ -1,6 +1,6 @@
 import { Item, equippedDaggerOils } from '../entities/Item.js';
 import { Puddle } from '../entities/Puddle.js';
-import { createActivationBurst, createEmberBurst, createIceBurst } from '../entities/Particle.js';
+import { createActivationBurst, createEmberBurst, createIceBurst, createShockBurst } from '../entities/Particle.js';
 import { GRID, BACKGROUND_OBJECT_VARIANTS } from '../game/GameConfig.js';
 import { applyLavaContact } from './LavaContact.js';
 import { MAX_PIPS } from './StatusEffects.js';
@@ -1410,6 +1410,8 @@ export class TrapSystem {
     // Burst particle effect at trap location
     if (trapData.effect === 'burn') {
       for (const p of createEmberBurst(cx, cy)) game.particles.push(tagInteriorPlane(game, p));
+    } else if (trapData.effect === 'zap') {
+      for (const p of createShockBurst(cx, cy, r)) game.particles.push(tagInteriorPlane(game, p));
     } else {
       for (const p of createActivationBurst(cx, cy, trapData.color || '#ffffff')) game.particles.push(tagInteriorPlane(game, p));
     }

@@ -186,6 +186,42 @@ export function createIceBurst(x, y) {
   return particles;
 }
 
+// Factory function to create a shock burst (Stun Trap going off). Sparks are
+// laid across the whole effect radius — a ring at its edge, a scatter inside —
+// so the burst shows the area the stun reached, not just the trap's tile.
+export function createShockBurst(x, y, radius) {
+  const particles = [];
+  const sparkColors = ['#ffff00', '#ffffaa', '#00ffff', '#ffffff'];
+  const sparkChars = ['%', '!', '+', '·'];
+  const spark = (px, py, angle) => {
+    const speed = 10 + Math.random() * 20;
+    const char = sparkChars[Math.floor(Math.random() * sparkChars.length)];
+    const color = sparkColors[Math.floor(Math.random() * sparkColors.length)];
+    const p = new Particle(px, py, char, color,
+      { vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed }, 0.3 + Math.random() * 0.3);
+    p.decelerationRate = 0.85;
+    p.boundToGrid = false;
+    particles.push(p);
+  };
+
+  // Edge ring — one spark per cell of circumference.
+  const ringCount = Math.max(8, Math.round((Math.PI * 2 * radius) / GRID.CELL_SIZE));
+  for (let i = 0; i < ringCount; i++) {
+    const angle = (Math.PI * 2 * i) / ringCount + (Math.random() - 0.5) * 0.2;
+    spark(x + Math.cos(angle) * radius, y + Math.sin(angle) * radius, angle);
+  }
+
+  // Interior scatter, spread evenly over the disc's area.
+  const innerCount = Math.round(ringCount / 2);
+  for (let i = 0; i < innerCount; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const r = radius * Math.sqrt(Math.random());
+    spark(x + Math.cos(angle) * r, y + Math.sin(angle) * r, angle);
+  }
+
+  return particles;
+}
+
 // Factory function to create explosion particles
 export function createExplosion(x, y, count = 20, color = COLORS.PLAYER) {
   const particles = [];
