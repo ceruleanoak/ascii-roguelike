@@ -346,8 +346,10 @@ export class WorldEffectsSystem {
     // Minimal/rare by design — a decorative tell, not a hazard indicator.
     game._hotSpringSteamTimer = (game._hotSpringSteamTimer ?? 3) - deltaTime;
     if (game._hotSpringSteamTimer <= 0) {
-      game._hotSpringSteamTimer = 3 + Math.random() * 4;
       const hotWaterTiles = game._activeBackgroundObjects().filter(o => o.typeId === 'hot_water');
+      // No pool, no roll: a draw here in a room without one would shift a
+      // seeded fight (Mist Battle Act 2) by how long the run has been going.
+      game._hotSpringSteamTimer = hotWaterTiles.length > 0 ? 3 + Math.random() * 4 : 3;
       if (hotWaterTiles.length > 0) {
         const tile = hotWaterTiles[Math.floor(Math.random() * hotWaterTiles.length)];
         game.particles.push(tagInteriorPlane(game, createSteamPuff(
