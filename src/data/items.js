@@ -137,7 +137,7 @@ export const ITEMS = {
   // so the mag only refills through resetUses on room entry). The bolo snares
   // any enemy that isn't huge (boss-tier, or Troll-mass and up) — see WeaponEffectsSystem.
   '⊶': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '⊶',
     tier: 2,
     name: 'Bolo Launcher',
@@ -157,7 +157,7 @@ export const ITEMS = {
     color: '#c8a060'
   },
   'ᛉ': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: 'ᛉ',
     tier: 2,
     name: 'Shotgun',
@@ -174,7 +174,7 @@ export const ITEMS = {
     color: COLORS.ITEM
   },
   'X': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: 'X',
     tier: 2,
     name: 'Dual Pistols',
@@ -192,7 +192,7 @@ export const ITEMS = {
   // Plague Gun (Fester's Gun + Venom): the looping bullet poisons what it hits
   // and bursts into a poison cloud there (plagueBurst → WeaponEffectsSystem).
   '⌭': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '⌭',
     tier: 3,
     name: 'Plague Gun',
@@ -212,7 +212,7 @@ export const ITEMS = {
     color: '#66cc44'
   },
   'ƒ': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: 'ƒ',
     tier: 2,
     name: "Fester's Gun",
@@ -232,7 +232,7 @@ export const ITEMS = {
 
   // Stun Gun (Gun + Topaz): the electric zone flavor, capped at tier 2.
   'ᚾ': {
-    rarity: 'common',
+    rarity: 'rare',
     char: 'ᚾ',
     tier: 2,
     name: 'Stun Gun',
@@ -252,7 +252,7 @@ export const ITEMS = {
 
   // ── GUN — Tier 3 ──────────────────────────────────────────────────────────
   '⌐': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '⌐',
     tier: 3,
     name: 'Machine Gun',
@@ -268,7 +268,7 @@ export const ITEMS = {
     color: '#888888'
   },
   'ᚺ': {
-    rarity: 'common',
+    rarity: 'rare',
     char: 'ᚺ',
     tier: 3,
     name: 'Scatter Gun',
@@ -284,7 +284,7 @@ export const ITEMS = {
     color: '#cccccc'
   },
   'ᚱ': {
-    rarity: 'common',
+    rarity: 'rare',
     char: 'ᚱ',
     tier: 3,
     name: 'Ricochet Rifle',
@@ -301,7 +301,7 @@ export const ITEMS = {
     color: '#ff88ff'
   },
   'ᚲ': {
-    rarity: 'common',
+    rarity: 'epic',
     char: 'ᚲ',
     tier: 3,
     name: 'Dragon Shotgun',
@@ -339,7 +339,7 @@ export const ITEMS = {
 
   // ── BOW — Tier 2 ──────────────────────────────────────────────────────────
   '⇒': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '⇒',
     tier: 2,
     name: 'Sky Bow',
@@ -352,7 +352,7 @@ export const ITEMS = {
     color: '#00ffff'
   },
   '⋙': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '⋙',
     tier: 3,
     name: 'Multi-Shot Bow',
@@ -368,7 +368,7 @@ export const ITEMS = {
 
   // Chain Bow (Bow + Topaz): the electric zone flavor, capped at tier 2.
   'ᛚ': {
-    rarity: 'common',
+    rarity: 'rare',
     char: 'ᛚ',
     tier: 2,
     name: 'Chain Bow',
@@ -389,7 +389,7 @@ export const ITEMS = {
 
   // ── BOW — Tier 3 ──────────────────────────────────────────────────────────
   'ᛒ': {
-    rarity: 'common',
+    rarity: 'rare',
     char: 'ᛒ',
     tier: 3,
     name: 'Explosive Bow',
@@ -409,7 +409,7 @@ export const ITEMS = {
     // no critChance — AoE + 1.5× damage would be too powerful
   },
   'ᛟ': {
-    rarity: 'common',
+    rarity: 'rare',
     char: 'ᛟ',
     tier: 3,
     name: 'Homing Bow',
@@ -424,7 +424,7 @@ export const ITEMS = {
     color: '#ff00ff'
   },
   'ᛏ': {
-    rarity: 'common',
+    rarity: 'rare',
     char: 'ᛏ',
     tier: 3,
     name: 'Piercing Bow',
@@ -442,7 +442,7 @@ export const ITEMS = {
   // toward their current position (no curve). First enemy hit also chain-damages
   // nearby enemies in a tight radius. One shot per room.
   '↩': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '↩',
     tier: 1,
     name: 'Boomerang',
@@ -496,7 +496,7 @@ export const ITEMS = {
   // with no enemy in range it flies the way the player faces, like a Slingshot.
   // The accuracy roll still applies — the eye picks the line, not the hit.
   '⋔': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '⋔',
     tier: 2,
     name: 'Keen Slingshot',
@@ -521,7 +521,7 @@ export const ITEMS = {
   // ricochets off the room's border walls, and after every bounce keen aim
   // picks the nearest enemy again (CombatSystem's ricochet branch).
   '⑂': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '⑂',
     tier: 3,
     name: 'Pearl Slingshot',
@@ -567,7 +567,7 @@ export const ITEMS = {
 
   // ── MELEE / torch — Tier 1 ────────────────────────────────────────────────
   '♨': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '♨',
     tier: 1,
     name: 'Torch',
@@ -593,7 +593,7 @@ export const ITEMS = {
   // lights an underwater room (torchLight.underwaterFogRadius), and it lacks
   // the Torch's `dousedByDeepWater`, so deep water doesn't destroy it.
   '♁': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '♁',
     tier: 1,
     name: 'Lantern',
@@ -614,7 +614,7 @@ export const ITEMS = {
   // Stats mirror Tier 1 Sword; the unique behavior lives in CombatSystem:
   // striking an exit letter cycles it forward through EXIT_LETTERS.
   '§': {
-    rarity: 'common',
+    rarity: 'epic',
     char: '§',
     tier: 1,
     name: 'Sword of the Letter',
@@ -638,7 +638,7 @@ export const ITEMS = {
   // steers which zone a path of consecutive same-color exits resolves to —
   // see ExitSystem.mutateExitColor.
   '◓': {
-    rarity: 'common',
+    rarity: 'epic',
     char: '◓',
     tier: 1,
     name: 'Chromablade',
@@ -662,7 +662,7 @@ export const ITEMS = {
   // the specific key char — never consumed, so it opens every lock/vault
   // encountered for the rest of the run.
   '☓': {
-    rarity: 'common',
+    rarity: 'epic',
     char: '☓',
     tier: 1,
     name: 'χ-blade',
@@ -680,7 +680,7 @@ export const ITEMS = {
 
   // ── MELEE / sword — Tier 2 ────────────────────────────────────────────────
   '⫯': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '⫯',
     tier: 1,
     name: 'Longsword',
@@ -697,7 +697,7 @@ export const ITEMS = {
     color: '#ccccdd'
   },
   '‡': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '‡',
     tier: 2,
     name: 'Flame Sword',
@@ -713,7 +713,7 @@ export const ITEMS = {
     color: '#ff4400'
   },
   'ᛖ': {
-    rarity: 'common',
+    rarity: 'epic',
     char: 'ᛖ',
     tier: 3, // top of the sword family — see the "Dragon ___" naming rule above
     name: 'Dragon Blade',
@@ -728,7 +728,7 @@ export const ITEMS = {
     color: '#ff00ff'
   },
   'ᚠ': {
-    rarity: 'common',
+    rarity: 'rare',
     char: 'ᚠ',
     tier: 2,
     name: 'Lava Sword',
@@ -749,7 +749,7 @@ export const ITEMS = {
   // for the fountain, so as a tier 2 an unattuned fountain handed it straight
   // to a plain Sword. Magic Sword is now the Sword's plain tier-2 rung.
   'Ꞩ': {
-    rarity: 'common',
+    rarity: 'rare',
     char: 'Ꞩ',
     tier: 3,
     name: 'Lightning Sword',
@@ -771,7 +771,7 @@ export const ITEMS = {
 
   // ── MELEE / sword — Tier 3 ────────────────────────────────────────────────
   'ᛠ': {
-    rarity: 'common',
+    rarity: 'epic',
     char: 'ᛠ',
     tier: 3,
     name: 'Chaos Blade',
@@ -826,7 +826,7 @@ export const ITEMS = {
 
   // ── MELEE / axe — Tier 2 ──────────────────────────────────────────────────
   '⊤': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '⊤',
     tier: 2,
     name: 'Bone Axe',
@@ -843,7 +843,7 @@ export const ITEMS = {
 
   // Thunder Axe (Axe + Topaz): the gem rule's electric axe, capped at tier 2.
   'ᚨ': {
-    rarity: 'common',
+    rarity: 'rare',
     char: 'ᚨ',
     tier: 2,
     name: 'Thunder Axe',
@@ -884,7 +884,7 @@ export const ITEMS = {
 
   // ── MELEE / hammer — Tier 2 ───────────────────────────────────────────────
   '⟘': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '⟘',
     tier: 2,
     name: 'Maul',
@@ -907,7 +907,7 @@ export const ITEMS = {
   // on an already-Frozen enemy shatters it, spraying a freeze pip onto
   // everything nearby (folded in from the cut Glacier Hammer).
   'ᛜ': {
-    rarity: 'common',
+    rarity: 'rare',
     char: 'ᛜ',
     tier: 2,
     name: 'Ice Hammer',
@@ -927,7 +927,7 @@ export const ITEMS = {
     color: '#00ddff'
   },
   '⬢': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '⬢',
     tier: 2,
     name: 'Onyx Hammer',
@@ -948,7 +948,7 @@ export const ITEMS = {
   },
   // Hammer + Metal: the plain Hammer's ring, swung faster (shorter windup and recovery).
   '⫫': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '⫫',
     tier: 2,
     name: 'Sledgehammer',
@@ -965,7 +965,7 @@ export const ITEMS = {
     color: '#aaaaaa'
   },
   '✺': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '✺',
     tier: 2,
     name: 'Exploding Mace',
@@ -985,7 +985,7 @@ export const ITEMS = {
 
   // Bone Crusher has no recipe — it is found, never crafted (an Errand reward).
   '⚒': {
-    rarity: 'common',
+    rarity: 'epic',
     char: '⚒',
     tier: 3,
     name: 'Bone Crusher',
@@ -1007,7 +1007,7 @@ export const ITEMS = {
 
   // ── MELEE / hammer — Crystal Maul (no tier; secret vein drop, U room only) ─
   '⬡': {
-    rarity: 'common',
+    rarity: 'epic',
     char: '⬡',
     name: 'Crystal Maul',
     type: ITEM_TYPES.WEAPON,
@@ -1050,7 +1050,7 @@ export const ITEMS = {
   // Spear + Jaw. The spear's non-elemental tier-2 rung,
   // so an unattuned fountain has something to hand back for a Spear.
   'ⲯ': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: 'ⲯ',
     tier: 2,
     name: 'Trident',
@@ -1066,7 +1066,7 @@ export const ITEMS = {
     color: '#88aaff'
   },
   '⇑': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '⇑',
     tier: 3,
     name: 'War Spear',
@@ -1099,7 +1099,7 @@ export const ITEMS = {
     color: COLORS.ITEM
   },
   'Ⲯ': {
-    rarity: 'common',
+    rarity: 'uncommon',
     // Identical to Staff — same swing, same block stance, same release sweep —
     // except higher swing damage and the block-release sweep deals 1 dmg.
     char: 'Ⲯ',
@@ -1122,7 +1122,7 @@ export const ITEMS = {
   // swing of the line and a touch more reach. The one staff that breaks Rock
   // (breaksRock — InteractionSystem.resolveSmashRefusal).
   '⍋': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '⍋',
     tier: 2,
     name: 'Flail',
@@ -1139,7 +1139,7 @@ export const ITEMS = {
     color: '#bbccdd'
   },
   'ߒ': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: 'ߒ',
     name: 'Fishing Pole',
     type: ITEM_TYPES.WEAPON,
@@ -1154,7 +1154,7 @@ export const ITEMS = {
     color: '#8b4513'
   },
   '⚚': {
-    rarity: 'common',
+    rarity: 'rare',
     // A Thick Staff swing (same stance, block and release sweep) that also
     // throws its bolt once per swing — one press, one bolt, re-fired on the
     // melee cooldown. The bolt fields below are read by WeaponEffectsSystem's
@@ -1189,7 +1189,7 @@ export const ITEMS = {
   // non-boss) hit by the sweep are launched along the contact angle. Damage and
   // launch force scale with windup level.
   '¡': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '¡',
     tier: 1,
     name: 'Bat',
@@ -1207,7 +1207,7 @@ export const ITEMS = {
     color: '#cc9966'
   },
   '⸘': {
-    rarity: 'common',
+    rarity: 'rare',
     // Metal Bat (Bat + Metal) — Tier 3 of the windup slugger: double damage,
     // same windup/launch behavior.
     char: '⸘',
@@ -1253,7 +1253,7 @@ export const ITEMS = {
   // weapon's deflectCharge). No weaponSubtype: it is no category's weapon,
   // so no Weapons Master technique or staff/sword behavior applies.
   '⚑': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '⚑',
     tier: 1,
     name: 'Flag',
@@ -1276,7 +1276,7 @@ export const ITEMS = {
   // Charge time is gem-specific; cast deducts manaCost and triggers the spell effect.
   // Placeholder spell logic in Phase 1 — real effects implemented in Phase 2.
   '⚝': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '⚝',
     name: 'Ruby Staff',
     type: ITEM_TYPES.WEAPON,
@@ -1289,7 +1289,7 @@ export const ITEMS = {
     color: '#ff2244'
   },
   '⚹': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '⚹',
     name: 'Sapphire Staff',
     type: ITEM_TYPES.WEAPON,
@@ -1302,7 +1302,7 @@ export const ITEMS = {
     color: '#2244ff'
   },
   '⚶': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '⚶',
     name: 'Topaz Staff',
     type: ITEM_TYPES.WEAPON,
@@ -1315,7 +1315,7 @@ export const ITEMS = {
     color: '#ffcc00'
   },
   '⚸': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '⚸',
     name: 'Onyx Staff',
     type: ITEM_TYPES.WEAPON,
@@ -1328,7 +1328,7 @@ export const ITEMS = {
     color: '#333344'
   },
   '⚘': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '⚘',
     name: 'Emerald Staff',
     type: ITEM_TYPES.WEAPON,
@@ -1341,7 +1341,7 @@ export const ITEMS = {
     color: '#00cc44'
   },
   '⚭': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '⚭',
     name: 'Garnet Staff',
     type: ITEM_TYPES.WEAPON,
@@ -1354,7 +1354,7 @@ export const ITEMS = {
     color: '#cc2222'
   },
   '⚳': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '⚳',
     name: 'Force Wand',
     type: ITEM_TYPES.WEAPON,
@@ -1388,7 +1388,7 @@ export const ITEMS = {
   // slots, carries the luck blessing a raw coin in a green well grants, and
   // raises every kill's Coin chance (luck.js).
   '↥': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '↥',
     tier: 2,
     name: 'Fortune Dagger',
@@ -1409,7 +1409,7 @@ export const ITEMS = {
   // enemy within keenAimCells (KeenAim.updateKeenStrike); with none in reach
   // it stabs the way the player faces, like a Dagger.
   '↿': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '↿',
     tier: 2,
     name: 'Keen Dagger',
@@ -1429,7 +1429,7 @@ export const ITEMS = {
   // and the stab carries the wielder onto the target (lungeSpeed → attack.lunge
   // in Item.createMeleeAttack).
   '⥣': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '⥣',
     tier: 3,
     name: 'Pearl Dagger',
@@ -1448,7 +1448,7 @@ export const ITEMS = {
   },
   // Dagger + Jaw: the jaw-bone hook catches and twists, so every stab leaves the target dizzy.
   '⌠': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '⌠',
     tier: 2,
     name: 'Hook Sword',
@@ -1468,7 +1468,7 @@ export const ITEMS = {
   // carrying the equipped oils (TrapSystem.releaseTrapThrow). With the bundle
   // spent, SHIFT throws the Kunai like any weapon.
   '⚲': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '⚲',
     tier: 2,
     name: 'Kunai',
@@ -1486,7 +1486,7 @@ export const ITEMS = {
 
   // ── MELEE / whip ──────────────────────────────────────────────────────────
   '≋': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '≋',
     tier: 1,
     name: 'Whip',
@@ -1510,7 +1510,7 @@ export const ITEMS = {
   // also throws the Storm Staff's bolt, read live from its '⚚' entry —
   // mana cost included, so a dry meter means a plain swing.
   '⸸': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '⸸', tier: 2, name: 'Magic Sword',
     type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.MELEE, weaponSubtype: 'sword',
     damage: 2, windup: 0.35, recovery: 0.8, patternSpeed: 0.05, range: 20,
@@ -1519,7 +1519,7 @@ export const ITEMS = {
   },
   // Diamond Longsword (Longsword + Diamond): plain tier 2, a crit edge.
   '⟡': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '⟡', tier: 2, name: 'Diamond Longsword',
     type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.MELEE, weaponSubtype: 'sword',
     damage: 3, windup: 0.5, recovery: 0.8, patternSpeed: 0.07, range: 30,
@@ -1530,7 +1530,7 @@ export const ITEMS = {
   // into an ice burst that freezes everything around where it lands
   // (TrapSystem._landThrownWeapon).
   '⍖': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '⍖', tier: 2, name: 'Icicle',
     type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.MELEE, weaponSubtype: 'dagger',
     damage: 1, windup: 0.15, recovery: 0.6, range: 20, patternSpeed: 0.05,
@@ -1539,7 +1539,7 @@ export const ITEMS = {
   },
   // Ice Axe (Axe + Ice): freezing axe.
   '⍑': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '⍑', tier: 2, name: 'Ice Axe',
     type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.MELEE, weaponSubtype: 'axe',
     damage: 2, windup: 0.65, recovery: 0.9, patternSpeed: 0.04, range: 16,
@@ -1549,7 +1549,7 @@ export const ITEMS = {
   // Spore Mace (Exploding Mace + Pollen): every swing also bursts a
   // sleep-dust cloud at the head.
   '⁂': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '⁂', tier: 3, name: 'Spore Mace',
     type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.MELEE, weaponSubtype: 'hammer',
     damage: 4, windup: 0.6, recovery: 0.3, patternSpeed: 0.1, range: 20,
@@ -1559,17 +1559,18 @@ export const ITEMS = {
   },
   // Cinder Hammer (Onyx Hammer + Ash): the ring throws up a blinding ash cloud.
   '⫪': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '⫪', tier: 3, name: 'Cinder Hammer',
     type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.MELEE, weaponSubtype: 'hammer',
     damage: 3, windup: 0.35, recovery: 0.8, range: 20,
     attackPattern: 'hammerRing', locksMovement: true, critChance: 0.35, weaponLevel: 3,
+    rollsRock: true,
     dustBurst: { status: 'blind', duration: 3.0, color: '#888888', burnTicks: 1 },
     color: '#555555'
   },
   // Slag Maul (Maul + Slag): the impact leaves a lava patch.
   '⟂': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '⟂', tier: 3, name: 'Slag Maul',
     type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.MELEE, weaponSubtype: 'hammer',
     damage: 3, windup: 0.8, recovery: 1, range: 20,
@@ -1579,7 +1580,7 @@ export const ITEMS = {
   },
   // Rootstaff (Thick Staff + Root): a thrust roots the enemy in place.
   '⸾': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '⸾', tier: 3, name: 'Rootstaff',
     type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.MELEE, weaponSubtype: 'staff',
     damage: 2, windup: 0.25, recovery: 0.75, patternSpeed: 0.05,
@@ -1589,7 +1590,7 @@ export const ITEMS = {
   },
   // Bullwhip (Whip + Thick Fur): plain tier 2, a longer, harder crack.
   '⥊': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '⥊', tier: 2, name: 'Bullwhip',
     type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.MELEE, weaponSubtype: 'whip',
     damage: 2, windup: 0.5, recovery: 1.45, patternSpeed: 0.02, range: 40,
@@ -1598,7 +1599,7 @@ export const ITEMS = {
   },
   // Vine Whip (Whip + Moss): disarmed gear flies to the wielder.
   '∻': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '∻', tier: 2, name: 'Vine Whip',
     type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.MELEE, weaponSubtype: 'whip',
     damage: 1, windup: 0.5, recovery: 1.45, patternSpeed: 0.02, range: 40,
@@ -1609,7 +1610,7 @@ export const ITEMS = {
   // The chain cells crack like the whip (disarm); the farthest cell is the
   // spiked head (Item.createMeleeMorningStar), which lands as a hammer.
   '✹': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '✹', tier: 2, name: 'Morning Star',
     type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.MELEE, weaponSubtype: 'whip',
     attackPattern: 'morningStar',
@@ -1622,7 +1623,7 @@ export const ITEMS = {
   // never stuns (boomerangStun: false) and never knocks back. Two more
   // bounces at full charge than the Boomerang.
   '⌾': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '⌾', tier: 2, name: 'Chakram',
     type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.BOW,
     damage: 1, cooldown: 1.5, maxUses: 1, critChance: 0.1,
@@ -1641,7 +1642,7 @@ export const ITEMS = {
   // gem-infused (tier 3) whips below — infusing with mana first, then a
   // gemstone, is the intended crafting path to an elemental lash.
   '∾': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '∾',
     tier: 2,
     name: 'Infused Whip',
@@ -1661,7 +1662,7 @@ export const ITEMS = {
   // ── MELEE / whip — gem-infused (Infused Whip + gemstone) — Tier 3 ─────────
   // Elemental whipcracks: long-range lash inherits the gem's status effect.
   '∿': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '∿',
     tier: 3,
     name: 'Ruby Whip',
@@ -1678,7 +1679,7 @@ export const ITEMS = {
     color: '#ff2244'
   },
   '≀': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '≀',
     tier: 3,
     name: 'Sapphire Whip',
@@ -1695,7 +1696,7 @@ export const ITEMS = {
     color: '#2244ff'
   },
   '⤳': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '⤳',
     tier: 3,
     name: 'Topaz Whip',
@@ -1714,7 +1715,7 @@ export const ITEMS = {
     color: '#ffcc00'
   },
   '∽': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '∽',
     tier: 3,
     name: 'Emerald Whip',
@@ -1834,7 +1835,7 @@ export const ITEMS = {
     color: '#8b4513'
   },
   '𐤅': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '𐤅', name: 'Stitched Vest', type: ITEM_TYPES.ARMOR,
     flavor: ARMOR_FLAVORS.fur,
     defense: 2,
@@ -1845,7 +1846,7 @@ export const ITEMS = {
     color: '#aa6633'
   },
   '𐤌': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '𐤌', name: 'Slime Suit', type: ITEM_TYPES.ARMOR,
     defense: 1,
     slimeImmune: true,
@@ -1856,7 +1857,7 @@ export const ITEMS = {
     color: '#00ff00'
   },
   '𐤎': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '𐤎', name: 'Reinforced Slime Suit', type: ITEM_TYPES.ARMOR,
     defense: 2,
     slimeImmune: true,
@@ -1867,7 +1868,7 @@ export const ITEMS = {
     color: '#44ff44'
   },
   '𐤔': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '𐤔', name: 'Bone Armor', type: ITEM_TYPES.ARMOR,
     splinterChance: 0.12,   // a landed melee hit may Splinter it (destroyed)
     flavor: ARMOR_FLAVORS.bone,
@@ -1879,7 +1880,7 @@ export const ITEMS = {
     color: '#cccccc'
   },
   '𐤊': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '𐤊', name: 'Padded Bone Armor', type: ITEM_TYPES.ARMOR,
     splinterChance: 0.06,   // padding halves the Splinter chance
     flavor: ARMOR_FLAVORS.bone,
@@ -1893,7 +1894,7 @@ export const ITEMS = {
 
   // ── Tier 2: craftable mid-game ────────────────────────────────────────────
   '𐤂': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '𐤂', name: 'Leather Armor', type: ITEM_TYPES.ARMOR,
     flavor: ARMOR_FLAVORS.fur,
     defense: 1,
@@ -1905,7 +1906,7 @@ export const ITEMS = {
     color: '#8b6914'
   },
   '𐤖': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '𐤖', name: 'Bloom Mantle', type: ITEM_TYPES.ARMOR,
     defense: 1,
     speedBoost: 0.1,        // light woven fur + pollen
@@ -1914,7 +1915,7 @@ export const ITEMS = {
     color: '#ffe566'
   },
   '⛓': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '⛓', name: 'Chain Mail', type: ITEM_TYPES.ARMOR,
     flavor: ARMOR_FLAVORS.block,
     defense: 2,
@@ -1925,7 +1926,7 @@ export const ITEMS = {
     color: '#aaaaaa'
   },
   'S': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: 'S', name: 'Shield', type: ITEM_TYPES.ARMOR,
     flavor: ARMOR_FLAVORS.block,
     defense: 1,
@@ -1934,7 +1935,7 @@ export const ITEMS = {
     color: '#aaddff'
   },
   'U': {
-    rarity: 'common',
+    rarity: 'rare',
     char: 'U', name: 'Tower Shield', type: ITEM_TYPES.ARMOR,
     flavor: ARMOR_FLAVORS.block,
     defense: 2,
@@ -1945,7 +1946,7 @@ export const ITEMS = {
     color: '#8888ff'
   },
   '◍': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '◍', name: 'Buckler', type: ITEM_TYPES.ARMOR,
     flavor: ARMOR_FLAVORS.block,
     defense: 1,
@@ -1964,7 +1965,7 @@ export const ITEMS = {
     color: '#ccaa77'
   },
   '𐤄': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '𐤄', name: 'Robe', type: ITEM_TYPES.ARMOR,
     armorClass: 'robe',
     defense: 1,
@@ -1977,7 +1978,7 @@ export const ITEMS = {
     color: '#9370db'
   },
   '𐤆': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '𐤆', name: 'Warplate', type: ITEM_TYPES.ARMOR,
     flavor: ARMOR_FLAVORS.metal,
     defense: 4,
@@ -1992,7 +1993,7 @@ export const ITEMS = {
 
   // ── Tier 3: exotic / late-game ────────────────────────────────────────────
   '𐤏': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '𐤏', name: 'Ninja Garb', type: ITEM_TYPES.ARMOR,
     defense: 2,
     poisonImmune: true,
@@ -2003,7 +2004,7 @@ export const ITEMS = {
     color: '#2f2f2f'
   },
   '𐤉': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '𐤉', name: 'Ember Cloak', type: ITEM_TYPES.ARMOR,
     defense: 3,
     fireImmune: true,
@@ -2014,7 +2015,7 @@ export const ITEMS = {
     color: '#ff4500'
   },
   '𐤍': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '𐤍', name: 'Ice Plate', type: ITEM_TYPES.ARMOR,
     defense: 4,
     freezeImmune: true,
@@ -2026,7 +2027,7 @@ export const ITEMS = {
     color: '#87ceeb'
   },
   '𐤓': {
-    rarity: 'common',
+    rarity: 'epic',
     char: '𐤓', name: 'Dragon Scale Armor', type: ITEM_TYPES.ARMOR,
     defense: 5,
     bulletResist: 0.25,     // scales shed projectiles
@@ -2042,7 +2043,7 @@ export const ITEMS = {
   // spent weapon it hits for punchDamage and knocks back by punchKnockback
   // (PunchSystem reads both off the equipped armor).
   '𐤕': {
-    rarity: 'common',
+    rarity: 'epic',
     char: '𐤕', name: 'Dragon Gauntlets', type: ITEM_TYPES.ARMOR,
     defense: 2,
     punchDamage: 4,
@@ -2054,7 +2055,7 @@ export const ITEMS = {
   // ── Infused robes: Robe + elemental gemstone ──────────────────────────────
   // Pulse triggers on dodge roll, once per room — not a passive timer.
   '𐤇': {
-    rarity: 'common',
+    rarity: 'epic',
     char: '𐤇', name: 'Frost Robe', type: ITEM_TYPES.ARMOR,
     armorClass: 'robe',
     defense: 1,
@@ -2071,7 +2072,7 @@ export const ITEMS = {
     color: '#88ddff'
   },
   '𐤋': {
-    rarity: 'common',
+    rarity: 'epic',
     char: '𐤋', name: 'Flame Robe', type: ITEM_TYPES.ARMOR,
     armorClass: 'robe',
     defense: 1,
@@ -2088,7 +2089,7 @@ export const ITEMS = {
     color: '#ff6600'
   },
   '𐤈': {
-    rarity: 'common',
+    rarity: 'epic',
     char: '𐤈', name: 'Storm Robe', type: ITEM_TYPES.ARMOR,
     armorClass: 'robe',
     defense: 1,
@@ -2105,7 +2106,7 @@ export const ITEMS = {
     color: '#88ffff'
   },
   '𐤐': {
-    rarity: 'common',
+    rarity: 'epic',
     char: '𐤐', name: 'Emerald Robe', type: ITEM_TYPES.ARMOR,
     armorClass: 'robe',
     defense: 1,
@@ -2119,7 +2120,7 @@ export const ITEMS = {
     color: '#44cc44'
   },
   '𐤁': {
-    rarity: 'common',
+    rarity: 'epic',
     char: '𐤁', name: 'Blood Robe', type: ITEM_TYPES.ARMOR,
     armorClass: 'robe',
     defense: 1,
@@ -2133,7 +2134,7 @@ export const ITEMS = {
     color: '#cc2222'
   },
   '𐤃': {
-    rarity: 'common',
+    rarity: 'epic',
     char: '𐤃', name: 'Shadow Robe', type: ITEM_TYPES.ARMOR,
     armorClass: 'robe',
     defense: 1,
@@ -2147,7 +2148,7 @@ export const ITEMS = {
   },
 
   '⊛': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '⊛', name: 'Whirlwind Cape', type: ITEM_TYPES.ARMOR,
     defense: 1,
     rollCooldownMult: 0.85,
@@ -2157,7 +2158,7 @@ export const ITEMS = {
   },
 
   '⚷': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '⚷', name: 'Flippers', type: ITEM_TYPES.ARMOR,
     defense: 1,
     deepWaterImmune: true, // never wet, never drowns, no extra deep-water slow, dodge roll works (matches frog form); found under an Ocean room's Push Rock; unique, so only one is held at a time
@@ -2170,7 +2171,7 @@ export const ITEMS = {
   // activates the cloak: player renders as a bush `%`, and enemies that haven't
   // already aggro'd cannot detect the player at any range. Moving cancels it.
   'ᐤ': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: 'ᐤ', name: 'Fur Cloak', type: ITEM_TYPES.ARMOR,
     flavor: ARMOR_FLAVORS.fur,
     defense: 1,
@@ -2179,7 +2180,7 @@ export const ITEMS = {
     color: '#8b6914'
   },
   '𐤒': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '𐤒', name: 'Moss Cloak', type: ITEM_TYPES.ARMOR,
     defense: 1,
     mossCloak: true,
@@ -2193,7 +2194,7 @@ export const ITEMS = {
   // hints) decode to Latin, and Latin text (labels, prompts, item names)
   // encodes to Greek. Trades all physical protection for cipher decoding.
   '⊙': {
-    rarity: 'common',
+    rarity: 'epic',
     char: '⊙', name: 'Spectacles', type: ITEM_TYPES.ARMOR,
     defense: 0,
     spectacles: true,
@@ -2218,7 +2219,7 @@ export const ITEMS = {
     dropKeep: 0.7
   },
   'H': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: 'H',
     name: 'Health Potion',
     type: ITEM_TYPES.CONSUMABLE, bottle: true,
@@ -2230,7 +2231,7 @@ export const ITEMS = {
     leavesBottle: true
   },
   'ᒧ': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: 'ᒧ',
     name: 'Meat Jerky',
     type: ITEM_TYPES.CONSUMABLE,
@@ -2244,7 +2245,7 @@ export const ITEMS = {
   // Cooked Clam: a lit fireplace bakes a raw Clam (FireplaceSystem FIRE_BAKES).
   // Eaten for +1 HP, like Forest Berry; raw Clams are never eaten.
   '⌓': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '⌓',
     name: 'Cooked Clam',
     type: ITEM_TYPES.CONSUMABLE,
@@ -2257,7 +2258,7 @@ export const ITEMS = {
   // Cooked Fish: a lit fireplace bakes a Fish (FireplaceSystem commitSelection).
   // Eaten for +3 HP and stacks; a raw Fish is carried, never eaten.
   '⍟': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '⍟',
     name: 'Cooked Fish',
     type: ITEM_TYPES.CONSUMABLE,
@@ -2283,7 +2284,7 @@ export const ITEMS = {
   // A Fish caught in an armed Empty Bottle (InteractionSystem.tryBottleFish).
   // Like the Fairy in a Bottle it lives in the Bottles store. No effect yet.
   '⍾': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '⍾',
     name: 'Fish in a Bottle',
     type: ITEM_TYPES.CONSUMABLE, bottle: true,
@@ -2297,7 +2298,7 @@ export const ITEMS = {
   // heal-and-consume. autoTriggerHP: 0 disables the emergency auto-trigger
   // entirely — manual SPACE-consume still bypasses the threshold check.
   '❋': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '❋',
     name: 'Fire Berry',
     type: ITEM_TYPES.CONSUMABLE,
@@ -2309,7 +2310,7 @@ export const ITEMS = {
     color: '#ff6633'
   },
   'z': {
-    rarity: 'common',
+    rarity: 'rare',
     char: 'z', name: 'Mending Brew', type: ITEM_TYPES.CONSUMABLE, bottle: true,
     effect: 'regen', permanentUntilRoomExit: true, regenAmount: 1, regenInterval: 1.0, oneShot: true,
     autoTriggerHP: 0.30, color: '#3355ff',
@@ -2320,7 +2321,7 @@ export const ITEMS = {
   // the heart shatters the moment HP hits 0, whether or not a death save
   // then catches the player (ConsumableSlotBreaks.breakOnDeathPassives).
   '♥': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '♥',
     name: 'Heart',
     type: ITEM_TYPES.CONSUMABLE,
@@ -2331,7 +2332,7 @@ export const ITEMS = {
   },
   // Heart + Scale (recipes.js).
   '♦': {
-    rarity: 'common',
+    rarity: 'epic',
     char: '♦',
     name: 'Dragon Heart',
     type: ITEM_TYPES.CONSUMABLE,
@@ -2343,14 +2344,14 @@ export const ITEMS = {
 
   // ── Buffs ─────────────────────────────────────────────────────────────────
   'q': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: 'q', name: 'Haste Draught', type: ITEM_TYPES.CONSUMABLE, bottle: true,
     effect: 'speed', permanentUntilRoomExit: true, oneShot: true,
     autoTriggerHP: 0.24, color: '#3355ff',
     leavesBottle: true
   },
   'x': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: 'x', name: 'Stone Skin', type: ITEM_TYPES.CONSUMABLE, bottle: true,
     effect: 'stoneskin', permanentUntilRoomExit: true, duration: 10, oneShot: true,
     autoTrigger: { criticalHP: 0.20 },
@@ -2358,7 +2359,7 @@ export const ITEMS = {
     leavesBottle: true
   },
   'u': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: 'u', name: 'Battle Elixir', type: ITEM_TYPES.CONSUMABLE, bottle: true,
     effect: 'damageBuff', permanentUntilRoomExit: true, damageBonus: 2, oneShot: true,
     manualOnly: true, color: '#3355ff',
@@ -2369,7 +2370,7 @@ export const ITEMS = {
   // mirrorable weapon a second time. A hit breaks it until the next REST
   // (DragonSpiritSystem).
   'ᛝ': {
-    rarity: 'common',
+    rarity: 'epic',
     char: 'ᛝ', name: 'Dragon Spirit', type: ITEM_TYPES.CONSUMABLE,
     passive: true, dragonSpirit: true, color: '#ff4488'
   },
@@ -2377,12 +2378,12 @@ export const ITEMS = {
   // what each Sunken Glint hides shows through the water, darkened, and only
   // then can SPACE bring it up (SunkenGlintSystem).
   '⚇': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '⚇', name: 'Goggles', type: ITEM_TYPES.CONSUMABLE,
     passive: true, goggles: true, color: '#88ddee'
   },
   '★': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '★',
     name: 'Lucky Coin',
     type: ITEM_TYPES.CONSUMABLE,
@@ -2394,7 +2395,7 @@ export const ITEMS = {
     color: '#ffff00'
   },
   '¤': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '¤',
     name: 'Infused Coin',
     type: ITEM_TYPES.CONSUMABLE,
@@ -2402,7 +2403,7 @@ export const ITEMS = {
     color: '#ffcc66'
   },
   '¶': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '¶',
     name: 'Field Guide',
     type: ITEM_TYPES.CONSUMABLE,
@@ -2411,7 +2412,7 @@ export const ITEMS = {
     color: '#f0ead6'
   },
   '⊚': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '⊚',
     name: 'Frog Coin',
     type: ITEM_TYPES.CONSUMABLE,
@@ -2421,7 +2422,7 @@ export const ITEMS = {
     color: '#44bb44'
   },
   '🜛': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '🜛',
     name: 'Mana Potion',
     type: ITEM_TYPES.CONSUMABLE, bottle: true,
@@ -2434,7 +2435,7 @@ export const ITEMS = {
     color: '#8866ff'
   },
   'ᑕ': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: 'ᑕ',
     name: 'Tooth Necklace',
     type: ITEM_TYPES.CONSUMABLE,
@@ -2451,22 +2452,22 @@ export const ITEMS = {
   // could never land under the floor. It shortens poison instead, and eases
   // the goo slow (EquipmentEffectsSystem → StatusEffectSystem).
   'ᑌ': {
-    rarity: 'common',
+    rarity: 'rare',
     char: 'ᑌ', name: 'Ruby Necklace', type: ITEM_TYPES.CONSUMABLE,
     passive: true, elementReduction: { burn: 1 }, color: '#ff2244'
   },
   'ᑗ': {
-    rarity: 'common',
+    rarity: 'rare',
     char: 'ᑗ', name: 'Sapphire Necklace', type: ITEM_TYPES.CONSUMABLE,
     passive: true, elementReduction: { freeze: 1 }, color: '#2244ff'
   },
   'ᑘ': {
-    rarity: 'common',
+    rarity: 'rare',
     char: 'ᑘ', name: 'Topaz Necklace', type: ITEM_TYPES.CONSUMABLE,
     passive: true, elementReduction: { electric: 1 }, color: '#ffcc00'
   },
   'ᑙ': {
-    rarity: 'common',
+    rarity: 'rare',
     char: 'ᑙ', name: 'Emerald Necklace', type: ITEM_TYPES.CONSUMABLE,
     passive: true, poisonResist: 0.5, slimeResist: 0.5, color: '#00cc44'
   },
@@ -2476,7 +2477,7 @@ export const ITEMS = {
   // above; EquipmentEffectsSystem already sums elementReduction and
   // max-merges the resists, so it needs nothing of its own.
   'ᑚ': {
-    rarity: 'common',
+    rarity: 'epic',
     char: 'ᑚ', name: 'Rainbow Necklace', type: ITEM_TYPES.CONSUMABLE,
     passive: true, elementReduction: { burn: 1, freeze: 1, electric: 1 },
     poisonResist: 0.5, slimeResist: 0.5, color: '#ff88ff'
@@ -2487,7 +2488,7 @@ export const ITEMS = {
   // room is dodged outright (PlayerDamageSystem spends it, WingsSystem says the
   // word).
   '∞': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '∞',
     name: 'Wings',
     type: ITEM_TYPES.CONSUMABLE,
@@ -2519,7 +2520,7 @@ export const ITEMS = {
   // lift is gone and the slot holds the plain Boots they were crafted from
   // (spentChar). FloatingBootsSystem owns the drain.
   'ѡ': {
-    rarity: 'common',
+    rarity: 'rare',
     char: 'ѡ',
     name: 'Floating Boots',
     type: ITEM_TYPES.CONSUMABLE,
@@ -2537,7 +2538,7 @@ export const ITEMS = {
   // refuses the hit and StatusEffectSystem the zap). EquipmentEffectsSystem
   // projects both onto the player.
   'ѽ': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: 'ѽ',
     name: 'Rubber Boots',
     type: ITEM_TYPES.CONSUMABLE,
@@ -2550,7 +2551,7 @@ export const ITEMS = {
 
   // ── Defensive ─────────────────────────────────────────────────────────────
   '■': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '■',
     name: 'Metal Block',
     type: ITEM_TYPES.CONSUMABLE,
@@ -2560,7 +2561,7 @@ export const ITEMS = {
     color: '#888888'
   },
   '𐤑': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '𐤑',
     name: 'Smoke Bomb',
     type: ITEM_TYPES.CONSUMABLE,
@@ -2577,7 +2578,7 @@ export const ITEMS = {
     effect: 'firecracker', radius: 64, oneShot: true, manualOnly: true, stackable: true, color: '#ff8800'
   },
   '⊗': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '⊗',
     name: 'Bomb',
     type: ITEM_TYPES.CONSUMABLE,
@@ -2592,7 +2593,7 @@ export const ITEMS = {
   // everything in the burst gets wet (burn put out), and slimes (wetDot)
   // take `slimeDamage` on top (ConsumableWindupEffects 'waterBalloon').
   '◒': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '◒',
     name: 'Water Balloon',
     type: ITEM_TYPES.CONSUMABLE,
@@ -2608,7 +2609,7 @@ export const ITEMS = {
   // per room, then the Bombs in the consumable list. Never spent itself; all
   // throw logic lives in BombBagSystem (no `effect` — it has none of its own).
   '⊟': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '⊟',
     name: 'Bomb Bag',
     type: ITEM_TYPES.CONSUMABLE,
@@ -2617,7 +2618,7 @@ export const ITEMS = {
     color: '#b5835a'
   },
   '☠': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '☠',
     name: 'Cursed Skull',
     type: ITEM_TYPES.CONSUMABLE,
@@ -2629,7 +2630,7 @@ export const ITEMS = {
     color: '#ffffff'
   },
   '⊷': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '⊷',
     name: 'Cursed Belt',
     type: ITEM_TYPES.CONSUMABLE,
@@ -2638,14 +2639,14 @@ export const ITEMS = {
     color: '#aa66aa'
   },
   '∫': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '∫',
     name: 'Cursed Recipe',
     type: ITEM_TYPES.SCROLL,  // dropped by undead on a Cursed Run (CursedRunSystem.rollScrollDrop)
     color: '#aa66aa'
   },
   'ᐧ': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: 'ᐧ',
     name: 'Bone Dust',
     type: ITEM_TYPES.CONSUMABLE,
@@ -2659,7 +2660,7 @@ export const ITEMS = {
     color: '#cccccc'
   },
   'P': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: 'P',
     name: 'Poison Flask',
     type: ITEM_TYPES.CONSUMABLE, bottle: true,
@@ -2669,7 +2670,7 @@ export const ITEMS = {
     color: '#44ff44'
   },
   'J': {
-    rarity: 'common',
+    rarity: 'rare',
     char: 'J',
     name: 'Jolt Jar',
     type: ITEM_TYPES.CONSUMABLE,
@@ -2681,7 +2682,7 @@ export const ITEMS = {
     color: '#ffff00'
   },
   'v': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: 'v',
     name: 'Steam Vial',
     type: ITEM_TYPES.CONSUMABLE, bottle: true,
@@ -2698,7 +2699,7 @@ export const ITEMS = {
   // every room entry fills each quick-slot bow 3 arrows past its quiver
   // (QuiverRefill.refillQuiversForNewRoom).
   '⇈': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '⇈',
     name: 'Fletch of Arrows',
     type: ITEM_TYPES.CONSUMABLE,
@@ -2708,7 +2709,7 @@ export const ITEMS = {
     color: '#8b4513'
   },
   'T': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: 'T',
     name: 'Tonic',
     type: ITEM_TYPES.CONSUMABLE, bottle: true,
@@ -2718,7 +2719,7 @@ export const ITEMS = {
     leavesBottle: true
   },
   'o': {
-    rarity: 'common',
+    rarity: 'epic',
     char: 'o',
     name: 'Path Amulet',
     type: ITEM_TYPES.CONSUMABLE,
@@ -2727,7 +2728,7 @@ export const ITEMS = {
     color: '#ffaa00'
   },
   '✦': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '✦',
     name: 'Phoenix Feather',
     type: ITEM_TYPES.CONSUMABLE,
@@ -2741,7 +2742,7 @@ export const ITEMS = {
   // auto-trigger; Item.js bow/dagger/spear factories read oilEffect to override
   // arrow speed and onHit.
   '🜁': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '🜁',
     name: 'Slick Oil',
     type: ITEM_TYPES.CONSUMABLE,
@@ -2749,7 +2750,7 @@ export const ITEMS = {
     color: '#a07040'
   },
   '🜂': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '🜂',
     name: 'Fire Oil',
     type: ITEM_TYPES.CONSUMABLE,
@@ -2757,7 +2758,7 @@ export const ITEMS = {
     color: '#ff4400'
   },
   '❄': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '❄',
     name: 'Frost Oil',
     type: ITEM_TYPES.CONSUMABLE,
@@ -2765,7 +2766,7 @@ export const ITEMS = {
     color: '#88ddff'
   },
   '🜔': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '🜔',
     name: 'Drowse Oil',
     type: ITEM_TYPES.CONSUMABLE,
@@ -2776,7 +2777,7 @@ export const ITEMS = {
   // (passive augment, washed off by water) but bowOnly — it tips arrows, so
   // daggers and spears ignore it (Item.js _readEquippedOilEffect / oilAppliesTo).
   '⇞': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '⇞',
     name: 'Poison Tips',
     type: ITEM_TYPES.CONSUMABLE,
@@ -2786,7 +2787,7 @@ export const ITEMS = {
   // Not pressed either: brewed at the Alchemy Lab from Unstable Potion + Venom.
   // The poison oil for every weapon that takes oils (no bowOnly).
   '🜕': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '🜕',
     name: 'Venom Vial',
     type: ITEM_TYPES.CONSUMABLE, bottle: true,
@@ -2811,7 +2812,7 @@ export const ITEMS = {
     color: '#aaccee'
   },
   '⚱': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '⚱',
     name: 'Fairy in a Bottle',
     type: ITEM_TYPES.CONSUMABLE, bottle: true,
@@ -2824,7 +2825,7 @@ export const ITEMS = {
   // survives once the cooldown is over (healOnHit — player.hurtPending, read by
   // ConsumableTriggerSystem), or on SPACE. A fairy orbits the player while ready.
   '♔': {
-    rarity: 'common',
+    rarity: 'epic',
     char: '♔',
     name: 'Fairy King in a Bottle',
     type: ITEM_TYPES.CONSUMABLE, bottle: true,
@@ -2851,7 +2852,7 @@ export const ITEMS = {
   // Reverts to a regular Bottle of Water after 3 room exits (instance field
   // hotWaterRoomsLeft, decremented in main.js's room-transition reset block).
   '🜊': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '🜊',
     name: 'Bottle of Hot Water',
     type: ITEM_TYPES.CONSUMABLE, bottle: true,
@@ -2863,7 +2864,7 @@ export const ITEMS = {
   // 'Bottle of Poisoned Water' — filled from poisoned water or a poisoned
   // Alchemy Lab trough. Any ingredient brewed in it is an Unstable Potion.
   '🜋': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '🜋',
     name: 'Bottle of Poisoned Water',
     type: ITEM_TYPES.CONSUMABLE, bottle: true,
@@ -2877,7 +2878,7 @@ export const ITEMS = {
   // third starter. potionModifier carries through to the true potion made
   // from this starter at Cauldron stage 2 — see AlchemySystem.
   '🜅': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '🜅', name: 'Purified Potion', type: ITEM_TYPES.CONSUMABLE, bottle: true,
     effect: 'heal', amount: 1, oneShot: true,
     autoTriggerHP: 0.12, color: '#ffffff',
@@ -2885,7 +2886,7 @@ export const ITEMS = {
     potionModifier: 'buff'
   },
   '🜆': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '🜆', name: 'Unstable Potion', type: ITEM_TYPES.CONSUMABLE, bottle: true,
     effect: 'heal', amount: 1, oneShot: true,
     autoTriggerHP: 0.12, color: '#8833cc',
@@ -2896,7 +2897,7 @@ export const ITEMS = {
   // Special liquid bottles — discovered by interacting with background tiles
   // while holding an empty bottle (e.g., electrified water pool, magma vent, mud pit).
   'ε': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: 'ε',
     name: 'Bottle of Electrified Water',
     type: ITEM_TYPES.CONSUMABLE, bottle: true,
@@ -2906,7 +2907,7 @@ export const ITEMS = {
     color: '#ffff00'
   },
   '◆': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '◆',
     name: 'Bottle of Magma',
     type: ITEM_TYPES.CONSUMABLE, bottle: true,
@@ -2916,7 +2917,7 @@ export const ITEMS = {
     color: '#ff5500'
   },
   '◐': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '◐',
     name: 'Bottle of Mud',
     type: ITEM_TYPES.CONSUMABLE, bottle: true,
@@ -2933,7 +2934,7 @@ export const ITEMS = {
   // free and repeatable — it neither spends the attunement nor the one treasure
   // offering per visit, so the only limit is how many Empty Bottles you carry.
   '🜈': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '🜈',
     name: 'Bottle of Fairy Water',
     type: ITEM_TYPES.CONSUMABLE, bottle: true,
@@ -2941,7 +2942,7 @@ export const ITEMS = {
     color: '#ffaaff'
   },
   '🜍': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '🜍',
     name: 'Bottle of Ember Water',
     type: ITEM_TYPES.CONSUMABLE, bottle: true,
@@ -2949,7 +2950,7 @@ export const ITEMS = {
     color: '#ff6633'
   },
   '🜗': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '🜗',
     name: 'Bottle of Frost Water',
     type: ITEM_TYPES.CONSUMABLE, bottle: true,
@@ -2957,7 +2958,7 @@ export const ITEMS = {
     color: '#bbeeff'
   },
   '🜩': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '🜩',
     name: 'Bottle of Blight Water',
     type: ITEM_TYPES.CONSUMABLE, bottle: true,
@@ -2968,7 +2969,7 @@ export const ITEMS = {
   // Special potions — crafted at the cauldron from special liquid bottles
   // Charged Potion: nascent attack speed bonus
   '!': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '!',
     name: 'Charged Potion',
     type: ITEM_TYPES.CONSUMABLE, bottle: true,
@@ -2979,7 +2980,7 @@ export const ITEMS = {
   },
   // Burning Potion: apply burn to enemies that hit the player
   '«': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '«',
     name: 'Burning Potion',
     type: ITEM_TYPES.CONSUMABLE, bottle: true,
@@ -2990,7 +2991,7 @@ export const ITEMS = {
   },
   // Primal Potion: half damage repeat attack 0.5s later
   '¿': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '¿',
     name: 'Primal Potion',
     type: ITEM_TYPES.CONSUMABLE, bottle: true,
@@ -3054,7 +3055,7 @@ export const ITEMS = {
   // eat it exactly as they eat a loaf — but SPACE eats it for a bigger heal
   // than Meat Jerky, and it auto-eats at low HP the same way.
   '☰': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '☰',
     name: 'Sandwich',
     type: ITEM_TYPES.CONSUMABLE,
@@ -3071,7 +3072,7 @@ export const ITEMS = {
   // a run can cook its first heal before it fights. Feed like Bread; SPACE
   // eats it, and it auto-eats at low HP the way Meat Jerky does.
   '⏣': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '⏣',
     name: 'Lembas',
     type: ITEM_TYPES.CONSUMABLE,
@@ -3105,12 +3106,12 @@ export const ITEMS = {
   // See docs/adr/BACKLOG.md row for the still-open architecture question
   // (fork the effect vs. one effect, multiple contexts).
   '⌖': {
-    rarity: 'common',
+    rarity: 'epic',
     char: '⌖',
     name: 'Compass',
     type: ITEM_TYPES.ARMOR,
     passive: true,
-    passiveIndicator: '?',
+    passiveIndicator: '!',
     color: '#66ccff'
   },
 
@@ -3124,7 +3125,7 @@ export const ITEMS = {
   // to gate damage+status: enemies whose affinities include the trap's affinity are IMMUNE.
   // Sleep/Charm have no elemental class so they omit `affinity` and damage everyone.
   '[': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '[',
     name: 'Freeze Trap',
     type: ITEM_TYPES.TRAP,
@@ -3138,7 +3139,7 @@ export const ITEMS = {
     color: '#00ddff'
   },
   '{': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '{',
     name: 'Stun Trap',
     type: ITEM_TYPES.TRAP,
@@ -3154,7 +3155,7 @@ export const ITEMS = {
     color: '#ffff00'
   },
   '^': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '^',
     name: 'Fire Trap',
     type: ITEM_TYPES.TRAP,
@@ -3168,7 +3169,7 @@ export const ITEMS = {
     color: '#ff4400'
   },
   ';': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: ';',
     name: 'Sleep Bomb',
     type: ITEM_TYPES.TRAP,
@@ -3181,7 +3182,7 @@ export const ITEMS = {
     color: '#9944ff'
   },
   '∩': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '∩',
     name: 'Snare Trap',
     type: ITEM_TYPES.TRAP,
@@ -3194,7 +3195,7 @@ export const ITEMS = {
   },
   "'": {
     char: "'",
-    rarity: 'common',
+    rarity: 'uncommon',
     name: 'Charm Lure',
     type: ITEM_TYPES.TRAP,
     oneShot: true,
@@ -3206,7 +3207,7 @@ export const ITEMS = {
     color: '#ff44ff'
   },
   '(': {
-    rarity: 'common',
+    rarity: 'rare',
     char: '(',
     name: 'Remote Bomb',
     type: ITEM_TYPES.TRAP,
@@ -3222,7 +3223,7 @@ export const ITEMS = {
   // INGREDIENTS['●'] Pearl, whose Unicode char is a documented, permanent
   // exception (see TREASURE_CHARS comment) — so Slime Bomb moved instead.
   '◉': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '◉',
     name: 'Slime Bomb',
     type: ITEM_TYPES.TRAP,
@@ -3238,7 +3239,7 @@ export const ITEMS = {
 
   // ── Persistent placeables ─────────────────────────────────────────────────
   '"': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '"',
     name: 'Music Box',
     type: ITEM_TYPES.TRAP,
@@ -3251,7 +3252,7 @@ export const ITEMS = {
     color: '#9944ff'
   },
   ':': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: ':',
     name: 'Noise-maker',
     type: ITEM_TYPES.TRAP,
@@ -3266,7 +3267,7 @@ export const ITEMS = {
   // LightningSpire.createLightningSpire): it draws as the spire glyph, catches
   // strikes and charges when struck exactly as every other spire does.
   '⟟': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '⟟',
     name: 'Lightning Rod',
     type: ITEM_TYPES.TRAP,
@@ -3276,7 +3277,7 @@ export const ITEMS = {
     color: '#ccccaa'
   },
   ']': {
-    rarity: 'common',
+    rarity: 'rare',
     char: ']',
     name: 'Tesla Coil',
     type: ITEM_TYPES.TRAP,
@@ -3314,7 +3315,7 @@ export const ITEMS = {
   // WireSystem routes it through ElectricitySystem.shockEntity, so it carries the
   // zap stun, the contact damage, and electric-affinity immunity for free.
   '⏦': {
-    rarity: 'common',
+    rarity: 'uncommon',
     char: '⏦',
     name: 'Electric Tripline',
     type: ITEM_TYPES.TRAP,
@@ -3346,11 +3347,11 @@ export const ITEMS = {
   // would otherwise build one. Registered here only so the crafting-station
   // preview render (a bare glyph draw, no lookup) and tools/check-data.js's
   // recipe-resolves-to-something gate have somewhere to resolve the char.
-  '♟': { rarity: 'common', char: '♟', name: 'Slag Golem', type: ITEM_TYPES.GOLEM, color: '#5a4a42' },
-  '♞': { rarity: 'common', char: '♞', name: 'Mud Golem', type: ITEM_TYPES.GOLEM, color: '#664422' },
-  '♜': { rarity: 'common', char: '♜', name: 'Rock Golem', type: ITEM_TYPES.GOLEM, color: '#888888' },
-  '♚': { rarity: 'common', char: '♚', name: 'Metal Golem', type: ITEM_TYPES.GOLEM, color: '#aaaaaa' },
-  '♗': { rarity: 'common', char: '♗', name: 'Magma Golem', type: ITEM_TYPES.GOLEM, color: '#ff5522' }
+  '♟': { rarity: 'rare', char: '♟', name: 'Slag Golem', type: ITEM_TYPES.GOLEM, color: '#5a4a42' },
+  '♞': { rarity: 'rare', char: '♞', name: 'Mud Golem', type: ITEM_TYPES.GOLEM, color: '#664422' },
+  '♜': { rarity: 'rare', char: '♜', name: 'Rock Golem', type: ITEM_TYPES.GOLEM, color: '#888888' },
+  '♚': { rarity: 'rare', char: '♚', name: 'Metal Golem', type: ITEM_TYPES.GOLEM, color: '#aaaaaa' },
+  '♗': { rarity: 'rare', char: '♗', name: 'Magma Golem', type: ITEM_TYPES.GOLEM, color: '#ff5522' }
 };
 
 // Tier pools for the fountain upgrade and duplicate-upgrade crafting, derived
