@@ -131,7 +131,7 @@ All modes share CombatSystem, PhysicsSystem, and entity classes.
 
 **Popup/modal UIs are non-instructive — compliance rule.** No key-hint footers, no explanatory headers/questions, no "X → Y" pickup messages. Content is limited to glyphs, the selection cursor, and bare option labels (e.g. STORE IN CHEST) — the visuals speak for themselves. Applies to every new popup; SlotReplacementOverlay is the reference implementation.
 
-**Every passive has a unique Passive Indicator — hard rule.** Each time an item's passive acts, a word of its own floats over the player (`passiveIndicator` on its ITEMS entry, drawn with `combatSystem.createDamageNumber` the way an Armor Flavor word is). No two passives share a word. The Compass's `?` (`CompassSystem.announceFind`) is the reference; a new passive ships with its word.
+**Every passive has a unique Passive Indicator — hard rule.** Each time an item's passive acts, a word of its own floats over the player (`passiveIndicator` on its ITEMS entry, drawn with `combatSystem.createDamageNumber` the way an Armor Flavor word is). No two passives share a word. The Compass's `!` (`CompassSystem.announceFind`) is the reference; a new passive ships with its word.
 
 ## Font Rules
 
@@ -201,6 +201,7 @@ Rules:
 - New ingredients → letter/digit only. New crafted items → Unicode symbol only.
 - No emoji, no Unicode escapes (`\uXXXX`) — embed literal glyphs. No pure box-drawing chars on ingredients or crafted items.
 - Enemies, particles, UI icons → printable ASCII.
+  - Sanctioned exception, not precedent: the Grasp's Clutch hands (`☝☟☜☞✋✊`, `src/data/grasp.js`) are drawn as Unicode because the glyph *is* the animation. New enemies stay ASCII.
 - Background objects → any BMP glyph that isn't reserved, box drawing included (`claudedocs/set-dressing-rulebook.md` G1/G2).
 
 See `claudedocs/reference.md` for the legacy violations table and background object char map.
