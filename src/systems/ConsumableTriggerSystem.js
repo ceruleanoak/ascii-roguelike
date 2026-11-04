@@ -472,9 +472,11 @@ export class ConsumableTriggerSystem {
         const p = params();
         // An Unstable roll is whole HP: 0+ heals that much, below 0 hurts by
         // that much (POTION_MODIFIERS.H.unstable — "heal 0-7 or damage 2").
+        // The potion names itself as the cause, so a death by it gets a
+        // tombstone like any other killer.
         const amount = p?.amount ?? cd.amount;
         if (amount < 0) {
-          player.takeDamage?.(-amount);
+          player.takeDamage?.(-amount, { cause: consumable });
           break;
         }
         player.heal(amount);
