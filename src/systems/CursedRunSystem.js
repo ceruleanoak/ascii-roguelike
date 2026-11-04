@@ -4,6 +4,7 @@ import { CURSED_RECIPES } from '../data/recipes.js';
 import { ITEM_TYPES } from '../data/items.js';
 import { canReachLoot } from './PlaneSystem.js';
 import { formatElapsed } from './RunTimerSystem.js';
+import { createWildFairy } from '../entities/FairyKing.js';
 
 // The Graveyard is never empty on a first look, and it thickens from there.
 const GRAVEYARD_BASE = 5;
@@ -526,5 +527,27 @@ export class CursedRunSystem {
     // goes in after it — and is re-applied on every entry rather than set once.
     // Only the first room needs it: ZoneSystem keeps gray sticky after that.
     if (this.isRestDecayed(game)) game.zoneSystem.forceNextZone('gray');
+  }
+
+  /**
+   * A wild fairy's release (cut fairy grass, a fishing catch). Uncursed, it is
+   * the healing Fairy (or, rarely, the Fairy King). On a Cursed run it comes
+   * out hostile instead: the '*' Enemy, which darts in and away
+   * (DartMechanic). It is `uncounted`, so a room that was already cleared
+   * stays open around it.
+   * `x`/`y` are the fairy's center, as the NeutralCharacter Fairy takes them.
+   */
+  releaseWildFairy(game, x, y) {
+    if (!game.cursedRun) {
+      game.neutralCharacters.push(createWildFairy(x, y, game.currentRoom?.exits || {}));
+      return;
+    }
+    const half = GRID.CELL_SIZE / 2;
+    const [fairy] = game.roomGenerator.spawnEnemiesFrom(game, null, {
+      spawnChar: '*', spawnCount: 1, exactPosition: true,
+      spawnerPosition: { x: x - half, y: y - half },
+    });
+    fairy.uncounted = true;
+    game._activeEnemies().push(fairy);
   }
 }

@@ -14,6 +14,7 @@ import { TrailMechanic } from './enemyMechanics/TrailMechanic.js';
 import { TrapLayerMechanic } from './enemyMechanics/TrapLayerMechanic.js';
 import { ChargeMechanic } from './enemyMechanics/ChargeMechanic.js';
 import { FrostLungeMechanic } from './enemyMechanics/FrostLungeMechanic.js';
+import { DartMechanic } from './enemyMechanics/DartMechanic.js';
 import { LeapAttackMechanic } from './enemyMechanics/LeapAttackMechanic.js';
 import { GooSpewMechanic } from './enemyMechanics/GooSpewMechanic.js';
 import { ReformMechanic } from './enemyMechanics/ReformMechanic.js';
@@ -413,6 +414,7 @@ export class Enemy {
 
     if (ChargeMechanic.isEnabled(this)) ChargeMechanic.init(this);
     if (FrostLungeMechanic.isEnabled(this)) FrostLungeMechanic.init(this);
+    if (DartMechanic.isEnabled(this)) DartMechanic.init(this);
 
     if (MimicMechanic.isEnabled(this)) MimicMechanic.init(this);
 
@@ -777,6 +779,7 @@ export class Enemy {
     if (this.isFullyAsleep() || this.isStunned() || this.isZapped() || this.isFrozen() || this.isKnockedBack()) {
       ChargeMechanic.interrupt(this);
       FrostLungeMechanic.interrupt(this);
+      DartMechanic.interrupt(this);
     }
     if (this.isFullyAsleep()) {
       this.targetVelocity.vx = 0;
@@ -844,6 +847,8 @@ export class Enemy {
 
     const frostLunge = FrostLungeMechanic.update(this, { deltaTime, distance: effectiveDistance, effectiveVisionLength, onScreen, dotDamageEvents });
     if (frostLunge?.suspend) return frostLunge.result;
+    const dart = DartMechanic.update(this, { deltaTime, distance: effectiveDistance, onScreen, dotDamageEvents });
+    if (dart?.suspend) return dart.result;
 
     // Roost upkeep must run before the rest-state early-return below
     FlockMechanic.updateRoost(this);

@@ -1052,6 +1052,45 @@ export const ENEMIES = {
     tier: 'weak'
   },
 
+  '*': {
+    char: '*',
+    // A wild fairy released on a Cursed run (CursedRunSystem.releaseWildFairy)
+    // in place of the healing NeutralCharacter Fairy — same glyph and pink.
+    // No zone spawn table lists it.
+    name: 'Fairy',
+    description: 'On a Cursed run a fairy does not heal. It darts in and away.',
+    spellDescription: 'IT WILL NOT HEAL YOU.',
+    mass: 0.2,
+    hp: 2,
+    speed: 90,
+    acceleration: 600,
+    damage: 1,
+    attackType: 'none',    // no ordinary attack — the dart's contact is the whole threat (DartMechanic)
+    attackRange: 0,
+    aggroRange: GRID.CELL_SIZE * 10,
+    decisionInterval: 0.3,
+    color: '#ffaaff',
+    float: true,
+    // Between darts it keeps its distance — the flee half of the pattern.
+    movementStyle: 'kiter',
+    movementConfig: {
+      kiteDistance: GRID.CELL_SIZE * 4,
+      retreatThreshold: GRID.CELL_SIZE * 2,
+    },
+    dart: {
+      triggerRange: GRID.CELL_SIZE * 6,
+      tellTime: 0.4,       // a fifth of a real second, held still
+      speed: 260,
+      dartTime: 1.0,
+      retreatSpeed: 200,
+      retreatTime: 0.6,
+      cooldown: 2.0,       // one real second between darts
+      knockback: 250
+    },
+    affinities: [],
+    tier: 'weak'
+  },
+
   'F': {
     char: 'F',
     name: 'Fire Elemental',

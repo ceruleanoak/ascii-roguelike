@@ -6,7 +6,6 @@ import { Item } from '../entities/Item.js';
 import { tagLootLayer } from './PlaneSystem.js';
 import { RewardObject } from '../entities/RewardObject.js';
 import { Rusalka } from '../entities/Rusalka.js';
-import { createWildFairy } from '../entities/FairyKing.js';
 
 const STATES = {
   IDLE: 'IDLE',
@@ -554,7 +553,7 @@ export class FishingSystem {
       (specialKey, x, y) => {
         if (specialKey === 'fairy') {
           if (game.fairiesAngered) return;
-          game.neutralCharacters.push(createWildFairy(x, y, game.currentRoom?.exits || {}));
+          game.cursedRunSystem.releaseWildFairy(game, x, y);
           return;
         }
         game.lootSystem.spawnItemDrop(specialKey, x, y, null, null);

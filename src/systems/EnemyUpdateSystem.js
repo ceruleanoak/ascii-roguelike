@@ -9,6 +9,7 @@ import { createEmberBurst, createExplosion } from '../entities/Particle.js';
 import { findNearbyOpenExitDirection, getExitDespawnPoint } from './ExitSystem.js';
 import { createExplosionAftermath } from './WorldEffectsSystem.js';
 import { BumpMechanic } from '../entities/enemyMechanics/BumpMechanic.js';
+import { DartMechanic } from '../entities/enemyMechanics/DartMechanic.js';
 import { ChargeMechanic } from '../entities/enemyMechanics/ChargeMechanic.js';
 import { glyphsTouch } from '../entities/enemyMechanics/glyphContact.js';
 import { beginVisionFrame } from '../entities/enemyVision.js';
@@ -270,6 +271,7 @@ export class EnemyUpdateSystem {
 
       this._handleChargeContact(enemy, player, prevChargeSpeed);
       BumpMechanic.resolveContact(enemy, player, game, deltaTime);
+      DartMechanic.resolveContact(enemy, player, game);
       this.handleUpdateResult(enemy, player, updateResult, deltaTime);
     }
   }

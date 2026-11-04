@@ -2,7 +2,7 @@ import { Item } from '../entities/Item.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { Leshy } from '../entities/Leshy.js';
 import { Fairy, FAIRY_HEAL } from '../entities/Fairy.js';
-import { FairyKing, createWildFairy } from '../entities/FairyKing.js';
+import { FairyKing } from '../entities/FairyKing.js';
 import { isIngredient, isItem, generateEnemyDrops } from '../data/items.js';
 import { pickQuagmireIngredient } from '../data/alchemy.js';
 import { getZoneRandomEnemy, ENEMIES } from '../data/enemies.js';
@@ -1148,12 +1148,11 @@ export class InteractionSystem {
       // room are marked; the first one cut spawns the fairy, the rest are inert.
       if (obj.fairyGrass && !game.currentRoom?.fairySpawned && !game.fairiesAngered) {
         game.currentRoom.fairySpawned = true;
-        const fairy = createWildFairy(
+        game.cursedRunSystem.releaseWildFairy(
+          game,
           obj.position.x + GRID.CELL_SIZE / 2,
-          obj.position.y + GRID.CELL_SIZE / 2,
-          game.currentRoom.exits
+          obj.position.y + GRID.CELL_SIZE / 2
         );
-        game.neutralCharacters.push(fairy);
         console.log('[Secret] Fairy discovered!');
       }
       // Sinkhole reveal: counts this blade toward its concealing grass.
