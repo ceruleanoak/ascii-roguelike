@@ -1,7 +1,9 @@
-// MistBattleSystem — Act 1 of the Mist Battle (the true ending): the player
-// commands the three lost characters at once, as one Trine.
+// MistBattleSystem — the Mist Battle (the false ending). In Act 1 the player
+// commands the three lost characters at once, as one Trine; in Act 2 the
+// three fight each other with no input, and the mist takes the victor.
 //
-// Shape (see claudedocs/zone-cosmology.md, "The True Ending — the Mist Battle"):
+// Act 1's shape (see claudedocs/zone-cosmology.md, "The False Ending — the
+// Mist Battle"):
 // - Three real `Player` bodies. `game.player` is the Primary — a pointer, not a
 //   fixed body — so every existing Primary-only path (throw/drop, consumables,
 //   pickup, interactions, HUD) keeps working untouched. The other two bodies
@@ -23,14 +25,25 @@
 //
 // The fight: a warm-up of mixed gray waves (_updateWaves), then the Grasp
 // (GraspSystem) — a climb up a mountain that ends at the Summit, where the
-// camera closes in and startAct2() holds the Trine still. Act 2 itself is
-// unbuilt; startAct2() is its seam.
+// camera closes in and startAct2() begins Act 2.
 //
-// Today this is reached only from the CheatMenu BOSSES entries (not yet wired
-// to GrayZoneSystem's mist-out). `start()` takes the same descriptor shape
-// GrayZoneSystem._finalizeMistOut writes to `game.graySnapshots`, so the real
-// wiring can hand those in unchanged.
-import { GRID, PHYSICS } from '../game/GameConfig.js';
+// Act 2 (startAct2, the Act 2 sections below, AI in mistBattle/autoBattle.js):
+// - Three fresh bodies, built from the snapshots alone (full HP, snapshotted
+//   gear, fixed start points), so how Act 1 went never touches the outcome.
+// - Seeded: the battle's generator is seeded from the snapshots' content and
+//   swapped in for Math.random through every Act 2 update tick (runTick), so
+//   the same three lost characters fight the same fight.
+// - Every body uses its own consumables and death saves (_withBody).
+// - No input: every key is swallowed (handleKeydown).
+// - When one body stands, the mist closes over it (GrayZoneSystem.closeOver)
+//   and the run resets to the title. No text, no credits.
+//
+// Reached two ways: the third character the gray mist takes
+// (GrayZoneSystem._finalizeMistOut hands `game.graySnapshots` to enterArena),
+// and the CheatMenu BOSSES entries (random snapshots). Both build the arena
+// through enterArena.
+import { GAME_STATES, GRID, PHYSICS, ROOM_TYPES } from '../game/GameConfig.js';
+import { ZONES } from '../data/zones.js';
 import { Player } from '../entities/Player.js';
 import { Item } from '../entities/Item.js';
 import { ITEMS, ITEM_TYPES, WEAPON_TYPES, AFFINITY_POOLS } from '../data/items.js';
@@ -41,6 +54,8 @@ import { tryDeathSave } from './DeathSaveSystem.js';
 import { canMirror, mirrorPress, mirrorRelease, mirrorAutoAttack, tickMirroredWeapon, resolveEnemyHitsOn, reportHit } from './mirroredWeapon.js';
 import { createExplosion } from '../entities/Particle.js';
 import { DEATH_CAUSES } from '../data/deathCauses.js';
+import { DemoSystem } from './DemoSystem.js';
+import { createBrain, driveBody, resolveRivalHits } from './mistBattle/autoBattle.js';
 
 const CELL = GRID.CELL_SIZE;
 // Trine geometry, in cells, measured from the Primary along its facing.
@@ -67,6 +82,29 @@ const ROTATE_GLIDE_TIME = 0.2;
 const WAVE_FLOOR = 3;
 const WAVE_SIZE = 4;
 const WAVE_DELAY = 1.5;
+
+/** How many characters the gray mist takes before the Mist Battle begins. */
+export const MIST_BATTLE_LOST = 3;
+// Act 2: the three bodies start on a triangle this many cells around the
+// room center, apex up, each facing the center.
+const ACT2_START_RADIUS = 3;
+// Seconds the victor stands before the mist starts to close.
+const VICTOR_HOLD = 1.5;
+// A fight still going after this many seconds is ended by the mist anyway;
+// the body with the largest share of its HP left is the one it takes last.
+const STALEMATE_TIME = 90;
+
+// FNV-1a over the snapshots' content: the Act 2 seed. Same three lost
+// characters with the same gear → same seed → same fight.
+function snapshotSeed(snapshots) {
+  let hash = 0x811c9dc5;
+  const text = JSON.stringify(snapshots);
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return hash >>> 0;
+}
 
 // Weapons that can't mirror (canMirror: bat, charge hammer, gem wand,
 // mana weapons) stay out of all three loadouts: Rotate can promote any body
@@ -158,12 +196,23 @@ export class MistBattleSystem {
     // enough of them.
     this.wavesEnabled = true;
     this.wavesSpawned = 0;
-    // 1 = the fight; 2 = held at the Summit for Act 2 (startAct2).
+    // 1 = the Trine's fight; 2 = the lost characters' auto-battle (startAct2).
     this.act = 1;
     // Enemy melee attack → Set of Flank bodies it is done with. CombatSystem
     // marks a still attack `hasHit` after its one Primary test frame, so the
     // Flanks keep their own record instead of reading that flag.
     this.meleeResolved = new WeakMap();
+    // The snapshots this battle was built from (start); Act 2 rebuilds its
+    // bodies from them.
+    this.snapshots = null;
+    // Act 2: the seeded generator runTick swaps in, the arena center goals
+    // are leashed to, the fight clock, rival attack → bodies it is done with,
+    // and the ending ({ timer, closing, closed }) once one body stands.
+    this.rng = null;
+    this.arena = null;
+    this.act2Clock = 0;
+    this.rivalResolved = new WeakMap();
+    this.ending = null;
   }
 
   /**
@@ -192,6 +241,7 @@ export class MistBattleSystem {
   start(snapshots = this.rollTestSnapshots()) {
     const game = this.game;
     this.reset();
+    this.snapshots = snapshots.slice(0, 3);
 
     const primary = game.player;
     snapshots.slice(0, 3).forEach((snap, i) => {
@@ -211,12 +261,9 @@ export class MistBattleSystem {
         body,
         characterType: snap.characterType,
         swapFlash: 0,
-        gear: {
-          armor: snap.armor ? this._makeItem(snap.armor.char, body) : null,
-          consumables: (snap.consumables || []).map(c => (c ? this._makeItem(c.char, body) : null)),
-          spent: (snap.consumables || []).map(() => false),
-          cooldowns: (snap.consumables || []).map(() => 0),
-        },
+        gear: this._makeGear(snap, body),
+        brain: createBrain(),
+        fallen: false,
       });
     });
 
@@ -254,16 +301,190 @@ export class MistBattleSystem {
   }
 
   /**
-   * The Summit: the camera has closed in and Act 1 is over. Act 2 is the
-   * three lost characters' input-less battle (unbuilt — see
-   * claudedocs/planning-inbox.md); until it exists the Trine holds here,
-   * every key released and no body moving.
+   * Open the Mist Battle arena: a gray combat room holding a Trine built from
+   * `snapshots` (random test loadouts when omitted). Depth is pinned below
+   * ZONES.gray.maxDepth so applyRoomSwap's grayZoneSystem.onRoomEnter doesn't
+   * arm the mist-out. The Trine is built AFTER applyRoomSwap — the swap's
+   * room-scope reset clears physics and the previous Trine, so building it
+   * first would lose the Flanks. `graspPhase` (optional, test entries) skips
+   * the warm-up straight to a Grasp phase.
+   */
+  enterArena(snapshots = this.rollTestSnapshots(), graspPhase = null) {
+    const game = this.game;
+    game.bossSystem.deactivate();
+    const zone = 'gray';
+    game.zoneSystem.currentZone = zone;
+    const depth = Math.max(1, (ZONES[zone]?.maxDepth ?? 10) - 1);
+    game.zoneDepths[zone] = depth;
+    game.roomGenerator.setDepth(depth);
+
+    // Generate around the south spawn (one of the cells createCollisionMap
+    // guarantees clear), then move the Primary to a spot with room for the
+    // whole Trine — the back corners would sit in the south wall otherwise.
+    // The south spawn stays the fallback.
+    const southSpawn = { x: Math.floor(GRID.COLS / 2) * CELL, y: (GRID.ROWS - 3) * CELL };
+    const newRoom = game.roomGenerator.generateRoom(ROOM_TYPES.COMBAT, southSpawn, zone, null);
+    const spawnPos = this.findSpawnAnchor(newRoom) ?? southSpawn;
+
+    game.currentRoom = newRoom;
+    game.player.position.x = spawnPos.x;
+    game.player.position.y = spawnPos.y;
+    game.player.facing = { x: 0, y: -1 };
+    game.player.setCollisionMap(newRoom.collisionMap);
+    game.interiorManager.reset();
+    game.applyRoomSwap(newRoom);
+
+    this.start(snapshots);
+    if (graspPhase) game.graspSystem.skipTo(graspPhase);
+    game.audioSystem.switchZoneMusic(zone, import.meta.env.BASE_URL);
+  }
+
+  // ── Act 2 ─────────────────────────────────────────────────────────────
+
+  /**
+   * The Summit: the camera has closed in and Act 1 is over. The Trine's
+   * bodies leave and three fresh ones are built from the snapshots on fixed
+   * start points; from here the battle runs itself, seeded.
    */
   startAct2() {
-    this.act = 2;
     const game = this.game;
+    this.act = 2;
     for (const k of ['w', 'a', 's', 'd', 'space', 'shift', 'tab']) game.keys[k] = false;
     for (const k of Object.keys(game.arrowKeys)) game.arrowKeys[k] = false;
+    game.consumableTriggerSystem.disarm();
+
+    // Whatever Act 1 left in the arena goes: its enemies, its attacks, and
+    // the rock the climb left standing (shattered, the way breakLoose
+    // shatters the room). The fight starts on open ground every time.
+    const room = game.currentRoom;
+    room.enemies.length = 0;
+    game.combatSystem.clear();
+    const grasp = game.graspSystem;
+    for (const piece of grasp.climb.scenery) {
+      grasp.burst(piece.x + piece.w / 2, piece.y + piece.h / 2, 6);
+    }
+    grasp.climb.scenery = [];
+
+    // The Act 1 bodies leave; the fresh ones take their places in the ring.
+    const old = this.members.map(m => m.body);
+    for (const body of old) game.physicsSystem.removeEntity(body);
+    const collisionMap = game.player.collisionMap;
+    this.arena = { x: (GRID.COLS / 2) * CELL, y: (GRID.ROWS / 2) * CELL };
+    this.rng = DemoSystem.mulberry32(snapshotSeed(this.snapshots));
+    this.act2Clock = 0;
+    this.rivalResolved = new WeakMap();
+    this.ending = null;
+    this.glide = null;
+
+    this.members = this.snapshots.map((snap, i) => {
+      const angle = -Math.PI / 2 + (Math.PI * 2 * i) / this.snapshots.length;
+      const cx = this.arena.x + Math.cos(angle) * ACT2_START_RADIUS * CELL;
+      const cy = this.arena.y + Math.sin(angle) * ACT2_START_RADIUS * CELL;
+      const body = new Player(Math.round(cx - CELL / 2), Math.round(cy - CELL / 2));
+      body.setCollisionMap(collisionMap);
+      game.physicsSystem.addEntity(body);
+      game.characterSystem.applyCharacterTypeTo(body, snap.characterType);
+      body.quickSlots = snap.quickSlots.map(s => (s ? this._makeItem(s.char, body) : null));
+      body.activeSlotIndex = 0;
+      body.destroyedSlots = [false, false, false];
+      body.hp = body.maxHp;
+      body.facing = { x: Math.sign(Math.round(-Math.cos(angle))), y: Math.sign(Math.round(-Math.sin(angle))) };
+      return {
+        body, characterType: snap.characterType, swapFlash: 0,
+        gear: this._makeGear(snap, body), brain: createBrain(), fallen: false,
+      };
+    });
+
+    this.primaryIndex = 0;
+    game.player = this.members[0].body;
+    game.activeCharacterType = this.members[0].characterType;
+    for (const member of this.members) this._projectGear(member);
+    this._loadGear(this.primary);
+    game.updateUI();
+  }
+
+  /** Whether Act 2 holds the bodies (main.js movement lock: no WASD). */
+  holdsTrine() {
+    return this.active && this.act === 2;
+  }
+
+  /**
+   * Run one update tick (main.js's GameLoop callback). During Act 2 the
+   * battle's seeded generator stands in for Math.random for the whole tick,
+   * so every random draw the fight makes — AI choices, accuracy rolls,
+   * dodges, crits — comes from the seed. Rendering runs outside the tick and
+   * keeps the real Math.random.
+   */
+  runTick(tick) {
+    if (!this.rng || this.act !== 2) return tick();
+    const realRandom = Math.random;
+    Math.random = this.rng;
+    try {
+      tick();
+    } finally {
+      Math.random = realRandom;
+    }
+    // The mist has closed over the victor (_updateEnding). TITLE drops
+    // game.player, so it waits until the tick that closed the mist has run.
+    if (this.ending?.closed) this.game.stateMachine.transition(GAME_STATES.TITLE);
+  }
+
+  /** Act 2 takes no input: every key is swallowed. True when consumed. */
+  handleKeydown(e) {
+    if (!this.holdsTrine()) return false;
+    e.preventDefault();
+    return true;
+  }
+
+  // Run `fn` with `member` standing in as game.player and its gear loaded in
+  // the global slots, so player-bound paths (consumable auto-triggers and
+  // windups, death saves) act on that body. Raw slot swaps, not a
+  // projection: re-projecting every frame would re-arm per-room passives.
+  _withBody(member, fn) {
+    const game = this.game;
+    const primary = this.primary;
+    if (member === primary) return fn();
+    this._stashGear(primary);
+    this._loadSlots(member);
+    game.player = member.body;
+    try {
+      return fn();
+    } finally {
+      game.player = primary.body;
+      this._stashGear(member);
+      this._loadSlots(primary);
+    }
+  }
+
+  // Each frame of Act 2, after combat: rival hits, then every body at 0 HP
+  // gets its death save or falls. A fallen game.player hands the pointer to
+  // the next living body. One body (or none) left starts the ending.
+  _resolveAct2() {
+    const game = this.game;
+    const living = this.members.filter(m => m.body.hp > 0);
+    for (const member of living) {
+      const rivals = living.filter(m => m !== member).map(m => m.body);
+      resolveRivalHits(game, member.body, rivals, this.rivalResolved);
+    }
+    for (const member of this.members) {
+      const body = member.body;
+      if (body.hp > 0 || member.fallen) continue;
+      if (this._withBody(member, () => tryDeathSave(game))) continue;
+      member.fallen = true;
+      if (member === this.primary) {
+        const next = this.members.findIndex(m => m.body.hp > 0);
+        if (next >= 0) this._promote(next);
+        this.glide = null;
+      }
+      this._fall(member);
+    }
+    if (!this.ending && this.livingBodies().length <= 1) this._beginEnding();
+  }
+
+  // One body stands (or none): it holds still a moment, then the mist closes
+  // over it and the run ends at the title.
+  _beginEnding() {
+    this.ending = { timer: VICTOR_HOLD, closing: false, closed: false };
     for (const body of this.livingBodies()) {
       body.heldItem?.cancelChargeAndReload?.();
       body.velocity.vx = 0;
@@ -271,10 +492,68 @@ export class MistBattleSystem {
     }
   }
 
-  /** Whether the Trine is held still for Act 2 (main.js movement lock). */
-  holdsTrine() {
-    return this.active && this.act === 2;
+  // The stalemate cap: the mist ends the fight with the body holding the
+  // largest share of its HP as the one left standing.
+  _endStalemate() {
+    const living = this.members.filter(m => m.body.hp > 0);
+    if (living.length === 0) return this._beginEnding();
+    const share = (m) => m.body.hp / m.body.maxHp;
+    const victor = living.reduce((best, m) => (share(m) > share(best) ? m : best), living[0]);
+    for (const member of living) {
+      if (member === victor) continue;
+      member.fallen = true;
+      member.body.hp = 0;
+      this._fall(member);
+    }
+    const index = this.members.indexOf(victor);
+    if (index !== this.primaryIndex) this._promote(index);
+    this.glide = null;
+    this._beginEnding();
   }
+
+  _updateEnding(deltaTime) {
+    const ending = this.ending;
+    for (const body of this.livingBodies()) {
+      body.velocity.vx = 0;
+      body.velocity.vy = 0;
+    }
+    if (ending.closing) return;
+    ending.timer -= deltaTime;
+    if (ending.timer > 0) return;
+    ending.closing = true;
+    this.game.grayZoneSystem.closeOver(() => { ending.closed = true; });
+  }
+
+  // rest-parity: absent because the Mist Battle only exists in its EXPLORE arena.
+  _updateAct2(deltaTime) {
+    const game = this.game;
+    this.act2Clock += deltaTime;
+    for (const member of this.members) {
+      if (member.swapFlash > 0) member.swapFlash = Math.max(0, member.swapFlash - deltaTime);
+    }
+    if (!this.ending && this.act2Clock >= STALEMATE_TIME) this._endStalemate();
+
+    const living = this.members.filter(m => m.body.hp > 0);
+    for (const member of living) {
+      const body = member.body;
+      // game.player's own tick (Player.update, DoT, held weapon, consumables)
+      // runs in main.js; the other two tick here.
+      if (body !== game.player) {
+        this._applyDot(member, body.update(deltaTime));
+        tickMirroredWeapon(game, body, deltaTime, this._fire);
+        this._withBody(member, () => game.inventorySystem.update(
+          deltaTime, body, game.currentRoom, game.combatSystem, game.steamClouds, game.particles));
+      }
+      if (this.ending || body.hp <= 0) continue;
+      const rivals = living.filter(m => m !== member && m.body.hp > 0).map(m => m.body);
+      driveBody(game, member, rivals, this.arena, deltaTime, { fire: this._fire, onSlotSwitch: this._flashSwap });
+    }
+    if (this.ending) this._updateEnding(deltaTime);
+  }
+
+  _flashSwap = (member) => {
+    member.swapFlash = SWAP_FLASH_TIME;
+  };
 
   /**
    * A spawn cell for an apex-up Trine: the cell nearest the room center whose
@@ -323,6 +602,19 @@ export class MistBattleSystem {
     return new Item(char, body.position.x, body.position.y);
   }
 
+  // A member's own gear, from its snapshot. `windups` holds its consumables'
+  // pending throws (InventorySystem.consumableWindups while loaded).
+  _makeGear(snap, body) {
+    const consumables = snap.consumables || [];
+    return {
+      armor: snap.armor ? this._makeItem(snap.armor.char, body) : null,
+      consumables: consumables.map(c => (c ? this._makeItem(c.char, body) : null)),
+      spent: consumables.map(() => false),
+      cooldowns: consumables.map(() => 0),
+      windups: [],
+    };
+  }
+
   /** The member whose body is `game.player`. */
   get primary() {
     return this.members[this.primaryIndex] ?? null;
@@ -342,6 +634,12 @@ export class MistBattleSystem {
   // the Primary's by contract (HUD, SPACE-armed consumables, death saves all
   // read them), so this is only ever left loaded for the Primary.
   _loadGear(member) {
+    this._loadSlots(member);
+    this.game.inventorySystem.applyEquipmentEffectsToPlayer(member.body);
+  }
+
+  // The slot swap alone, without projecting stats onto the body.
+  _loadSlots(member) {
     const inv = this.game.inventorySystem;
     const slots = inv.maxConsumableSlots;
     const fit = (list, fill) => Array.from({ length: slots }, (_, i) => list[i] ?? fill);
@@ -349,7 +647,7 @@ export class MistBattleSystem {
     inv.equippedConsumables = fit(member.gear.consumables, null);
     inv.spentConsumableSlots = fit(member.gear.spent, false);
     inv.consumableCooldowns = fit(member.gear.cooldowns, 0);
-    inv.applyEquipmentEffectsToPlayer(member.body);
+    inv.consumableWindups = member.gear.windups;
   }
 
   // Project a Flank's passive gear stats (defense, resists, passives) onto its
@@ -433,7 +731,7 @@ export class MistBattleSystem {
    */
   tryRotate() {
     if (!this.active) return false;
-    if (this.act === 2) return true; // held for Act 2: SPACE does nothing
+    if (this.act === 2) return true; // Act 2 takes no input: SPACE does nothing
     if (this.clock - this.lastSpacePress > ROTATE_DOUBLE_TAP) {
       this.lastSpacePress = this.clock;
       return false;
@@ -486,6 +784,7 @@ export class MistBattleSystem {
     member.gear.consumables = [...inv.equippedConsumables];
     member.gear.spent = [...inv.spentConsumableSlots];
     member.gear.cooldowns = [...inv.consumableCooldowns];
+    member.gear.windups = inv.consumableWindups;
   }
 
   _updateGlide(deltaTime, minSpeed) {
@@ -566,6 +865,12 @@ export class MistBattleSystem {
    */
   resolveCombat() {
     if (!this.active) return false;
+    if (this.act === 2) {
+      // Act 2 owns every fall, the last one included: main.js's death path
+      // never runs here.
+      this._resolveAct2();
+      return true;
+    }
     this._applyEnemyDamageToFlanks();
     this.game.graspSystem.resolveContact();
     return this._catchPrimaryDeath();
@@ -630,17 +935,22 @@ export class MistBattleSystem {
 
   // Burn/poison ticks a Flank's own Player.update reports (the Primary's go
   // through StatusEffectSystem.applyPlayerDot, which is game.player-bound).
+  // In Act 2 a body burned to 0 HP falls in _resolveAct2, after its death save.
   _applyDot(member, tick) {
     if (!tick) return;
     const body = member.body;
     if (tick.burnDamage) body.takeDamage(tick.burnDamage, { isBullet: false, element: 'burn', cause: DEATH_CAUSES.burn });
     if (tick.poisonDamage) body.takeDamage(tick.poisonDamage, { isBullet: false, element: 'poison', cause: DEATH_CAUSES.poison });
-    if (body.hp <= 0) this._fall(member);
+    if (body.hp <= 0 && this.act === 1) this._fall(member);
   }
 
   // rest-parity: absent because the Mist Battle only exists in its EXPLORE arena.
   update(deltaTime) {
     if (!this.active) return;
+    if (this.act === 2) {
+      this._updateAct2(deltaTime);
+      return;
+    }
     const game = this.game;
     const lead = game.player;
     const flankSpeed = PHYSICS.PLAYER_SPEED * FLANK_SPEED_MULT;
@@ -663,7 +973,6 @@ export class MistBattleSystem {
       if (body.hp <= 0) continue;
       body.facing.x = lead.facing.x;
       body.facing.y = lead.facing.y;
-      if (this.act === 2) { body.velocity.vx = 0; body.velocity.vy = 0; continue; }
       tickMirroredWeapon(game, body, deltaTime, this._fire);
       mirrorAutoAttack(game, body, this._fire);
       if (body.dodgeRoll.active) continue; // the roll owns velocity; drift back afterward

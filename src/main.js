@@ -481,7 +481,7 @@ class Game {
 
     // Start game loop
     this.gameLoop = new GameLoop(
-      (dt) => this.update(dt),
+      (dt) => this.mistBattleSystem.runTick(() => this.update(dt)), // Act 2 ticks seeded
       (alpha) => this.render(alpha)
     );
     this.gameLoop.start();
@@ -502,6 +502,7 @@ class Game {
       }
       // A running Scripted Event owns every key (SPACE closes its dialogue).
       if (this.scriptedEventSystem.handleKeydown(e)) return;
+      if (this.mistBattleSystem.handleKeydown(e)) return; // Mist Battle Act 2 takes no input
 
       // Arcade demo: any keypress aborts playback back to the pre-intro title.
       if (this.stateMachine.getCurrentState() === GAME_STATES.ARCADE_DEMO) {

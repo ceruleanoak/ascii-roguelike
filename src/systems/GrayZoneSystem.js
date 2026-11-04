@@ -12,15 +12,18 @@
  * 2. Depth-10 finish line: gray has no zone boss. Entering the room at
  *    ZONES.gray.maxDepth arms the mist-out — a short grace, then the circle
  *    closes to black and the mist takes the character. Their loadout is
- *    snapshotted to game.graySnapshots (the Mist Battle / true-ending hook),
- *    the character joins game.lostCharacters, and play resumes at REST with
- *    the next living character. Losing the last living character ends the
- *    run. Fully diegetic — no text, the closing fog is the ceremony.
+ *    snapshotted to game.graySnapshots, the character joins
+ *    game.lostCharacters, and play resumes at REST with the next living
+ *    character. The third lost character opens the Mist Battle
+ *    (MistBattleSystem.enterArena) instead; losing the last living character
+ *    before that ends the run. Fully diegetic — no text, the closing fog is
+ *    the ceremony.
  */
 
 import { GRID } from '../game/GameConfig.js';
 import { ZONES } from '../data/zones.js';
 import { isInteriorActive } from './PlaneSystem.js';
+import { MIST_BATTLE_LOST } from './MistBattleSystem.js';
 
 const GRACE_DURATION = 1.0;   // See the tenth room before the mist moves
 const SHRINK_DURATION = 5.0;  // Vision radius 10 → 0 cells
@@ -57,6 +60,9 @@ export class GrayZoneSystem {
     // Mist-out sequence: null | 'grace' | 'shrink' | 'hold'
     this.mistOutPhase = null;
     this.mistOutTimer = 0;
+    // closeOver's callback: when set, the mist-out's hold ends in it instead
+    // of taking the walker (_finalizeMistOut).
+    this.onMistClosed = null;
 
     // Death swallow (game over in gray): null | 'hold' | 'close' | 'closed'
     this.deathSwallowPhase = null;
@@ -115,6 +121,7 @@ export class GrayZoneSystem {
     if (zone !== 'gray') {
       this.mistOutPhase = null;
       this.mistOutTimer = 0;
+      this.onMistClosed = null;
       return;
     }
 
@@ -194,8 +201,29 @@ export class GrayZoneSystem {
     }
 
     if (this.mistOutPhase === 'hold' && this.mistOutTimer <= 0) {
-      this._finalizeMistOut();
+      const onClosed = this.onMistClosed;
+      if (!onClosed) {
+        this._finalizeMistOut();
+        return;
+      }
+      this.onMistClosed = null;
+      this.mistOutPhase = null;
+      this.mistOutTimer = 0;
+      this.currentRadiusCells = this.baseRadiusCells;
+      onClosed();
     }
+  }
+
+  /**
+   * The mist-out's close (shrink → hold) over the current room, ending in
+   * `onClosed` instead of taking the walker: the Mist Battle's end, the mist
+   * closing over the victor.
+   */
+  closeOver(onClosed) {
+    this.onMistClosed = onClosed;
+    this.mistOutPhase = 'shrink';
+    this.mistOutTimer = SHRINK_DURATION;
+    this.game.audioSystem?.playSFX('mist_take');
   }
 
   _finalizeMistOut() {
@@ -203,9 +231,9 @@ export class GrayZoneSystem {
     const player = game.player;
 
     // Snapshot the loadout the character carried into the mist. Plain
-    // descriptors, not live objects — this is the data hook the Mist Battle
-    // (true ending, three lost characters) consumes; MistBattleSystem.start
-    // takes snapshots of this shape.
+    // descriptors, not live objects — the Mist Battle (three lost
+    // characters) is built from them; MistBattleSystem.start takes snapshots
+    // of this shape.
     game.graySnapshots.push({
       characterType: game.activeCharacterType,
       depth: game.zoneDepths.gray,
@@ -237,10 +265,14 @@ export class GrayZoneSystem {
     // from the start. 0 = "not yet entered", so the next gray room lands at L1.
     game.zoneDepths.gray = 0;
 
-    // Not wired yet: the third lost character (`lostCharacters.length === 3`)
-    // is where the Mist Battle begins (MistBattleSystem.start with
-    // `graySnapshots`). That branch belongs here, ahead of the walker switch
-    // below; the arena pins its own depth, so the reset above can stay.
+    // The third lost character opens the Mist Battle, the three lost
+    // characters' last fight. The arena pins its own depth, so the reset
+    // above can stay.
+    if (game.lostCharacters.length >= MIST_BATTLE_LOST) {
+      game.mistBattleSystem.enterArena(game.graySnapshots.slice(-MIST_BATTLE_LOST));
+      return;
+    }
+
     const living = game.unlockedCharacters.filter(
       type => !game.deadCharacters.includes(type) && !game.lostCharacters.includes(type)
     );

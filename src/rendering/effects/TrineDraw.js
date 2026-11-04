@@ -2,8 +2,9 @@
 // is game.player and draws through the normal player path; this draws the two
 // Flanks as full characters ('@' in their own character color), never as
 // companions, a step dimmer than the Primary so the one you steer reads at a
-// glance. After a 1/2/3 swap every body (Primary included) briefly shows its
-// newly held weapon glyph half a cell above it.
+// glance. In Act 2 nobody is steered, so every body draws at full strength.
+// After a 1/2/3 swap (or an Act 2 body drawing another weapon) every body,
+// Primary included, briefly shows its newly held weapon glyph above it.
 //
 // Surface-plane only: the Mist Battle arena is a plain gray combat room with no
 // Interior, so there is no PiP pass to share this with.
@@ -26,13 +27,14 @@ export function drawTrine(renderer, game) {
       1
     );
   }
+  const alphaMult = mist.act === 2 ? 1 : FLANK_ALPHA_MULT;
   for (const { body } of mist.flanks()) {
     renderer.drawTextWithAlpha(
       body.position.x + half,
       body.position.y + half,
       body.char,
       body.getDisplayColor(),
-      body.getVisibilityAlpha() * FLANK_ALPHA_MULT
+      body.getVisibilityAlpha() * alphaMult
     );
   }
 }

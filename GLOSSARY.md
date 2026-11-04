@@ -1076,11 +1076,16 @@ identity, not standard programming terms.
   mist. Two acts: Act 1 is a controlled final battle in which the player fights mixed waves
   with all three lost characters at once as the Trine; after a brief delay, Act 2 has the three
   fight each other with no player input, last one standing. There are no credits.
-- **In code:** `MistBattleSystem` (Act 1, reachable today from the CheatMenu BOSSES entries
-  via `CheatWarpSystem.handleMistBattleTest`). Act 1 runs warm-up waves, then the Grasp
-  (`GraspSystem`), and ends at the Summit's zoom, where `MistBattleSystem.startAct2()` holds the
-  Trine still. Fed by `game.graySnapshots` / `game.lostCharacters` from `GrayZoneSystem`; the
-  mist-out → Mist Battle wiring and Act 2 itself are not built.
+- **In code:** `MistBattleSystem`, entered through `enterArena(snapshots)`: by the third gray
+  mist-out (`GrayZoneSystem._finalizeMistOut` once `lostCharacters` reaches `MIST_BATTLE_LOST`,
+  passing the last three `graySnapshots`), or from the CheatMenu BOSSES entries with random
+  characters (`CheatWarpSystem.handleMistBattleTest`). Act 1 runs warm-up waves, then the Grasp
+  (`GraspSystem`), and ends at the Summit's zoom in `startAct2()`. Act 2 rebuilds the three as
+  fresh bodies (full HP, snapshotted gear, fixed triangle start), swallows all input
+  (`handleKeydown`), and ticks under a generator seeded from the snapshots (`runTick`). Each
+  body's AI is in `src/systems/mistBattle/autoBattle.js`. The last one standing holds a moment,
+  then the gray mist closes over it (`GrayZoneSystem.closeOver`) and the run resets to title. A
+  stalemate cap (`STALEMATE_TIME`) closes the mist anyway, and the highest HP share stands.
 - **Not:** a Boss fight; the mist-out itself (the per-character loss at gray depth 10).
 
 ### Grasp
@@ -1146,7 +1151,7 @@ identity, not standard programming terms.
   Trine. When the zoom settles, Act 2 begins.
 - **In code:** the `summit` / `zoom` phases of `GraspSystem`; `CameraZoomSystem.holdZoom`; ends in
   `MistBattleSystem.startAct2()`.
-- **Not:** Act 2 itself (not built); a Mountain room or the Ridge.
+- **Not:** Act 2 itself; a Mountain room or the Ridge.
 
 ### Trine
 - **Definition:** The three-body formation the player controls in the Mist Battle's Act 1: the

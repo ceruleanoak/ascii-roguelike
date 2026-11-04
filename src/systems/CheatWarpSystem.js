@@ -149,42 +149,12 @@ export class CheatWarpSystem {
     console.log(`[CHEAT] ✓ Boss test: ${targetZone} zone boss spawned`);
   }
 
-  // The Mist Battle arena: a gray combat room holding a fresh random Trine.
-  // Depth is pinned below ZONES.gray.maxDepth so applyRoomSwap's
-  // grayZoneSystem.onRoomEnter doesn't arm the mist-out mid-test. The Trine
-  // is built AFTER applyRoomSwap — the swap's room-scope reset clears physics
-  // and the previous Trine, so building it first would lose the Flanks.
-  // `graspPhase` (optional) skips the warm-up straight to a Grasp phase.
+  // The Mist Battle arena with a fresh random Trine (MistBattleSystem.enterArena
+  // builds it, the same path the third gray mist-out takes). `graspPhase`
+  // (optional) skips the warm-up straight to a Grasp phase.
   handleMistBattleTest(game, graspPhase = null) {
     if (!this._requireExplore(game, 'Mist Battle test')) return;
-
-    game.bossSystem.deactivate();
-    const zone = 'gray';
-    game.zoneSystem.currentZone = zone;
-    const depth = Math.max(1, (ZONES[zone]?.maxDepth ?? 10) - 1);
-    game.zoneDepths[zone] = depth;
-    game.roomGenerator.setDepth(depth);
-
-    // Generate around the south spawn (one of the cells createCollisionMap
-    // guarantees clear, same as handleBossTest), then move the Primary to a
-    // spot with room for the whole Trine — the back corners would sit in the
-    // south wall otherwise. The south spawn stays the fallback.
-    const southSpawn = { x: Math.floor(GRID.COLS / 2) * GRID.CELL_SIZE, y: (GRID.ROWS - 3) * GRID.CELL_SIZE };
-    const newRoom = game.roomGenerator.generateRoom(ROOM_TYPES.COMBAT, southSpawn, zone, null);
-    const spawnPos = game.mistBattleSystem.findSpawnAnchor(newRoom) ?? southSpawn;
-
-    game.currentRoom = newRoom;
-    game.player.position.x = spawnPos.x;
-    game.player.position.y = spawnPos.y;
-    game.player.facing = { x: 0, y: -1 };
-    game.player.setCollisionMap(newRoom.collisionMap);
-    game.interiorManager.reset();
-    game.applyRoomSwap(newRoom);
-
-    game.mistBattleSystem.start();
-    if (graspPhase) game.graspSystem.skipTo(graspPhase);
-    game.audioSystem.switchZoneMusic(zone, import.meta.env.BASE_URL);
-
+    game.mistBattleSystem.enterArena(undefined, graspPhase);
     console.log(`[CHEAT] ✓ Mist Battle: ${game.mistBattleSystem.members.map(m => m.characterType).join(' / ')}`);
   }
 

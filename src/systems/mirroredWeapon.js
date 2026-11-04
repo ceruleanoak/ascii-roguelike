@@ -70,30 +70,60 @@ export function tickMirroredWeapon(game, body, deltaTime, fire) {
  */
 export function resolveEnemyHitsOn(game, body, meleeResolved, takeHit) {
   const cs = game.combatSystem;
-  const projectiles = cs.enemyProjectiles || [];
-  const melee = cs.enemyMeleeAttacks || [];
+  resolveAttacksOn(game, body, {
+    projectiles: cs.enemyProjectiles || [],
+    melee: cs.enemyMeleeAttacks || [],
+    resolved: meleeResolved,
+    skipProjectile: (proj) => proj.reflected,
+    skipMelee: (attack) => attack.isCharmedAttack || (attack.shooterPlane ?? 0) !== 0,
+  }, takeHit);
+}
+
+/**
+ * The general form of resolveEnemyHitsOn: test `projectiles` and `melee`
+ * (live CombatSystem lists) against `body`. `resolved` is the caller's
+ * WeakMap, attack → Set of bodies it is done with; with `pierce` set, a
+ * piercing projectile (`proj.pierce`) is recorded there and flies on instead
+ * of being spent, so it hits each body once. `skipProjectile` / `skipMelee`
+ * filter attacks that never hurt this body. `meleeHits(attack)`, when given,
+ * replaces the enemy-strike contact test and every melee attack gets exactly
+ * one test (the player's own swings, which hit on their first frame). Used
+ * for enemy attacks on the
+ * Trine and for the Mist Battle's Act 2, where the three bodies' own attacks
+ * hit each other (mistBattle/autoBattle.js).
+ */
+export function resolveAttacksOn(game, body, { projectiles, melee, resolved, skipProjectile, skipMelee, meleeHits = null, pierce = false }, takeHit) {
+  const cs = game.combatSystem;
   for (let i = projectiles.length - 1; i >= 0; i--) {
     const proj = projectiles[i];
-    if (proj.reflected || !inSamePlane(proj, body)) continue;
+    if (skipProjectile?.(proj) || !inSamePlane(proj, body)) continue;
+    const piercing = pierce && proj.pierce;
+    if (piercing && resolved.get(proj)?.has(body)) continue;
     if (!cs.checkProjectileCollisionWithPlayer(proj, body)) continue;
     const result = takeHit(proj.damage, { isBullet: true, element: proj.onHit, attacker: proj.owner },
-      proj.position, proj.knockbackForce || PHYSICS.DEFAULT_DAMAGE_KNOCKBACK);
+      proj.position, proj.knockbackForce || PHYSICS.DEFAULT_DAMAGE_KNOCKBACK, proj);
     if (result === false) continue;
+    if (piercing) {
+      if (!resolved.has(proj)) resolved.set(proj, new Set());
+      resolved.get(proj).add(body);
+      continue;
+    }
     projectiles.splice(i, 1);
   }
   for (const attack of melee) {
-    if (attack.windupPhase || attack.isCharmedAttack) continue;
-    if ((attack.shooterPlane ?? 0) !== 0) continue;
-    let resolved = meleeResolved.get(attack);
-    if (resolved?.has(body)) continue;
-    const connected = attackHitsBox(attack, body.getHitbox(), () => cs.checkMeleeCollisionWithPlayer(attack, body));
-    if (connected || !isSweptStrike(attack)) {
-      if (!resolved) meleeResolved.set(attack, resolved = new Set());
-      resolved.add(body);
+    if (attack.windupPhase || skipMelee?.(attack)) continue;
+    let done = resolved.get(attack);
+    if (done?.has(body)) continue;
+    const connected = meleeHits
+      ? meleeHits(attack)
+      : attackHitsBox(attack, body.getHitbox(), () => cs.checkMeleeCollisionWithPlayer(attack, body));
+    if (connected || meleeHits || !isSweptStrike(attack)) {
+      if (!done) resolved.set(attack, done = new Set());
+      done.add(body);
     }
     if (!connected) continue;
     takeHit(attack.damage, { isBullet: false, isMelee: true, element: attack.onHit, attacker: attack.owner },
-      attack.position, attack.knockback);
+      attack.position, attack.knockback, attack);
   }
 }
 

@@ -173,10 +173,13 @@ are the THREE room — see "Endings" and "Path to Canon" below.)*
   Clutch of small hands, then faster under massive Fingers that must be beaten
   back above the Trap Line. At the Summit the north wall returns, the south
   stays open a moment, then closes, and the camera zooms in: Act 2 begins.
-- **Status (2026-11-03)**: Act 1 is built end to end (`MistBattleSystem` +
-  `GraspSystem`), reachable only from the CheatMenu BOSSES entries with random
-  characters. It ends in `MistBattleSystem.startAct2()`, which holds the Trine
-  in the zoomed frame. Not yet built: Act 2 and the depth-10 mist-out wiring.
+- **Status (2026-11-04)**: built end to end. The third gray mist-out enters the
+  Mist Battle with the real snapshots (the CheatMenu BOSSES entries still roll
+  random characters). Act 2: the three fight fresh (full HP, their snapshotted
+  gear, fixed start points), weapon-driven (nearest rival, slot by range, own
+  roll, own consumables), seeded from the snapshots. The victor stands a moment,
+  then the gray mist closes over it and the run resets to title: no text, no
+  credits. A 90s stalemate cap closes the mist anyway (highest HP share stands).
 
 ### Endings (restated 2026-10-09 — supersedes the Win/Know/Yield list)
 
