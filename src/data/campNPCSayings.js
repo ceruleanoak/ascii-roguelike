@@ -1,6 +1,7 @@
-// Camp NPC sayings — the C-room mercenary's campfire talk, told one per SPACE
-// when the player has no coin to offer (a coin still buys the zone's wise
-// saying; CampNPCSystem.handleSpacePress). Read only by CampNPC.getDialogueLines.
+// Camp NPC sayings — the C-room mercenary's campfire talk. Each Camp NPC knows
+// one, rolled when it is made, and tells it on every SPACE when the player has
+// no coin to offer (a coin still buys the zone's wise saying;
+// CampNPCSystem.handleSpacePress). Read only by CampNPC.
 //
 // Folk wisdom about getting by out there, not instructions: each line points
 // at something the world really does and leaves the doing to the player.
