@@ -33,6 +33,9 @@ const COMPASS_STONE_DATA = {
   bulletInteraction: 'block',
   flammability: 'none',
   indestructible: true,
+  // The static layer draws animationChar, not char: a diamond marker shows its
+  // token while its char stays stone (bug #507: a `~` char reads as water).
+  showsAnimationChar: true,
   interactions: { default: { animation: 'clang', message: null } }
 };
 

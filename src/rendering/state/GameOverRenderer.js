@@ -82,7 +82,7 @@ export class GameOverRenderer {
           const x = obj.position.x + GRID.CELL_SIZE / 2;
           const y = obj.position.y + GRID.CELL_SIZE / 2;
           this.renderer.bgCtx.fillStyle = obj.color;
-          this.renderer.bgCtx.fillText(obj.char, x, y);
+          this.renderer.bgCtx.fillText(obj.data?.showsAnimationChar ? obj.animationChar : obj.char, x, y);
         }
       }
 

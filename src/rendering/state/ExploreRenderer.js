@@ -266,7 +266,7 @@ export class ExploreRenderer {
         } else if (obj.data?.customSprite === 'fracturedRock') {
           drawFracturedRock(this.renderer.bgCtx, x, y, obj.damageStage, objColor);
         } else {
-          this.renderer.bgCtx.fillText(obj.char, x, y);
+          this.renderer.bgCtx.fillText(obj.data?.showsAnimationChar ? obj.animationChar : obj.char, x, y);
         }
       }
     }
