@@ -413,7 +413,6 @@ export const ENEMIES = {
       weakness: { 'freeze': 1.5 }
     },
     affinities: ['beast'],
-    motif: { name: 'boar', bars: 2 },
     tier: 'normal'
   },
 
