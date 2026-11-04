@@ -423,7 +423,7 @@ identity, not standard programming terms.
 
 ### Passive Indicator
 - **Definition:** The floating word unique to one passive item, shown over the player each time
-  that passive acts. No two passives share one. The Compass's is `?`, with every beep.
+  that passive acts. No two passives share one. The Compass's is `!`, with every beep.
 - **In code:** `passiveIndicator` on the item's `ITEMS` entry, drawn with
   `combatSystem.createDamageNumber` (Compass: `CompassSystem.announceFind`).
 - **Not:** an Armor Flavor word (said once, on equip, for an armor family); a pickup message;
@@ -1076,11 +1076,77 @@ identity, not standard programming terms.
   mist. Two acts: Act 1 is a controlled final battle in which the player fights mixed waves
   with all three lost characters at once as the Trine; after a brief delay, Act 2 has the three
   fight each other with no player input, last one standing. There are no credits.
-- **In code:** `MistBattleSystem` (Act 1 only, reachable today from the CheatMenu BOSSES entry
-  via `CheatWarpSystem.handleMistBattleTest`). Fed by `game.graySnapshots` /
-  `game.lostCharacters` from `GrayZoneSystem`; the mist-out → Mist Battle wiring and Act 2 are
-  not built.
+- **In code:** `MistBattleSystem` (Act 1, reachable today from the CheatMenu BOSSES entries
+  via `CheatWarpSystem.handleMistBattleTest`). Act 1 runs warm-up waves, then the Grasp
+  (`GraspSystem`), and ends at the Summit's zoom, where `MistBattleSystem.startAct2()` holds the
+  Trine still. Fed by `game.graySnapshots` / `game.lostCharacters` from `GrayZoneSystem`; the
+  mist-out → Mist Battle wiring and Act 2 itself are not built.
 - **Not:** a Boss fight; the mist-out itself (the per-character loss at gray depth 10).
+
+### Grasp
+- **Definition:** Mist Battle Act 1's foe after the warm-up waves: a mountain climb in three
+  phases (Great Hands, then the Clutch, then Fingers) that ends at the Summit.
+- **In code:** `GraspSystem` (`src/systems/GraspSystem.js`; phase machine `warmup → tremble →
+  grip → flee → clutch → fingers → summit → zoom → done`), mechanic files in
+  `src/systems/grasp/`, data and tuning in `src/data/grasp.js`, draw in
+  `src/rendering/effects/GraspDraw.js`. Its hitboxes are `GraspUnit` proxies in `room.enemies`.
+- **Not:** a Boss (it is not in `BossSystem` and drops nothing); the Mist Battle as a whole.
+
+### Great Hands
+- **Definition:** The Grasp's first phase: two huge multi-glyph hands gripping the North Barrier
+  that flex, reach and grab a Trine body. They can be hurt only while out over the arena
+  (reaching or grabbing), and share one HP pool. At 0 they flee.
+- **In code:** `src/systems/grasp/greatHands.js`; `GraspSystem.hands`, pool `handsHp`; art
+  `HAND_ART` (mirrored for the right hand).
+- **Not:** the Clutch (small single-glyph hands); a GooHead-style boss grab (it borrows the shape
+  but grabs any Trine body, not only `game.player`).
+
+### North Barrier
+- **Definition:** The rock lip under the top border that the Great Hands grip. It crumbles when
+  they flee, which opens the climb.
+- **In code:** `climb.raiseBarrier` / `climb.breakLoose` (`src/systems/grasp/climb.js`);
+  `BARRIER_ROWS` collision rows; `climb.barrier`.
+- **Not:** the room's north border wall (that stays solid collision throughout; only its drawing
+  opens).
+
+### Climb Scenery
+- **Definition:** Rock that rides down through the arena during the climb, so the world appears
+  to move north. It blocks the Trine, and a body pinned against the south edge by it is crushed.
+- **In code:** `climb.scenery` (pixel-space rects), moved in `climb.update`, resolved by
+  `climb.resolveBlockers` (not the collision map); shapes in `SCENERY_SHAPES`.
+- **Not:** background objects (the room's own are shattered when the climb starts); a camera
+  scroll (the room never moves).
+
+### Clutch
+- **Definition:** The Grasp's second phase: small hands in Galaga-style formations that stream in,
+  sway, and dive at Trine bodies. Each glyph shows what the hand is doing: ☝☟☜☞ for heading, ✋
+  holding formation, ✊ diving.
+- **In code:** `src/systems/grasp/clutch.js`; `GraspSystem.clutch.members`, each with its own `hp`;
+  `CLUTCH_WAVES`, `CLUTCH_FORMATION`, `CLUTCH_GLYPHS`.
+- **Not:** ordinary enemies (they are `GraspUnit` proxies, not `ENEMIES` entries); the Great Hands.
+
+### Fingers
+- **Definition:** The Grasp's third phase: four massive nailed fingers reaching down their lanes
+  while the climb runs fast. Any blow drives one far back up; all four share one HP pool. One
+  that reaches past the Trap Line presses down and hurts whoever is against it.
+- **In code:** `src/systems/grasp/fingers.js`; `GraspSystem.fingers`, pool `fingersHp`;
+  `FINGER_LANES`, `FINGER_ART`, `FINGER_KNOCKBACK`.
+- **Not:** the Great Hands; Climb Scenery (a Finger blocks the Trine but is part of the foe).
+
+### Trap Line
+- **Definition:** The row `TRAP_LINE_ROWS` cells above the south edge. A Finger whose tip passes it
+  is pressing, which walls off its lane and hurts any Trine body touching it.
+- **In code:** `TRAP_LINE_Y` / `isPressed` (`src/systems/grasp/fingers.js`); drawn as a dotted row
+  by `drawGraspScenery`.
+- **Not:** a trap (`TrapSystem`); a collision row.
+
+### Summit
+- **Definition:** The end of the climb and of Act 1. The scroll stops, the north wall builds back,
+  the south stays open for `SOUTH_EXPOSED_TIME`, then closes, and the camera zooms in on the
+  Trine. When the zoom settles, Act 2 begins.
+- **In code:** the `summit` / `zoom` phases of `GraspSystem`; `CameraZoomSystem.holdZoom`; ends in
+  `MistBattleSystem.startAct2()`.
+- **Not:** Act 2 itself (not built); a Mountain room or the Ridge.
 
 ### Trine
 - **Definition:** The three-body formation the player controls in the Mist Battle's Act 1: the
@@ -1286,6 +1352,18 @@ identity, not standard programming terms.
   Stun, freeze, zap, sleep and knockback call `FrostLungeMechanic.interrupt()`.
 - **Not:** an Enemy State; the phases run inside the mechanic and suspend the rest of the AI.
   Not a Charge either: it homes on the player the whole way instead of committing to a line.
+
+### Dart
+- **Definition:** A rapid attack and retreat. The enemy holds still for a short tell, darts at
+  the target much faster than it moves, and its body is the hitbox for as long as the dart
+  lasts. Touching the target (or running out of dart time) turns it straight around into a
+  retreat, then it waits out a cooldown. The Cursed-run Fairy (`'*'`) is the first user.
+- **In code:** `src/entities/enemyMechanics/DartMechanic.js`, configured by `data.dart`.
+  `dartPhase` is `'idle'`, `'tell'`, `'dart'` or `'retreat'`. Contact is resolved by
+  `DartMechanic.resolveContact()` from `EnemyUpdateSystem`. Stun, freeze, zap, sleep and
+  knockback call `DartMechanic.interrupt()`.
+- **Not:** an Enemy State; the phases run inside the mechanic and suspend the rest of the AI.
+  Not a Frost Lunge: there is no projectile, and it always turns back after contact.
 
 ### Breach
 - **Definition:** The Frosted Maw crashing up through the ice at the player's feet — its whole
