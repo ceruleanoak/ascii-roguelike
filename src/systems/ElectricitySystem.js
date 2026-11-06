@@ -30,6 +30,8 @@
  * Counterplay / conduction rules:
  *   - Only 'normal' water conducts. Frozen / poisoned tiles
  *     BLOCK the spread — a freeze-line across a river is a firebreak.
+ *   - Current dissipates after MAX_TRAVEL (5 cells) of travel from its seed,
+ *     whatever the source's charge.
  *   - Seeding a tile (or slime stamp) that is already electrified is a no-op,
  *     so continuous sources (a hovering Spark) re-trigger only after the local
  *     tail decays.
@@ -59,6 +61,10 @@ const TILE_DURATION = 2.5;    // seconds a tile stays electrified after the fron
 const SCAN_INTERVAL = 0.25;   // ambient electric-source contact scan cadence
 const MAX_RING_PARTICLES = 4; // spark particles spawned per ring advance (visual cap)
 const CHARGE_DECAY_PER_RING = 2; // charge diminished per ring expansion; spread stops at ≤0
+// However much charge a source carries, current dissipates after this many
+// cells of travel along the conductor (path length, not straight-line), so a
+// strike never runs the length of a river.
+const MAX_TRAVEL = GRID.CELL_SIZE * 5;
 // Two slime trail stamps conduct to each other when their centers are within
 // this (Chebyshev) reach — about one cell, the slime analogue of water's
 // 4-adjacent neighbour. Consecutive stamps along a trail sit a few px apart,
@@ -222,6 +228,7 @@ export class ElectricitySystem {
       plane,
       visited: new Set([seed]),
       frontier: [seed],
+      travelled: new Map([[seed, 0]]), // node → path length from the seed (px)
       timer: opts.interval ?? SPREAD_INTERVAL,
       interval: opts.interval ?? SPREAD_INTERVAL,
       tileDuration,
@@ -387,9 +394,15 @@ export class ElectricitySystem {
 
     const next = [];
     for (const node of c.frontier) {
+      const from = this._center(node);
       for (const n of this._neighbors(c, node)) {
         if (c.visited.has(n)) continue;
+        const to = this._center(n);
+        const travelled = c.travelled.get(node) + Math.hypot(to.x - from.x, to.y - from.y);
+        // Too far to reach: left unvisited, so a shorter path can still get there.
+        if (travelled > MAX_TRAVEL) continue;
         c.visited.add(n);
+        c.travelled.set(n, travelled);
         if (!this._conducts(n)) continue;
         this._electrifyNode(n, c.tileDuration, c.current);
         next.push(n);
