@@ -3051,6 +3051,21 @@ export const ITEMS = {
     pawnValue: 0,
     color: '#7755dd'
   },
+  // Berry Juice: three Forest Berries pressed into an Empty Bottle at the
+  // Press (PressSystem). One drink heals what the three berries would, in one
+  // slot, and leaves the bottle behind. Never stacks.
+  '⁘': {
+    rarity: 'common',
+    char: '⁘',
+    name: 'Berry Juice',
+    type: ITEM_TYPES.CONSUMABLE, bottle: true,
+    effect: 'heal',
+    amount: 3,
+    oneShot: true,
+    leavesBottle: true,
+    pawnValue: 0,
+    color: '#7755dd'
+  },
   // Sandwich (Bread + Meat): Feed like Bread — SHIFT throws it and crows/rats
   // eat it exactly as they eat a loaf — but SPACE eats it for a bigger heal
   // than Meat Jerky, and it auto-eats at low HP the same way.

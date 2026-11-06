@@ -228,6 +228,35 @@ export class InventorySystem {
     return [...this.consumableInventory, ...this.bottles];
   }
 
+  // Every carried `char` consumable stack, the pile first, then the slots —
+  // the order removeOneConsumable spends them in, so a slotted stack is kept
+  // while a spare sits in the pile.
+  consumableStacks(char) {
+    return [
+      ...this.allUnequippedConsumables().filter(it => it.char === char),
+      ...this.equippedConsumables.filter(it => it?.char === char)
+    ];
+  }
+
+  // How many `char` consumables are carried, counting every unit of a stack.
+  countConsumable(char) {
+    return this.consumableStacks(char).reduce((n, it) => n + (it.count || 1), 0);
+  }
+
+  // Spends one `char` consumable off a stack (a stack holds `count` units),
+  // removing the item when it was the last one. Returns whether one was spent.
+  removeOneConsumable(char) {
+    const stack = this.consumableStacks(char)[0];
+    if (!stack) return false;
+    if ((stack.count || 1) > 1) {
+      stack.count -= 1;
+      return true;
+    }
+    const slot = this.equippedConsumables.indexOf(stack);
+    if (slot !== -1) return this.removeCarriedItem('equippedConsumable', slot, this.game.player);
+    return this.removeFromConsumableInventory(stack);
+  }
+
   getEquippedArmor() {
     return this.equippedArmor;
   }

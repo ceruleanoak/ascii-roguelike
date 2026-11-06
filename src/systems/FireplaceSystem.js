@@ -130,7 +130,7 @@ export class FireplaceSystem {
       counts.set('|', stickCount);
       items.push('|');
     }
-    const bundleCount = this._bundleStacks().reduce((n, b) => n + (b.count || 1), 0);
+    const bundleCount = this.game.inventorySystem.countConsumable(STICK_BUNDLE_CHAR);
     if (bundleCount > 0) {
       counts.set(STICK_BUNDLE_CHAR, bundleCount);
       items.push(STICK_BUNDLE_CHAR);
@@ -216,7 +216,7 @@ export class FireplaceSystem {
         return;
       }
     } else if (rawChar === STICK_BUNDLE_CHAR) {
-      if (!this._removeOneBundle()) return;
+      if (!this.game.inventorySystem.removeOneConsumable(STICK_BUNDLE_CHAR)) return;
       let sticks = STICKS_PER_BUNDLE;
       if (!fireplace.burning) {
         this._light(fireplace);
@@ -327,33 +327,6 @@ export class FireplaceSystem {
     } else if (roll < STOKE_ASH_CHANCE + STOKE_ESSENCE_CHANCE) {
       this.game.lootSystem.spawnIngredientDrop('F', dropX, dropY);
     }
-  }
-
-  // Every carried Stick Bundle stack, the pile first, then the slots — the
-  // order _removeOneBundle spends them in, so a slotted bundle is kept while
-  // a spare sits in the pile.
-  _bundleStacks() {
-    const inv = this.game.inventorySystem;
-    return [
-      ...inv.allUnequippedConsumables().filter(it => it.char === STICK_BUNDLE_CHAR),
-      ...inv.equippedConsumables.filter(it => it?.char === STICK_BUNDLE_CHAR)
-    ];
-  }
-
-  // Spends one bundle off a stack (a stack holds `count` bundles), removing
-  // the item when it was the last one.
-  _removeOneBundle() {
-    const game = this.game;
-    const inv = game.inventorySystem;
-    const stack = this._bundleStacks()[0];
-    if (!stack) return false;
-    if ((stack.count || 1) > 1) {
-      stack.count -= 1;
-      return true;
-    }
-    const slot = inv.equippedConsumables.indexOf(stack);
-    if (slot !== -1) return inv.removeCarriedItem('equippedConsumable', slot, game.player);
-    return inv.removeFromConsumableInventory(stack);
   }
 
   /** How many ore to smelt at once, 1..oreCount. Mirrors openStickQuantityMenu. */

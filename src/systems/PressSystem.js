@@ -12,6 +12,9 @@ import { ORE_METAL_CHANCE, STOKE_ASH_CHANCE } from './FireplaceSystem.js';
  * those go back to the ingredient pouch. A Clam rolls its own pearls (PRESS_ROLLS):
  * each output rolls independently at the same chance the fireplace gives Metal
  * from Ore and Ash from sticks.
+ *
+ * Forest Berries press into Berry Juice: BERRIES_PER_JUICE berries and an
+ * Empty Bottle, which the juice fills where it sits.
  */
 
 const PRESS_TABLE = {
@@ -30,6 +33,10 @@ const PRESS_ROLLS = {
     { char: 'p', chance: STOKE_ASH_CHANCE }   // Pearl Shard (Ash's roll)
   ]
 };
+
+const FOREST_BERRY_CHAR = '⁖';
+const BERRY_JUICE_CHAR = '⁘';
+const BERRIES_PER_JUICE = 3;
 
 const INTERACT_RADIUS = GRID.CELL_SIZE * 1.2;
 
@@ -72,6 +79,12 @@ export class PressSystem {
       if (!pressable.includes(ch)) pressable.push(ch);
     }
 
+    const berryCount = game.inventorySystem.countConsumable(FOREST_BERRY_CHAR);
+    if (berryCount >= BERRIES_PER_JUICE && game.bottlesSystem.emptyBottleRef()) {
+      counts.set(FOREST_BERRY_CHAR, berryCount);
+      pressable.push(FOREST_BERRY_CHAR);
+    }
+
     if (pressable.length === 0) {
       game.menuSystem.showPickupMessage('NOTHING TO PRESS');
       return;
@@ -89,6 +102,7 @@ export class PressSystem {
   /** Commit the press: consume one raw, drop the output into consumables (or ingredients). */
   commitSelection(rawChar) {
     const game = this.game;
+    if (rawChar === FOREST_BERRY_CHAR) { this._pressJuice(); return; }
     const outChar = PRESS_TABLE[rawChar];
     const rolls = PRESS_ROLLS[rawChar];
     if (!outChar && !rolls) return;
@@ -115,6 +129,20 @@ export class PressSystem {
       const stacked = game.inventorySystem.stowConsumable(oil, game.player);
       game.menuSystem.announceCrafted(oil.char, stacked);
     }
+    game.audioSystem?.playSFX?.('craft');
+    game.closeMenu();
+    game.updateUI();
+  }
+
+  // Three berries into the Empty Bottle: the juice takes the bottle's place.
+  _pressJuice() {
+    const game = this.game;
+    const inv = game.inventorySystem;
+    const bottle = game.bottlesSystem.emptyBottleRef();
+    if (!bottle || inv.countConsumable(FOREST_BERRY_CHAR) < BERRIES_PER_JUICE) return;
+    for (let i = 0; i < BERRIES_PER_JUICE; i++) inv.removeOneConsumable(FOREST_BERRY_CHAR);
+    game.bottlesSystem.replaceAt(bottle, BERRY_JUICE_CHAR);
+    game.menuSystem.announceCrafted(BERRY_JUICE_CHAR);
     game.audioSystem?.playSFX?.('craft');
     game.closeMenu();
     game.updateUI();
