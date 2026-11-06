@@ -1,6 +1,7 @@
 import { GRID } from '../game/GameConfig.js';
 import { Item } from '../entities/Item.js';
 import { findRecipe } from '../data/recipes.js';
+import { isInteriorActive } from './PlaneSystem.js';
 import {
   ALL_STARTER_INGREDIENTS,
   starterPotionForIngredient,
@@ -8,6 +9,7 @@ import {
   applyPotionModifierColor,
   HOT_WATER_CHAR,
   POISONED_WATER_CHAR,
+  SLIME_BOTTLE_CHAR,
   DEMO_BASE,
   DEMO_SUPPLEMENT
 } from '../data/alchemy.js';
@@ -32,7 +34,7 @@ import {
  *
  *   BREW   (liquid path — makes a starter potion and stops there)
  *   'mode'    — top choice: BREW
- *   'input'   — select a liquid Bottle (Water/Hot Water/Poisoned Water/
+ *   'input'   — select a liquid Bottle (Water/Hot Water/Poisoned Water/Slime/
  *               Electrified/Magma/Mud)
  *   'starter' — select a held ingredient to brew a starter potion (Base /
  *               Purified / Unstable / Charged / Burning / Primal); it replaces
@@ -59,7 +61,7 @@ const LIQUID_SOURCE_RADIUS = GRID.CELL_SIZE;
 // Base / Purified / Unstable (plain water) and Charged / Burning / Primal
 // (electrified water, magma, mud) — every BREW result INFUSE can finish.
 const STARTER_POTION_CHARS = new Set(['🜄', '🜅', '🜆', '!', '«', '¿']);
-const LIQUID_BOTTLE_CHARS = new Set(['🜉', HOT_WATER_CHAR, POISONED_WATER_CHAR, 'ε', '◆', '◐']);  // Water, Hot Water, Poisoned Water, Electrified, Magma, Mud
+const LIQUID_BOTTLE_CHARS = new Set(['🜉', HOT_WATER_CHAR, POISONED_WATER_CHAR, SLIME_BOTTLE_CHAR, 'ε', '◆', '◐']);  // Water, Hot Water, Poisoned Water, Slime, Electrified, Magma, Mud
 const PURIFIED_POTION_CHAR = '🜅';
 const UNSTABLE_POTION_CHAR = '🜆';
 const CAULDRON_COLOR = '#ffffff';
@@ -93,6 +95,7 @@ const STARTER_NAMES = {
 const LIQUID_BOTTLE_NAMES = {
   '🜉': 'BOTTLE OF WATER',
   [POISONED_WATER_CHAR]: 'BOTTLE OF POISONED WATER',
+  [SLIME_BOTTLE_CHAR]: 'BOTTLE OF SLIME',
   'ε': 'BOTTLE OF ELECTRIFIED WATER',
   '◆': 'BOTTLE OF MAGMA',
   '◐': 'BOTTLE OF MUD'
@@ -200,6 +203,7 @@ export class AlchemySystem {
     let filled = !!game.fountainSystem?.tryFillArmedBottle(ref);
     if (!filled && this.nearTrough()) filled = this.fillTroughBottle(ref);
     if (!filled && this.nearHotSpring()) filled = this.fillHotWaterBottle(ref);
+    if (!filled) filled = this.fillSlimeBottle(ref);
     if (!filled) {
       const worldLiquid = this._nearWorldLiquid();
       if (worldLiquid) filled = this.fillLiquidBottle(ref, worldLiquid);
@@ -279,6 +283,23 @@ export class AlchemySystem {
     game.menuSystem.announceItem('🜉');
     game.audioSystem?.playSFX?.('pickup');
     game.updateUI();
+    return true;
+  }
+
+  // ─── Goo Blob ────────────────────────────────────────────────────────────
+
+  // Scoop the nearest goo blob within one cell into the bottle; the blob is gone.
+  fillSlimeBottle(ref) {
+    const game = this.game;
+    const C = GRID.CELL_SIZE;
+    const px = game.player.position.x + C / 2;
+    const py = game.player.position.y + C / 2;
+    const interior = isInteriorActive(game);
+    const blob = game.gooBlobs.find(b => !b.expired &&
+      !!b.hutPlane === interior && (b.plane ?? 0) === (game.player.plane ?? 0) &&
+      Math.hypot(b.position.x - px, b.position.y - py) < LIQUID_SOURCE_RADIUS);
+    if (!blob || !this.fillLiquidBottle(ref, SLIME_BOTTLE_CHAR)) return false;
+    game.gooBlobs.splice(game.gooBlobs.indexOf(blob), 1);
     return true;
   }
 
@@ -487,8 +508,8 @@ export class AlchemySystem {
       } else if (this.cauldronLiquidType === HOT_WATER_CHAR) {
         // Hot Water purifies any base — the Alchemist's lesson.
         starterChar = PURIFIED_POTION_CHAR;
-      } else if (this.cauldronLiquidType === POISONED_WATER_CHAR) {
-        // Poison guarantees Unstable, whatever the ingredient.
+      } else if (this.cauldronLiquidType === POISONED_WATER_CHAR || this.cauldronLiquidType === SLIME_BOTTLE_CHAR) {
+        // Poison and slime guarantee Unstable, whatever the ingredient.
         starterChar = UNSTABLE_POTION_CHAR;
       } else {
         // Electrified/Magma/Mud: still liquid-determined, ingredient-agnostic

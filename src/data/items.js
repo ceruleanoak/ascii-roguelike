@@ -2873,6 +2873,17 @@ export const ITEMS = {
     splash: 'poisoned', oneShot: true, manualOnly: true, leavesBottle: true, // thrown: a Liquid Splash (LiquidSplash.js)
     color: '#44bb44'
   },
+  // 'Bottle of Slime' — scooped from a goo blob (AlchemySystem.fillSlimeBottle).
+  // Like Poisoned Water, any ingredient brewed in it is an Unstable Potion.
+  '⦿': {
+    rarity: 'uncommon',
+    char: '⦿',
+    name: 'Bottle of Slime',
+    type: ITEM_TYPES.CONSUMABLE, bottle: true,
+    pawnValue: 0, // free to fill from the world, so worth nothing at the counter
+    effect: 'cauldronInput',
+    color: '#00ff00'
+  },
   // Starter potions (Alchemy Cauldron stage 1: Bottle of Water + raw
   // ingredient). Base Potion '🜄' (above, in the main potion block) is the
   // third starter. potionModifier carries through to the true potion made

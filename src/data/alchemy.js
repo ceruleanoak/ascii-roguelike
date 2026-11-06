@@ -17,6 +17,9 @@ export const STARTER_POTION_CHARS = new Set(['🜄', '🜅', '🜆']);
 // char never drifts between the two "currently carrying" checks.
 export const HOT_WATER_CHAR = '🜊';
 export const POISONED_WATER_CHAR = '🜋';
+// Bottle of Slime — scooped from a GooBlob. Like Poisoned Water, anything
+// brewed in it is an Unstable Potion.
+export const SLIME_BOTTLE_CHAR = '⦿';
 
 // The Alchemist's own stock for the Hot Water demo (scriptedEvents.js). Bone
 // in plain Water brews a Base Potion, so the Hot Water is what purifies it.
