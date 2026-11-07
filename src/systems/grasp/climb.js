@@ -16,6 +16,7 @@ import {
 
 const CS = GRID.CELL_SIZE;
 const FLOOR_TOP = (GRID.ROWS - 1) * CS;
+const TOP_WALL = CS;
 const LEFT_WALL = CS;
 const RIGHT_WALL = (GRID.COLS - 1) * CS;
 
@@ -194,8 +195,13 @@ export function update(grasp, dt) {
 
 /**
  * Push one body out of every blocker it overlaps (scenery and Fingers), along
- * the shallowest axis. A body driven into the south edge is crushed: it takes
- * a hit and is shunted to whichever side of the blocker is nearer.
+ * the shallowest axis that keeps it inside the walls and below the top wall
+ * (a Finger hangs from the top edge, so "up" out of one left the arena). A
+ * body wedged between a blocker and a side wall, with no shallow way out, is
+ * pinned against the wall rather than shoved the length of the rock: a
+ * lilting Finger leans half a cell into a one-cell wall gap. A body driven
+ * into the south edge is crushed: it takes a hit and is shunted to whichever
+ * side of the blocker is nearer.
  */
 export function resolveBlockers(grasp, body, blockers) {
   const bw = body.width ?? CS;
@@ -206,14 +212,22 @@ export function resolveBlockers(grasp, body, blockers) {
     const oy = Math.min(p.y + bh, r.y + r.h) - Math.max(p.y, r.y);
     if (ox <= 0 || oy <= 0) continue;
 
-    const pushes = [
+    const all = [
       { axis: 'y', d: r.y + r.h - p.y },  // down
       { axis: 'y', d: -(p.y + bh - r.y) }, // up
       { axis: 'x', d: -(p.x + bw - r.x) }, // left
       { axis: 'x', d: r.x + r.w - p.x },   // right
-    ].filter(push => push.axis === 'y' || (p.x + push.d >= LEFT_WALL && p.x + push.d + bw <= RIGHT_WALL));
+    ];
+    const inside = (push) => push.axis === 'y'
+      ? p.y + push.d >= TOP_WALL
+      : p.x + push.d >= LEFT_WALL && p.x + push.d + bw <= RIGHT_WALL;
+    const pushes = all.filter(inside);
     pushes.sort((a, b) => Math.abs(a.d) - Math.abs(b.d));
-    const push = pushes[0];
+    const wallSide = all.slice(2).find(push => !inside(push));
+    let push = pushes[0];
+    if (wallSide && Math.abs(push.d) > CS) {
+      push = { axis: 'x', d: wallSide.d < 0 ? LEFT_WALL - p.x : RIGHT_WALL - bw - p.x };
+    }
     if (push.axis === 'x') { p.x += push.d; body.velocity.vx = 0; }
     else { p.y += push.d; body.velocity.vy = 0; }
 
