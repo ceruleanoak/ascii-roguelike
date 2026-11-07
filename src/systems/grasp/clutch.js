@@ -76,7 +76,9 @@ function enter(grasp, { wave, mirrored }) {
   const c = grasp.clutch;
   const slot = freeSlots(c)[0];
   if (!slot) return;
-  const flip = (p) => ({ x: (mirrored ? GRID.COLS - 1 - p.x : p.x) * CS, y: p.y * CS });
+  // Mirrors the unit's whole square, not its top-left cell: COLS - 1 - x
+  // set a mirrored hand one cell right of true, into the east wall at x = 1.
+  const flip = (p) => ({ x: (mirrored ? GRID.COLS - SIZE / CS - p.x : p.x) * CS, y: p.y * CS });
   const member = {
     hp: T.CLUTCH_HP, slot, state: 'enter', t: 0, flash: 0,
     path: { p0: flip(wave.p0), p1: flip(wave.p1), p2: slotPosition(grasp, slot), time: T.CLUTCH_ENTER_TIME },

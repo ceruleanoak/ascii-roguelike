@@ -231,11 +231,14 @@ export const CLUTCH_FORMATION = {
   swayCells: 2,
   swayPeriod: 3.2,
 };
-// Each wave enters as two mirrored streams from the top corners along a
-// quadratic bezier (p0 → p1 → the unit's slot), one unit every `stagger` s.
+// Each wave enters as two mirrored streams from above the open north edge
+// along a quadratic bezier (p0 → p1 → the unit's slot), one unit every
+// `stagger` s. Every p0 is off screen, so no hand appears in the open, and
+// every p1 inside the side walls, so no path crosses one.
 export const CLUTCH_WAVES = [
   { count: 8, stagger: 0.28, p0: { x: 3, y: -2 }, p1: { x: 3, y: 16 } },
-  { count: 10, stagger: 0.24, p0: { x: 1, y: 10 }, p1: { x: 14, y: 20 } },
+  // Swings wide and low along the wall before it rises to its slot.
+  { count: 10, stagger: 0.24, p0: { x: 8, y: -2 }, p1: { x: 1, y: 18 } },
   { count: 12, stagger: 0.2, p0: { x: 14, y: -2 }, p1: { x: 2, y: 12 } },
 ];
 
