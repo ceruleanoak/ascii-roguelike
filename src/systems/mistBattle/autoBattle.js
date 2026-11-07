@@ -21,6 +21,7 @@
 import { GRID, PHYSICS } from '../../game/GameConfig.js';
 import { WEAPON_TYPES } from '../../data/items.js';
 import { steerToward } from '../npcSteering.js';
+import { PlayerInputSystem } from '../PlayerInputSystem.js';
 import { resolveAttacksOn, reportHit } from '../mirroredWeapon.js';
 
 const CELL = GRID.CELL_SIZE;
@@ -49,10 +50,17 @@ const ROLL_CHANCE = 0.35;
 const LEASH = 6 * CELL;
 // Inside this distance of a goal a body stops instead of jittering on it.
 const ARRIVE = CELL * 0.4;
+// A ranged body not yet lined up settles this close to its Firing Post: two
+// bodies each stopped a full ARRIVE off their posts can sit just outside
+// ALIGN_TOLERANCE of each other and never shoot.
+const LINE_UP_ARRIVE = ALIGN_TOLERANCE * 0.4;
+// A weapon that can't fire for longer than this (data seconds: an emptied
+// bow reloading, a long cooldown) is set down for one of the other kind.
+const MAX_WAIT = 3;
 
 /** Fresh per-body AI state (MistBattleSystem stores it on the member). */
 export function createBrain() {
-  return { thinkTimer: 0, target: null, slotCooldown: 0, goal: null };
+  return { thinkTimer: 0, target: null, slotCooldown: 0, goal: null, goalRadius: 0 };
 }
 
 const center = (body) => ({ x: body.position.x + CELL / 2, y: body.position.y + CELL / 2 });
@@ -110,41 +118,57 @@ function nearestRival(body, rivals) {
 }
 
 // Slot choice: a weapon of the preferred kind for this distance, else one of
-// the other kind when the body holds nothing usable. Only the held weapon's
-// timers tick (as for the player: main.js updatePlayerMechanics), so a
-// weapon put down mid-cooldown is still cooling when it is picked back up.
-// The choice therefore goes by kind, the readiest of that kind first, never
-// by readiness alone: a body that drew its third weapon would otherwise never
-// see the first two ready again. A charging weapon is never dropped. Returns
-// true when the body switched slots.
+// the other kind. Only the held weapon's timers tick (as for the player:
+// main.js updatePlayerMechanics), so a weapon put down mid-cooldown is still
+// cooling when it is picked back up. The choice therefore goes by kind, the
+// readiest of that kind first, never by readiness alone: a body that drew its
+// third weapon would otherwise never see the first two ready again. A held
+// weapon of the preferred kind is kept unless it can't fire for more than
+// MAX_WAIT (an emptied bow reloading); then the readiest weapon of either
+// kind that can fire sooner takes its place. A charging weapon is never
+// dropped. Returns true when the body switched slots.
 function chooseSlot(member, dist) {
   const { body, brain } = member;
-  if (body.heldItem?.isCharging || body.heldItem?.windupActive) return false;
+  const held = body.heldItem;
+  if (held?.isCharging || held?.windupActive) return false;
   if (brain.slotCooldown > 0) return false;
   const prefer = dist > RANGED_RANGE ? 'ranged' : 'melee';
-  const heldKind = weaponKind(body.heldItem);
-  if (heldKind === prefer) return false;
-  const readiest = (kind) => {
+  const heldKind = weaponKind(held);
+  if (heldKind === prefer && waitOf(held) <= MAX_WAIT) return false;
+  // The readiest weapon of `kind` in another slot that fires sooner than
+  // `below` (ties go to the higher damageRate), or -1.
+  const readiest = (kind, below) => {
     let best = -1;
     let bestWait = Infinity;
     let bestRate = -Infinity;
     body.quickSlots.forEach((item, i) => {
-      if (body.destroyedSlots?.[i] || weaponKind(item) !== kind) return;
-      const wait = item.canUse() ? 0 : Math.max(0, item.cooldownTimer);
+      if (i === body.activeSlotIndex || body.destroyedSlots?.[i] || weaponKind(item) !== kind) return;
+      const wait = waitOf(item);
+      if (wait >= below) return;
       const rate = damageRate(item);
-      if (wait < bestWait || (wait === bestWait && rate > bestRate)) {
+      if (best < 0 || wait < bestWait || (wait === bestWait && rate > bestRate)) {
         best = i; bestWait = wait; bestRate = rate;
       }
     });
     return best;
   };
-  let index = readiest(prefer);
-  if (index < 0 && !heldKind) index = readiest(prefer === 'ranged' ? 'melee' : 'ranged');
-  if (index < 0 || index === body.activeSlotIndex) return false;
-  body.heldItem?.cancelChargeAndReload?.();
+  const other = prefer === 'ranged' ? 'melee' : 'ranged';
+  // Nothing usable in hand: any weapon beats none. Otherwise only a weapon
+  // that fires within MAX_WAIT is worth the switch.
+  const limit = heldKind ? MAX_WAIT + 1e-6 : Infinity;
+  let index = readiest(prefer, limit);
+  if (index < 0 && heldKind !== other) index = readiest(other, limit);
+  if (index < 0) return false;
+  held?.cancelChargeAndReload?.();
   body.activeSlotIndex = index;
   brain.slotCooldown = SLOT_SWITCH_COOLDOWN;
   return true;
+}
+
+// Data seconds until `item` can fire: 0 when ready, else its cooldown (an
+// emptied bow's reload runs on the cooldown timer too).
+function waitOf(item) {
+  return item.canUse() ? 0 : Math.max(0, item.cooldownTimer);
 }
 
 function clampToLeash(point, arena) {
@@ -226,13 +250,14 @@ function think(game, member, rivals, arena, onSlotSwitch) {
   const kind = weaponKind(body.heldItem);
   if (kind === 'ranged') {
     brain.goal = firingPost(from, at, arena);
+    brain.goalRadius = 0;
   } else {
-    // Close to reach: aim for the point just short of the target.
-    const stop = Math.max(0, dist - reachOf(body.heldItem) * 0.7);
-    brain.goal = clampToLeash({
-      x: from.x + ((at.x - from.x) / (dist || 1)) * stop,
-      y: from.y + ((at.y - from.y) / (dist || 1)) * stop,
-    }, arena);
+    // Close to reach: head for the target itself and stop once inside most
+    // of the reach. Aiming at a point short of it instead could set the goal
+    // inside a pillar between the two, where steering can't arrive or route
+    // and both bodies stood still for the rest of the battle.
+    brain.goal = clampToLeash(at, arena);
+    brain.goalRadius = reachOf(body.heldItem) * 0.7;
   }
 }
 
@@ -252,10 +277,12 @@ function attack(member, dist, aligned, fire) {
   if (good && body.canAttack() && item.canUse()) fire(body.useHeldItem());
 }
 
-function move(game, member) {
+function move(game, member, aligned) {
   const { body, brain } = member;
   if (body.dodgeRoll.active || body.continuousRollActive) return; // the roll owns velocity
-  if (!brain.goal || body.heldItem?.isCharging || body.isLocked()) {
+  // The player's own attack rules hold here too: a drawn charge or a planted
+  // stance stops the feet, a firing gun or a held windup slows them.
+  if (!brain.goal || body.heldItem?.isCharging || body.isLocked() || PlayerInputSystem.plantsFeet(body)) {
     body.velocity.vx = 0;
     body.velocity.vy = 0;
     return;
@@ -263,13 +290,26 @@ function move(game, member) {
   // `goal` is a center point; steering works on the body's top-left.
   const x = brain.goal.x - CELL / 2;
   const y = brain.goal.y - CELL / 2;
-  if (Math.hypot(x - body.position.x, y - body.position.y) < ARRIVE) {
+  const arrive = Math.max(brain.goalRadius,
+    weaponKind(body.heldItem) === 'ranged' && !aligned ? LINE_UP_ARRIVE : ARRIVE);
+  if (Math.hypot(x - body.position.x, y - body.position.y) < arrive) {
     body.velocity.vx = 0;
     body.velocity.vy = 0;
     return;
   }
-  const speed = (body.getRollSpeed() / 1.1) * body.getStatusSpeedMultiplier();
-  steerToward(game, body, x, y, speed);
+  const speed = (body.getRollSpeed() / 1.1) * body.getStatusSpeedMultiplier()
+    * PlayerInputSystem.attackSpeedMultiplier(body);
+  const { mode } = steerToward(game, body, x, y, speed);
+  // Steering waits at the shore of a hazard its goal stands in (an NPC won't
+  // wade in). A body is a player and wades: two rivals each standing in water
+  // otherwise waited on each other's shores for the rest of the battle.
+  if (mode === 'shore') {
+    const dx = x - body.position.x;
+    const dy = y - body.position.y;
+    const len = Math.hypot(dx, dy) || 1;
+    body.velocity.vx = (dx / len) * speed;
+    body.velocity.vy = (dy / len) * speed;
+  }
 }
 
 /**
@@ -296,13 +336,17 @@ export function driveBody(game, member, rivals, arena, deltaTime, { fire, onSlot
   const at = center(target);
   const dx = at.x - from.x;
   const dy = at.y - from.y;
+  // A swing keeps the facing it started with, as the player's does while
+  // SPACE is held (main.js lockFacing): a body can't track its rival through
+  // its own windup.
   const facing = facingToward(dx, dy);
-  if (facing.x !== 0 || facing.y !== 0) {
+  if ((facing.x !== 0 || facing.y !== 0) && !PlayerInputSystem.swingHoldsFacing(body.heldItem)) {
     body.facing.x = facing.x;
     body.facing.y = facing.y;
   }
-  attack(member, Math.hypot(dx, dy), linedUp(dx, dy), fire);
-  move(game, member);
+  const aligned = linedUp(dx, dy);
+  attack(member, Math.hypot(dx, dy), aligned, fire);
+  move(game, member, aligned);
 }
 
 /**
