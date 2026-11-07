@@ -225,19 +225,43 @@ export class GraspSystem {
     }
   }
 
-  // The camera closes in on the Trine; once it settles, Act 2 begins.
+  // The camera closes in on the Trine; once it settles, Act 2 begins. The
+  // hold stays on through Act 2, fitted to the bodies still standing.
   _startZoom() {
     this._setPhase('zoom');
-    this.game.cameraZoomSystem.holdZoom(T.ZOOM_SCALE, () => this._trineCentroid());
+    this.game.cameraZoomSystem.holdZoom(() => this._trineFitScale(), () => this._trineCenter());
   }
 
-  // Canvas-pixel center of the living Trine (CameraZoomSystem focus).
-  _trineCentroid() {
+  // Canvas-pixel box around the living Trine's cells, or null.
+  _trineBounds() {
     const bodies = this.bodies();
     if (bodies.length === 0) return null;
-    let x = 0, y = 0;
-    for (const b of bodies) { x += b.position.x + CS / 2; y += b.position.y + CS / 2; }
-    return { x: x / bodies.length, y: y / bodies.length };
+    let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
+    for (const b of bodies) {
+      left = Math.min(left, b.position.x);
+      top = Math.min(top, b.position.y);
+      right = Math.max(right, b.position.x + CS);
+      bottom = Math.max(bottom, b.position.y + CS);
+    }
+    return { left, top, right, bottom };
+  }
+
+  // The hold's focus: the middle of that box, not the bodies' mean — the
+  // fit below sizes the frame to the box, so the box is what it must center.
+  _trineCenter() {
+    const box = this._trineBounds();
+    return box && { x: (box.left + box.right) / 2, y: (box.top + box.bottom) / 2 };
+  }
+
+  // The hold's scale: as tight as the Summit's ZOOM_SCALE while the box plus
+  // ZOOM_FIT_MARGIN on each side still fits the screen, opening toward 1 as
+  // the bodies spread (Act 2's fight ranges over its whole leash). A lone
+  // victor fits at the full ZOOM_SCALE.
+  _trineFitScale() {
+    const box = this._trineBounds();
+    if (!box) return T.ZOOM_SCALE;
+    const span = Math.max(box.right - box.left, box.bottom - box.top) + 2 * T.ZOOM_FIT_MARGIN;
+    return Math.max(1, Math.min(T.ZOOM_SCALE, Math.min(GRID.WIDTH, GRID.HEIGHT) / span));
   }
 
   /**

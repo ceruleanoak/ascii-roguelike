@@ -4,6 +4,12 @@ import { isDeathHeldOffSurface, isInteriorActive, activeInteriorFloor } from './
 // Time constant (seconds) of a scripted frame's pan toward a moved focus:
 // ~95% of the way there in three of these.
 const SCRIPTED_FOCUS_EASE_SECONDS = 0.3;
+// Time constants of a fitted hold's scale (holdZoom with a scale function).
+// Opening out matches the pan, so a body heading for the edge stays in frame;
+// closing back in is four times slower, so a gap that opens and shuts in a
+// moment barely moves the frame instead of pumping it in and out.
+const SCRIPTED_FIT_OUT_SECONDS = 0.3;
+const SCRIPTED_FIT_IN_SECONDS = 1.2;
 
 /**
  * CameraZoomSystem — combat-proximity camera zoom.
@@ -55,7 +61,9 @@ const SCRIPTED_FOCUS_EASE_SECONDS = 0.3;
  *
  * A scripted scene can take the frame over with holdZoom(scale, focus) — every
  * trigger above is ignored until releaseZoom(). The Grasp holds the climb
- * fully open at 1.0 and ends Act 1 by easing in on the Trine (GraspSystem).
+ * fully open at 1.0 and ends Act 1 by easing in on the Trine (GraspSystem);
+ * through Act 2 that hold is fitted — its scale follows the bodies still
+ * standing, out as they spread and back in as they close.
  * Entering TITLE snaps the frame open instead of easing (reset()).
  */
 export class CameraZoomSystem {
@@ -74,7 +82,7 @@ export class CameraZoomSystem {
     // the canvas-pixel point to frame on, or null to keep the player as the
     // focus, and `at` is where the frame is actually centered — it eases
     // toward focus() (_easeScriptedFocus) so a jump in the focus is a pan,
-    // not a cut.
+    // not a cut. A fitted hold also carries `fit`, its eased scale.
     this.scripted = null;
   }
 
@@ -82,10 +90,13 @@ export class CameraZoomSystem {
    * Take the frame out of the combat trigger's hands: ease to `scale` framed
    * on `focus()` (canvas pixels; omitted = the player) until releaseZoom().
    * Scale 1 holds the frame fully open — a scripted scene that needs the
-   * whole room on screen (the Grasp's climb) uses it that way.
+   * whole room on screen (the Grasp's climb) uses it that way. `scale` may
+   * instead be a function, read every frame: a fitted hold, whose scale the
+   * camera eases toward it (_fitScriptedScale) — the scene says how tight
+   * the frame can be, the camera decides how fast it gets there.
    */
   holdZoom(scale, focus = null) {
-    this.scripted = { scale, focus, at: null };
+    this.scripted = { scale, focus, at: null, fit: null };
   }
 
   /** Hand the frame back to the combat trigger. */
@@ -211,7 +222,7 @@ export class CameraZoomSystem {
 
       // A scripted frame overrides every trigger above, focus included.
       if (this.scripted) {
-        desiredScale = this.scripted.scale;
+        desiredScale = this._scriptedScale(deltaTime);
         const focus = this._easeScriptedFocus(deltaTime);
         if (focus && desiredScale > 1) {
           this.originXPercent = this._computeClampedOrigin((focus.x / GRID.WIDTH) * 100, roomLeftPercent, roomRightPercent, desiredScale);
@@ -247,6 +258,26 @@ export class CameraZoomSystem {
       at.y += (target.y - at.y) * k;
     }
     return this.scripted.at;
+  }
+
+  // The scripted frame's scale this frame. A fitted hold opens on the usual
+  // eased transition (_tickZoom), aimed at its first fit; once that settles
+  // the scale follows the fit itself, eased here, and current and target
+  // move together — _tickZoom's fixed-length transition would restart every
+  // frame against a target that moves every frame, and crawl.
+  _scriptedScale(deltaTime) {
+    const s = this.scripted;
+    if (typeof s.scale !== 'function') return s.scale;
+    const want = s.scale();
+    if (s.fit === null) {
+      s.fit = want;
+      return want;
+    }
+    if (this.currentZoom !== this.targetZoom) return this.targetZoom;
+    const tau = want < s.fit ? SCRIPTED_FIT_OUT_SECONDS : SCRIPTED_FIT_IN_SECONDS;
+    s.fit += (want - s.fit) * (1 - Math.exp(-deltaTime / tau));
+    this.currentZoom = this.targetZoom = this.startZoom = s.fit;
+    return s.fit;
   }
 
   /** The tightest scale this layer's frame can reach. */

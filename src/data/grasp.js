@@ -339,6 +339,9 @@ export const GRASP_TUNING = {
   WALL_BUILD_TIME: 0.8,
   SOUTH_EXPOSED_TIME: 2.5,
   ZOOM_SCALE: 2,
+  // The Summit's hold keeps this much room around the bodies on each side,
+  // opening the zoom out when they spread too far for ZOOM_SCALE.
+  ZOOM_FIT_MARGIN: 2 * CS,
 
   // Hits on any Grasp unit with no attack id (burn ticks, splash) are spaced
   // this far apart.

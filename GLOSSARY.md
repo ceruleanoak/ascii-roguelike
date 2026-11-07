@@ -1152,8 +1152,11 @@ identity, not standard programming terms.
 ### Summit
 - **Definition:** The end of the climb and of Act 1. The scroll stops, the north wall builds back,
   the south stays open for `SOUTH_EXPOSED_TIME`, then closes, and the camera zooms in on the
-  Trine. When the zoom settles, Act 2 begins.
-- **In code:** the `summit` / `zoom` phases of `GraspSystem`; `CameraZoomSystem.holdZoom`; ends in
+  Trine. When the zoom settles, Act 2 begins. The zoom holds through Act 2, fitted to the bodies
+  still standing: as tight as `ZOOM_SCALE` while they and `ZOOM_FIT_MARGIN` around them fit the
+  screen, opening toward 1 as they spread, and closing back in on the lone victor.
+- **In code:** the `summit` / `zoom` phases of `GraspSystem`; `CameraZoomSystem.holdZoom` with a
+  scale function (`GraspSystem._trineFitScale`, eased by `_scriptedScale`); ends in
   `MistBattleSystem.startAct2()`.
 - **Not:** Act 2 itself; a Mountain room or the Ridge.
 
