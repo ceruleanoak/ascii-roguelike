@@ -40,6 +40,7 @@ import { tagInteriorPlane, tagLootLayer, planeOf } from './PlaneSystem.js';
 import { fizzleToSpark } from './MagicSystem.js';
 import { applyDotTicks } from './StatusEffects.js';
 import { enemyInRadius, enemyVisualAnchor } from './enemyHitTest.js';
+import { countsAsBoss } from '../entities/bossTest.js';
 
 const C = GRID.CELL_SIZE;
 const DUST_BURST_RADIUS = C * 2.5;
@@ -127,7 +128,7 @@ export class WeaponEffectsSystem {
   _ensnare(enemy) {
     if (enemy.hp <= 0) return;
     const mass = enemy.mass ?? enemy.data?.mass ?? 1;
-    const huge = enemy.isBoss || enemy.isBossEntity || enemy.data?.tier === 'boss' || mass >= HUGE_MASS;
+    const huge = countsAsBoss(enemy) || mass >= HUGE_MASS;
     if (huge) {
       const at = enemyVisualAnchor(enemy);
       this.game.combatSystem.createDamageNumber('SHRUG', at.x, at.y - 14, '#c8a060');

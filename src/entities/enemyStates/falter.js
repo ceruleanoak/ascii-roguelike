@@ -1,3 +1,5 @@
+import { countsAsBoss } from '../bossTest.js';
+
 // Falter — a beat where an Enemy stops and doesn't commit, rolled on its
 // decision frames while it is in Approach or Flee.
 //
@@ -20,15 +22,10 @@
 // Bosses never falter unless their data authors a `falter` block on purpose.
 export const FALTER_DEFAULT_CHANCE = 0.15;
 
-// Same boss test as Enemy.getNearDeathBlinkColor.
-function isBoss(enemy) {
-  return enemy.isBoss || enemy.isBossEntity || enemy.data?.tier === 'boss';
-}
-
 function falterConfig(enemy, cfg) {
   const authored = cfg?.falter;
   if (authored === false) return null;
-  if (authored == null && isBoss(enemy)) return null;
+  if (authored == null && countsAsBoss(enemy)) return null;
   return {
     chance: authored?.chance ?? FALTER_DEFAULT_CHANCE,
     // One thinking beat by default, so a slow Enemy falters for longer than a

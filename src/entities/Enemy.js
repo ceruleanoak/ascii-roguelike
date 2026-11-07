@@ -60,6 +60,7 @@ import {
 import { absorbsZap } from '../systems/ImbuePoolSystem.js';
 import { gooRenderScale, gooFontSize, gooBodyHitbox } from './gooBody.js';
 import { arrowCharForAngle } from './arrowGlyph.js';
+import { countsAsBoss } from './bossTest.js';
 
 // ─── Enemy AI Debug Logger ─────────────────────────────────────────────────
 // Toggle in browser console: window.ENEMY_AI_DEBUG = true
@@ -2175,7 +2176,7 @@ export class Enemy {
   // signal as the player (Player.getDisplayColor). Date.now() keeps all parts
   // of a composite boss blinking in phase.
   getNearDeathBlinkColor() {
-    if (!(this.isBoss || this.isBossEntity || this.data?.tier === 'boss')) return null;
+    if (!countsAsBoss(this)) return null;
     if (this.hp <= 0 || this.hp > this.maxHp * 0.3) return null;
     return Math.floor(Date.now() / 250) % 2 === 0 ? '#660000' : null;
   }

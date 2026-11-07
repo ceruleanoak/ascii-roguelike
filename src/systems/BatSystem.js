@@ -1,6 +1,7 @@
 import { GRID } from '../game/GameConfig.js';
 import { planeOf } from './PlaneSystem.js';
 import { enemyNearestPoint } from './enemyHitTest.js';
+import { countsAsBoss } from '../entities/bossTest.js';
 
 // Bat weapons (data.batCharge — Bat, Rubber Bat): hold-to-windup swing.
 //
@@ -145,7 +146,7 @@ export class BatSystem {
   // Heavy = mass ≥ 2 or boss — they take the hit but hold their ground
   // (consistent with the ≥50% mass-based knockback resistance at that mass).
   applyLaunch(enemy, attack) {
-    const isHeavy = (enemy.data.mass ?? 1) >= 2 || enemy.data.isBoss || enemy.isBossEntity;
+    const isHeavy = (enemy.data.mass ?? 1) >= 2 || countsAsBoss(enemy);
     if (isHeavy) return;
     const dir = this._steerLaunch(enemy, Math.cos(attack.launchAngle), Math.sin(attack.launchAngle));
     this.game.physicsSystem.applyKnockbackDir(enemy, dir.x, dir.y, attack.launchForce, 0.45);

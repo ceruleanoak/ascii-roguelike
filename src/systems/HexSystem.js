@@ -4,6 +4,7 @@ import { ENEMIES } from '../data/enemies.js';
 import { inSamePlane, tagInteriorPlane } from './PlaneSystem.js';
 import { MAX_PIPS, hasStatusImmunity } from './StatusEffects.js';
 import { enemyDistance, enemyVisualAnchor } from './enemyHitTest.js';
+import { countsAsBoss } from '../entities/bossTest.js';
 
 /** The Hex Witch enemy whose curse the Witch companion casts, aimed at enemies instead. */
 const HEX_WITCH = ENEMIES['H'];
@@ -135,8 +136,7 @@ export class HexSystem {
   }
 
   _canBecomeFrog(enemy) {
-    return enemy.char !== FROG_CHAR
-      && !enemy.isBoss && !enemy.isBossEntity && enemy.data?.tier !== 'boss';
+    return enemy.char !== FROG_CHAR && !countsAsBoss(enemy);
   }
 
   /** The nearest living enemy opposing the player within `range` of `caster` that `accepts` passes. */

@@ -29,6 +29,7 @@ import { vaultWallBlocksReach } from './vaultWalls.js';
 import { strikeWatcherEye } from './WatcherEye.js';
 import { knockbackTakenScale } from '../entities/knockbackTaken.js';
 import { enemyOverlapsBox, enemyNearestPoint, enemyVisualAnchor } from './enemyHitTest.js';
+import { countsAsBoss } from '../entities/bossTest.js';
 
 // Default maximum travel distance (in pixels) for gun bullets. Roughly 2/3 of a
 // room — keeps cross-room sniping in check while still feeling powerful.
@@ -587,13 +588,21 @@ export class CombatSystem {
             break;
           }
 
-          // Special handling for transmutation bolt - polymorph enemy
+          // Special handling for transmutation bolt - polymorph enemy.
+          // A Boss or any part of one is spent against, not transmuted:
+          // TransmutationSystem takes the struck enemy out of the room, which
+          // for a Great Hand, a Finger or a Clutch hand tears a piece out of
+          // the Grasp that GraspSystem still drives.
           if (proj.type === 'transmutation_bolt') {
-            // Store polymorph event to process after projectile loop
-            this.polymorphEvents.push({
-              enemy: enemy,
-              position: enemy.position
-            });
+            if (countsAsBoss(enemy)) {
+              this.createDamageNumber('IMMUNE', at.x, at.y, '#cccccc');
+            } else {
+              // Store polymorph event to process after projectile loop
+              this.polymorphEvents.push({
+                enemy: enemy,
+                position: enemy.position
+              });
+            }
             hit = true;
             break;
           }
