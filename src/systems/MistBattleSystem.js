@@ -803,11 +803,13 @@ export class MistBattleSystem {
   // first two taps attack as usual; the third rotates instead.
 
   /**
-   * Called on every EXPLORE SPACE press before the attack. Returns true when
-   * the press completed a triple-tap and Rotated (the press is consumed).
+   * Called on every SPACE press, ahead of every other SPACE use (pickup,
+   * containers, the attack), so each tap counts toward the triple-tap.
+   * Returns true when the press completed one and Rotated (the press is
+   * consumed). Outside EXPLORE (GAME_OVER after the Trine falls) no tap counts.
    */
   tryRotate() {
-    if (!this.active) return false;
+    if (!this.active || this.game.stateMachine.getCurrentState() !== GAME_STATES.EXPLORE) return false;
     if (this.act === 2) return true; // Act 2 takes no input: SPACE does nothing
     const inWindow = this.clock - this.lastSpacePress <= ROTATE_TAP_WINDOW;
     this.spaceTaps = inWindow ? this.spaceTaps + 1 : 1;

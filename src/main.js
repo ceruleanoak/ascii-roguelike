@@ -1943,8 +1943,7 @@ class Game {
       // Lock movement during fishing cast/wait
       const fishingBlocked = this.player.fishingLocked;
       // Lock movement during windup and attack flash for weapons that require a planted stance
-      const windupLocked = !!(this.player.heldItem?.data?.locksMovement &&
-        (this.player.heldItem?.windupActive || this.player.heldItem?.attackLockTimer > 0));
+      const windupLocked = PlayerInputSystem.plantsFeet(this.player);
       // Lock facing for non-bow weapons during attack; allow aiming while charging bow; lock during trap charge; FIGHT's committed swing
       const lockFacing = !!this.trapCharging || (this.keys.space && this.player.heldItem && this.player.heldItem.data.weaponType !== 'BOW') || this.fightSystem.locksFacing();
       // Lock movement for the TITLE -> REST spawn fade-in, until alpha reaches 1
@@ -2957,6 +2956,9 @@ class Game {
       }
     }
 
+    // Triple-tap SPACE = Rotate; every tap counts, whatever else it does.
+    if (this.mistBattleSystem.tryRotate()) return;
+
     // SPACE beside a Scripted Event's actor starts it (ScriptedEventSystem).
     if (this.scriptedEventSystem.handleSpacePress()) return;
 
@@ -3223,7 +3225,6 @@ class Game {
 
       // If player has a weapon and can attack, attack (gem/bread gating +
       // charge SFX + attack creation live in CombatSystem.tryUseHeldWeapon)
-      if (this.mistBattleSystem.tryRotate()) return; // triple-tap SPACE = Rotate
       // A spent item in hand (Item.isSpent) fights like empty hands.
       const armed = this.player.heldItem && !this.player.heldItem.isSpent();
       if (armed && !this.captiveInteractionThisFrame && this.player.canAttack()) {
