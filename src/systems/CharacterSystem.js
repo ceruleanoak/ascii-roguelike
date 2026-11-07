@@ -485,8 +485,7 @@ export class CharacterSystem {
     if (!weapon || weapon.data.weaponSubtype === 'dagger' || weapon.data.weaponType === 'BOW' || weapon.data.weaponType === 'UTILITY' || !player.canAttack()) return;
     const attack = player.useHeldItem();
     if (attack) {
-      game.combatSystem.createAttack(game.applyGreenDamageModifier(attack), game._activeEnemies());
-      game.triggerGreenActionCooldown();
+      this.fireAttack(attack);
       game._emitSoundEvent();
     }
   }
@@ -673,6 +672,19 @@ export class CharacterSystem {
     return withBonus(attack, bonus);
   }
 
+  // Commit an attack built from game.player's held weapon, the way every
+  // player attack lands: the damage modifier (shrines, Frog Coin, training)
+  // baked in, then the green action cooldown spent. Whoever is game.player
+  // is the attacker, so an Act 2 body fires through here under
+  // MistBattleSystem._withBody. A wand whose proximity check fails returns
+  // false and spends no cooldown; the caller refunds the wand.
+  fireAttack(attack) {
+    const game = this.game;
+    const succeeded = game.combatSystem.createAttack(this.applyGreenDamageModifier(attack), game._activeEnemies());
+    if (succeeded !== false) this.triggerGreenActionCooldown();
+    return succeeded;
+  }
+
   triggerGreenActionCooldown() {
     const game = this.game;
     if (game.activeCharacterType === 'green' && game.player) {
@@ -702,12 +714,9 @@ export class CharacterSystem {
       } else {
         const attack = player.useHeldItem();
         if (attack) {
-          const enemies = game._activeEnemies();
-          const succeeded = game.combatSystem.createAttack(this.applyGreenDamageModifier(attack), enemies);
-          if (weapon.data.weaponType === 'WAND' && succeeded === false) {
+          if (this.fireAttack(attack) === false && weapon.data.weaponType === 'WAND') {
             weapon.cooldownTimer = 0;
           } else {
-            this.triggerGreenActionCooldown();
             game._emitSoundEvent();
           }
         }

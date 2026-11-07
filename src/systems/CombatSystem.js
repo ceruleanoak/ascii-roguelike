@@ -1653,10 +1653,7 @@ export class CombatSystem {
     if (held?.windupActive && held.windupTimer === held.windupDuration && held.holdsWindup()) {
       game.audioSystem.playStoppableSFXStretched('melee_charge', held.windupDuration / PHYSICS.WEAPON_TIMER_RATE);
     }
-    if (attack) {
-      this.createAttack(game.applyGreenDamageModifier(attack), game._activeEnemies());
-      game.triggerGreenActionCooldown();
-    }
+    if (attack) game.characterSystem.fireAttack(attack);
   }
 
   createAttack(attackData, enemies = []) {

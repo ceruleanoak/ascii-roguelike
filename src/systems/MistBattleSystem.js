@@ -591,7 +591,7 @@ export class MistBattleSystem {
       }
       if (this.ending || body.hp <= 0) continue;
       const rivals = living.filter(m => m !== member && m.body.hp > 0).map(m => m.body);
-      driveBody(game, member, rivals, this.arena, deltaTime, { fire: this._fire, punch: this._punch, onSlotSwitch: this._flashSwap });
+      driveBody(game, member, rivals, this.arena, deltaTime, { fire: this._fireAsPlayer, punch: this._punch, onSlotSwitch: this._flashSwap });
     }
     // The bodies shoulder each other apart instead of stacking, pushed after
     // steering so the push rides this frame's physics step.
@@ -809,6 +809,14 @@ export class MistBattleSystem {
 
   _fire = (attack) => {
     if (attack) this.game.combatSystem.createAttack(attack, this.game._activeEnemies());
+  };
+
+  // An Act 2 body's attack lands as the player's does (fireAttack: the
+  // damage modifier and the green action cooldown), read off that body
+  // standing in as game.player. Its windups already take the same path
+  // through _tickBody's tickHeldItem.
+  _fireAsPlayer = (member, attack) => {
+    if (attack) this._withBody(member, () => this.game.characterSystem.fireAttack(attack));
   };
 
   // An empty-handed Act 2 body's Punch, thrown with its own gear worn so its

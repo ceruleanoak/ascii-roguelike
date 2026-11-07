@@ -323,11 +323,11 @@ function attack(member, dist, aligned, fire, punch) {
   const kind = weaponKind(item);
   if (!kind) return;
   if (item.isCharging) {
-    if (item.chargeTime >= item.maxChargeTime && body.canAttack()) fire(item.releaseBow());
+    if (item.chargeTime >= item.maxChargeTime && body.canAttack()) fire(member, item.releaseBow());
     return;
   }
   const good = kind === 'melee' ? dist <= reachOf(item) : aligned;
-  if (good && body.canAttack() && item.canUse()) fire(body.useHeldItem());
+  if (good && body.canAttack() && item.canUse()) fire(member, body.useHeldItem());
 }
 
 function move(game, member, aligned) {
@@ -367,8 +367,8 @@ function move(game, member, aligned) {
 
 /**
  * Drive one body for this frame. `rivals` are the other living bodies,
- * `arena` the center point goals are leashed to. `fire(attack)` hands an
- * attack to CombatSystem; `punch(member)` throws the body's Punch when it has
+ * `arena` the center point goals are leashed to. `fire(member, attack)`
+ * commits the body's attack as the player's own; `punch(member)` throws the body's Punch when it has
  * nothing to swing; `onSlotSwitch(member)` is told when the body draws a
  * different weapon.
  */

@@ -3387,8 +3387,7 @@ class Game {
         if (this.player.canAttack()) {
           const attack = this.player.heldItem.releaseBow();
           if (attack) {
-            this.combatSystem.createAttack(this.applyGreenDamageModifier(attack), this._activeEnemies());
-            this.triggerGreenActionCooldown();
+            this.characterSystem.fireAttack(attack);
             this._emitSoundEvent();
           }
         }
