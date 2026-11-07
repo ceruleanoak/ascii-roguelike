@@ -4,8 +4,9 @@
 // Each body is weapon-driven:
 // - it targets the nearest living rival and faces it in eight directions;
 // - it picks its slot by range: past RANGED_RANGE a ranged weapon (gun, bow,
-//   boomerang), inside it a melee weapon, falling back to whichever kind is
-//   ready (utility items like keys are never drawn);
+//   boomerang), inside it a melee weapon, falling back to the other kind only
+//   when it carries none of the preferred one (utility items like keys are
+//   never drawn);
 // - melee closes to reach, ranged holds a Firing Post: a point PREFERRED_RANGE
 //   from the target on one of its eight lines, so its shots fly true;
 // - it rolls out of an incoming rival shot or wind-up with its own
@@ -64,6 +65,15 @@ function weaponKind(item) {
   return 'melee';
 }
 
+// Damage per swing over the swing's full cycle (windup plus recovery, data
+// seconds). Breaks a tie between two weapons of one kind, so a body reaches
+// for its sword before a torch or a flag that hits for little or nothing.
+function damageRate(item) {
+  const d = item.data;
+  const cycle = (d.windup || 0) + (d.recovery || d.cooldown || 0.5);
+  return (d.damage || 0) / cycle;
+}
+
 function reachOf(item) {
   return item?.data.weaponSubtype === 'whip' ? WHIP_REACH : MELEE_REACH;
 }
@@ -99,18 +109,37 @@ function nearestRival(body, rivals) {
   return best;
 }
 
-// Slot choice: the preferred kind for this distance if one is ready, else the
-// other kind if ready, else stay put. A charging weapon is never dropped.
-// Returns true when the body switched slots.
+// Slot choice: a weapon of the preferred kind for this distance, else one of
+// the other kind when the body holds nothing usable. Only the held weapon's
+// timers tick (as for the player: main.js updatePlayerMechanics), so a
+// weapon put down mid-cooldown is still cooling when it is picked back up.
+// The choice therefore goes by kind, the readiest of that kind first, never
+// by readiness alone: a body that drew its third weapon would otherwise never
+// see the first two ready again. A charging weapon is never dropped. Returns
+// true when the body switched slots.
 function chooseSlot(member, dist) {
   const { body, brain } = member;
   if (body.heldItem?.isCharging || body.heldItem?.windupActive) return false;
   if (brain.slotCooldown > 0) return false;
   const prefer = dist > RANGED_RANGE ? 'ranged' : 'melee';
-  const ready = (kind) => body.quickSlots.findIndex((item, i) =>
-    !body.destroyedSlots?.[i] && weaponKind(item) === kind && item.canUse());
-  let index = ready(prefer);
-  if (index < 0) index = ready(prefer === 'ranged' ? 'melee' : 'ranged');
+  const heldKind = weaponKind(body.heldItem);
+  if (heldKind === prefer) return false;
+  const readiest = (kind) => {
+    let best = -1;
+    let bestWait = Infinity;
+    let bestRate = -Infinity;
+    body.quickSlots.forEach((item, i) => {
+      if (body.destroyedSlots?.[i] || weaponKind(item) !== kind) return;
+      const wait = item.canUse() ? 0 : Math.max(0, item.cooldownTimer);
+      const rate = damageRate(item);
+      if (wait < bestWait || (wait === bestWait && rate > bestRate)) {
+        best = i; bestWait = wait; bestRate = rate;
+      }
+    });
+    return best;
+  };
+  let index = readiest(prefer);
+  if (index < 0 && !heldKind) index = readiest(prefer === 'ranged' ? 'melee' : 'ranged');
   if (index < 0 || index === body.activeSlotIndex) return false;
   body.heldItem?.cancelChargeAndReload?.();
   body.activeSlotIndex = index;
