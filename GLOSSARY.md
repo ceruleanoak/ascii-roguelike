@@ -1211,14 +1211,17 @@ identity, not standard programming terms.
 ### Held
 - **Definition:** A Trine body in a Great Hand's grip. It is out of the Trine: it doesn't mirror
   the Primary or hold its corner, can't be Rotated to, and takes 2 HP through armor every 2
-  seconds. A caught Primary hands the apex to the next free body. The third blow on the holding
+  seconds. The holding hand still fights as a fist: it shivers, then lunges at the Primary, and
+  its touch hurts and knocks the Primary back instead of catching it. A caught Primary hands the
+  apex to the next free body. The third blow on the holding
   hand since the catch lets it go (any body's: the Primary, a Flank, or the Held Primary's own)
   and it runs back to its slot, and so does a death save that revives it, or the Great Hands
   fleeing; one that drops goes Dormant. Two hands, so at most two are
   Held at once.
 - **In code:** `body.grabbedBy` is a hand's `GraspUnit`; `MistBattleSystem.isHeld(body)`,
   `onHeld(body)`; `greatHands.grab`, `GraspSystem.releaseRevived` (death save), tuning `HAND_GRAB_RADIUS` / `HAND_HOLD_HITS` (hand
-  `holdHits`) / `HAND_SQUEEZE_DAMAGE` / `HAND_SQUEEZE_TICK`.
+  `holdHits`) / `HAND_SQUEEZE_DAMAGE` / `HAND_SQUEEZE_TICK`; the fist's lunge is
+  `greatHands.updatePunch` (hand `punchStage`, tuning `HAND_PUNCH_*`).
 - **Not:** Dormant (a Held body is awake); a GooHead or Hoardmaw grab (those hold `game.player`
   and leave it the Primary).
 

@@ -294,6 +294,18 @@ export const GRASP_TUNING = {
   HAND_HOLD_HITS: 3,
   // How hard the rest of the Trine is knocked down when one is caught.
   HAND_GRAB_KNOCKBACK: 260,
+  // Holding, a fist attacks the Primary: it waits this long, shivers (this
+  // far each way, px, this many steps a second) for the tell time, then
+  // lunges at this speed for up to this long. Its art touching the Primary
+  // hurts it (armor softens it) and knocks it back, once a lunge.
+  HAND_PUNCH_WAIT: 1.2,
+  HAND_PUNCH_TELL_TIME: 0.4,
+  HAND_PUNCH_SHIVER: 2,
+  HAND_PUNCH_SHIVER_RATE: 20,
+  HAND_PUNCH_SPEED: 170,
+  HAND_PUNCH_TIME: 1.0,
+  HAND_PUNCH_DAMAGE: 2,
+  HAND_PUNCH_KNOCKBACK: 100,
   // A held body takes this much, through armor, every tick until the hand lets go.
   HAND_SQUEEZE_DAMAGE: 2,
   HAND_SQUEEZE_TICK: 2.0,

@@ -2,9 +2,11 @@
 // Each cycles grip → flex (the tell) → reach (toward the nearest Trine body)
 // → grab → retract. A reaching hand catches any free body that comes near its
 // palm and holds it, out of the Trine (MistBattleSystem.onHeld), squeezing,
-// until HAND_HOLD_HITS blows have landed on it; it stays still all the
-// while. Only the body dropping, a death save, or the phase ending lets go
-// sooner. With two hands, at
+// until HAND_HOLD_HITS blows have landed on it. Holding, the fist still
+// fights: every so often it shivers (the tell) and lunges at the Primary,
+// and its art knocks the Primary back and hurts it instead of catching
+// (punch*). Only the body dropping, a death save, or the phase ending lets
+// go sooner. With two hands, at
 // most two bodies are held at once. A hand can be struck only outside the
 // rim — reaching, grabbing or pulling back. Both hands spend one pool,
 // GraspSystem.handsHp.
@@ -32,6 +34,8 @@ const palm = (hand) => ({ x: hand.x + W / 2 + hand.palmShift, y: hand.y + H - CS
 // A hand's whole art stays inside the side walls, reaching or not.
 const MIN_X = CS;
 const MAX_X = (GRID.COLS - 1) * CS - W;
+// The lowest a hand's art goes: its bottom row on the floor row.
+const MAX_Y = (GRID.ROWS - 1) * CS - H;
 // How far the grip point can slide off the middle: to the outermost
 // column's center, where the spread fingertips are drawn.
 const MAX_PALM_SHIFT = W / 2 - CS / 2;
@@ -118,6 +122,9 @@ export function spawn(grasp) {
       target: null, body: null, squeeze: 0, flash: 0,
       // Blows landed on this hand since it caught its body (HAND_HOLD_HITS).
       holdHits: 0,
+      // A holding fist's attack on the Primary: 'wait' → 'tell' (shivering
+      // about punchBaseX) → 'lunge' toward punchGoal, one blow a lunge.
+      punchStage: 'wait', punchTimer: 0, punchBaseX: 0, punchGoal: null, punchLanded: false,
       // Pixels the grip point sits off the middle of the hand: pressed
       // against a wall, the fingers on that side do the catching.
       palmShift: 0,
@@ -203,6 +210,8 @@ function grab(grasp, hand, body) {
   hand.body = body;
   hand.holdHits = 0;
   hand.squeeze = T.HAND_SQUEEZE_TICK;
+  hand.punchStage = 'wait';
+  hand.punchTimer = 0;
   body.grabbed = true;
   body.grabbedBy = hand.unit;
   body.velocity.vx = 0;
@@ -277,6 +286,7 @@ export function update(grasp, dt) {
         // Caught by the outer fingers, the body is drawn into the fist.
         hand.palmShift = Math.sign(hand.palmShift)
           * Math.max(0, Math.abs(hand.palmShift) - T.HAND_REACH_SPEED * dt);
+        updatePunch(grasp, hand, dt);
         hand.squeeze -= dt;
         if (hand.squeeze <= 0) {
           hand.squeeze = T.HAND_SQUEEZE_TICK;
@@ -314,6 +324,62 @@ export function onHit(grasp, hand) {
     if (body) grasp.game.physicsSystem.applyKnockback(body, hand.x + W / 2, hand.y, 160);
   } else if (hand.state === 'reach') {
     hand.y -= HIT_RECOIL;
+  }
+}
+
+// The Primary a holding fist swings at: not the body in it, and not one the
+// other hand holds (its palm pins it).
+function punchTarget(grasp, hand) {
+  const primary = grasp.game.player;
+  if (!primary || primary.hp <= 0 || primary === hand.body || primary.grabbed) return null;
+  return primary;
+}
+
+// A holding fist's attack (case 'grab'): it waits HAND_PUNCH_WAIT, shivers
+// for HAND_PUNCH_TELL_TIME, then lunges at where the Primary stood when the
+// tell ended. The first touch of its art on the Primary in a lunge hurts it
+// and knocks it away from the fist; it doesn't catch. The lunge ends on
+// arrival or after HAND_PUNCH_TIME, and the fist stays where it stopped.
+function updatePunch(grasp, hand, dt) {
+  hand.punchTimer += dt;
+  switch (hand.punchStage) {
+    case 'wait':
+      if (hand.punchTimer < T.HAND_PUNCH_WAIT || !punchTarget(grasp, hand)) return;
+      hand.punchStage = 'tell';
+      hand.punchTimer = 0;
+      hand.punchBaseX = hand.x;
+      return;
+    case 'tell': {
+      const step = Math.floor(hand.punchTimer * T.HAND_PUNCH_SHIVER_RATE) % 2 ? 1 : -1;
+      hand.x = Math.min(MAX_X, Math.max(MIN_X, hand.punchBaseX + step * T.HAND_PUNCH_SHIVER));
+      if (hand.punchTimer < T.HAND_PUNCH_TELL_TIME) return;
+      hand.x = hand.punchBaseX;
+      const target = punchTarget(grasp, hand);
+      if (!target) { hand.punchStage = 'wait'; hand.punchTimer = 0; return; }
+      const p = palm(hand);
+      hand.punchGoal = {
+        x: Math.min(MAX_X, Math.max(MIN_X, hand.x + target.position.x + CS / 2 - p.x)),
+        y: Math.min(MAX_Y, hand.y + target.position.y + CS / 2 - p.y),
+      };
+      hand.punchStage = 'lunge';
+      hand.punchTimer = 0;
+      hand.punchLanded = false;
+      return;
+    }
+    case 'lunge': {
+      const arrived = moveToward(hand, hand.punchGoal.x, hand.punchGoal.y, T.HAND_PUNCH_SPEED, dt);
+      const target = punchTarget(grasp, hand);
+      if (target && !hand.punchLanded && handOverlapsBox(hand, target.getHitbox())) {
+        hand.punchLanded = true;
+        const p = palm(hand);
+        grasp.hurt(target, T.HAND_PUNCH_DAMAGE, p);
+        grasp.game.physicsSystem.applyKnockback(target, p.x, p.y, T.HAND_PUNCH_KNOCKBACK);
+      }
+      if (arrived || hand.punchTimer >= T.HAND_PUNCH_TIME) {
+        hand.punchStage = 'wait';
+        hand.punchTimer = 0;
+      }
+    }
   }
 }
 
