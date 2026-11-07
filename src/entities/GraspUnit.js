@@ -49,17 +49,17 @@ export class GraspUnit extends Enemy {
     this.height = height;
     this.baseColor = GRASP_COLOR;
 
-    // Every status but charm is refused (IMMUNE, through the usual
-    // shouldApplyStatusEffect check). GraspSystem drives every part and reads
-    // none of them, and the part skips Enemy.update, so each would sit on it
-    // doing nothing: a freeze or stun wouldn't stop a hand, sleep is never
-    // broken (takeDamage below bypasses Enemy's wake), and a burn or poison
-    // tick would land on the unit's own 1 hp rather than the pool, and the
-    // world tick's removal pass would take the part. Charm stays open: it is
-    // the one a Boss part takes today, pending whether a Boss may be charmed
-    // at all (#546).
+    // Every status is refused (IMMUNE, through the usual
+    // shouldApplyStatusEffect check): a Boss part takes no status, charm
+    // included (#546). GraspSystem drives every part and reads none of them,
+    // and the part skips Enemy.update, so each would sit on it doing
+    // nothing: a freeze or stun wouldn't stop a hand, sleep is never broken
+    // (takeDamage below bypasses Enemy's wake), a burn or poison tick would
+    // land on the unit's own 1 hp rather than the pool, and a charm only
+    // dropped the part out of the Flanks' and homing picks while it kept
+    // hurting the Trine.
     this.elementalAffinity = {
-      immunity: Object.keys(this.statusEffects).filter(effect => effect !== 'charm'),
+      immunity: Object.keys(this.statusEffects),
       resistance: {},
       weakness: {},
     };
@@ -105,8 +105,8 @@ export class GraspUnit extends Enemy {
   }
 
   // The iframe timer and the status countdown run here, through the same
-  // tick as every enemy, so a status the part does take wears off on
-  // schedule (#546: never ticked, a charm stayed for good). Velocity stays
+  // tick as every enemy, so nothing a part is ever left holding outlasts its
+  // schedule. Velocity stays
   // zero so PhysicsSystem never reads a unit as a charging body (see
   // SeaSerpentUnit.update).
   update(deltaTime) {
