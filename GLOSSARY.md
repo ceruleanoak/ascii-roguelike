@@ -1197,10 +1197,11 @@ identity, not standard programming terms.
 - **Definition:** A Trine body in a Great Hand's grip. It is out of the Trine: it doesn't mirror
   the Primary or hold its corner, can't be Rotated to, and takes 2 HP through armor every 2
   seconds. A caught Primary hands the apex to the next free body. A blow on the hand lets it go
-  and it runs back to its slot; one that drops goes Dormant. Two hands, so at most two are
+  and it runs back to its slot, and so does a death save that revives it; one that drops goes
+  Dormant. Two hands, so at most two are
   Held at once.
 - **In code:** `body.grabbedBy` is a hand's `GraspUnit`; `MistBattleSystem.isHeld(body)`,
-  `onHeld(body)`; `greatHands.grab`, tuning `HAND_GRAB_RADIUS` / `HAND_SQUEEZE_DAMAGE` /
+  `onHeld(body)`; `greatHands.grab`, `GraspSystem.releaseRevived` (death save), tuning `HAND_GRAB_RADIUS` / `HAND_SQUEEZE_DAMAGE` /
   `HAND_SQUEEZE_TICK`.
 - **Not:** Dormant (a Held body is awake); a GooHead or Hoardmaw grab (those hold `game.player`
   and leave it the Primary).
@@ -1208,7 +1209,7 @@ identity, not standard programming terms.
 ### Dormant (Trine)
 - **Definition:** A Trine body brought to 0 HP in Act 1. Instead of dying it hands the apex
   to the next awake body, rides along in its corner doing nothing, and wakes at full HP
-  after 15 seconds as a Flank. A Primary falling while both other bodies are Dormant dies,
+  after 15 seconds as a Flank. Its Status Effects end when it goes Dormant, so it wakes clean. A Primary falling while both other bodies are Dormant dies,
   and the run ends.
 - **In code:** `member.dormant` (seconds left; 0 = awake) on `MistBattleSystem.members`,
   set by `_goDormant`, counted down by `_updateDormant` (`DORMANT_TIME`). A Dormant body has
