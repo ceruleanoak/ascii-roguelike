@@ -5,6 +5,7 @@ import { createDebris } from '../entities/Debris.js';
 import { Particle, createFootstep, createWetDrop, createSteamPuff, createChaff, WET_DROP_COLOR } from '../entities/Particle.js';
 import { statusEffectColor } from './StatusEffectVisuals.js';
 import { inSamePlane, tagInteriorPlane } from './PlaneSystem.js';
+import { enemyInRadius } from './enemyHitTest.js';
 
 const MAX_GOO_BLOBS = 20;
 const IDLE_ECHO_DURATION = 0.5; // seconds — must match the radius/alpha envelope in RestRenderer
@@ -504,10 +505,10 @@ export class WorldEffectsSystem {
           if (!entity || entity.hp <= 0) return;
           if (sw.hitEntities.has(entity)) return;
           if ((entity.plane ?? 0) !== sw.plane) return;
-          const ex = entity.position.x + C / 2;
-          const ey = entity.position.y + C / 2;
-          const d = Math.hypot(ex - sw.x, ey - sw.y);
-          if (d > sw.radius) return;
+          // The player (no shape) is measured from its cell's center; an
+          // enemy through the shared hit test, so a shaped one is reached
+          // only where it's drawn.
+          if (!enemyInRadius(entity, sw.x, sw.y, sw.radius, C / 2)) return;
           sw.hitEntities.add(entity);
           const isSlime = entity.data?.affinities?.includes('goo');
           game.physicsSystem.applyKnockback(entity, sw.x, sw.y, sw.knockback, 0.12);

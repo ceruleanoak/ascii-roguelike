@@ -24,6 +24,7 @@ import { isInteriorActive } from './PlaneSystem.js';
 import { detonateBomb } from './ExplosionEffects.js';
 import { clearStatusEffect } from './StatusEffects.js';
 import { splashLiquid } from './LiquidSplash.js';
+import { enemyInRadius } from './enemyHitTest.js';
 
 export class ConsumableWindupEffects {
   // Ticks the in-flight windup list (owned by InventorySystem) and resolves
@@ -76,9 +77,7 @@ export class ConsumableWindupEffects {
       case 'curse': {
         // Cursed Skull damage
         for (const enemy of enemies) {
-          const dx = (enemy.position.x + 20) - px;
-          const dy = (enemy.position.y + 20) - py;
-          if (Math.sqrt(dx * dx + dy * dy) <= cd.radius) {
+          if (enemyInRadius(enemy, px, py, cd.radius, 20)) {
             enemy.takeDamage(cd.damage);
             combatSystem.createDamageNumber(cd.damage, enemy.position.x, enemy.position.y, '#ffffff');
           }
@@ -89,9 +88,7 @@ export class ConsumableWindupEffects {
       case 'slow': {
         // Slime Ball - a slow: held at freeze pip 1, never escalates to Frozen
         for (const enemy of enemies) {
-          const dx = (enemy.position.x + 20) - px;
-          const dy = (enemy.position.y + 20) - py;
-          if (Math.sqrt(dx * dx + dy * dy) <= 50) {
+          if (enemyInRadius(enemy, px, py, 50, 20)) {
             enemy.applyStatusEffect('freeze', cd.duration || 10, 1);
             combatSystem.createDamageNumber('~', enemy.position.x, enemy.position.y, '#00ff00');
           }
@@ -102,9 +99,7 @@ export class ConsumableWindupEffects {
       case 'poison': {
         // Poison Flask - apply poison
         for (const enemy of enemies) {
-          const dx = (enemy.position.x + 20) - px;
-          const dy = (enemy.position.y + 20) - py;
-          if (Math.sqrt(dx * dx + dy * dy) <= 55) {
+          if (enemyInRadius(enemy, px, py, 55, 20)) {
             if (enemy.shouldApplyStatusEffect('poison')) enemy.applyStatusEffect('poison', 8);
             combatSystem.createDamageNumber('☠', enemy.position.x, enemy.position.y, '#44ff44');
           }
@@ -119,11 +114,7 @@ export class ConsumableWindupEffects {
         const radius = cd.radius || 80;
         const damage = cd.damage || 4;
         for (const enemy of enemies) {
-          const ex = enemy.position.x + 20;
-          const ey = enemy.position.y + 20;
-          const dx = ex - ix;
-          const dy = ey - iy;
-          if (Math.sqrt(dx * dx + dy * dy) <= radius) {
+          if (enemyInRadius(enemy, ix, iy, radius, 20)) {
             enemy.takeDamage(damage);
             combatSystem.createDamageNumber(damage, enemy.position.x, enemy.position.y, '#ffff00');
           }
@@ -142,8 +133,7 @@ export class ConsumableWindupEffects {
         // soaked (burn put out, as water does), and slimes take slimeDamage.
         const radius = cd.radius * 2;
         for (const enemy of enemies) {
-          const dx = (enemy.position.x + 20) - px, dy = (enemy.position.y + 20) - py;
-          if (Math.sqrt(dx * dx + dy * dy) > radius) continue;
+          if (!enemyInRadius(enemy, px, py, radius, 20)) continue;
           if (enemy.shouldApplyStatusEffect('wet')) {
             enemy.applyStatusEffect('wet', 6.0, 1); // wet pip 1; deep water fills the rest
             if (enemy.statusEffects.burn?.active) clearStatusEffect(enemy, 'burn');
@@ -162,8 +152,7 @@ export class ConsumableWindupEffects {
       case 'firecracker': {
         const burnRadius = windup.consumable?.data?.radius || 64;
         for (const enemy of enemies) {
-          const dx = (enemy.position.x + 20) - px, dy = (enemy.position.y + 20) - py;
-          if (Math.sqrt(dx * dx + dy * dy) <= burnRadius) {
+          if (enemyInRadius(enemy, px, py, burnRadius, 20)) {
             // Two stacks so the blast reads as a real hit, not a graze —
             // applyStatusEffect increments enemy.statusEffects.burn.stacks
             // by 1 per call (capped at MAX_PIPS=3 in StatusEffects.js).

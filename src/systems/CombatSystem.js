@@ -28,6 +28,7 @@ import { projectileSailsOver, tagLaunchPit } from './pits.js';
 import { vaultWallBlocksReach } from './vaultWalls.js';
 import { strikeWatcherEye } from './WatcherEye.js';
 import { knockbackTakenScale } from '../entities/knockbackTaken.js';
+import { enemyOverlapsBox } from './enemyHitTest.js';
 
 // Default maximum travel distance (in pixels) for gun bullets. Roughly 2/3 of a
 // room — keeps cross-room sniping in check while still feeling powerful.
@@ -1780,15 +1781,9 @@ export class CombatSystem {
       height: proj.height || GRID.CELL_SIZE
     };
 
-    const enemyBox = enemy.getHitbox();
-
     // An enemy whose drawn shape doesn't fill its rect refines the test
     // (overlapsBox — a Great Hand counts only where its art is).
-    return projBox.x < enemyBox.x + enemyBox.width &&
-           projBox.x + projBox.width > enemyBox.x &&
-           projBox.y < enemyBox.y + enemyBox.height &&
-           projBox.y + projBox.height > enemyBox.y &&
-           (enemy.overlapsBox?.(projBox) ?? true);
+    return enemyOverlapsBox(enemy, projBox);
   }
 
   checkMeleeCollision(attack, enemy) {
@@ -1799,13 +1794,7 @@ export class CombatSystem {
       height: attack.height
     };
 
-    const enemyBox = enemy.getHitbox();
-
-    return attackBox.x < enemyBox.x + enemyBox.width &&
-           attackBox.x + attackBox.width > enemyBox.x &&
-           attackBox.y < enemyBox.y + enemyBox.height &&
-           attackBox.y + attackBox.height > enemyBox.y &&
-           (enemy.overlapsBox?.(attackBox) ?? true);
+    return enemyOverlapsBox(enemy, attackBox);
   }
 
   checkMeleeCollisionWithObject(attack, obj) {

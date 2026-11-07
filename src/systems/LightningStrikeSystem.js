@@ -26,6 +26,7 @@ import { planeOf, inSamePlane, isInteriorActive } from './PlaneSystem.js';
 import { MAX_PIPS } from './StatusEffects.js';
 import { absorbsZap } from './ImbuePoolSystem.js';
 import { findStrikeSpire, spireStruck } from './LightningSpire.js';
+import { enemyInRadius, enemyNearestPoint } from './enemyHitTest.js';
 
 const FLASH_DURATION = 0.12;
 const DEFAULT_RADIUS = GRID.CELL_SIZE * 1.2;
@@ -125,11 +126,7 @@ export class LightningStrikeSystem {
     // Enemy damage — plane-gated, circle test on enemy center
     for (const enemy of enemies) {
       if (planeOf(enemy) !== s.plane) continue;
-      const ex = enemy.position.x + (enemy.width || GRID.CELL_SIZE) / 2;
-      const ey = enemy.position.y + (enemy.height || GRID.CELL_SIZE) / 2;
-      const dx = ex - s.x;
-      const dy = ey - s.y;
-      if (Math.sqrt(dx * dx + dy * dy) <= s.radius) {
+      if (enemyInRadius(enemy, s.x, s.y, s.radius, 'center')) {
         // An Imbue-capable enemy takes the bolt as its electric Imbue instead.
         if (absorbsZap(enemy)) continue;
         enemy.takeDamage(s.damage);
@@ -193,9 +190,7 @@ export class LightningStrikeSystem {
       for (const enemy of enemies) {
         if (alreadyHit.has(enemy)) continue;
         if (!inSamePlane(hitEnemy, enemy)) continue;
-        const dx = enemy.position.x - currentEnemy.position.x;
-        const dy = enemy.position.y - currentEnemy.position.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
+        const dist = enemyNearestPoint(enemy, currentEnemy.position.x, currentEnemy.position.y, 'corner', chainRange).dist;
         if (dist < chainRange && dist < nearestDist) {
           nearestEnemy = enemy;
           nearestDist = dist;

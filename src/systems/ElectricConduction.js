@@ -1,6 +1,7 @@
 import { DEATH_CAUSES } from '../data/deathCauses.js';
 import { inSamePlane } from './PlaneSystem.js';
 import { MAX_PIPS } from './StatusEffects.js';
+import { enemyInRadius } from './enemyHitTest.js';
 
 // Wet-enemy/player electrical conduction — extracted from CombatSystem so a
 // projectile/melee electric hit on a conductive object can chain into anyone
@@ -19,11 +20,7 @@ export function conductElectricity(combatSystem, sourceObj, damage, enemies, pla
     if (!enemy.isWet || !enemy.isWet()) continue;
     if (!inSamePlane(sourceObj, enemy)) continue;
 
-    const dx = enemy.position.x - sourceObj.position.x;
-    const dy = enemy.position.y - sourceObj.position.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-
-    if (dist <= WET_RANGE) {
+    if (enemyInRadius(enemy, sourceObj.position.x, sourceObj.position.y, WET_RANGE)) {
       const dmg = Math.ceil(damage * WET_MULT);
       enemy.takeDamage(dmg);
       // 'zap', not 'stun' — electric immobilization with the shake visual;

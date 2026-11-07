@@ -9,6 +9,7 @@ import { isInteriorActive, tagInteriorPlane, planeOf, objectOnPlane } from './Pl
 import { createLightningSpire } from './LightningSpire.js';
 import { createExplosionAftermath, createGooBurst } from './WorldEffectsSystem.js';
 import { applyExtraOnHitEffects } from './ExtraOnHitEffects.js';
+import { enemyInRadius } from './enemyHitTest.js';
 
 // True when any quick slot holds a weapon — the "armed" test for the
 // thrown-weapon pointer.
@@ -769,11 +770,7 @@ export class TrapSystem {
       if (!enemy || enemy.hp <= 0) continue;
       if ((enemy.plane ?? 0) !== playerPlane) continue;
       if (t.hitEnemies.has(enemy)) continue;
-      const ex = enemy.position.x + C / 2;
-      const ey = enemy.position.y + C / 2;
-      const dx = ex - t.x;
-      const dy = ey - t.y;
-      if (dx * dx + dy * dy > hitR * hitR) continue;
+      if (!enemyInRadius(enemy, t.x, t.y, hitR, C / 2)) continue;
 
       const dmg = this._thrownWeaponDamage(t, speed);
       if (dmg > 0) {
@@ -888,9 +885,7 @@ export class TrapSystem {
     }
     for (const enemy of game._activeEnemies()) {
       if (planeOf(enemy) !== plane) continue;
-      const dx = (enemy.position.x + C / 2) - t.x;
-      const dy = (enemy.position.y + C / 2) - t.y;
-      if (Math.sqrt(dx * dx + dy * dy) > burst.radius) continue;
+      if (!enemyInRadius(enemy, t.x, t.y, burst.radius, C / 2)) continue;
       if (!enemy.shouldApplyStatusEffect?.(burst.onHit)) continue;
       enemy.applyStatusEffect(burst.onHit, burst.duration ?? 3, MAX_PIPS);
     }
@@ -1087,9 +1082,7 @@ export class TrapSystem {
             game.placedTraps.splice(i, 1);
           } else {
             for (const enemy of enemies) {
-              const dx = enemy.position.x - tx;
-              const dy = enemy.position.y - ty;
-              if (Math.sqrt(dx * dx + dy * dy) <= trapData.effectRadius) {
+              if (enemyInRadius(enemy, tx, ty, trapData.effectRadius)) {
                 if (!entry.affectedEnemies.has(enemy)) {
                   entry.affectedEnemies.add(enemy);
                   // Full Pip track: a single drowsy pip only slows; the box's
@@ -1114,9 +1107,7 @@ export class TrapSystem {
             this.triggerElectricAt(tx + GRID.CELL_SIZE / 2, ty + GRID.CELL_SIZE / 2, trapData.effectRadius, item.plane ?? 0);
             const zapDmg = trapData.damage || 2;
             for (const enemy of enemies) {
-              const dx = enemy.position.x - tx;
-              const dy = enemy.position.y - ty;
-              if (Math.sqrt(dx * dx + dy * dy) > trapData.effectRadius) continue;
+              if (!enemyInRadius(enemy, tx, ty, trapData.effectRadius)) continue;
               if (!this._applyTrapHit(enemy, trapData, zapDmg, '#00ffff')) continue;
               enemy.applyStatusEffect('zap', trapData.stunDuration || 0.8, MAX_PIPS);
               // Lightning particle
@@ -1161,9 +1152,7 @@ export class TrapSystem {
       // enemies are filtered by _applyTrapHit via trapData.affinity='slime' (shows IMMUNE).
       const slowDmg = trapData.damage || 1;
       for (const enemy of targets) {
-        const dx = (enemy.position.x + GRID.CELL_SIZE / 2) - cx;
-        const dy = (enemy.position.y + GRID.CELL_SIZE / 2) - cy;
-        if (Math.sqrt(dx * dx + dy * dy) > r) continue;
+        if (!enemyInRadius(enemy, cx, cy, r, GRID.CELL_SIZE / 2)) continue;
         if (!this._applyTrapHit(enemy, trapData, slowDmg, '#00ff00')) continue;
         enemy.applyStatusEffect('goo', 5.0);
       }
@@ -1191,9 +1180,7 @@ export class TrapSystem {
       for (const p of createIceBurst(cx, cy)) game.particles.push(tagInteriorPlane(game, p));
       const freezeDmg = trapData.damage || 1;
       for (const enemy of targets) {
-        const dx = (enemy.position.x + GRID.CELL_SIZE / 2) - cx;
-        const dy = (enemy.position.y + GRID.CELL_SIZE / 2) - cy;
-        if (Math.sqrt(dx * dx + dy * dy) > r) continue;
+        if (!enemyInRadius(enemy, cx, cy, r, GRID.CELL_SIZE / 2)) continue;
         if (!this._applyTrapHit(enemy, trapData, freezeDmg, '#aaffff')) continue;
         const isIceWeak = enemy.getElementalModifier('freeze') > 1.0;
         const duration = (enemy.data.freezePermanent || isIceWeak) ? Infinity : trapData.effectDuration;
@@ -1285,9 +1272,7 @@ export class TrapSystem {
       // The burn status follows but is also unconditional (lore: shrapnel ignites).
       const dmg = trapData.damage || 6;
       for (const enemy of targets) {
-        const dx = (enemy.position.x + GRID.CELL_SIZE / 2) - cx;
-        const dy = (enemy.position.y + GRID.CELL_SIZE / 2) - cy;
-        if (Math.sqrt(dx * dx + dy * dy) <= r) {
+        if (enemyInRadius(enemy, cx, cy, r, GRID.CELL_SIZE / 2)) {
           enemy.takeDamage(dmg);
           enemy.applyStatusEffect('burn', 3.0);
           game.combatSystem.createDamageNumber(dmg, enemy.position.x, enemy.position.y, '#ff6600');
@@ -1328,9 +1313,7 @@ export class TrapSystem {
       // untouched — this is a hunter's snare, not a blast. No damage; the catch is the point.
       let caught = false;
       for (const enemy of targets) {
-        const dx = (enemy.position.x + GRID.CELL_SIZE / 2) - cx;
-        const dy = (enemy.position.y + GRID.CELL_SIZE / 2) - cy;
-        if (Math.sqrt(dx * dx + dy * dy) > r) continue;
+        if (!enemyInRadius(enemy, cx, cy, r, GRID.CELL_SIZE / 2)) continue;
         if (!enemy.data?.affinities?.includes('beast')) continue;
         enemy.pinnedDuration = Infinity;
         enemy.velocity.vx = 0;
@@ -1383,9 +1366,7 @@ export class TrapSystem {
       }
 
       for (const enemy of targets) {
-        const dx = enemy.position.x - tx;
-        const dy = enemy.position.y - ty;
-        if (Math.sqrt(dx * dx + dy * dy) > r) continue;
+        if (!enemyInRadius(enemy, tx, ty, r)) continue;
         if (!this._applyTrapHit(enemy, trapData, effectDmg, dmgColor)) continue;
         // The Stun Trap's burst is an all-at-once hit: straight to zap pip 3
         // (lock + disarm), the way the Freeze Trap goes straight to Frozen.

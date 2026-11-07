@@ -1,7 +1,7 @@
-import { GRID } from '../game/GameConfig.js';
 import { ITEMS } from '../data/items.js';
 import { planeOf, objectOnPlane } from './PlaneSystem.js';
 import { createExplosionAftermath, createBurstParticles } from './WorldEffectsSystem.js';
+import { enemyInRadius, enemyNearestPoint } from './enemyHitTest.js';
 
 // Area-effect combat helpers — extracted from CombatSystem (proximity check,
 // AOE status application, explosion damage/knockback/object destruction).
@@ -15,15 +15,8 @@ export function checkProximity(position, proximityRange, enemies, sourcePlane = 
   for (const enemy of enemies) {
     if (planeOf(enemy) !== sourcePlane) continue;
 
-    // Calculate enemy center position (enemy.position is top-left)
-    const enemyCenterX = enemy.position.x + (enemy.width || GRID.CELL_SIZE) / 2;
-    const enemyCenterY = enemy.position.y + (enemy.height || GRID.CELL_SIZE) / 2;
-
-    const dx = enemyCenterX - position.x;
-    const dy = enemyCenterY - position.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-
-    if (dist <= proximityRange) {
+    // Measured from the enemy's center (enemy.position is top-left).
+    if (enemyInRadius(enemy, position.x, position.y, proximityRange, 'center')) {
       return true; // At least one enemy in range
     }
   }
@@ -36,11 +29,7 @@ export function applyAOEStatus(position, radius, statusType, duration, enemies, 
   for (const enemy of enemies) {
     if (planeOf(enemy) !== sourcePlane) continue;
 
-    const dx = enemy.position.x - position.x;
-    const dy = enemy.position.y - position.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-
-    if (dist <= radius) {
+    if (enemyInRadius(enemy, position.x, position.y, radius)) {
       enemy.applyStatusEffect(statusType, duration);
       affectedCount++;
     }
@@ -55,9 +44,7 @@ export function applyAOEStatus(position, radius, statusType, duration, enemies, 
 // lighter falloff createExplosion below.
 export function detonateBomb(game, x, y, { damage, radius, enemies, particles, color }) {
   for (const enemy of enemies) {
-    const dx = (enemy.position.x + 20) - x;
-    const dy = (enemy.position.y + 20) - y;
-    if (Math.sqrt(dx * dx + dy * dy) <= radius) enemy.takeDamage(damage);
+    if (enemyInRadius(enemy, x, y, radius, 20)) enemy.takeDamage(damage);
   }
   createBurstParticles(game, particles, x, y, 20, color || '#ff4400');
   createExplosionAftermath(game, x, y, { shake: 10, shakeDuration: 0.5, smoke: 16, spread: radius * 0.5 });
@@ -79,9 +66,7 @@ export function createExplosion(combatSystem, x, y, radius, damage, enemies, bac
   for (const enemy of enemies) {
     if (planeOf(enemy) !== sourcePlane) continue;
 
-    const dx = enemy.position.x - x;
-    const dy = enemy.position.y - y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
+    const dist = enemyNearestPoint(enemy, x, y, 'corner', radius).dist;
 
     if (dist <= radius) {
       // Calculate damage falloff: ranges from 1.0 at center to damageMin at edge

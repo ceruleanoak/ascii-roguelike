@@ -1,4 +1,5 @@
 import { planeOf, inSamePlane, objectOnPlane } from './PlaneSystem.js';
+import { enemyOverlapsBox } from './enemyHitTest.js';
 
 /**
  * Red Warrior's damage dodge-roll: smashes enemies and background objects on
@@ -39,9 +40,7 @@ export function updateRollDamage(combatSystem, player, enemies, backgroundObject
   for (const enemy of enemies) {
     if (combatSystem._rollHitEnemies.has(enemy) || enemy.hp <= 0) continue;
     if (!inSamePlane(player, enemy)) continue;
-    const eb = enemy.getHitbox();
-    if (hitbox.x < eb.x + eb.width && hitbox.x + hitbox.width > eb.x &&
-        hitbox.y < eb.y + eb.height && hitbox.y + hitbox.height > eb.y) {
+    if (enemyOverlapsBox(enemy, hitbox)) {
       combatSystem._rollHitEnemies.add(enemy);
       const result = enemy.takeDamage(1);
       if (result) {

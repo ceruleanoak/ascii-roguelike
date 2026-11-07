@@ -2,6 +2,7 @@ import { GRID, PHYSICS } from '../game/GameConfig.js';
 import { inSamePlane, isInteriorActive } from './PlaneSystem.js';
 import { ENEMIES } from '../data/enemies.js';
 import { NeutralCharacter } from '../entities/NeutralCharacter.js';
+import { enemyOverlapsBox } from './enemyHitTest.js';
 
 const FROG_SPEED = 130;        // matches ENEMIES['g'].speed
 const FROG_ACCEL = 800;        // matches ENEMIES['g'].acceleration
@@ -369,12 +370,8 @@ export class PolymorphSystem {
 
             for (const enemy of tongue.targetEnemies) {
               if (enemy.hp <= 0) continue;
-              const ex = enemy.position.x;
-              const ey = enemy.position.y;
-              const ew = GRID.CELL_SIZE;
-              const eh = GRID.CELL_SIZE;
-              if (tipX + half > ex && tipX - half < ex + ew &&
-                  tipY + half > ey && tipY - half < ey + eh) {
+              const tip = { x: tipX - half, y: tipY - half, width: half * 2, height: half * 2 };
+              if (enemyOverlapsBox(enemy, tip)) {
                 enemy.takeDamage(tongue.damage);
                 enemy.applyStatusEffect?.('stun', tongue.stunDuration);
                 game.combatSystem?.createDamageNumber?.(

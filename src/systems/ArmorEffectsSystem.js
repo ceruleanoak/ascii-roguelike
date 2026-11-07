@@ -17,6 +17,7 @@
 import { GRID } from '../game/GameConfig.js';
 import { makeAuraParticle } from './WorldEffectsSystem.js';
 import { tagInteriorPlane } from './PlaneSystem.js';
+import { enemyInRadius } from './enemyHitTest.js';
 
 // How far from a Moss-Cloaked player any memory mark is kept.
 const MOSS_MARK_CLEARANCE = GRID.CELL_SIZE * 2.5;
@@ -99,7 +100,7 @@ export class ArmorEffectsSystem {
 
       for (const enemy of this.game._activeEnemies()) {
         if (enemy.hp <= 0) continue;
-        if (Math.hypot(enemy.position.x + 8 - cx, enemy.position.y + 8 - cy) <= radius) {
+        if (enemyInRadius(enemy, cx, cy, radius, 8)) {
           enemy.applyStatusEffect(armorData.rollPulse, duration);
         }
       }

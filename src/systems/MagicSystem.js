@@ -15,6 +15,7 @@ import { Particle } from '../entities/Particle.js';
 import { GRID } from '../game/GameConfig.js';
 import { tagInteriorPlane, planeOf } from './PlaneSystem.js';
 import { MAX_PIPS } from './StatusEffects.js';
+import { enemyDistance, enemyNearestPoint } from './enemyHitTest.js';
 
 // Mana yield per ingredient char. Phase 1 only Goo is exposed in the UI;
 // remaining entries are reserved for the Phase 2 conversion menu expansion.
@@ -597,9 +598,7 @@ export class MagicSystem {
     let nearest = null;
     let nearestDist = Infinity;
     for (const enemy of enemies) {
-      const dx = enemy.position.x - attack.position.x;
-      const dy = enemy.position.y - attack.position.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
+      const dist = enemyDistance(enemy, attack.position.x, attack.position.y);
       if (dist < nearestDist) { nearest = enemy; nearestDist = dist; }
     }
     if (!nearest) return;
@@ -642,11 +641,12 @@ export class MagicSystem {
     const blindDuration = 3.0;
 
     for (const enemy of enemies) {
-      const dx = enemy.position.x - attack.position.x;
-      const dy = enemy.position.y - attack.position.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
+      // Aimed at the point of the enemy nearest the caster (its shape, for a
+      // shaped enemy), so the cone covers what's drawn.
+      const at = enemyNearestPoint(enemy, attack.position.x, attack.position.y, 'corner', reach);
+      const dist = at.dist;
       if (dist > reach || dist < 0.001) continue;
-      const angle = Math.atan2(dy, dx);
+      const angle = Math.atan2(at.y - attack.position.y, at.x - attack.position.x);
       let delta = Math.abs(angle - facingAngle);
       if (delta > Math.PI) delta = 2 * Math.PI - delta;
       if (delta <= halfAngle) {
@@ -751,9 +751,10 @@ export class MagicSystem {
 
     for (const enemy of enemies) {
       if (enemy.destroyed) continue;
-      const ex = enemy.position.x - attack.position.x;
-      const ey = enemy.position.y - attack.position.y;
-      const dist = Math.sqrt(ex * ex + ey * ey);
+      const at = enemyNearestPoint(enemy, attack.position.x, attack.position.y, 'corner', radius);
+      const ex = at.x - attack.position.x;
+      const ey = at.y - attack.position.y;
+      const dist = at.dist;
       if (dist > radius) continue;
 
       // Cone check: enemy must be within the forward arc

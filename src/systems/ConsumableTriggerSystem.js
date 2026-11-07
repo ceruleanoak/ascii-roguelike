@@ -3,6 +3,7 @@ import { GAME_STATES, GRID } from '../game/GameConfig.js';
 import { clearStatusEffect } from './StatusEffects.js';
 import { FAIRY_HEAL } from '../entities/Fairy.js';
 import { entityCenter } from '../game/Telegraph.js';
+import { enemyInRadius } from './enemyHitTest.js';
 
 // Every consumable use is a throw: the item arcs up and lands before its
 // effect resolves (checkTriggerCondition only gates whether it CAN fire;
@@ -533,9 +534,7 @@ export class ConsumableTriggerSystem {
         const py = player.position.y + 20;
         const blindRadius = cd.radius ?? 96;
         for (const enemy of enemies) {
-          const dx = (enemy.position.x + 20) - px;
-          const dy = (enemy.position.y + 20) - py;
-          if (Math.sqrt(dx * dx + dy * dy) <= blindRadius) enemy.applyStatusEffect('blind', cd.duration || 4.0);
+          if (enemyInRadius(enemy, px, py, blindRadius, 20)) enemy.applyStatusEffect('blind', cd.duration || 4.0);
         }
         break;
       }

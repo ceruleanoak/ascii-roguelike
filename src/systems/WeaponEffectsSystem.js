@@ -39,6 +39,7 @@ import { ITEMS } from '../data/items.js';
 import { tagInteriorPlane, tagLootLayer, planeOf } from './PlaneSystem.js';
 import { fizzleToSpark } from './MagicSystem.js';
 import { applyDotTicks } from './StatusEffects.js';
+import { enemyInRadius } from './enemyHitTest.js';
 
 const C = GRID.CELL_SIZE;
 const DUST_BURST_RADIUS = C * 2.5;
@@ -189,7 +190,7 @@ export class WeaponEffectsSystem {
   _burnInCloud(x, y, ticks, enemies, plane) {
     for (const enemy of enemies) {
       if (planeOf(enemy) !== plane) continue;
-      if (Math.hypot(enemy.position.x - x, enemy.position.y - y) <= DUST_BURST_RADIUS) applyDotTicks(enemy, 'burn', ticks);
+      if (enemyInRadius(enemy, x, y, DUST_BURST_RADIUS)) applyDotTicks(enemy, 'burn', ticks);
     }
   }
 
