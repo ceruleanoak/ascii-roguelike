@@ -235,14 +235,22 @@ export const CLUTCH_WAVES = [
 // Four lanes, left column of each, in cells. A Finger is FINGER_COLS wide.
 export const FINGER_LANES = [3, 10, 17, 24];
 export const FINGER_COLS = 4;
-// A Finger is drawn bottom-up from its tip: the nail rows first, then the
-// shaft, with a knuckle crease every FINGER_CREASE_EVERY rows.
+// A Finger is drawn bottom-up from its tip in heavy `+` strokes, the outline
+// of a thing too big to fit in the glyphs: the rounded tip, the nail as a
+// plate of strokes, then the shaft, banded by a knuckle every
+// FINGER_KNUCKLE_EVERY rows. In the art each glyph's code is its part, and
+// every part draws as `+` in its own color: '+' skin, 'o' nail, '=' knuckle
+// crease. A '.' is bare flesh that may carry a fleck of FINGER_TEXTURE.
 export const FINGER_ART = {
-  tip: ['\\__/', '|()|', '|  |'],   // bottom row first
-  shaft: '|  |',
-  crease: '|--|',
+  tip: [' ++ ', '+oo+', '+oo+', '+==+'],   // bottom row first
+  shaft: '+..+',
+  knuckle: ['+==+', '+.=+'],                // bottom row first
 };
-export const FINGER_CREASE_EVERY = 4;
+export const FINGER_KNUCKLE_EVERY = 6;
+// Flecks on the bare flesh, fixed to the Finger so they ride with it.
+export const FINGER_TEXTURE = ['=', '-', '~', 'x', ':'];
+// Share of bare-flesh cells that carry a fleck.
+export const FINGER_TEXTURE_DENSITY = 0.3;
 
 export const GRASP_TUNING = {
   // Warm-up: mixed gray waves before the Grasp shows.
@@ -290,6 +298,12 @@ export const GRASP_TUNING = {
   // The reach speeds up as the pool drains: speed × (1 + this × spent share).
   FINGER_RAGE: 1.0,
   FINGER_KNOCKBACK: 80,
+  // Struck, a Finger holds still this long before it reaches again...
+  FINGER_STALL_TIME: 1.0,
+  // ...and lilts side to side meanwhile: this far each way (px), at this rate
+  // (radians/s). A cell each way keeps it inside its lane.
+  FINGER_LILT: CS,
+  FINGER_LILT_RATE: 5,
   FINGER_MIN_TIP: 2 * CS,
   FINGER_PRESS_DAMAGE: 1,
   FINGER_WITHDRAW_SPEED: 260,

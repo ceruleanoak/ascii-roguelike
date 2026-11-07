@@ -3,7 +3,9 @@
 // up (FINGER_KNOCKBACK); left alone it keeps coming. A tip past the Trap Line
 // presses: the Finger walls its lane off and hurts any body against it. All
 // four spend one pool, GraspSystem.fingersHp. A Finger always blocks the Trine
-// (it is rock-hard flesh), pressed or not.
+// (it is rock-hard flesh), pressed or not. A struck Finger stalls a moment
+// (FINGER_STALL_TIME) and lilts idly side to side in its lane before it
+// comes on again.
 import { GRID } from '../../game/GameConfig.js';
 import { GRASP_TUNING as T, FINGER_LANES, FINGER_COLS } from '../../data/grasp.js';
 
@@ -20,6 +22,11 @@ export function spawn(grasp) {
   grasp.fingers = FINGER_LANES.map((col, i) => {
     const finger = {
       x: col * CS,
+      laneX: col * CS,
+      stall: 0,
+      // The lilt's sine phase, in [0, 2π). It only rests on exactly 0 or π,
+      // where the Finger sits square in its lane.
+      liltPhase: 0,
       tipY: START_TIPS[i] * CS,
       pace: 0.8 + Math.random() * 0.4,
       flash: 0,
@@ -45,15 +52,33 @@ export function update(grasp, dt) {
   const reach = T.FINGER_REACH_SPEED * (1 + T.FINGER_RAGE * spent);
   for (const f of grasp.fingers) {
     if (f.flash > 0) f.flash -= dt;
+    if (f.stall > 0) f.stall -= dt;
     if (grasp.fingersHp <= 0) f.tipY -= T.FINGER_WITHDRAW_SPEED * dt;
-    else f.tipY = Math.min(FLOOR_TOP, f.tipY + reach * f.pace * dt);
+    else if (f.stall <= 0) f.tipY = Math.min(FLOOR_TOP, f.tipY + reach * f.pace * dt);
+    lilt(f, dt);
     syncUnit(f);
   }
+}
+
+// Sway while stalled; once the stall ends, finish the current swing back to
+// the lane's center rather than snapping there.
+function lilt(f, dt) {
+  const resting = f.liltPhase === 0 || f.liltPhase === Math.PI;
+  if (f.stall <= 0 && resting) return;
+  const next = f.liltPhase + T.FINGER_LILT_RATE * dt;
+  // The next center crossing: π after the right swing, 2π (stored as 0)
+  // after the left.
+  const center = f.liltPhase < Math.PI ? Math.PI : 2 * Math.PI;
+  if (next >= center) f.liltPhase = f.stall <= 0 || center === 2 * Math.PI ? center % (2 * Math.PI) : next;
+  else f.liltPhase = next;
+  if (f.liltPhase >= 2 * Math.PI) f.liltPhase -= 2 * Math.PI;
+  f.x = f.laneX + Math.sin(f.liltPhase) * T.FINGER_LILT;
 }
 
 /** Driven back up, far — never above FINGER_MIN_TIP, so it is never gone. */
 export function onHit(grasp, finger) {
   finger.tipY = Math.max(T.FINGER_MIN_TIP, finger.tipY - T.FINGER_KNOCKBACK);
+  finger.stall = T.FINGER_STALL_TIME;
   syncUnit(finger);
   if (grasp.fingersHp <= 0) grasp.game.renderController?.screenShake.trigger(5, 0.5);
 }

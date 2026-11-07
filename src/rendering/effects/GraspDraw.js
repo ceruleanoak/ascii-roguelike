@@ -11,8 +11,8 @@ import { GRID } from '../../game/GameConfig.js';
 import {
   HAND_ART, HAND_COLS, mirrorArt, handGlyphColor, BARRIER_ROWS, BARRIER_GLYPHS, ROCK_COLOR,
   ROCK_EDGE_COLOR, ROCK_GLYPH, ROCK_CAP_GLYPH, STREAK_COLOR, FINGER_ART,
-  FINGER_CREASE_EVERY, GRASP_COLOR, GRASP_NAIL_COLOR, GRASP_CREASE_COLOR,
-  CLUTCH_COLOR, GRASP_TUNING as T,
+  FINGER_KNUCKLE_EVERY, FINGER_TEXTURE, FINGER_TEXTURE_DENSITY, GRASP_COLOR, GRASP_NAIL_COLOR,
+  GRASP_CREASE_COLOR, CLUTCH_COLOR, GRASP_TUNING as T,
 } from '../../data/grasp.js';
 
 const CS = GRID.CELL_SIZE;
@@ -130,21 +130,47 @@ function drawHand(renderer, hand, ground) {
   }
 }
 
-// Bottom-up from the tip: nail rows, then shaft with a crease every few rows.
-function drawFinger(renderer, finger) {
+const FINGER_PART_COLOR = { '+': GRASP_COLOR, o: GRASP_NAIL_COLOR, '=': GRASP_CREASE_COLOR };
+
+// A fixed 0..1 value per Finger cell, so a fleck stays put on the flesh.
+function fleckRoll(fingerX, row, col) {
+  let h = (fingerX * 73856093) ^ (row * 19349663) ^ (col * 83492791);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
+// The art row `i` rows up from the tip: tip rows, then shaft banded by knuckles.
+function fingerRow(i) {
+  if (i < FINGER_ART.tip.length) return FINGER_ART.tip[i];
+  const k = (i - FINGER_ART.tip.length) % FINGER_KNUCKLE_EVERY;
+  const band = FINGER_KNUCKLE_EVERY - FINGER_ART.knuckle.length;
+  return k >= band ? FINGER_ART.knuckle[k - band] : FINGER_ART.shaft;
+}
+
+// Bottom-up from the tip, one row per cell until the Finger leaves the top.
+// Every cell inside the outline is backed with bare ground, so the Finger reads
+// as one solid mass over the arena floor.
+function drawFinger(renderer, finger, ground) {
   const flash = finger.flash > 0;
-  const tipRow = Math.floor(finger.tipY / CS) - 1;
-  for (let i = 0; tipRow - i >= -1; i++) {
+  const ctx = renderer.fgCtx;
+  ctx.fillStyle = ground;
+  for (let i = 0; ; i++) {
     const y = finger.tipY - (i + 1) * CS;
     if (y + CS < 0) break;
-    const isTip = i < FINGER_ART.tip.length;
-    const crease = !isTip && (i - FINGER_ART.tip.length) % FINGER_CREASE_EVERY === FINGER_CREASE_EVERY - 1;
-    const row = isTip ? FINGER_ART.tip[i] : crease ? FINGER_ART.crease : FINGER_ART.shaft;
-    const color = flash ? FLASH_COLOR : i === 1 ? GRASP_NAIL_COLOR : crease ? GRASP_CREASE_COLOR : GRASP_COLOR;
+    const row = fingerRow(i);
     for (let col = 0; col < row.length; col++) {
-      const glyph = row[col];
-      if (glyph === ' ') continue;
-      renderer.drawTextWithAlpha(finger.x + col * CS + HALF, y + HALF, glyph, color, 1);
+      const part = row[col];
+      if (part === ' ') continue;
+      ctx.fillRect(finger.x + col * CS, y, CS, CS);
+      let glyph = '+';
+      let color = FINGER_PART_COLOR[part];
+      if (part === '.') {
+        const roll = fleckRoll(finger.x, i, col);
+        if (roll >= FINGER_TEXTURE_DENSITY) continue;
+        glyph = FINGER_TEXTURE[Math.floor(roll / FINGER_TEXTURE_DENSITY * FINGER_TEXTURE.length)];
+        color = GRASP_CREASE_COLOR;
+      }
+      renderer.drawTextWithAlpha(finger.x + col * CS + HALF, y + HALF, glyph, flash ? FLASH_COLOR : color, 1);
     }
   }
 }
@@ -154,7 +180,7 @@ export function drawGraspParts(renderer, game) {
   if (!grasp?.active) return;
   const ground = game.zoneSystem.getBlendedEnvironmentColors(game.currentRoom.zone).background;
   for (const hand of grasp.hands) drawHand(renderer, hand, ground);
-  for (const finger of grasp.fingers) drawFinger(renderer, finger);
+  for (const finger of grasp.fingers) drawFinger(renderer, finger, ground);
   for (const m of grasp.clutch.members) {
     renderer.drawTextWithAlpha(m.x + HALF, m.y + HALF, m.glyph, m.flash > 0 ? FLASH_COLOR : CLUTCH_COLOR, 1);
   }

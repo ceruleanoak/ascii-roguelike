@@ -1132,7 +1132,8 @@ identity, not standard programming terms.
 
 ### Fingers
 - **Definition:** The Grasp's third phase: four massive nailed fingers reaching down their lanes
-  while the climb runs fast. Any blow drives one far back up; all four share one HP pool. One
+  while the climb runs fast. Any blow drives one far back up, where it stalls a moment and lilts
+  idly in its lane before it comes on again; all four share one HP pool. One
   that reaches past the Trap Line presses down and hurts whoever is against it.
 - **In code:** `src/systems/grasp/fingers.js`; `GraspSystem.fingers`, pool `fingersHp`;
   `FINGER_LANES`, `FINGER_ART`, `FINGER_KNOCKBACK`.
