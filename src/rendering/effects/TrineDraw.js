@@ -7,10 +7,18 @@
 // Primary included, briefly shows its newly held weapon glyph above it.
 // A Dormant body draws faint and brightens toward Flank strength as it
 // recovers, so its wake reads without a timer.
+// The player-layer Frame Passes draw game.player's own visible state (status
+// pips, dizzy orbit, parry tell, a weapon's windup pose); the other bodies get
+// the same here (drawBodyState), so in Act 2, where no body is the one being
+// steered, all three show what is happening to them alike.
 //
 // Surface-plane only: the Mist Battle arena is a plain gray combat room with no
 // Interior, so there is no PiP pass to share this with.
 import { GRID } from '../../game/GameConfig.js';
+import { drawStatusPips } from './StatusPipEffects.js';
+import { drawDizzyOrbitals } from './DizzyOrbitals.js';
+import { drawParryIndicator } from '../ui/ParryIndicator.js';
+import { drawGemWandCharge, drawHeldWindupCharge, drawHammerWindupPose, drawStaffBlockStance } from './WeaponPreviewDraw.js';
 
 const FLANK_ALPHA_MULT = 0.7;
 const DORMANT_ALPHA_MIN = 0.2;
@@ -42,6 +50,7 @@ export function drawTrine(renderer, game) {
       body.getDisplayColor(),
       body.getVisibilityAlpha() * alphaMult
     );
+    drawBodyState(renderer, body);
   }
   for (const member of mist.members) {
     if (member.dormant <= 0) continue;
@@ -55,4 +64,19 @@ export function drawTrine(renderer, game) {
       DORMANT_ALPHA_MIN + (FLANK_ALPHA_MULT - DORMANT_ALPHA_MIN) * recovered
     );
   }
+}
+
+// What the player-layer Frame Passes draw for game.player, drawn for another
+// Trine body: its status, its parry window and its held weapon's pose.
+function drawBodyState(renderer, body) {
+  const half = GRID.CELL_SIZE / 2;
+  if (body.isDizzy?.()) {
+    drawDizzyOrbitals(renderer.fgCtx, body.position.x + half, body.position.y + half, body.statusBlinkTimer);
+  }
+  drawStatusPips(renderer, body);
+  drawParryIndicator(renderer, body, body.parryMechanic);
+  drawStaffBlockStance(renderer, body);
+  drawGemWandCharge(renderer, body);
+  drawHeldWindupCharge(renderer, body);
+  drawHammerWindupPose(renderer, body);
 }

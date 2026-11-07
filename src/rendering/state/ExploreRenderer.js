@@ -1745,15 +1745,15 @@ export class ExploreRenderer {
   // renderController.exploreRenderer, the same render-helper pattern used
   // for the interior PiP overlays.
   drawConsumableWindups(game) { drawConsumableWindups(this.renderer, game); }
-  drawGemWandCharge(game) { drawGemWandCharge(this.renderer, game); }
-  drawHeldWindupCharge(game) { drawHeldWindupCharge(this.renderer, game); }
-  drawHammerWindupPose(game) { drawHammerWindupPose(this.renderer, game); }
+  drawGemWandCharge(game) { drawGemWandCharge(this.renderer, game.player); }
+  drawHeldWindupCharge(game) { drawHeldWindupCharge(this.renderer, game.player); }
+  drawHammerWindupPose(game) { drawHammerWindupPose(this.renderer, game.player); }
   // Held trap charges + armed Bomb Bag ammo — the counts that float over the player.
   drawChargeCounts(game) {
     drawTrapChargeCount(this.renderer, game);
     drawBombBagCount(this.renderer, game);
   }
-  drawStaffBlockStance(game) { drawStaffBlockStance(this.renderer, game); }
+  drawStaffBlockStance(game) { drawStaffBlockStance(this.renderer, game.player); }
 
   // Reticule + in-flight + placed traps share a single render path so the
   // surface canvas and the interior overlay (HutInteriorOverlay) can both

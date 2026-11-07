@@ -11,8 +11,11 @@ import { blendColors } from '../../systems/ZoneSystem.js';
  * and `RestRenderer.render()` (the render-helper pattern), instead of a
  * second hand-maintained copy living in RestRenderer.
  *
- * Each function takes the ASCIIRenderer + `game` and nothing else — no
- * interior/hutPlane parameter, because none of these behaviors currently have
+ * Each function takes the ASCIIRenderer + `game` and nothing else — except
+ * the held-weapon poses (gem wand charge, held windup, hammer pose, staff
+ * block), which take the body holding the weapon, so drawTrine can draw them
+ * on every Mist Battle body, not only game.player. No interior/hutPlane
+ * parameter, because none of these behaviors currently have
  * a hut-PiP counterpart (out of scope for the Rest/Explore parity fix this
  * module exists for).
  */
@@ -83,8 +86,8 @@ export function drawConsumableWindups(renderer, game) {
 
 /** Gem wand held aloft with shake while charging — shake intensifies as the
  * spell nears completion. */
-export function drawGemWandCharge(renderer, game) {
-  const held = game.player.heldItem;
+export function drawGemWandCharge(renderer, body) {
+  const held = body.heldItem;
   if (!held?.data?.gemWand || !held.isCharging) return;
   const C = GRID.CELL_SIZE;
   const ctx = renderer.fgCtx;
@@ -99,16 +102,16 @@ export function drawGemWandCharge(renderer, game) {
   ctx.fillStyle = held.color || '#ffffff';
   ctx.fillText(
     held.char,
-    game.player.position.x + C / 2 + jitterX,
-    game.player.position.y - C * 0.6 + jitterY
+    body.position.x + C / 2 + jitterX,
+    body.position.y - C * 0.6 + jitterY
   );
   ctx.restore();
 }
 
 /** AoE melee weapon held aloft through its held windup (Item.holdsWindup) —
  * the gem wand's charge read: shake intensifies as the swing nears. */
-export function drawHeldWindupCharge(renderer, game) {
-  const held = game.player.heldItem;
+export function drawHeldWindupCharge(renderer, body) {
+  const held = body.heldItem;
   if (!held?.windupActive || !held.holdsWindup?.()) return;
   const C = GRID.CELL_SIZE;
   const ctx = renderer.fgCtx;
@@ -123,8 +126,8 @@ export function drawHeldWindupCharge(renderer, game) {
   ctx.fillStyle = held.color || '#ffffff';
   ctx.fillText(
     held.char,
-    game.player.position.x + C / 2 + jitterX,
-    game.player.position.y - C * 0.6 + jitterY
+    body.position.x + C / 2 + jitterX,
+    body.position.y - C * 0.6 + jitterY
   );
   ctx.restore();
 }
@@ -135,13 +138,13 @@ export function drawHeldWindupCharge(renderer, game) {
  * drawing it for the strike itself. Static (no shake): the raised pose alone
  * reads as "about to swing" without competing with the impact-frame burst at
  * the strike. */
-export function drawHammerWindupPose(renderer, game) {
-  const held = game.player.heldItem;
+export function drawHammerWindupPose(renderer, body) {
+  const held = body.heldItem;
   if (held?.data?.attackPattern !== 'hammerRing' || !held.windupActive) return;
   const C = GRID.CELL_SIZE;
   renderer.drawEntity(
-    game.player.position.x + C / 2,
-    game.player.position.y - C / 2,
+    body.position.x + C / 2,
+    body.position.y - C / 2,
     held.char,
     held.color || COLORS.ITEM
   );
@@ -187,14 +190,14 @@ export function drawTrapChargeCount(renderer, game) {
 
 /** Staff held perpendicular to facing direction, ~1 cell forward, while
  * blocking. */
-export function drawStaffBlockStance(renderer, game) {
-  if (!game.player.isStaffBlocking || !game.player.heldItem) return;
-  const facingAngle = Math.atan2(game.player.facing.y, game.player.facing.x);
+export function drawStaffBlockStance(renderer, body) {
+  if (!body.isStaffBlocking || !body.heldItem) return;
+  const facingAngle = Math.atan2(body.facing.y, body.facing.x);
   const offset = GRID.CELL_SIZE * 0.9;
-  const cx = game.player.position.x + GRID.CELL_SIZE / 2 + Math.cos(facingAngle) * offset;
-  const cy = game.player.position.y + GRID.CELL_SIZE / 2 + Math.sin(facingAngle) * offset;
-  const staffChar = game.player.heldItem.data?.meleeChar || game.player.heldItem.char || '|';
-  const staffColor = game.player.heldItem.color || '#ffffff';
+  const cx = body.position.x + GRID.CELL_SIZE / 2 + Math.cos(facingAngle) * offset;
+  const cy = body.position.y + GRID.CELL_SIZE / 2 + Math.sin(facingAngle) * offset;
+  const staffChar = body.heldItem.data?.meleeChar || body.heldItem.char || '|';
+  const staffColor = body.heldItem.color || '#ffffff';
   // Rotate the (vertical-glyph) staff so it lies perpendicular to facing.
   renderer.drawEntityRotated(cx, cy, staffChar, staffColor, facingAngle);
 }
