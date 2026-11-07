@@ -1157,7 +1157,8 @@ identity, not standard programming terms.
 - **Definition:** The three-body formation the player controls in the Mist Battle's Act 1: the
   Primary at the apex, pointing where the Primary faces, with a Flank behind on each side. The
   three attack on one press (each Flank aimed at its own nearest enemy), swap weapons together,
-  and roll together. Only the Primary takes damage.
+  and roll together. Only the Primary takes damage. A body brought to 0 HP goes Dormant
+  rather than dying; the Trine dies only when every body is down.
 - **In code:** `MistBattleSystem.members` (clockwise ring; `primaryIndex` is the apex), formation
   slots `FLANK_BACK` / `FLANK_SIDE`; drawn by `drawTrine` (`src/rendering/effects/TrineDraw.js`).
 - **Not:** a party or companion group (every body is a full `Player`); "triad" (that word
@@ -1181,12 +1182,25 @@ identity, not standard programming terms.
 
 ### Rotate
 - **Definition:** Changing the Primary: triple-tap SPACE and the Trine turns one step
-  clockwise, so the back-left Flank becomes the Primary at the apex. A fallen Primary is
-  replaced the same way, automatically.
+  clockwise, so the back-left Flank becomes the Primary at the apex. A Primary that goes
+  Dormant is replaced the same way, automatically. Rotate skips Dormant bodies.
 - **In code:** `MistBattleSystem.tryRotate()` (`ROTATE_TAPS` presses, each within `ROTATE_TAP_WINDOW`), `rotate()`,
   `_promote()` (repoints `game.player`, swaps gear).
 - **Not:** a character switch at REST; turning to face a new direction (the apex follows facing
   without a Rotate).
+
+### Dormant (Trine)
+- **Definition:** A Trine body brought to 0 HP in Act 1. Instead of dying it hands the apex
+  to the next awake body, rides along in its corner doing nothing, and wakes at full HP
+  after 15 seconds as a Flank. A Primary falling while both other bodies are Dormant dies,
+  and the run ends.
+- **In code:** `member.dormant` (seconds left; 0 = awake) on `MistBattleSystem.members`,
+  set by `_goDormant`, counted down by `_updateDormant` (`DORMANT_TIME`). A Dormant body has
+  `hp` 0, so `flanks()`, `livingBodies()`, `rotate()` and the Grasp's targeting skip it;
+  `presentBodies()` includes it (mist clearing, Climb Scenery blocking). Drawn faint and
+  brightening by `drawTrine`.
+- **Not:** the enemy Dormant State (`enemyStates/dormant.js`); a Flank (it doesn't attack,
+  aim or roll); Act 2, where a body at 0 HP falls for good.
 
 ### Dragon Spirit
 - **Definition:** The passive consumable (Fire Essence + Scale, either order) that calls up

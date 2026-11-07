@@ -99,7 +99,7 @@ export class GraspSystem {
     return this.game.mistBattleSystem;
   }
 
-  /** Living Trine bodies (the Primary first). */
+  /** Awake Trine bodies (the Primary first); Dormant ones aren't targets. */
   bodies() {
     return this.mist.livingBodies();
   }
@@ -372,7 +372,8 @@ export class GraspSystem {
     if (!this.active) return;
     greatHands.resolveGrabs(this);
     const blockers = [...this.climb.scenery, ...fingers.blockers(this)];
-    for (const body of this.bodies()) {
+    // Dormant bodies are blocked too, so none wakes inside rock.
+    for (const body of this.mist.presentBodies()) {
       if (!body.grabbed) climb.resolveBlockers(this, body, blockers);
     }
     clutch.resolveContact(this);

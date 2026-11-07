@@ -17,8 +17,10 @@
 // - Rotate (triple-tap SPACE) turns the Trine clockwise: `game.player` is
 //   repointed at the back-left body and the gear slots swap with it.
 // - Only the Primary takes damage: enemies target it alone, and nothing hurts
-//   a Flank (hurt, _applyDot). A fallen Primary hands off to a living Flank;
-//   only the last body's death ends the run.
+//   a Flank (hurt, _applyDot). A Primary at 0 HP goes Dormant instead of
+//   dying: it hands off to an awake Flank, rides along in its corner, and
+//   wakes at full HP after DORMANT_TIME. Only a Primary falling with no awake
+//   Flank left ends the run.
 // - Each body carries its own character type and its own gear. The global
 //   InventorySystem gear slots always mirror the Primary; a Flank's passive
 //   armor/consumable stats are projected onto it by briefly loading its gear
@@ -88,6 +90,8 @@ const WAVE_DELAY = 1.5;
 // Mist clearing (mistClearings): each living body clears the mist this many
 // times the zone's vision radius, so the whole Trine reads at once.
 const BODY_MIST_RADIUS_MULT = 1.5;
+// Seconds a Dormant Trine body lies still before it wakes at full HP.
+const DORMANT_TIME = 15;
 
 /** How many characters the gray mist takes before the Mist Battle begins. */
 export const MIST_BATTLE_LOST = 3;
@@ -267,6 +271,7 @@ export class MistBattleSystem {
         gear: this._makeGear(snap, body),
         brain: createBrain(),
         fallen: false,
+        dormant: 0, // seconds left Dormant (Act 1); 0 = awake
       });
     });
 
@@ -278,13 +283,21 @@ export class MistBattleSystem {
     game.graspSystem.begin(game.currentRoom);
   }
 
-  /** Every living body, the Primary first. */
+  /** Every awake body, the Primary first (Dormant bodies are not counted). */
   livingBodies() {
     const lead = this.primary;
     if (!lead) return [];
     const out = lead.body.hp > 0 ? [lead.body] : [];
     for (const { body } of this.flanks()) out.push(body);
     return out;
+  }
+
+  /**
+   * Every body still in the arena, awake or Dormant: what the mist parts
+   * around and the climb's rock blocks.
+   */
+  presentBodies() {
+    return this.members.filter(m => m.body.hp > 0 || m.dormant > 0).map(m => m.body);
   }
 
   /**
@@ -395,7 +408,7 @@ export class MistBattleSystem {
       body.facing = { x: Math.sign(Math.round(-Math.cos(angle))), y: Math.sign(Math.round(-Math.sin(angle))) };
       return {
         body, characterType: snap.characterType, swapFlash: 0,
-        gear: this._makeGear(snap, body), brain: createBrain(), fallen: false,
+        gear: this._makeGear(snap, body), brain: createBrain(), fallen: false, dormant: 0,
       };
     });
 
@@ -629,7 +642,7 @@ export class MistBattleSystem {
   mistClearings(radius, scale) {
     if (!this.active) return [];
     const out = [];
-    for (const body of this.livingBodies()) {
+    for (const body of this.presentBodies()) {
       out.push({ x: body.position.x + CELL / 2, y: body.position.y + CELL / 2, r: radius * BODY_MIST_RADIUS_MULT });
     }
     out.push(...this.game.graspSystem.mistClearings(scale));
@@ -641,7 +654,7 @@ export class MistBattleSystem {
     return this.members[this.primaryIndex] ?? null;
   }
 
-  /** Every living non-Primary member, in ring order. */
+  /** Every awake non-Primary member, in ring order (Dormant ones are skipped). */
   flanks() {
     const out = [];
     for (let k = 1; k < this.members.length; k++) {
@@ -896,18 +909,43 @@ export class MistBattleSystem {
     return this._catchPrimaryDeath();
   }
 
-  // The Primary is down. With a Flank still standing the Trine doesn't end:
-  // an equipped death save gets its normal chance first, then the fallen
-  // Primary leaves and the next living body is promoted. The last body
-  // standing dies through main.js's normal path.
+  // The Primary is down. With a Flank still awake the Trine doesn't end:
+  // an equipped death save gets its normal chance first, then the next awake
+  // body is promoted and the old Primary goes Dormant in its corner. With
+  // every other body Dormant, the Primary dies through main.js's normal path.
   _catchPrimaryDeath() {
     const primary = this.primary;
     if (!primary || primary.body.hp > 0 || this.flanks().length === 0) return false;
     if (tryDeathSave(this.game)) return true;
     this.rotate();
-    this._fall(primary);
+    this._goDormant(primary);
     this.glide = null; // the new Primary holds its ground; the apex is empty
     return true;
+  }
+
+  // A body at 0 HP lies Dormant: it stays in physics and keeps its corner of
+  // the Trine, but does nothing else (flanks(), rotate() and the Grasp's
+  // targeting all skip hp <= 0) until _updateDormant wakes it.
+  _goDormant(member) {
+    const body = member.body;
+    body.hp = 0;
+    body.velocity.vx = 0;
+    body.velocity.vy = 0;
+    body.heldItem?.cancelChargeAndReload?.();
+    member.dormant = DORMANT_TIME;
+  }
+
+  /** How far a Dormant member is toward waking, 0 → 1 (drawTrine's fade). */
+  dormantRecovery(member) {
+    return 1 - member.dormant / DORMANT_TIME;
+  }
+
+  _updateDormant(deltaTime) {
+    for (const member of this.members) {
+      if (member.dormant <= 0) continue;
+      member.dormant = Math.max(0, member.dormant - deltaTime);
+      if (member.dormant === 0) member.body.hp = member.body.maxHp;
+    }
   }
 
   // A member leaves the fight: burst, out of physics, out of every roster
@@ -994,6 +1032,7 @@ export class MistBattleSystem {
     for (const member of this.members) {
       if (member.swapFlash > 0) member.swapFlash = Math.max(0, member.swapFlash - deltaTime);
     }
+    this._updateDormant(deltaTime);
     this._mirrorDodge();
     this._updateGlide(deltaTime, flankSpeed);
 
@@ -1003,11 +1042,15 @@ export class MistBattleSystem {
     for (let k = 1; k < this.members.length; k++) {
       const member = this.members[(this.primaryIndex + k) % this.members.length];
       const body = member.body;
-      if (body.hp <= 0) continue;
-      this._applyDot(member, body.update(deltaTime));
-      this._aimFlank(body, lead);
-      tickMirroredWeapon(game, body, deltaTime, this._fire);
-      mirrorAutoAttack(game, body, this._fire);
+      const dormant = member.dormant > 0;
+      if (body.hp <= 0 && !dormant) continue;
+      if (!dormant) {
+        this._applyDot(member, body.update(deltaTime));
+        this._aimFlank(body, lead);
+        tickMirroredWeapon(game, body, deltaTime, this._fire);
+        mirrorAutoAttack(game, body, this._fire);
+      }
+      // A Dormant body is carried along in its corner so the Trine keeps its shape.
       if (body.dodgeRoll.active) continue; // the roll owns velocity; drift back afterward
       if (body.grabbed) continue; // a Great Hand holds it (GraspSystem)
 

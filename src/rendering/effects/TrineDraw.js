@@ -5,12 +5,15 @@
 // glance. In Act 2 nobody is steered, so every body draws at full strength.
 // After a 1/2/3 swap (or an Act 2 body drawing another weapon) every body,
 // Primary included, briefly shows its newly held weapon glyph above it.
+// A Dormant body draws faint and brightens toward Flank strength as it
+// recovers, so its wake reads without a timer.
 //
 // Surface-plane only: the Mist Battle arena is a plain gray combat room with no
 // Interior, so there is no PiP pass to share this with.
 import { GRID } from '../../game/GameConfig.js';
 
 const FLANK_ALPHA_MULT = 0.7;
+const DORMANT_ALPHA_MIN = 0.2;
 
 export function drawTrine(renderer, game) {
   const mist = game.mistBattleSystem;
@@ -35,6 +38,18 @@ export function drawTrine(renderer, game) {
       body.char,
       body.getDisplayColor(),
       body.getVisibilityAlpha() * alphaMult
+    );
+  }
+  for (const member of mist.members) {
+    if (member.dormant <= 0) continue;
+    const body = member.body;
+    const recovered = mist.dormantRecovery(member);
+    renderer.drawTextWithAlpha(
+      body.position.x + half,
+      body.position.y + half,
+      body.char,
+      body.getDisplayColor(),
+      DORMANT_ALPHA_MIN + (FLANK_ALPHA_MULT - DORMANT_ALPHA_MIN) * recovered
     );
   }
 }
