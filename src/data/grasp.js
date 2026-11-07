@@ -256,6 +256,8 @@ export const GRASP_TUNING = {
   HAND_FLEX_TIME: 0.7,
   HAND_REACH_SPEED: 150,
   HAND_REACH_TIME: 1.8,
+  // A reaching palm this close to its target splays, and stays splayed.
+  HAND_SPLAY_DISTANCE: 3 * CS,
   HAND_RETRACT_SPEED: 200,
   HAND_GRAB_TIME: 1.8,
   HAND_SQUEEZE_DAMAGE: 1,

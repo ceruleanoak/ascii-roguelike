@@ -9,7 +9,7 @@
 // whole steps (retro quantization): no gradients anywhere.
 import { GRID } from '../../game/GameConfig.js';
 import {
-  HAND_ART, HAND_COLS, HAND_ROWS, mirrorArt, handGlyphColor, BARRIER_ROWS, BARRIER_GLYPHS, ROCK_COLOR,
+  HAND_ART, HAND_COLS, mirrorArt, handGlyphColor, BARRIER_ROWS, BARRIER_GLYPHS, ROCK_COLOR,
   ROCK_EDGE_COLOR, ROCK_GLYPH, ROCK_CAP_GLYPH, STREAK_COLOR, FINGER_ART,
   FINGER_CREASE_EVERY, GRASP_COLOR, GRASP_NAIL_COLOR, GRASP_CREASE_COLOR,
   CLUTCH_COLOR, GRASP_TUNING as T,
@@ -31,21 +31,14 @@ const FRAME_FOR_STATE = { rise: 'grip', grip: 'grip', flex: 'flex', reach: 'open
 const HALF_FRAME_TIME = 0.12;
 // Reaching, it twitches between `open` and `openB` once per this many seconds.
 const RESTLESS_PERIOD = 0.35;
-// Reaching, it splays once its palm is this close to the body it wants.
-const SPLAY_DISTANCE = 3 * CS;
 
 /** Which HAND_ART frame a hand shows this frame, from its state and timer. */
 function handFrame(hand) {
   const reaching = hand.state === 'reach';
   if ((reaching || hand.state === 'retract') && hand.timer < HALF_FRAME_TIME) return 'half';
   if (!reaching) return FRAME_FOR_STATE[hand.state] ?? 'grip';
-  const body = hand.target;
-  if (body) {
-    // The palm cell, as greatHands.palm(): bottom center of the art.
-    const px = hand.x + (HAND_COLS * CS) / 2;
-    const py = hand.y + (HAND_ROWS - 1) * CS;
-    if (Math.hypot(body.position.x + HALF - px, body.position.y + HALF - py) < SPLAY_DISTANCE) return 'splay';
-  }
+  // Once splayed near its target it holds the splay until the grab.
+  if (hand.splayed) return 'splay';
   return Math.floor(hand.timer / RESTLESS_PERIOD) % 2 ? 'openB' : 'open';
 }
 

@@ -27,7 +27,10 @@ export function spawn(grasp) {
     const hand = {
       side, state: 'rise', timer: 0,
       x: ANCHOR_X[side], y: OFF_TOP,
-      body: null, squeeze: 0, flash: 0,
+      target: null, body: null, squeeze: 0, flash: 0,
+      // Set once a reaching palm comes within HAND_SPLAY_DISTANCE of its
+      // target; the splayed frame then holds until the reach ends.
+      splayed: false,
       // The right hand waits a beat longer, so the two never start in step.
       wait: i === 0 ? randIn(T.HAND_GRIP_TIME) : randIn(T.HAND_GRIP_TIME) + 1,
     };
@@ -105,6 +108,7 @@ export function update(grasp, dt) {
           hand.target = nearestFree(grasp, palm(hand));
           hand.state = hand.target ? 'reach' : 'grip';
           hand.timer = 0;
+          hand.splayed = false;
           hand.wait = randIn(T.HAND_GRIP_TIME);
         }
         break;
@@ -115,6 +119,7 @@ export function update(grasp, dt) {
         const bx = body.position.x + CS / 2;
         const by = body.position.y + CS / 2;
         moveToward(hand, hand.x + bx - p.x, hand.y + by - p.y, T.HAND_REACH_SPEED, dt);
+        if (Math.hypot(bx - p.x, by - p.y) < T.HAND_SPLAY_DISTANCE) hand.splayed = true;
         // A rolling body slips the grab.
         if (Math.hypot(bx - p.x, by - p.y) < GRAB_RADIUS && !body.dodgeRoll?.active) {
           hand.state = 'grab';
