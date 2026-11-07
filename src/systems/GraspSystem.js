@@ -220,10 +220,15 @@ export class GraspSystem {
       c.southOpen = Math.max(0, 1 - s.timer / T.WALL_BUILD_TIME);
       if (c.southOpen <= 0) {
         this.game.renderController?.screenShake.trigger(4, 0.3);
-        this._setPhase('zoom');
-        this.game.cameraZoomSystem.holdZoom(T.ZOOM_SCALE, () => this._trineCentroid());
+        this._startZoom();
       }
     }
+  }
+
+  // The camera closes in on the Trine; once it settles, Act 2 begins.
+  _startZoom() {
+    this._setPhase('zoom');
+    this.game.cameraZoomSystem.holdZoom(T.ZOOM_SCALE, () => this._trineCentroid());
   }
 
   // Canvas-pixel center of the living Trine (CameraZoomSystem focus).
@@ -237,14 +242,16 @@ export class GraspSystem {
 
   /**
    * Test entry (CheatMenu BOSSES): skip the warm-up straight to `phase`
-   * ('grip' | 'clutch' | 'fingers' | 'summit'). The climb phases start with
-   * the barrier already broken and the scroll already at speed.
+   * ('grip' | 'clutch' | 'fingers' | 'summit' | 'act2'). The climb phases
+   * start with the barrier already broken and the scroll already at speed;
+   * 'act2' goes straight to the Summit's zoom, which starts Act 2.
    */
   skipTo(phase) {
     const room = this.room;
     this.mist.wavesEnabled = false;
     room.enemies.length = 0;
     if (phase === 'grip') { this.startGrip(); return; }
+    if (phase === 'act2') { this._startZoom(); return; }
     climb.breakLoose(this);
     this.climb.speed = phase === 'clutch' ? T.CLIMB_SPEED : T.CLIMB_SPEED_FAST;
     if (phase === 'clutch') this.startClutch();

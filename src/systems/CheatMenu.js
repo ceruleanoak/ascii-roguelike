@@ -80,6 +80,8 @@ export class CheatMenu {
       { char: '☟', name: 'GRASP: CLUTCH',  type: 'mist_battle_test', graspPhase: 'clutch',  color: '#d8d0c4' },
       { char: '|', name: 'GRASP: FINGERS', type: 'mist_battle_test', graspPhase: 'fingers', color: '#d8d0c4' },
       { char: '▲', name: 'GRASP: SUMMIT',  type: 'mist_battle_test', graspPhase: 'summit',  color: '#d8d0c4' },
+      // Straight to Act 2: the Summit's zoom, then the auto-battle.
+      { char: '▽', name: 'MIST: ACT 2',    type: 'mist_battle_test', graspPhase: 'act2',    color: '#888888' },
       // The hidden pair: through the Sunken Ship into its Hold, south open.
       { char: 'S', name: 'SEA SERPENTS (hold)', type: 'sea_serpent_test',      color: '#2fbf8f' }
     ] : [];
