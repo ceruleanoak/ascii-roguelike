@@ -460,9 +460,10 @@ export class MistBattleSystem {
     return true;
   }
 
-  // Run `fn` with `member` standing in as game.player and its gear loaded in
-  // the global slots, so player-bound paths (consumable auto-triggers and
-  // windups, death saves) act on that body. Raw slot swaps, not a
+  // Run `fn` with `member` standing in as game.player (its character type
+  // the active one) and its gear loaded in the global slots, so player-bound
+  // paths (consumable auto-triggers and windups, death saves, _tickBody) act
+  // on that body. Raw slot swaps, not a
   // projection: re-projecting every frame would re-arm per-room passives.
   _withBody(member, fn) {
     const game = this.game;
@@ -471,10 +472,13 @@ export class MistBattleSystem {
     this._stashGear(primary);
     this._loadSlots(member);
     game.player = member.body;
+    // Character-keyed bonuses (Weapons Master training) read the active type.
+    game.activeCharacterType = member.characterType;
     try {
       return fn();
     } finally {
       game.player = primary.body;
+      game.activeCharacterType = primary.characterType;
       this._stashGear(member);
       this._loadSlots(primary);
     }
@@ -564,15 +568,32 @@ export class MistBattleSystem {
       // runs in main.js; the other two tick here.
       if (body !== game.player) {
         this._applyDot(member, body.update(deltaTime));
-        tickMirroredWeapon(game, body, deltaTime, this._fire);
-        this._withBody(member, () => game.inventorySystem.update(
-          deltaTime, body, game.currentRoom, game.combatSystem, game.steamClouds, game.particles));
+        this._withBody(member, () => this._tickBody(deltaTime));
       }
       if (this.ending || body.hp <= 0) continue;
       const rivals = living.filter(m => m !== member && m.body.hp > 0).map(m => m.body);
       driveBody(game, member, rivals, this.arena, deltaTime, { fire: this._fire, onSlotSwitch: this._flashSwap });
     }
     if (this.ending) this._updateEnding(deltaTime);
+  }
+
+  // The player-bound paths main.js runs each frame for game.player, run for
+  // another Act 2 body while it stands in as game.player (_withBody): its
+  // armor passives (Splinter, Wings' word, the boots' charge, a robe's
+  // aura), its dagger's roll-end stab, its held weapon's tick and swing
+  // effects, and its consumables. A body fights the same whichever seat it
+  // holds (bug #533). Act 1 Flanks don't run these: they mirror the
+  // Primary's attacks (tickMirroredWeapon) and nothing hurts them.
+  _tickBody(deltaTime) {
+    const game = this.game;
+    const body = game.player;
+    game.armorEffectsSystem.updateSplinter();
+    game.wingsSystem.update();
+    game.floatingBootsSystem.update(deltaTime);
+    game.characterSystem.triggerDaggerRollAttack();
+    game.characterSystem.tickHeldItem(deltaTime);
+    game.inventorySystem.update(deltaTime, body, game.currentRoom, game.combatSystem, game.steamClouds, game.particles);
+    game.armorEffectsSystem.updateRobeAura(deltaTime, body, game.currentRoom, game.particles);
   }
 
   _flashSwap = (member) => {

@@ -1895,8 +1895,9 @@ export class PhysicsSystem {
       // an elemental status, so Rubber Boots' water immunity doesn't stop it.
       if (entity.statusEffects?.goo?.active) clearStatusEffect(entity, 'goo');
 
-      // Check water immunity (Rubber Boots) — blocks elemental status effects but not movement slow
-      const isImmune = entity === game.player && game.player.waterImmune;
+      // Check water immunity (Rubber Boots) — blocks elemental status effects but not movement slow.
+      // Read off the wader, not game.player: every Mist Battle body wears its own gear.
+      const isImmune = !!entity.waterImmune;
       // An authored wet immunity (elementalAffinity.immunity 'wet'; no enemy
       // carries one today) blocks only the wet status — electrified water
       // still shocks it.
@@ -1904,7 +1905,7 @@ export class PhysicsSystem {
       // The Giant Slime's own broken Imbue Pool ice doesn't soak it: it lands
       // there for the ice Imbue, not to lose its leap (Water Balloon).
       const wetImmune = isImmune || !!entity.elementalAffinity?.immunity?.includes('wet')
-        || (entity === game.player && entity.deepWaterImmune)
+        || !!entity.deepWaterImmune
         || (imbuePoolWater && !!entity.data?.imbue?.enabled);
       // Shock consequences (and shock immunities — electric affinity) are
       // owned by ElectricitySystem.shockEntity, not here.

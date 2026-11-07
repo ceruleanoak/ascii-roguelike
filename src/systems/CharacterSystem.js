@@ -1,12 +1,12 @@
 import { CharacterNPC } from '../entities/CharacterNPC.js';
 import { CHARACTER_TYPES } from '../data/characters.js';
 import { TRAINING_TECHNIQUES } from '../data/items.js';
-import { GRID, NPC_INTERACTION_RANGE, GAME_STATES } from '../game/GameConfig.js';
+import { GRID, NPC_INTERACTION_RANGE, GAME_STATES, PHYSICS } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { tagInteriorPlane } from './PlaneSystem.js';
 import { StatusEffectSystem } from './StatusEffectSystem.js';
 import { isInputCaptured } from '../game/inputCapture.js';
-import { aimFacingAtNearestEnemy, keenStrikeReach } from './KeenAim.js';
+import { aimFacingAtNearestEnemy, keenStrikeReach, updateKeenStrike } from './KeenAim.js';
 import { stashEquipment, loadEquipment } from './characterLoadout.js';
 import { tryPoleVault } from './PoleVault.js';
 
@@ -398,8 +398,6 @@ export class CharacterSystem {
     }
   }
 
-  // Dagger roll auto-attack: fires immediately on roll completion, bypassing cooldown and windup.
-  // Direction from current WASD input, falling back to player facing.
   _struggleLock(player) {
     const game = this.game;
     const held = new Set();
@@ -414,6 +412,39 @@ export class CharacterSystem {
     this._lockHeldKeys = held;
   }
 
+  // The held item's tick and windup completion for game.player (main.js
+  // updatePlayerMechanics). This is the ONLY place a player's held item ticks
+  // — at WEAPON_TIMER_RATE (2×), preserving the double-tick feel all weapon
+  // data was tuned against (resolved bug #88). Player-bound like the rest of
+  // the player's own paths: the Mist Battle's Act 2 runs it for its other
+  // bodies with each standing in as game.player (MistBattleSystem._withBody),
+  // so a swing lands its lava, bolt or ring whichever body throws it.
+  tickHeldItem(deltaTime) {
+    const game = this.game;
+    const player = game.player;
+    // Clear staff-block state if the held weapon is no longer a blocking staff
+    if (player.isStaffBlocking && !this.isBlockingStaff(player.heldItem)) {
+      player.isStaffBlocking = false;
+      player.staffSwingHasFired = false;
+    }
+    const held = player.heldItem;
+    if (!held?.update) return;
+    updateKeenStrike(player, game._activeEnemies()); // Keen Dagger: windup tracks the nearest enemy
+    const windupAttack = held.update(deltaTime * PHYSICS.WEAPON_TIMER_RATE);
+    if (!windupAttack) return;
+    game.playWeaponAttackSFX(held);
+    game.combatSystem.createAttack(game.applyGreenDamageModifier(windupAttack), game._activeEnemies());
+    game.weaponEffectsSystem.startShockwave(windupAttack); // hammer-type rings
+    game.weaponEffectsSystem.onSwingComplete(player); // lava / lightning / bolt / dust
+    if (this.isBlockingStaff(held)) player.staffSwingHasFired = true;
+    game.magicSystem.fireStaffMissile(player); // no-op off-staff
+    game._emitSoundEvent();
+  }
+
+  // Dagger roll auto-attack: fires immediately on roll completion, bypassing cooldown and windup.
+  // Direction from current WASD input, falling back to player facing.
+  // Player-bound, as tickHeldItem: every Act 2 body rolls, so each gets its
+  // roll-end stab through MistBattleSystem._withBody (bug #533).
   triggerDaggerRollAttack() {
     const game = this.game;
     const player = game.player;

@@ -160,7 +160,7 @@ import { ITEM_TYPES, INGREDIENTS, ITEMS, getItemData } from './data/items.js';
 import { CHARACTER_TYPES } from './data/characters.js';
 import { EXIT_LETTERS } from './data/exitLetters.js';
 import { freshZoneDepths } from './data/zones.js';
-import { GAME_STATES, GRID, CRAFTING, INTERACTION_RANGE, ROOM_TYPES, PHYSICS } from './game/GameConfig.js';
+import { GAME_STATES, GRID, CRAFTING, INTERACTION_RANGE, ROOM_TYPES } from './game/GameConfig.js';
 import { captureDeath, deathCauseOf, newRunId } from './systems/DeathLedgerSystem.js';
 import{DiagonalInputSystem as DIS}from'./systems/DiagonalInputSystem.js';
 import * as ingredientPile from './systems/IngredientPile.js';
@@ -168,7 +168,6 @@ import { breakOnDeathPassives } from './systems/ConsumableSlotBreaks.js';
 import { tryDeathSave } from './systems/DeathSaveSystem.js';
 import { refillQuiversForNewRoom, announceQuiverFull } from './systems/QuiverRefill.js';
 import { PlayerParry } from './entities/enemyMechanics/ParryMechanic.js';
-import { updateKeenStrike } from './systems/KeenAim.js';
 
 // Starter satchel: 3 distinct ingredients from a fixed pool. Each rolled char
 // drops per the table below; unlisted chars drop x2 (per-run replay variety).
@@ -2006,31 +2005,10 @@ class Game {
       this.pathAnnouncementTimer -= deltaTime;
     }
 
-    // Clear staff-block state if the held weapon is no longer a blocking staff
-    if (this.player.isStaffBlocking && !this.characterSystem.isBlockingStaff(this.player.heldItem)) {
-      this.player.isStaffBlocking = false;
-      this.player.staffSwingHasFired = false;
-    }
-
-    // Update held item cooldown and check for windup completion. This is the
-    // ONLY place the held item ticks — at WEAPON_TIMER_RATE (2×), preserving
-    // the double-tick feel all weapon data was tuned against (resolved bug #88).
-    if (this.player.heldItem && this.player.heldItem.update) {
-      updateKeenStrike(this.player, this._activeEnemies()); // Keen Dagger: windup tracks the nearest enemy
-      const windupAttack = this.player.heldItem.update(deltaTime * PHYSICS.WEAPON_TIMER_RATE);
-      if (windupAttack) {
-        this.playWeaponAttackSFX(this.player.heldItem);
-        this.combatSystem.createAttack(this.applyGreenDamageModifier(windupAttack), this._activeEnemies());
-        this.weaponEffectsSystem.startShockwave(windupAttack); // hammer-type rings
-        this.weaponEffectsSystem.onSwingComplete(this.player); // lava / lightning / bolt / dust
-        if (this.characterSystem.isBlockingStaff(this.player.heldItem)) {
-          this.player.staffSwingHasFired = true;
-        }
-        this.magicSystem.fireStaffMissile(this.player); // no-op off-staff
-        this._emitSoundEvent();
-      }
-      this.reloadAudioSystem.update(this.player.heldItem);
-    }
+    // Held item: cooldown and windup completion (CharacterSystem.tickHeldItem,
+    // the ONLY place the held item ticks — resolved bug #88).
+    this.characterSystem.tickHeldItem(deltaTime);
+    if (this.player.heldItem?.update) this.reloadAudioSystem.update(this.player.heldItem);
 
     // Bat windup visual + charge lifecycle (batCharge weapons, all states)
     this.batSystem.update(deltaTime);
