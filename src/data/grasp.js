@@ -2,9 +2,10 @@
 // paths and tuning, all in one catalogue. Distances are pixels, times seconds,
 // speeds px/s unless a name says otherwise.
 //
-// Glyph exception: the Clutch are enemies drawn with Unicode hands
-// (☝☟☜☞✋✊), not printable ASCII — sanctioned for the Grasp alone
-// (CLAUDE.md, Character Encoding Rule).
+// Glyph exceptions, sanctioned for the Grasp alone (CLAUDE.md, Character
+// Encoding Rule): the Clutch are enemies drawn with Unicode hands (☝☟☜☞✋✊),
+// and the Fingers are math symbols, Unicode ones included, the way the Great
+// Hands are letters.
 import { GRID } from '../game/GameConfig.js';
 
 const CS = GRID.CELL_SIZE;
@@ -235,6 +236,7 @@ export const CLUTCH_WAVES = [
 // Four lanes, left column of each, in cells. A Finger is FINGER_COLS wide.
 export const FINGER_LANES = [3, 10, 17, 24];
 export const FINGER_COLS = 4;
+// Math symbols only, as the Great Hands are letters only.
 // A Finger is drawn bottom-up from its tip in heavy `+` strokes, the outline
 // of a thing too big to fit in the glyphs: the rounded tip, the nail as a
 // plate of strokes, then the shaft, banded by a knuckle every
@@ -248,7 +250,7 @@ export const FINGER_ART = {
 };
 export const FINGER_KNUCKLE_EVERY = 6;
 // Flecks on the bare flesh, fixed to the Finger so they ride with it.
-export const FINGER_TEXTURE = ['=', '-', '~', 'x', ':'];
+export const FINGER_TEXTURE = ['≠', 'π', '÷', '≈', '√', '×', '∞', '=', '-'];
 // Share of bare-flesh cells that carry a fleck.
 export const FINGER_TEXTURE_DENSITY = 0.3;
 
