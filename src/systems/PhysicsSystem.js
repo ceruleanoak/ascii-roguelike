@@ -32,6 +32,12 @@ const SOFT_CONTACT_FORCE = 120;
 // A rolling player passes through what it would otherwise be pushed off,
 // except the red character's ramming 'damage' roll.
 const rollsThrough = (body) => body.dodgeRoll?.active && body.dodgeRoll.type !== 'damage';
+// Run `fn` with `entity` as game.player when it is a player body — game.player
+// or a Mist Battle Act 2 body, each wearing its own gear (bug #534). Returns
+// whether `fn` ran.
+function asPlayerBody(game, entity, fn) {
+  return game.mistBattleSystem?.asPlayerBody(entity, fn) ?? (entity === game.player && (fn(), true));
+}
 
 // entity.hookedByWhip traversal (px/sec) — a whip strike landing on a Stump,
 // Tree, or the Whip Trial's hook posts grabs on and reels the player in.
@@ -1831,9 +1837,11 @@ export class PhysicsSystem {
               if (entity.takeDamage) {
                 // The drown hit's iframes match its interval — the default 1s
                 // window would swallow every other tick of a faster drown.
-                const damageResult = entity === game.player
-                  ? entity.takeDamage(1, { cause: DEATH_CAUSES.drowning, iframeDuration: 1.0 / drownRate })
-                  : entity.takeDamage(1);
+                let damageResult;
+                const playerHit = () => {
+                  damageResult = entity.takeDamage(1, { cause: DEATH_CAUSES.drowning, iframeDuration: 1.0 / drownRate });
+                };
+                if (!asPlayerBody(game, entity, playerHit)) damageResult = entity.takeDamage(1);
                 if (damageResult === true || (damageResult && damageResult.damaged)) {
                   game.combatSystem.createDamageNumber(1, entity.position.x, entity.position.y, WATER_COLORS.deep);
                   entity.hitFlashTimer = 0.15;
@@ -1855,7 +1863,7 @@ export class PhysicsSystem {
 
       // Deep water destroys torches — the player's carried ones here, a
       // dropped one in the item branch below (TorchDousing.js).
-      if (inDeepWater && entity === game.player) douseCarriedTorches(game, entity);
+      if (inDeepWater) asPlayerBody(game, entity, () => douseCarriedTorches(game, entity));
 
       // Ingredients: lava destroys them, water makes them bob. Loot on another
       // layer (the frozen surface while an Interior owns the frame) was tested
@@ -1899,10 +1907,10 @@ export class PhysicsSystem {
         entity.inDamagingLiquid = false; // left lava (or was never in it) this frame
       }
 
-      // Hot spring (Red Zone caldera): slow passive heal for the player only.
+      // Hot spring (Red Zone caldera): slow passive heal for player bodies only.
       // Per-entity cooldown timer mirrors lavaDamageTimer — NOT applyRegen(),
       // which would reset its own interval timer every frame if called here.
-      if (healingLiquid && entity === game.player) {
+      if (healingLiquid && asPlayerBody(game, entity, () => {
         if (!entity.hotWaterHealTimer) entity.hotWaterHealTimer = 0;
         entity.hotWaterHealTimer -= deltaTime;
         if (entity.hotWaterHealTimer <= 0) {
@@ -1912,8 +1920,7 @@ export class PhysicsSystem {
           }
           entity.hotWaterHealTimer = healingLiquid.interval;
         }
-        continue;
-      }
+      })) continue;
 
       // Clear inLava for lava-immune entities that have left the lava
       if (entity.data?.lavaImmune && entity.inLava) entity.inLava = false;
@@ -1945,9 +1952,7 @@ export class PhysicsSystem {
         // coating. Gate on the pre-apply dry state so this only fires on
         // the dry→wet transition, not every frame the player lingers in
         // water (the oil is already gone by the second frame).
-        if (entity === game.player && !entity.isWet()) {
-          destroyWetOils(game.inventorySystem, entity);
-        }
+        if (!entity.isWet?.()) asPlayerBody(game, entity, () => destroyWetOils(game.inventorySystem, entity));
         entity.applyStatusEffect('wet', 6.0);
         const wet = entity.statusEffects?.wet;
         if (wet?.stacks !== undefined) wet.stacks = wetPipCount(entity); // pips, not per-frame applications

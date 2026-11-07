@@ -484,6 +484,25 @@ export class MistBattleSystem {
     }
   }
 
+  /**
+   * Run `fn` with `body` as game.player, for a player-bound path outside
+   * this system that touches a body directly (PhysicsSystem's liquid
+   * effects): game.player itself runs `fn` as is, and an Act 2 body stands
+   * in through _withBody, so the effect lands on that body and its gear
+   * (bug #534). Returns whether `fn` ran — false for anything else, Act 1
+   * Flanks included (they mirror the Primary and nothing hurts them).
+   */
+  asPlayerBody(body, fn) {
+    if (body === this.game.player) {
+      fn();
+      return true;
+    }
+    const member = this.act === 2 ? this.members.find(m => m.body === body) : null;
+    if (!member) return false;
+    this._withBody(member, fn);
+    return true;
+  }
+
   // Each frame of Act 2, after combat: rival hits, then every body at 0 HP
   // gets its death save or falls. A fallen game.player hands the pointer to
   // the next living body. One body (or none) left starts the ending.
