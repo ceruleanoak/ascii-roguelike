@@ -118,7 +118,8 @@ function snapshotSeed(snapshots) {
 
 // Weapons that can't mirror (canMirror: bat, charge hammer, gem wand,
 // mana weapons) stay out of all three loadouts: Rotate can promote any body
-// to Primary, so every body draws from the same pools.
+// to Primary, so every body draws from the same pools. A real mist-out
+// snapshot can still carry one; _makeWeapon leaves that slot empty.
 
 // Utility = the weapon families the dungeon puzzle rooms teach on their
 // pedestals (whip, boomerang, torch today). Derived from the templates rather
@@ -260,7 +261,7 @@ export class MistBattleSystem {
         game.physicsSystem.addEntity(body);
       }
       game.characterSystem.applyCharacterTypeTo(body, snap.characterType);
-      body.quickSlots = snap.quickSlots.map(s => (s ? this._makeItem(s.char, body) : null));
+      body.quickSlots = snap.quickSlots.map(s => this._makeWeapon(s, body));
       body.activeSlotIndex = 0;
       body.destroyedSlots = [false, false, false];
       body.hp = body.maxHp;
@@ -403,7 +404,7 @@ export class MistBattleSystem {
       body.setCollisionMap(collisionMap);
       game.physicsSystem.addEntity(body);
       game.characterSystem.applyCharacterTypeTo(body, snap.characterType);
-      body.quickSlots = snap.quickSlots.map(s => (s ? this._makeItem(s.char, body) : null));
+      body.quickSlots = snap.quickSlots.map(s => this._makeWeapon(s, body));
       body.activeSlotIndex = 0;
       body.destroyedSlots = [false, false, false];
       body.hp = body.maxHp;
@@ -619,6 +620,17 @@ export class MistBattleSystem {
 
   _makeItem(char, body) {
     return new Item(char, body.position.x, body.position.y);
+  }
+
+  // A quick slot from a snapshot. A weapon that can't mirror would sit dead
+  // in a Flank's hands and in every Act 2 body's, so the slot is left empty
+  // instead. The snapshot itself is untouched: the Act 2 seed is hashed from
+  // it, and the same snapshots still build the same bodies.
+  _makeWeapon(slot, body) {
+    if (!slot) return null;
+    const data = ITEMS[slot.char];
+    if (data?.type === ITEM_TYPES.WEAPON && !canMirror(data)) return null;
+    return this._makeItem(slot.char, body);
   }
 
   // A member's own gear, from its snapshot. `windups` holds its consumables'
