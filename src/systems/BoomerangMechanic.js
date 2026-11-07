@@ -1,6 +1,6 @@
 import { GRID } from '../game/GameConfig.js';
 import { inSamePlane, canReachLoot } from './PlaneSystem.js';
-import { enemyInRadius, enemyNearestPoint, enemyVisualAnchor } from './enemyHitTest.js';
+import { enemyInRadius, enemyNearestPoint, enemyVisualAnchor, enemyEffectSource } from './enemyHitTest.js';
 
 // Bounce-target search radius used only for puzzle-room switch chaining
 // (onObjectHit below) — deliberately its own constant rather than reusing
@@ -243,10 +243,11 @@ export const BoomerangMechanic = {
     proj.boomerangTimer += proj.boomerangHitDefer || 0.18;
     proj.boomerangHasHitFirst = true;
     const r = proj.chainRadius || 32;
+    const from = enemyEffectSource(enemy);
     for (const other of enemies) {
       if (other === enemy) continue;
       if (!inSamePlane(proj, other)) continue;
-      if (!enemyInRadius(other, enemy.position.x, enemy.position.y, r)) continue;
+      if (!enemyInRadius(other, from.x, from.y, r)) continue;
       const chainDamaged = other.takeDamage(proj.damage, proj.attackId);
       if (chainDamaged !== false) {
         const at = enemyVisualAnchor(other);

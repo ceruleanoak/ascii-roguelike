@@ -26,7 +26,7 @@ import { planeOf, inSamePlane, isInteriorActive } from './PlaneSystem.js';
 import { MAX_PIPS } from './StatusEffects.js';
 import { absorbsZap } from './ImbuePoolSystem.js';
 import { findStrikeSpire, spireStruck } from './LightningSpire.js';
-import { enemyInRadius, enemyNearestPoint, enemyVisualAnchor } from './enemyHitTest.js';
+import { enemyInRadius, enemyNearestPoint, enemyVisualAnchor, enemyEffectSource } from './enemyHitTest.js';
 
 const FLASH_DURATION = 0.12;
 const DEFAULT_RADIUS = GRID.CELL_SIZE * 1.2;
@@ -188,10 +188,13 @@ export class LightningStrikeSystem {
     while (chained < maxChains) {
       let nearestEnemy = null;
       let nearestDist = Infinity;
+      // The hop leaves from where the last link is drawn (a Great Hand's
+      // palm), not its frame corner.
+      const hopFrom = enemyEffectSource(currentEnemy);
       for (const enemy of enemies) {
         if (alreadyHit.has(enemy)) continue;
         if (!inSamePlane(hitEnemy, enemy)) continue;
-        const dist = enemyNearestPoint(enemy, currentEnemy.position.x, currentEnemy.position.y, 'corner', chainRange).dist;
+        const dist = enemyNearestPoint(enemy, hopFrom.x, hopFrom.y, 'corner', chainRange).dist;
         if (dist < chainRange && dist < nearestDist) {
           nearestEnemy = enemy;
           nearestDist = dist;

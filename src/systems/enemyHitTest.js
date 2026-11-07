@@ -114,3 +114,20 @@ export function enemyVisualAnchor(enemy, anchor = 'corner') {
   const off = anchor === 'corner' || anchor === 0 ? 0 : CS / 2;
   return { x: cell.x + off, y: cell.y + off };
 }
+
+/**
+ * Where an effect that spreads from a struck enemy starts: the next hop of a
+ * chain-lightning arc, the boomerang's splash, a shatter's freeze. An
+ * ordinary enemy gives exactly its anchor point (as anchorPoint above), so
+ * each effect reaches as far as it always has.
+ *
+ * An enemy that names where its damage numbers rise (`damageNumberAnchor`)
+ * spreads from the middle of that cell instead: a Great Hand's position is
+ * the empty top-left corner of its frame, so a chain hopping off its palm
+ * searched from a point nowhere near the hand.
+ */
+export function enemyEffectSource(enemy, anchor = 'corner') {
+  const cell = enemy.damageNumberAnchor?.();
+  if (!cell) return anchorPoint(enemy, anchor);
+  return { x: cell.x + CS / 2, y: cell.y + CS / 2 };
+}

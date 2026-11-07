@@ -28,7 +28,7 @@ import { projectileSailsOver, tagLaunchPit } from './pits.js';
 import { vaultWallBlocksReach } from './vaultWalls.js';
 import { strikeWatcherEye } from './WatcherEye.js';
 import { knockbackTakenScale } from '../entities/knockbackTaken.js';
-import { enemyOverlapsBox, enemyNearestPoint, enemyVisualAnchor } from './enemyHitTest.js';
+import { enemyOverlapsBox, enemyNearestPoint, enemyVisualAnchor, enemyEffectSource } from './enemyHitTest.js';
 import { countsAsBoss } from '../entities/bossTest.js';
 
 // Default maximum travel distance (in pixels) for gun bullets. Roughly 2/3 of a
@@ -1203,8 +1203,11 @@ export class CombatSystem {
                 this.physicsSystem.applyHitstop(attack.owner, 0.04);
                 // Whips have no knockback recoil
                 if (attack.weaponSubtype !== 'whip') {
-                  const dx = attack.owner.position.x - enemy.position.x;
-                  const dy = attack.owner.position.y - enemy.position.y;
+                  // Away from where the enemy is drawn (a Great Hand's
+                  // palm), not its frame corner.
+                  const from = enemyEffectSource(enemy);
+                  const dx = attack.owner.position.x - from.x;
+                  const dy = attack.owner.position.y - from.y;
                   this.physicsSystem.applyImpulse(attack.owner, dx, dy, 60);
                 }
               }

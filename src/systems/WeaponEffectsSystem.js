@@ -39,7 +39,7 @@ import { ITEMS } from '../data/items.js';
 import { tagInteriorPlane, tagLootLayer, planeOf } from './PlaneSystem.js';
 import { fizzleToSpark } from './MagicSystem.js';
 import { applyDotTicks } from './StatusEffects.js';
-import { enemyInRadius, enemyVisualAnchor } from './enemyHitTest.js';
+import { enemyInRadius, enemyVisualAnchor, enemyEffectSource } from './enemyHitTest.js';
 import { countsAsBoss } from '../entities/bossTest.js';
 
 const C = GRID.CELL_SIZE;
@@ -199,8 +199,7 @@ export class WeaponEffectsSystem {
   }
 
   _shatter(attack, enemy) {
-    const x = enemy.position.x + C / 2;
-    const y = enemy.position.y + C / 2;
+    const { x, y } = enemyEffectSource(enemy, C / 2);
     const others = this.game._activeEnemies().filter(e => e !== enemy);
     this.game.combatSystem.applyAOEStatus({ x, y }, SHATTER_RADIUS, 'freeze', SHATTER_FREEZE_SECONDS, others, attack.shooterPlane ?? 0);
     const at = enemyVisualAnchor(enemy);
