@@ -31,7 +31,10 @@ export function drawTrine(renderer, game) {
     );
   }
   const alphaMult = mist.act === 2 ? 1 : FLANK_ALPHA_MULT;
-  for (const { body } of mist.flanks()) {
+  // Flanks, and any body a Great Hand holds out of the Trine.
+  for (const member of mist.members) {
+    const body = member.body;
+    if (member === mist.primary || body.hp <= 0) continue;
     renderer.drawTextWithAlpha(
       body.position.x + half,
       body.position.y + half,

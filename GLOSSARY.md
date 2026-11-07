@@ -1099,8 +1099,10 @@ identity, not standard programming terms.
 
 ### Great Hands
 - **Definition:** The Grasp's first phase: two huge multi-glyph hands gripping the North Barrier
-  that flex, reach and grab a Trine body. They can be hurt only while out over the arena
-  (reaching or grabbing), and share one HP pool. At 0 they flee.
+  that flex and reach for a Trine body. Any body that comes near a reaching hand's palm is
+  caught and Held, and the rest of the Trine is knocked back down; the hand stays still until a
+  blow lands on it, which lets the body go. They can be hurt only while out over the arena
+  (reaching, holding or pulling back), and share one HP pool. At 0 they flee.
 - **In code:** `src/systems/grasp/greatHands.js`; `GraspSystem.hands`, pool `handsHp`; art
   `HAND_ART` (mirrored for the right hand).
 - **Not:** the Clutch (small single-glyph hands); a GooHead-style boss grab (it borrows the shape
@@ -1159,7 +1161,7 @@ identity, not standard programming terms.
 - **Definition:** The three-body formation the player controls in the Mist Battle's Act 1: the
   Primary at the apex, pointing where the Primary faces, with a Flank behind on each side. The
   three attack on one press (each Flank aimed at its own nearest enemy), swap weapons together,
-  and roll together. Only the Primary takes damage. A body brought to 0 HP goes Dormant
+  and roll together. Only the Primary (and a Held body) takes damage. A body brought to 0 HP goes Dormant
   rather than dying; the Trine dies only when every body is down.
 - **In code:** `MistBattleSystem.members` (clockwise ring; `primaryIndex` is the apex), formation
   slots `FLANK_BACK` / `FLANK_SIDE`; drawn by `drawTrine` (`src/rendering/effects/TrineDraw.js`).
@@ -1177,7 +1179,7 @@ identity, not standard programming terms.
 - **Definition:** Either of the two Trine bodies behind the Primary. A Flank mirrors the
   Primary's attacks and rolls with its own weapons and roll type, always facing its own nearest
   enemy, and drifts back to its formation slot. Enemies don't target a Flank and nothing
-  damages it; it takes hits again only once Rotated to the apex.
+  damages it; it takes hits again only once Rotated to the apex, or once Held.
 - **In code:** `MistBattleSystem.flanks()` (living non-Primary members); aim in
   `MistBattleSystem._aimFlank`; `MistBattleSystem.hurt` passes over Flanks.
 - **Not:** a Companion or NPC; a follower that acts on its own.
@@ -1185,11 +1187,23 @@ identity, not standard programming terms.
 ### Rotate
 - **Definition:** Changing the Primary: triple-tap SPACE and the Trine turns one step
   clockwise, so the back-left Flank becomes the Primary at the apex. A Primary that goes
-  Dormant is replaced the same way, automatically. Rotate skips Dormant bodies.
+  Dormant or Held is replaced the same way, automatically. Rotate skips Dormant and Held bodies.
 - **In code:** `MistBattleSystem.tryRotate()` (`ROTATE_TAPS` presses, each within `ROTATE_TAP_WINDOW`), `rotate()`,
   `_promote()` (repoints `game.player`, swaps gear).
 - **Not:** a character switch at REST; turning to face a new direction (the apex follows facing
   without a Rotate).
+
+### Held
+- **Definition:** A Trine body in a Great Hand's grip. It is out of the Trine: it doesn't mirror
+  the Primary or hold its corner, can't be Rotated to, and takes 2 HP through armor every 2
+  seconds. A caught Primary hands the apex to the next free body. A blow on the hand lets it go
+  and it runs back to its slot; one that drops goes Dormant. Two hands, so at most two are
+  Held at once.
+- **In code:** `body.grabbedBy` is a hand's `GraspUnit`; `MistBattleSystem.isHeld(body)`,
+  `onHeld(body)`; `greatHands.grab`, tuning `HAND_GRAB_RADIUS` / `HAND_SQUEEZE_DAMAGE` /
+  `HAND_SQUEEZE_TICK`.
+- **Not:** Dormant (a Held body is awake); a GooHead or Hoardmaw grab (those hold `game.player`
+  and leave it the Primary).
 
 ### Dormant (Trine)
 - **Definition:** A Trine body brought to 0 HP in Act 1. Instead of dying it hands the apex

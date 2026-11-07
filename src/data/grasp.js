@@ -278,9 +278,13 @@ export const GRASP_TUNING = {
   // A reaching palm this close to its target splays, and stays splayed.
   HAND_SPLAY_DISTANCE: 3 * CS,
   HAND_RETRACT_SPEED: 200,
-  HAND_GRAB_TIME: 1.8,
-  HAND_SQUEEZE_DAMAGE: 1,
-  HAND_SQUEEZE_TICK: 0.6,
+  // A free body this close to a reaching palm is caught and held.
+  HAND_GRAB_RADIUS: 2 * CS,
+  // How hard the rest of the Trine is knocked down when one is caught.
+  HAND_GRAB_KNOCKBACK: 260,
+  // A held body takes this much, through armor, every tick until the hand is struck.
+  HAND_SQUEEZE_DAMAGE: 2,
+  HAND_SQUEEZE_TICK: 2.0,
   HAND_SWIPE_DAMAGE: 2,
   // Below this share of the pool both hands may reach at once.
   HANDS_BOTH_REACH_AT: 0.5,

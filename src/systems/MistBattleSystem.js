@@ -302,17 +302,19 @@ export class MistBattleSystem {
 
   /**
    * Damage on a Trine body from a source CombatSystem doesn't resolve (the
-   * Grasp). Only the Primary takes damage: a hit on a Flank passes through
-   * (returns false). Goes through Player.takeDamage, so armor, i-frames and
-   * the roll apply; a Primary that drops is caught by _catchPrimaryDeath.
+   * Grasp). Only the Primary and Held bodies take damage: a hit on a Flank
+   * passes through (returns false). Goes through Player.takeDamage, so armor,
+   * i-frames and the roll apply; a Primary that drops is caught by
+   * _catchPrimaryDeath, and a Held body that drops goes Dormant.
    */
   hurt(body, damage, source, from) {
-    if (this.act === 1 && body !== this.game.player) return false;
+    if (this.act === 1 && body !== this.game.player && !this.isHeld(body)) return false;
     const result = body.takeDamage(damage, source);
     if (result !== false) reportHit(this.game, body, result, damage, from, 0);
     if (body !== this.game.player && body.hp <= 0) {
       const member = this.members.find(m => m.body === body);
-      if (member) this._fall(member);
+      if (member && this.act === 1) this._goDormant(member);
+      else if (member) this._fall(member);
     }
     return result;
   }
@@ -654,14 +656,40 @@ export class MistBattleSystem {
     return this.members[this.primaryIndex] ?? null;
   }
 
-  /** Every awake non-Primary member, in ring order (Dormant ones are skipped). */
+  /**
+   * Every awake non-Primary member in the Trine, in ring order. Dormant
+   * members are skipped, and so are Held ones.
+   */
   flanks() {
     const out = [];
     for (let k = 1; k < this.members.length; k++) {
       const member = this.members[(this.primaryIndex + k) % this.members.length];
-      if (member.body.hp > 0) out.push(member);
+      if (member.body.hp > 0 && !this.isHeld(member.body)) out.push(member);
     }
     return out;
+  }
+
+  /**
+   * Whether a Great Hand holds this body. A Held body is out of the Trine: it
+   * neither mirrors the Primary nor holds its corner, and can't be Rotated to,
+   * until the hand lets it go and it runs back to its slot.
+   */
+  isHeld(body) {
+    return body.grabbedBy?.isGraspUnit === true;
+  }
+
+  /**
+   * A Great Hand has just caught `body` (greatHands.grab). If it was the
+   * Primary, control passes to the next free body; with none free, the
+   * Primary stays held.
+   */
+  onHeld(body) {
+    if (body !== this.game.player) return;
+    body.acceleration.ax = 0;
+    body.acceleration.ay = 0;
+    // The new Primary holds its ground: gliding to the old apex would run it
+    // straight into the hand.
+    if (this.rotate()) this.glide = null;
   }
 
   // Put a member's gear into the global InventorySystem slots. Those slots are
@@ -781,7 +809,8 @@ export class MistBattleSystem {
     let next = -1;
     for (let k = n - 1; k >= 1; k--) { // back-left (n-1) before back-right
       const idx = (this.primaryIndex + k) % n;
-      if (this.members[idx].body.hp > 0) { next = idx; break; }
+      const body = this.members[idx].body;
+      if (body.hp > 0 && !this.isHeld(body)) { next = idx; break; }
     }
     if (next < 0) return false;
     this._promote(next);
@@ -1046,9 +1075,12 @@ export class MistBattleSystem {
       if (body.hp <= 0 && !dormant) continue;
       if (!dormant) {
         this._applyDot(member, body.update(deltaTime));
-        this._aimFlank(body, lead);
-        tickMirroredWeapon(game, body, deltaTime, this._fire);
-        mirrorAutoAttack(game, body, this._fire);
+        // Held, it's out of the Trine: no aiming, no mirrored attacks.
+        if (!this.isHeld(body)) {
+          this._aimFlank(body, lead);
+          tickMirroredWeapon(game, body, deltaTime, this._fire);
+          mirrorAutoAttack(game, body, this._fire);
+        }
       }
       // A Dormant body is carried along in its corner so the Trine keeps its shape.
       if (body.dodgeRoll.active) continue; // the roll owns velocity; drift back afterward

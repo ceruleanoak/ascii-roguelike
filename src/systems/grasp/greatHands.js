@@ -1,8 +1,11 @@
 // Great Hands (GraspSystem phase 1): two hands hooked over the North Barrier.
 // Each cycles grip → flex (the tell) → reach (toward the nearest Trine body)
-// → grab (holds it, squeezing) → retract. A hand can be struck only outside
-// the rim — reaching, grabbing or pulling back — and any hit on a grabbing
-// hand lets its body go. Both hands spend one pool, GraspSystem.handsHp.
+// → grab → retract. A reaching hand catches any free body that comes near its
+// palm and holds it, out of the Trine (MistBattleSystem.onHeld), squeezing,
+// until a blow lands on it; it stays still all the while. With two hands, at
+// most two bodies are held at once. A hand can be struck only outside the
+// rim — reaching, grabbing or pulling back. Both hands spend one pool,
+// GraspSystem.handsHp.
 import { GRID } from '../../game/GameConfig.js';
 import { GRASP_TUNING as T, HAND_COLS, HAND_ROWS, HAND_KNUCKLE_ROW } from '../../data/grasp.js';
 
@@ -15,7 +18,6 @@ const H = HAND_ROWS * CS;
 const ANCHOR_Y = (1 - HAND_KNUCKLE_ROW) * CS;
 const ANCHOR_X = { left: CS, right: (GRID.COLS - 1) * CS - W };
 const OFF_TOP = -H - CS;
-const GRAB_RADIUS = CS * 0.9;
 const HIT_RECOIL = CS / 2;
 
 const randIn = ([lo, hi]) => lo + Math.random() * (hi - lo);
@@ -80,10 +82,42 @@ function nearestFree(grasp, from) {
   return best;
 }
 
-// Whether the other hand is already out — below half the pool both may be.
+// Whether the other hand is already on its way out — below half the pool
+// both may be. A hand holding a body doesn't count, so the other can still
+// reach for a second.
 function otherHandOut(grasp, hand) {
   if (grasp.handsHp <= T.HANDS_HP * T.HANDS_BOTH_REACH_AT) return false;
-  return grasp.hands.some(h => h !== hand && (h.state === 'flex' || h.state === 'reach' || h.state === 'grab'));
+  return grasp.hands.some(h => h !== hand && (h.state === 'flex' || h.state === 'reach'));
+}
+
+// The free body nearest the palm within HAND_GRAB_RADIUS, if any. A rolling
+// body slips the grab.
+function bodyInPalm(grasp, p) {
+  let best = null;
+  let bestDist = T.HAND_GRAB_RADIUS;
+  for (const body of grasp.bodies()) {
+    if (body.grabbed || body.dodgeRoll?.active) continue;
+    const d = Math.hypot(body.position.x + CS / 2 - p.x, body.position.y + CS / 2 - p.y);
+    if (d < bestDist) { best = body; bestDist = d; }
+  }
+  return best;
+}
+
+// Close on a body: it leaves the Trine, and the rest of the Trine is knocked
+// back down, away from the hand.
+function grab(grasp, hand, body) {
+  hand.state = 'grab';
+  hand.timer = 0;
+  hand.body = body;
+  hand.squeeze = T.HAND_SQUEEZE_TICK;
+  body.grabbed = true;
+  body.grabbedBy = hand.unit;
+  body.velocity.vx = 0;
+  body.velocity.vy = 0;
+  grasp.mist.onHeld(body);
+  for (const other of grasp.bodies()) {
+    if (other !== body) grasp.game.physicsSystem.applyKnockbackDir(other, 0, 1, T.HAND_GRAB_KNOCKBACK);
+  }
 }
 
 export function update(grasp, dt) {
@@ -120,21 +154,14 @@ export function update(grasp, dt) {
         const by = body.position.y + CS / 2;
         moveToward(hand, hand.x + bx - p.x, hand.y + by - p.y, T.HAND_REACH_SPEED, dt);
         if (Math.hypot(bx - p.x, by - p.y) < T.HAND_SPLAY_DISTANCE) hand.splayed = true;
-        // A rolling body slips the grab.
-        if (Math.hypot(bx - p.x, by - p.y) < GRAB_RADIUS && !body.dodgeRoll?.active) {
-          hand.state = 'grab';
-          hand.timer = 0;
-          hand.body = body;
-          hand.squeeze = T.HAND_SQUEEZE_TICK;
-          body.grabbed = true;
-          body.grabbedBy = hand.unit;
-          body.velocity.vx = 0;
-          body.velocity.vy = 0;
-        }
+        // Whoever comes near the palm is caught, the target or not.
+        const caught = bodyInPalm(grasp, palm(hand));
+        if (caught) grab(grasp, hand, caught);
         break;
       }
+      // Held until a blow lands (onHit) or the body goes down.
       case 'grab':
-        if (!hand.body || hand.body.hp <= 0 || hand.timer >= T.HAND_GRAB_TIME) {
+        if (!hand.body || hand.body.hp <= 0) {
           release(grasp, hand);
           startRetract(hand);
           break;
@@ -142,7 +169,7 @@ export function update(grasp, dt) {
         hand.squeeze -= dt;
         if (hand.squeeze <= 0) {
           hand.squeeze = T.HAND_SQUEEZE_TICK;
-          grasp.mist.hurt(hand.body, T.HAND_SQUEEZE_DAMAGE, { isBullet: false, element: null, attacker: hand.unit }, palm(hand));
+          grasp.mist.hurt(hand.body, T.HAND_SQUEEZE_DAMAGE, { isBullet: false, element: null, attacker: hand.unit, ignoresArmor: true }, palm(hand));
         }
         break;
       case 'retract':
@@ -160,7 +187,7 @@ export function update(grasp, dt) {
   }
 }
 
-/** A blow lands: a grabbing hand lets go, a reaching one flinches. */
+/** A blow lands: a grabbing hand lets go (its body rejoins the Trine), a reaching one flinches. */
 export function onHit(grasp, hand) {
   if (hand.state === 'grab') {
     const body = hand.body;
