@@ -31,25 +31,32 @@ const PUNCH_ACCURACY = 0.5;   // half the punches whiff (CombatSystem shows MISS
 export class PunchSystem {
   constructor(game) {
     this.game = game;
-    // Windup visuals in flight (at most one), each a Telegraph-shaped attack.
+    // Windup visuals in flight (at most one per body), each a Telegraph-shaped
+    // attack. One body outside the Mist Battle; each Act 2 body throws its own.
     this.punches = [];
-    // Double-seconds until the next Punch may start (the Slime's attackCooldown).
-    this.cooldown = 0;
+    // Double-seconds until each body's next Punch may start (the Slime's
+    // attackCooldown), keyed by the body that threw the last one.
+    this.cooldowns = new Map();
   }
 
-  /** Is a Punch winding up or still flashing? */
-  isPunching() {
-    return this.punches.length > 0;
+  /** Is a Punch of this body's winding up or still flashing? */
+  isPunching(player = this.game.player) {
+    return this.punches.some(p => p.owner === player);
+  }
+
+  /** Is this body's last Punch still cooling down? */
+  isCoolingDown(player = this.game.player) {
+    return (this.cooldowns.get(player) ?? 0) > 0;
   }
 
   /**
-   * Start a Punch toward the player's facing. Ignored while one is already in
-   * flight or cooling down.
+   * Start a Punch toward the body's facing (the player's, unless a Mist
+   * Battle body is named). Ignored while one is already in flight or cooling
+   * down.
    * @returns {boolean} true when a Punch started
    */
-  tryPunch() {
-    const player = this.game.player;
-    if (!player || this.isPunching() || this.cooldown > 0) return false;
+  tryPunch(player = this.game.player) {
+    if (!player || this.isPunching(player) || this.isCoolingDown(player)) return false;
     // A frog has no fists; otherwise the same gate every weapon swing passes.
     if (player.polymorphed || !player.canAttack()) return false;
 
@@ -89,6 +96,9 @@ export class PunchSystem {
       beatElapsed: 0,
       beatElapsedPrev: 0,
       hutPlane: this.game.combatSystem.activeHutPlane(),
+      // Read now, while the thrower's armor is the one worn (an Act 2 body's
+      // gear is only loaded while it acts): Dragon Gauntlets harden the blow.
+      armor: this.game.inventorySystem?.equippedArmor?.data ?? null,
     });
     return true;
   }
@@ -126,7 +136,10 @@ export class PunchSystem {
   update(deltaTime) {
     // Enemy-melee clock: the Slime's timings are double-seconds on it.
     const step = deltaTime * PHYSICS.ENEMY_TIMER_RATE;
-    if (this.cooldown > 0) this.cooldown = Math.max(0, this.cooldown - step);
+    for (const [body, left] of this.cooldowns) {
+      if (left - step > 0) this.cooldowns.set(body, left - step);
+      else this.cooldowns.delete(body);
+    }
 
     for (let i = this.punches.length - 1; i >= 0; i--) {
       const punch = this.punches[i];
@@ -134,7 +147,7 @@ export class PunchSystem {
       if (punch.windupPhase && punch.windupElapsed >= punch.windupDuration) {
         activateWindupVisual(punch);
         this._land(punch);
-        this.cooldown = SLIME.attackCooldown;
+        this.cooldowns.set(punch.owner, SLIME.attackCooldown);
       }
       if (expired && !punch.windupPhase) this.punches.splice(i, 1);
     }
@@ -143,17 +156,17 @@ export class PunchSystem {
   /** Drop any Punch in flight (Reset Registry, room scope). */
   reset() {
     this.punches = [];
-    this.cooldown = 0;
+    this.cooldowns.clear();
   }
 
   // Hand the blow to CombatSystem as a live player melee hitbox on the box's
   // cell. Objects are skipped, a Brick Wall excepted: an unarmed SPACE beside
   // one interacts with it (main.js), and the Punch's damage is not for objects.
   _land(punch) {
-    const player = this.game.player;
+    const player = punch.owner;
     // Dragon Gauntlets (or any armor authoring punchDamage/punchKnockback)
     // harden the blow; bare skin is the Slime's 1-damage, no-knockback hit.
-    const armor = this.game.inventorySystem?.equippedArmor?.data;
+    const armor = punch.armor;
     const position = this._hitPosition(player, punch.facing, punch.reach);
     this._strikeBrickWall(position);
     this.game.combatSystem.createAttack({

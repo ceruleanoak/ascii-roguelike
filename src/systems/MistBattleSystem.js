@@ -572,7 +572,7 @@ export class MistBattleSystem {
       }
       if (this.ending || body.hp <= 0) continue;
       const rivals = living.filter(m => m !== member && m.body.hp > 0).map(m => m.body);
-      driveBody(game, member, rivals, this.arena, deltaTime, { fire: this._fire, onSlotSwitch: this._flashSwap });
+      driveBody(game, member, rivals, this.arena, deltaTime, { fire: this._fire, punch: this._punch, onSlotSwitch: this._flashSwap });
     }
     if (this.ending) this._updateEnding(deltaTime);
   }
@@ -787,6 +787,12 @@ export class MistBattleSystem {
 
   _fire = (attack) => {
     if (attack) this.game.combatSystem.createAttack(attack, this.game._activeEnemies());
+  };
+
+  // An empty-handed Act 2 body's Punch, thrown with its own gear worn so its
+  // armor's punchDamage hardens it (bug #532).
+  _punch = (member) => {
+    this._withBody(member, () => this.game.punchSystem.tryPunch(member.body));
   };
 
   /** SPACE press, right after the Primary's attack (main.js handleSpacePress). */

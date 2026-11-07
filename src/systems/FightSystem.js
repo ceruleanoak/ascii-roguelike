@@ -256,7 +256,7 @@ export class FightSystem {
       this._afterShot(held, before);
     } else {
       const punch = game.punchSystem;
-      if (punch.isPunching() || punch.cooldown > 0) return;
+      if (punch.isPunching() || punch.isCoolingDown()) return;
       this._face(dx / dist, dy / dist);
       punch.tryPunch();
     }

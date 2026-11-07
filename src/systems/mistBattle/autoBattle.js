@@ -36,6 +36,14 @@ const PREFERRED_RANGE = 5 * CELL;
 // Melee reach: a whip lashes farther than everything else.
 const MELEE_REACH = 1.5 * CELL;
 const WHIP_REACH = 3 * CELL;
+// The Punch lands one cell box about a cell out from the body's center
+// (PunchSystem: the Slime's hitShape), so an empty-handed body stands about
+// that far off its rival, and doesn't throw at a rival nearer than
+// PUNCH_TOO_CLOSE: the box would sit past it. Bodies don't collide with each
+// other, and two closing on each other ended up overlapped, punching the air
+// behind each other for the rest of the battle.
+const PUNCH_STANCE = 1.1 * CELL;
+const PUNCH_TOO_CLOSE = 0.6 * CELL;
 // A shot counts as lined up when the target is this close to one of the
 // shooter's eight lines.
 const ALIGN_TOLERANCE = CELL * 0.5;
@@ -64,6 +72,9 @@ export function createBrain() {
 }
 
 const center = (body) => ({ x: body.position.x + CELL / 2, y: body.position.y + CELL / 2 });
+
+// Nothing in hand, or a spent item: what the player's SPACE Punches with.
+const emptyHanded = (item) => !item || !!item.isSpent?.();
 
 function weaponKind(item) {
   if (!item || item.isSpent?.()) return null;
@@ -251,6 +262,14 @@ function think(game, member, rivals, arena, onSlotSwitch) {
   if (kind === 'ranged') {
     brain.goal = firingPost(from, at, arena);
     brain.goalRadius = 0;
+  } else if (emptyHanded(body.heldItem)) {
+    // The Punch's stance: PUNCH_STANCE off the rival, on this body's side.
+    const len = dist || 1;
+    brain.goal = clampToLeash({
+      x: at.x + ((from.x - at.x) / len) * PUNCH_STANCE,
+      y: at.y + ((from.y - at.y) / len) * PUNCH_STANCE,
+    }, arena);
+    brain.goalRadius = 0;
   } else {
     // Close to reach: head for the target itself and stop once inside most
     // of the reach. Aiming at a point short of it instead could set the goal
@@ -264,11 +283,19 @@ function think(game, member, rivals, arena, onSlotSwitch) {
 // Fire the held weapon when the shot is good: melee in reach, ranged lined
 // up. A bow (or charge gun) draws on the first good moment and looses at
 // full draw.
-function attack(member, dist, aligned, fire) {
+function attack(member, dist, aligned, fire, punch) {
   const { body } = member;
   const item = body.heldItem;
+  if (body.dodgeRoll.active) return;
+  // Nothing in hand, or a spent item: the Punch is the attack, as for the
+  // player's SPACE (main.js handleSpacePress). Thrown from melee reach;
+  // PunchSystem gates its own windup and cooldown.
+  if (emptyHanded(item)) {
+    if (dist >= PUNCH_TOO_CLOSE && dist <= MELEE_REACH && body.canAttack()) punch(member);
+    return;
+  }
   const kind = weaponKind(item);
-  if (!kind || body.dodgeRoll.active) return;
+  if (!kind) return;
   if (item.isCharging) {
     if (item.chargeTime >= item.maxChargeTime && body.canAttack()) fire(item.releaseBow());
     return;
@@ -315,10 +342,11 @@ function move(game, member, aligned) {
 /**
  * Drive one body for this frame. `rivals` are the other living bodies,
  * `arena` the center point goals are leashed to. `fire(attack)` hands an
- * attack to CombatSystem; `onSlotSwitch(member)` is told when the body draws
- * a different weapon.
+ * attack to CombatSystem; `punch(member)` throws the body's Punch when it has
+ * nothing to swing; `onSlotSwitch(member)` is told when the body draws a
+ * different weapon.
  */
-export function driveBody(game, member, rivals, arena, deltaTime, { fire, onSlotSwitch }) {
+export function driveBody(game, member, rivals, arena, deltaTime, { fire, punch, onSlotSwitch }) {
   const { body, brain } = member;
   brain.slotCooldown = Math.max(0, brain.slotCooldown - deltaTime);
   brain.thinkTimer -= deltaTime;
@@ -345,7 +373,7 @@ export function driveBody(game, member, rivals, arena, deltaTime, { fire, onSlot
     body.facing.y = facing.y;
   }
   const aligned = linedUp(dx, dy);
-  attack(member, Math.hypot(dx, dy), aligned, fire);
+  attack(member, Math.hypot(dx, dy), aligned, fire, punch);
   move(game, member, aligned);
 }
 

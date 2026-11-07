@@ -1994,7 +1994,10 @@ identity, not standard programming terms.
   The landed blow is a player melee hitbox via `CombatSystem.createAttack` with `accuracy`
   (rolled per swing as `attack.missed`), `telegraphDrawn` and `isPunch` (MazeSystem's cover-object
   hit pass skips it). Damage/knockback come from the equipped armor's `punchDamage`/`punchKnockback`
-  when authored (`ITEMS` armor fields), else 1 / 0. Drawn by the `punches` Frame Pass.
+  when authored (`ITEMS` armor fields), else 1 / 0, read off the thrower's armor when the Punch
+  starts. Each body has its own Punch and cooldown (`tryPunch(body)`, `isPunching(body)`,
+  `isCoolingDown(body)`): an empty-handed Mist Battle Act 2 body throws it too
+  (`autoBattle.attack` → `MistBattleSystem._punch`). Drawn by the `punches` Frame Pass.
 - **Not:** a weapon or Item; not "unarmed attack" / "fist" / "melee strike".
 
 ### Fight
