@@ -286,9 +286,12 @@ export const GRASP_TUNING = {
   // fingers was nearly always caught first. The hit area (the art) is
   // unchanged.
   HAND_GRAB_RADIUS: 1 * CS,
+  // A held body is let go on this many blows on the holding hand, counted
+  // from the catch; until then the hand neither lets go nor pulls back.
+  HAND_HOLD_HITS: 3,
   // How hard the rest of the Trine is knocked down when one is caught.
   HAND_GRAB_KNOCKBACK: 260,
-  // A held body takes this much, through armor, every tick until the hand is struck.
+  // A held body takes this much, through armor, every tick until the hand lets go.
   HAND_SQUEEZE_DAMAGE: 2,
   HAND_SQUEEZE_TICK: 2.0,
   // Below this share of the pool both hands may reach at once.

@@ -1102,8 +1102,8 @@ identity, not standard programming terms.
 ### Great Hands
 - **Definition:** The Grasp's first phase: two huge multi-glyph hands gripping the North Barrier
   that flex and reach for a Trine body. Any body within a cell of a reaching hand's palm is
-  caught and Held, and the rest of the Trine is knocked back down; the hand stays still until a
-  blow lands on it, which lets the body go. They can be hurt only while out over the arena
+  caught and Held, and the rest of the Trine is knocked back down; the hand stays still, neither
+  letting go nor pulling back, until three blows have landed on it since the catch. They can be hurt only while out over the arena
   (reaching, holding or pulling back), and only where their art is drawn (each row from its
   first glyph to its last), and share one HP pool. A reaching hand stays inside the side walls;
   pressed against one, it catches a body by the wall with the fingers on that side and draws
@@ -1207,13 +1207,14 @@ identity, not standard programming terms.
 ### Held
 - **Definition:** A Trine body in a Great Hand's grip. It is out of the Trine: it doesn't mirror
   the Primary or hold its corner, can't be Rotated to, and takes 2 HP through armor every 2
-  seconds. A caught Primary hands the apex to the next free body. A blow on the hand lets it go
-  and it runs back to its slot, and so does a death save that revives it; one that drops goes
-  Dormant. Two hands, so at most two are
+  seconds. A caught Primary hands the apex to the next free body. The third blow on the holding
+  hand since the catch lets it go (any body's: the Primary, a Flank, or the Held Primary's own)
+  and it runs back to its slot, and so does a death save that revives it, or the Great Hands
+  fleeing; one that drops goes Dormant. Two hands, so at most two are
   Held at once.
 - **In code:** `body.grabbedBy` is a hand's `GraspUnit`; `MistBattleSystem.isHeld(body)`,
-  `onHeld(body)`; `greatHands.grab`, `GraspSystem.releaseRevived` (death save), tuning `HAND_GRAB_RADIUS` / `HAND_SQUEEZE_DAMAGE` /
-  `HAND_SQUEEZE_TICK`.
+  `onHeld(body)`; `greatHands.grab`, `GraspSystem.releaseRevived` (death save), tuning `HAND_GRAB_RADIUS` / `HAND_HOLD_HITS` (hand
+  `holdHits`) / `HAND_SQUEEZE_DAMAGE` / `HAND_SQUEEZE_TICK`.
 - **Not:** Dormant (a Held body is awake); a GooHead or Hoardmaw grab (those hold `game.player`
   and leave it the Primary).
 

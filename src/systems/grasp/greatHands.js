@@ -2,7 +2,9 @@
 // Each cycles grip → flex (the tell) → reach (toward the nearest Trine body)
 // → grab → retract. A reaching hand catches any free body that comes near its
 // palm and holds it, out of the Trine (MistBattleSystem.onHeld), squeezing,
-// until a blow lands on it; it stays still all the while. With two hands, at
+// until HAND_HOLD_HITS blows have landed on it; it stays still all the
+// while. Only the body dropping, a death save, or the phase ending lets go
+// sooner. With two hands, at
 // most two bodies are held at once. A hand can be struck only outside the
 // rim — reaching, grabbing or pulling back. Both hands spend one pool,
 // GraspSystem.handsHp.
@@ -114,6 +116,8 @@ export function spawn(grasp) {
       side, state: 'rise', timer: 0,
       x: ANCHOR_X[side], y: OFF_TOP,
       target: null, body: null, squeeze: 0, flash: 0,
+      // Blows landed on this hand since it caught its body (HAND_HOLD_HITS).
+      holdHits: 0,
       // Pixels the grip point sits off the middle of the hand: pressed
       // against a wall, the fingers on that side do the catching.
       palmShift: 0,
@@ -197,6 +201,7 @@ function grab(grasp, hand, body) {
   hand.state = 'grab';
   hand.timer = 0;
   hand.body = body;
+  hand.holdHits = 0;
   hand.squeeze = T.HAND_SQUEEZE_TICK;
   body.grabbed = true;
   body.grabbedBy = hand.unit;
@@ -262,7 +267,7 @@ export function update(grasp, dt) {
         if (caught) grab(grasp, hand, caught);
         break;
       }
-      // Held until a blow lands (onHit) or the body goes down.
+      // Held until HAND_HOLD_HITS blows land (onHit) or the body goes down.
       case 'grab':
         if (!hand.body || hand.body.hp <= 0) {
           release(grasp, hand);
@@ -293,9 +298,16 @@ export function update(grasp, dt) {
   }
 }
 
-/** A blow lands: a grabbing hand lets go (its body rejoins the Trine), a reaching one flinches. */
+/**
+ * A blow lands: a reaching hand flinches; a grabbing one counts it, and on
+ * the HAND_HOLD_HITS-th lets go (its body rejoins the Trine). The blows
+ * before that show only as any blow on the Grasp does: the flash, the sound
+ * and the number.
+ */
 export function onHit(grasp, hand) {
   if (hand.state === 'grab') {
+    hand.holdHits += 1;
+    if (hand.holdHits < T.HAND_HOLD_HITS) return;
     const body = hand.body;
     release(grasp, hand);
     startRetract(hand);
