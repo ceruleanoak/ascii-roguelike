@@ -273,6 +273,9 @@ export const GRASP_TUNING = {
 
   // Great Hands
   HANDS_HP: 80,
+  // Taken off every blow on a Great Hand before it reaches the pool, at
+  // least 1 getting through: the player's armor rule (PlayerDamageSystem).
+  HANDS_DEFENSE: 1,
   HAND_RISE_TIME: 1.2,
   HAND_GRIP_TIME: [1.4, 2.6],
   HAND_FLEX_TIME: 0.7,

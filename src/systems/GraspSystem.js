@@ -345,8 +345,13 @@ export class GraspSystem {
     this.game.audioSystem?.onBossDamaged?.();
 
     if (unit.kind === 'hand') {
-      this.handsHp = Math.max(0, this.handsHp - amount);
+      // The Great Hands' armor: a flat cut, at least 1 through, as the
+      // player's defense works. What got through goes back as actualDamage,
+      // the player's result shape, so the hit's number shows it.
+      const dealt = amount > 0 ? Math.max(1, amount - T.HANDS_DEFENSE) : 0;
+      this.handsHp = Math.max(0, this.handsHp - dealt);
       greatHands.onHit(this, part);
+      return { damaged: true, actualDamage: dealt };
     } else if (unit.kind === 'finger') {
       this.fingersHp = Math.max(0, this.fingersHp - amount);
       fingers.onHit(this, part);

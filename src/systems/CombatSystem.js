@@ -684,7 +684,8 @@ export class CombatSystem {
                                elementalMod < 1.0 ? '#888888' :   // Resisted
                                elementalMod > 1.0 ? '#ffff00' :   // Weakness
                                enemy.color;                       // Normal
-            this.createDamageNumber(finalDamage, at.x, at.y, damageColor, critRoll.isCrit ? 1.7 : 1);
+            // An armored part says what got through (actualDamage, the player's result shape).
+            this.createDamageNumber(damaged.actualDamage ?? finalDamage, at.x, at.y, damageColor, critRoll.isCrit ? 1.7 : 1);
 
             if (critRoll.isCrit) {
               const critLabel = critRoll.isLucky ? 'LUCKY CRIT' : 'CRIT';
@@ -1114,7 +1115,7 @@ export class CombatSystem {
                                  enemy.color;                       // Normal
               // Zero-damage hits (Rubber Bat) skip the number — the launch is the feedback
               if (finalDamage > 0) {
-                this.createDamageNumber(finalDamage, at.x, at.y, damageColor, critRoll.isCrit ? 1.7 : 1);
+                this.createDamageNumber(damaged.actualDamage ?? finalDamage, at.x, at.y, damageColor, critRoll.isCrit ? 1.7 : 1);
               }
 
               if (critRoll.isCrit) {

@@ -1105,10 +1105,13 @@ identity, not standard programming terms.
   caught and Held, and the rest of the Trine is knocked back down; the hand stays still, neither
   letting go nor pulling back, until three blows have landed on it since the catch. They can be hurt only while out over the arena
   (reaching, holding or pulling back), and only where their art is drawn (each row from its
-  first glyph to its last), and share one HP pool. A reaching hand stays inside the side walls;
+  first glyph to its last), and share one HP pool. They are armored: each blow loses
+  `HANDS_DEFENSE` before it reaches the pool, at least 1 getting through (the player's defense
+  rule), and its number shows what got through. A reaching hand stays inside the side walls;
   pressed against one, it catches a body by the wall with the fingers on that side and draws
   it into the fist. At 0 they flee.
-- **In code:** `src/systems/grasp/greatHands.js`; `GraspSystem.hands`, pool `handsHp`; art
+- **In code:** `src/systems/grasp/greatHands.js`; `GraspSystem.hands`, pool `handsHp` (armor
+  applied in `GraspSystem.handleUnitHit`); art
   `HAND_ART` (mirrored for the right hand); hit area `handOverlapsBox` (via `GraspUnit.overlapsBox`).
 - **Not:** the Clutch (small single-glyph hands); a GooHead-style boss grab (it borrows the shape
   but grabs any Trine body, not only `game.player`).
