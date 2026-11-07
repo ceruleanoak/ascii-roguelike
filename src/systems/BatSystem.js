@@ -1,6 +1,6 @@
 import { GRID } from '../game/GameConfig.js';
 import { planeOf } from './PlaneSystem.js';
-import { enemyNearestPoint } from './enemyHitTest.js';
+import { enemyNearestPoint, enemyEffectSource } from './enemyHitTest.js';
 import { countsAsBoss } from '../entities/bossTest.js';
 
 // Bat weapons (data.batCharge — Bat, Rubber Bat): hold-to-windup swing.
@@ -154,15 +154,16 @@ export class BatSystem {
 
   // Bend the contact-angle launch: first toward the WASD direction the player
   // is holding, then mildly toward the nearest other enemy in front of the
-  // flight path (within 90° of it, so the keen never reverses a launch).
+  // flight path (within 90° of it, so the keen never reverses a launch). The
+  // search starts where the launched enemy is drawn (enemyEffectSource), like
+  // every other effect that spreads from a struck enemy.
   _steerLaunch(enemy, x, y) {
     const keys = this.game.keys || {};
     const hx = (keys.d ? 1 : 0) - (keys.a ? 1 : 0);
     const hy = (keys.s ? 1 : 0) - (keys.w ? 1 : 0);
     if (hx || hy) ({ x, y } = blend(x, y, hx, hy, HELD_DIRECTION_WEIGHT));
 
-    const ex = enemy.position.x;
-    const ey = enemy.position.y;
+    const { x: ex, y: ey } = enemyEffectSource(enemy);
     let target = null;
     let bestDist = KEEN_RANGE;
     for (const other of this.game._activeEnemies()) {
