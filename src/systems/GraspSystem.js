@@ -275,8 +275,10 @@ export class GraspSystem {
     this.mist.wavesEnabled = false;
     room.enemies.length = 0;
     if (phase === 'grip') { this.startGrip(); return; }
-    if (phase === 'act2') { this._startZoom(); return; }
+    // Every later phase starts on the open ground the climb's break leaves:
+    // Act 2 included, or a test fight keeps the room's walls and rocks.
     climb.breakLoose(this);
+    if (phase === 'act2') { this._startZoom(); return; }
     this.climb.speed = phase === 'clutch' ? T.CLIMB_SPEED : T.CLIMB_SPEED_FAST;
     if (phase === 'clutch') this.startClutch();
     else if (phase === 'fingers') this.startFingers();
