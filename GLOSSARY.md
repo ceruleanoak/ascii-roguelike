@@ -1101,7 +1101,7 @@ identity, not standard programming terms.
 
 ### Great Hands
 - **Definition:** The Grasp's first phase: two huge multi-glyph hands gripping the North Barrier
-  that flex and reach for a Trine body. Any body that comes near a reaching hand's palm is
+  that flex and reach for a Trine body. Any body within a cell of a reaching hand's palm is
   caught and Held, and the rest of the Trine is knocked back down; the hand stays still until a
   blow lands on it, which lets the body go. They can be hurt only while out over the arena
   (reaching, holding or pulling back), and only where their art is drawn (each row from its

@@ -281,8 +281,11 @@ export const GRASP_TUNING = {
   // A reaching palm this close to its target splays, and stays splayed.
   HAND_SPLAY_DISTANCE: 3 * CS,
   HAND_RETRACT_SPEED: 200,
-  // A free body this close to a reaching palm is caught and held.
-  HAND_GRAB_RADIUS: 2 * CS,
+  // A free body this close to a reaching palm is caught and held. One cell,
+  // not the two it was: at two, a body near enough to strike the reaching
+  // fingers was nearly always caught first. The hit area (the art) is
+  // unchanged.
+  HAND_GRAB_RADIUS: 1 * CS,
   // How hard the rest of the Trine is knocked down when one is caught.
   HAND_GRAB_KNOCKBACK: 260,
   // A held body takes this much, through armor, every tick until the hand is struck.
