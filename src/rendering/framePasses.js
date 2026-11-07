@@ -200,8 +200,17 @@ export const FRAME_PASSES = {
     { id: 'armedGlyph', on: everywhere, draw: (rc, game, owner) => { if (!deathHeld(game, owner)) drawArmedGlyph(rc.renderer, game); } },
     // A newly held weapon's glyph, for a moment — HeldGlyphSystem.
     { id: 'heldGlyph', on: everywhere, draw: (rc, game, owner) => { if (!deathHeld(game, owner)) drawHeldGlyph(rc.renderer, game); } },
-    // Attack-direction '^' orbiting tight around the player.
-    { id: 'facingIndicator', on: { ...everywhere, rest: 'REST is the safe hub; the attack-direction cue is hidden there by design' }, draw: (rc, game, owner) => { if (!deathHeld(game, owner)) drawPlayerFacingIndicator(rc.renderer, game); } },
+    // Attack-direction '^' orbiting tight around the player. Hidden while the
+    // Mist Battle's Act 2 holds the Trine: no one is controlled, so the cue
+    // would only mark whichever body happens to be game.player (the victor,
+    // once one stands).
+    {
+      id: 'facingIndicator', on: { ...everywhere, rest: 'REST is the safe hub; the attack-direction cue is hidden there by design' },
+      draw: (rc, game, owner) => {
+        if (deathHeld(game, owner) || game.mistBattleSystem?.holdsTrine()) return;
+        drawPlayerFacingIndicator(rc.renderer, game);
+      }
+    },
     { id: 'staffBlockStance', on: everywhere, draw: (rc, game) => er(rc).drawStaffBlockStance(game) },
     { id: 'knownSpellHints', on: everywhere, draw: (rc, game) => { if (game.knownSpells?.size > 0) drawKnownSpellHints(rc.renderer, game); } },
     { id: 'gemWandCharge', on: everywhere, draw: (rc, game) => er(rc).drawGemWandCharge(game) },
