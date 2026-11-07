@@ -1322,7 +1322,9 @@ identity, not standard programming terms.
   (`enemy.isBoss || enemy.data?.isBoss` — #215). Set on the instance by the roomFeatures boss
   spawn paths; the Centipede head ships its own data object with the flag. Checked via
   `ZoneSystem.isBossReady(zone, depth)`; room type `BOSS_ROOM` generated when conditions are
-  met. Boss-spawned enemies carry `isBossEntity` flag.
+  met. Boss-spawned enemies carry `isBossEntity` flag. Every rule that treats a Boss (or a part
+  of one) differently asks one predicate, `countsAsBoss(enemy)` (`src/entities/bossTest.js`):
+  true for `isBoss` on the instance or its data, `isBossEntity`, or `tier: 'boss'` in its data.
 - **Not:** just a difficult Enemy; a Boss is a gated milestone tied to zone depth. Not a
   Dungeon Boss (interior encounter, own system) or a Miniboss (`BOSS_ENCOUNTERS` B-room
   variant).
