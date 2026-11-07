@@ -24,10 +24,15 @@ const HIT_RECOIL = CS / 2;
 
 const randIn = ([lo, hi]) => lo + Math.random() * (hi - lo);
 
-const palm = (hand) => ({ x: hand.x + W / 2, y: hand.y + H - CS });
+// The grip point: the middle of the bottom row, slid sideways by palmShift
+// when the hand is pressed against a wall (see the reach state).
+const palm = (hand) => ({ x: hand.x + W / 2 + hand.palmShift, y: hand.y + H - CS });
 // A hand's whole art stays inside the side walls, reaching or not.
 const MIN_X = CS;
 const MAX_X = (GRID.COLS - 1) * CS - W;
+// How far the grip point can slide off the middle: to the outermost
+// column's center, where the spread fingertips are drawn.
+const MAX_PALM_SHIFT = W / 2 - CS / 2;
 
 // ── Frames and the hit area ─────────────────────────────────────────────
 // Which frame a hand shows is decided here, not in GraspDraw, because the
@@ -109,6 +114,9 @@ export function spawn(grasp) {
       side, state: 'rise', timer: 0,
       x: ANCHOR_X[side], y: OFF_TOP,
       target: null, body: null, squeeze: 0, flash: 0,
+      // Pixels the grip point sits off the middle of the hand: pressed
+      // against a wall, the fingers on that side do the catching.
+      palmShift: 0,
       // Set once a reaching palm comes within HAND_SPLAY_DISTANCE of its
       // target; the splayed frame then holds until the reach ends.
       splayed: false,
@@ -148,6 +156,7 @@ function release(grasp, hand) {
 function startRetract(hand) {
   hand.state = 'retract';
   hand.timer = 0;
+  hand.palmShift = 0;
 }
 
 function nearestFree(grasp, from) {
@@ -218,6 +227,7 @@ export function update(grasp, dt) {
         break;
       case 'flex':
         if (hand.timer >= T.HAND_FLEX_TIME) {
+          hand.palmShift = 0;
           hand.target = nearestFree(grasp, palm(hand));
           hand.state = hand.target ? 'reach' : 'grip';
           hand.timer = 0;
@@ -228,14 +238,25 @@ export function update(grasp, dt) {
       case 'reach': {
         const body = hand.target;
         if (!body || body.hp <= 0 || body.grabbed || hand.timer >= T.HAND_REACH_TIME) { startRetract(hand); break; }
+        const midX = hand.x + W / 2;
         const p = palm(hand);
         const bx = body.position.x + CS / 2;
         const by = body.position.y + CS / 2;
         // Toward the body, as far as the walls allow: a body hugging a wall
         // is reached for, but the hand doesn't pass into the wall after it.
-        const goalX = Math.min(MAX_X, Math.max(MIN_X, hand.x + bx - p.x));
+        const goalX = Math.min(MAX_X, Math.max(MIN_X, hand.x + bx - midX));
         moveToward(hand, goalX, hand.y + by - p.y, T.HAND_REACH_SPEED, dt);
-        if (Math.hypot(bx - p.x, by - p.y) < T.HAND_SPLAY_DISTANCE) hand.splayed = true;
+        // Once the wall stops it, the grip slides toward the body along the
+        // fingers on that side, so a body in the columns by a wall can still
+        // be caught by the fingertips drawn over it (#544). Only toward the
+        // wall that stopped it, and only as far as the art goes.
+        const atLeftWall = hand.x <= MIN_X + 0.5 && bx < hand.x + W / 2;
+        const atRightWall = hand.x >= MAX_X - 0.5 && bx > hand.x + W / 2;
+        hand.palmShift = atLeftWall || atRightWall
+          ? Math.max(-MAX_PALM_SHIFT, Math.min(MAX_PALM_SHIFT, bx - (hand.x + W / 2)))
+          : 0;
+        const reachPalm = palm(hand);
+        if (Math.hypot(bx - reachPalm.x, by - reachPalm.y) < T.HAND_SPLAY_DISTANCE) hand.splayed = true;
         // Whoever comes near the palm is caught, the target or not.
         const caught = bodyInPalm(grasp, palm(hand));
         if (caught) grab(grasp, hand, caught);
@@ -248,6 +269,9 @@ export function update(grasp, dt) {
           startRetract(hand);
           break;
         }
+        // Caught by the outer fingers, the body is drawn into the fist.
+        hand.palmShift = Math.sign(hand.palmShift)
+          * Math.max(0, Math.abs(hand.palmShift) - T.HAND_REACH_SPEED * dt);
         hand.squeeze -= dt;
         if (hand.squeeze <= 0) {
           hand.squeeze = T.HAND_SQUEEZE_TICK;
