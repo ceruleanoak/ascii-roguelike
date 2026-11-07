@@ -24,6 +24,7 @@ export function create() {
     waveIndex: 0,
     queue: [],          // members waiting to enter: { delay, stream }
     queueTimer: 0,
+    waveWait: 0,        // s since the last wave finished entering
     diveTimer: 0,
     lingerTimer: 0,
   };
@@ -53,14 +54,21 @@ export function start(grasp) {
   grasp.clutch.diveTimer = randIn(T.CLUTCH_DIVE_INTERVAL) + T.CLUTCH_ENTER_TIME;
 }
 
-// The next wave enters once the block has room for all of it.
-function queueNextWave(grasp) {
+// The next wave enters once the block has room for all of it, or once it
+// has waited CLUTCH_WAVE_WAIT for that room — then only into the slots that
+// are free. The waves (and so the linger, and the phase) always arrive, even
+// for a Trine that never strikes a hand: 14 slots can't hold 8 + 10 + 12.
+function queueNextWave(grasp, dt) {
   const c = grasp.clutch;
   if (c.queue.length > 0 || c.waveIndex >= CLUTCH_WAVES.length) return;
+  c.waveWait += dt;
   const wave = CLUTCH_WAVES[c.waveIndex];
-  if (freeSlots(c).length < wave.count) return;
+  const free = freeSlots(c).length;
+  if (free < wave.count && c.waveWait < T.CLUTCH_WAVE_WAIT) return;
   c.waveIndex++;
-  for (let i = 0; i < wave.count; i++) c.queue.push({ wave, mirrored: i % 2 === 1 });
+  c.waveWait = 0;
+  const count = Math.min(wave.count, free);
+  for (let i = 0; i < count; i++) c.queue.push({ wave, mirrored: i % 2 === 1 });
   c.queueTimer = 0;
 }
 
@@ -115,7 +123,7 @@ function steer(member, tx, ty, speed, dt) {
 export function update(grasp, dt) {
   const c = grasp.clutch;
   if (grasp.phase === 'clutch') {
-    queueNextWave(grasp);
+    queueNextWave(grasp, dt);
     if (c.queue.length > 0) {
       c.queueTimer -= dt;
       if (c.queueTimer <= 0) {

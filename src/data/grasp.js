@@ -303,6 +303,9 @@ export const GRASP_TUNING = {
   CLUTCH_DIVE_TIME: 1.5,
   CLUTCH_DIVE_INTERVAL: [0.9, 1.8],
   CLUTCH_DIVERS: 2,
+  // A wave that finds the block too full waits this long, then enters into
+  // whatever slots are free.
+  CLUTCH_WAVE_WAIT: 8,
   // After the last wave settles, survivors linger this long, then retreat.
   CLUTCH_LINGER: 10,
   CLUTCH_RETREAT_SPEED: 160,
