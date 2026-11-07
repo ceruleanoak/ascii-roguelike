@@ -17,52 +17,104 @@ export const GRASP_CREASE_COLOR = '#8a8278';
 
 // ── Great Hands (phase 1) ──────────────────────────────────────────────
 // Art rows are drawn top to bottom, one glyph per cell; ' ' is empty. Drawn
-// for the LEFT hand; the right hand is the mirror (mirrorArt). Every frame
-// shares one width and height so a frame swap never moves the hitbox.
+// for the LEFT hand, back of the hand up, wrist at the top and the thumb on
+// the inner side; the right hand is the mirror (mirrorArt). Every frame
+// shares one width and height so a frame swap never moves the hitbox, and a
+// hand stays within a quarter of the grid (half its width and height).
+//
+// Alphanumeric only, and a glyph's class is its part (handGlyphColor):
+// uppercase is the skin's outline and the knuckles (B C D), lowercase the
+// creases, digits the nails, mismatched. The fingers are single bony
+// columns, too long, with one joint too many. The palm cell (bottom center,
+// where a grabbed body is pinned) stays empty in `open` and `fist`, so the
+// body shows between the fingers.
 export const HAND_ART = {
-  // Knuckles hooked over the North Barrier's lip.
+  // Knuckles hooked over the North Barrier's lip, nails dug into the rock.
+  // Only the bottom rows hang below the top edge.
   grip: [
-    '  ___  ',
-    ' /   \\ ',
-    '|     |',
-    '|     |>',
-    '|_|_|_|',
-    '(_(_(_)',
+    '    A   A    ',
+    '    A z A    ',
+    '   A  z  A   ',
+    '   A z  z A  ',
+    '  A  z z  Az ',
+    '  A z   w  A ',
+    ' B    m   zB ',
+    ' C D  B C  A ',
+    ' A A  A Az z ',
+    ' A A  A A A  ',
+    ' BzB  BzB 0  ',
+    ' A A zA A    ',
+    ' z z  z z    ',
+    ' 0 6  9 0    ',
   ],
-  // The tell: fingers lift off the rock.
+  // The tell: the fingertips come up off the rock and the bottom rows go bare.
   flex: [
-    '  ___  ',
-    ' /   \\ ',
-    '|     |',
-    '|     |>',
-    '|/|/|/|',
-    ' \' \' \' ',
+    '    A   A    ',
+    '    A z A    ',
+    '   A  z  A   ',
+    '   A z  z A  ',
+    '  A  z z  Az ',
+    '  A z   w  A ',
+    ' B    m   zB ',
+    ' C D  B C  A ',
+    ' A A  A Az z ',
+    ' BzB  BzB A  ',
+    ' z z zz z 0  ',
+    ' 0 6  9 0    ',
+    '             ',
+    '             ',
   ],
-  // Reaching down at the Trine, fingers spread.
+  // Reaching down at the Trine, fingers and thumb spread.
   open: [
-    ' _____ ',
-    '|     |',
-    '|     |>',
-    '\\|||||/',
-    ' ||||| ',
-    ' vvvvv ',
+    '    A   A    ',
+    '    A z A    ',
+    '   A  z  A   ',
+    '   A z  z A  ',
+    '  A  z z  Az ',
+    '  A z   w  AB',
+    ' B    m   A A',
+    ' C D  B C z A',
+    ' A A  A A   z',
+    'A  A   A A  0',
+    'B zC   D  B  ',
+    '0  A   Az A  ',
+    '   A    A  0 ',
+    '   6    9    ',
   ],
-  // Closed on a body.
+  // Closed on a body: fingers wrap it from the outside, the thumb crosses
+  // from the inside, nails turned in.
   fist: [
-    ' _____ ',
-    '/     \\',
-    '|     |>',
-    '|_____|',
-    '(_|_|_)',
-    ' \\___/ ',
+    '    A   A    ',
+    '    A z A    ',
+    '   A  z  A   ',
+    '   A z  z A  ',
+    '  A  z z  Az ',
+    '  A z   w zA ',
+    ' B    m    B ',
+    ' C D  B C  A ',
+    ' A Az A A A  ',
+    ' A B  D B z  ',
+    ' B  zz z  C  ',
+    '  z A9 0 A   ',
+    '  zA 6  z    ',
+    '    0  0     ',
   ],
 };
-export const HAND_COLS = 8;
-export const HAND_ROWS = 6;
+export const HAND_COLS = 13;
+export const HAND_ROWS = 14;
+// The art row of the knuckle ridge (B C D), which rests on the barrier's rim.
+export const HAND_KNUCKLE_ROW = 7;
 
-const MIRROR = { '/': '\\', '\\': '/', '(': ')', ')': '(', '<': '>', '>': '<' };
+/** A hand glyph's color by its class: nail (digit), crease (lowercase) or skin. */
+export function handGlyphColor(glyph) {
+  if (glyph >= '0' && glyph <= '9') return GRASP_NAIL_COLOR;
+  if (glyph >= 'a' && glyph <= 'z') return GRASP_CREASE_COLOR;
+  return GRASP_COLOR;
+}
+
+// The art is alphanumeric, so mirroring is a plain reversal of each row.
 export function mirrorArt(rows, width = HAND_COLS) {
-  return rows.map(row => [...row.padEnd(width, ' ')].reverse().map(c => MIRROR[c] ?? c).join(''));
+  return rows.map(row => [...row.padEnd(width, ' ')].reverse().join(''));
 }
 
 // ── North Barrier and Climb Scenery ────────────────────────────────────

@@ -9,7 +9,7 @@
 // whole steps (retro quantization): no gradients anywhere.
 import { GRID } from '../../game/GameConfig.js';
 import {
-  HAND_ART, HAND_COLS, mirrorArt, BARRIER_ROWS, BARRIER_GLYPHS, ROCK_COLOR,
+  HAND_ART, HAND_COLS, mirrorArt, handGlyphColor, BARRIER_ROWS, BARRIER_GLYPHS, ROCK_COLOR,
   ROCK_EDGE_COLOR, ROCK_GLYPH, ROCK_CAP_GLYPH, STREAK_COLOR, FINGER_ART,
   FINGER_CREASE_EVERY, GRASP_COLOR, GRASP_NAIL_COLOR, GRASP_CREASE_COLOR,
   CLUTCH_COLOR, GRASP_TUNING as T,
@@ -95,14 +95,22 @@ export function drawGraspScenery(renderer, game) {
   }
 }
 
-function drawHand(renderer, hand) {
+// Each glyph sits on a cell of bare ground, so a hand draped over the North
+// Barrier reads in front of the rock rather than tangled in its glyphs.
+function drawHand(renderer, hand, ground) {
   const rows = HAND_FRAMES[hand.side][FRAME_FOR_STATE[hand.state] ?? 'grip'];
-  const color = hand.flash > 0 ? FLASH_COLOR : GRASP_COLOR;
+  const flash = hand.flash > 0;
+  const ctx = renderer.fgCtx;
+  ctx.fillStyle = ground;
   for (let r = 0; r < rows.length; r++) {
     for (let col = 0; col < HAND_COLS; col++) {
       const glyph = rows[r][col];
       if (!glyph || glyph === ' ') continue;
-      renderer.drawTextWithAlpha(hand.x + col * CS + HALF, hand.y + r * CS + HALF, glyph, color, 1);
+      const x = hand.x + col * CS;
+      const y = hand.y + r * CS;
+      ctx.fillRect(x, y, CS, CS);
+      const color = flash ? FLASH_COLOR : handGlyphColor(glyph);
+      renderer.drawTextWithAlpha(x + HALF, y + HALF, glyph, color, 1);
     }
   }
 }
@@ -129,7 +137,8 @@ function drawFinger(renderer, finger) {
 export function drawGraspParts(renderer, game) {
   const grasp = game.graspSystem;
   if (!grasp?.active) return;
-  for (const hand of grasp.hands) drawHand(renderer, hand);
+  const ground = game.zoneSystem.getBlendedEnvironmentColors(game.currentRoom.zone).background;
+  for (const hand of grasp.hands) drawHand(renderer, hand, ground);
   for (const finger of grasp.fingers) drawFinger(renderer, finger);
   for (const m of grasp.clutch.members) {
     renderer.drawTextWithAlpha(m.x + HALF, m.y + HALF, m.glyph, m.flash > 0 ? FLASH_COLOR : CLUTCH_COLOR, 1);

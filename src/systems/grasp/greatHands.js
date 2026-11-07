@@ -4,14 +4,16 @@
 // the rim — reaching, grabbing or pulling back — and any hit on a grabbing
 // hand lets its body go. Both hands spend one pool, GraspSystem.handsHp.
 import { GRID } from '../../game/GameConfig.js';
-import { GRASP_TUNING as T, HAND_COLS, HAND_ROWS, BARRIER_ROWS } from '../../data/grasp.js';
+import { GRASP_TUNING as T, HAND_COLS, HAND_ROWS, HAND_KNUCKLE_ROW } from '../../data/grasp.js';
 
 const CS = GRID.CELL_SIZE;
 const W = HAND_COLS * CS;
 const H = HAND_ROWS * CS;
-// The art's bottom row sits on the barrier's lip.
-const ANCHOR_Y = (BARRIER_ROWS + 1) * CS - H;
-const ANCHOR_X = { left: 5 * CS, right: (GRID.COLS - 5) * CS - W };
+// Gripping, the knuckle row sits on the barrier's rim (row 1) and the
+// fingers hang down over the rock into the arena. Each hand hugs its own
+// side wall, which leaves a gap down the middle between the two.
+const ANCHOR_Y = (1 - HAND_KNUCKLE_ROW) * CS;
+const ANCHOR_X = { left: CS, right: (GRID.COLS - 1) * CS - W };
 const OFF_TOP = -H - CS;
 const GRAB_RADIUS = CS * 0.9;
 const HIT_RECOIL = CS / 2;
@@ -87,7 +89,7 @@ export function update(grasp, dt) {
     if (hand.flash > 0) hand.flash -= dt;
     switch (hand.state) {
       case 'rise':
-        if (moveToward(hand, ANCHOR_X[hand.side], ANCHOR_Y, H / T.HAND_RISE_TIME, dt)) {
+        if (moveToward(hand, ANCHOR_X[hand.side], ANCHOR_Y, (ANCHOR_Y - OFF_TOP) / T.HAND_RISE_TIME, dt)) {
           hand.state = 'grip';
           hand.timer = 0;
         }
