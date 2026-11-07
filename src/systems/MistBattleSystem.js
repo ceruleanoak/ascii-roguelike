@@ -1043,8 +1043,9 @@ export class MistBattleSystem {
     if (tick.poisonDamage) body.takeDamage(tick.poisonDamage, { isBullet: false, element: 'poison', cause: DEATH_CAUSES.poison });
   }
 
-  // A Flank faces its nearest living enemy (eight directions, the Act 2
-  // bodies' facingToward), so its mirrored attacks fly at its own target.
+  // A Flank faces its nearest living enemy that can be hurt (eight
+  // directions, the Act 2 bodies' facingToward), so its mirrored attacks
+  // fly at its own target.
   // With nothing to aim at it keeps the Primary's facing. A swing keeps the
   // facing it started with, as the Primary's does while SPACE is held.
   _aimFlank(body, lead) {
@@ -1055,6 +1056,9 @@ export class MistBattleSystem {
     let bestDist = Infinity;
     for (const enemy of this.game._activeEnemies()) {
       if (enemy.hp <= 0 || enemy.isDying || enemy.graspRemoved || (enemy.plane ?? 0) !== 0) continue;
+      // A part no blow can hurt right now (a Great Hand rising or holding)
+      // isn't worth facing.
+      if (enemy.isVulnerable?.() === false) continue;
       const box = enemy.getHitbox?.() ?? { x: enemy.position.x, y: enemy.position.y, width: CELL, height: CELL };
       const dx = box.x + box.width / 2 - cx;
       const dy = box.y + box.height / 2 - cy;

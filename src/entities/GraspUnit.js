@@ -75,6 +75,13 @@ export class GraspUnit extends Enemy {
     return { x: at.x, y: Math.max(CS, at.y) };
   }
 
+  // Whether a blow can hurt this part right now (GraspSystem decides: a
+  // Great Hand only while it reaches, grabs or retracts). A Flank skips a
+  // part that can't be hurt when it picks what to face.
+  isVulnerable() {
+    return this.game.graspSystem._isVulnerable(this);
+  }
+
   // Only the iframe timer runs here; velocity stays zero so PhysicsSystem
   // never reads a unit as a charging body (see SeaSerpentUnit.update).
   update(deltaTime) {
