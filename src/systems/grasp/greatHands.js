@@ -7,7 +7,9 @@
 // rim — reaching, grabbing or pulling back. Both hands spend one pool,
 // GraspSystem.handsHp.
 import { GRID } from '../../game/GameConfig.js';
-import { GRASP_TUNING as T, HAND_COLS, HAND_ROWS, HAND_KNUCKLE_ROW } from '../../data/grasp.js';
+import {
+  GRASP_TUNING as T, HAND_ART, HAND_COLS, HAND_ROWS, HAND_KNUCKLE_ROW, mirrorArt,
+} from '../../data/grasp.js';
 
 const CS = GRID.CELL_SIZE;
 const W = HAND_COLS * CS;
@@ -23,6 +25,67 @@ const HIT_RECOIL = CS / 2;
 const randIn = ([lo, hi]) => lo + Math.random() * (hi - lo);
 
 const palm = (hand) => ({ x: hand.x + W / 2, y: hand.y + H - CS });
+// A hand's whole art stays inside the side walls, reaching or not.
+const MIN_X = CS;
+const MAX_X = (GRID.COLS - 1) * CS - W;
+
+// ── Frames and the hit area ─────────────────────────────────────────────
+// Which frame a hand shows is decided here, not in GraspDraw, because the
+// frame is also its hit area (handOverlapsBox).
+const HAND_FRAMES = {
+  left: HAND_ART,
+  right: Object.fromEntries(Object.entries(HAND_ART).map(([k, rows]) => [k, mirrorArt(rows)])),
+};
+const FRAME_FOR_STATE = { rise: 'grip', grip: 'grip', flex: 'flex', reach: 'open', grab: 'fist', retract: 'open', flee: 'open' };
+// A hand passes through `half` for this long as it opens to reach or
+// unclenches into a retract.
+const HALF_FRAME_TIME = 0.12;
+// Reaching, it twitches between `open` and `openB` once per this many seconds.
+const RESTLESS_PERIOD = 0.35;
+
+/** Which HAND_ART frame a hand shows this frame, from its state and timer. */
+function handFrame(hand) {
+  const reaching = hand.state === 'reach';
+  if ((reaching || hand.state === 'retract') && hand.timer < HALF_FRAME_TIME) return 'half';
+  if (!reaching) return FRAME_FOR_STATE[hand.state] ?? 'grip';
+  // Once splayed near its target it holds the splay until the grab.
+  if (hand.splayed) return 'splay';
+  return Math.floor(hand.timer / RESTLESS_PERIOD) % 2 ? 'openB' : 'open';
+}
+
+/** The art rows (one glyph per cell, ' ' empty) a hand shows this frame. */
+export function handRows(hand) {
+  return HAND_FRAMES[hand.side][handFrame(hand)];
+}
+
+// Each art row's filled span, [first, last] column or null, per frame and side.
+const ROW_SPANS = Object.fromEntries(Object.entries(HAND_FRAMES).map(([side, frames]) => [side,
+  Object.fromEntries(Object.entries(frames).map(([name, rows]) => [name, rows.map((row) => {
+    const first = row.search(/\S/);
+    return first < 0 ? null : [first, row.trimEnd().length - 1];
+  })])),
+]));
+
+/**
+ * Whether a pixel box touches the hand's drawn art: each row counts from its
+ * first glyph to its last (the gaps between fingers fill in, the empty
+ * corners around them don't). The unit's rect is the art's whole 13×14
+ * frame, of which the glyphs cover about a third, so blows into the empty
+ * corners used to land.
+ */
+export function handOverlapsBox(hand, box) {
+  const spans = ROW_SPANS[hand.side][handFrame(hand)];
+  const firstRow = Math.max(0, Math.floor((box.y - hand.y) / CS));
+  const lastRow = Math.min(HAND_ROWS - 1, Math.ceil((box.y + box.height - hand.y) / CS) - 1);
+  for (let r = firstRow; r <= lastRow; r++) {
+    const span = spans[r];
+    if (!span) continue;
+    const left = hand.x + span[0] * CS;
+    const right = hand.x + (span[1] + 1) * CS;
+    if (box.x < right && box.x + box.width > left) return true;
+  }
+  return false;
+}
 
 export function spawn(grasp) {
   grasp.hands = ['left', 'right'].map((side, i) => {
@@ -152,7 +215,10 @@ export function update(grasp, dt) {
         const p = palm(hand);
         const bx = body.position.x + CS / 2;
         const by = body.position.y + CS / 2;
-        moveToward(hand, hand.x + bx - p.x, hand.y + by - p.y, T.HAND_REACH_SPEED, dt);
+        // Toward the body, as far as the walls allow: a body hugging a wall
+        // is reached for, but the hand doesn't pass into the wall after it.
+        const goalX = Math.min(MAX_X, Math.max(MIN_X, hand.x + bx - p.x));
+        moveToward(hand, goalX, hand.y + by - p.y, T.HAND_REACH_SPEED, dt);
         if (Math.hypot(bx - p.x, by - p.y) < T.HAND_SPLAY_DISTANCE) hand.splayed = true;
         // Whoever comes near the palm is caught, the target or not.
         const caught = bodyInPalm(grasp, palm(hand));

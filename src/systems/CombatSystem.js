@@ -1777,10 +1777,13 @@ export class CombatSystem {
 
     const enemyBox = enemy.getHitbox();
 
+    // An enemy whose drawn shape doesn't fill its rect refines the test
+    // (overlapsBox — a Great Hand counts only where its art is).
     return projBox.x < enemyBox.x + enemyBox.width &&
            projBox.x + projBox.width > enemyBox.x &&
            projBox.y < enemyBox.y + enemyBox.height &&
-           projBox.y + projBox.height > enemyBox.y;
+           projBox.y + projBox.height > enemyBox.y &&
+           (enemy.overlapsBox?.(projBox) ?? true);
   }
 
   checkMeleeCollision(attack, enemy) {
@@ -1796,7 +1799,8 @@ export class CombatSystem {
     return attackBox.x < enemyBox.x + enemyBox.width &&
            attackBox.x + attackBox.width > enemyBox.x &&
            attackBox.y < enemyBox.y + enemyBox.height &&
-           attackBox.y + attackBox.height > enemyBox.y;
+           attackBox.y + attackBox.height > enemyBox.y &&
+           (enemy.overlapsBox?.(attackBox) ?? true);
   }
 
   checkMeleeCollisionWithObject(attack, obj) {

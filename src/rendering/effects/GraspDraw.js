@@ -9,38 +9,18 @@
 // whole steps (retro quantization): no gradients anywhere.
 import { GRID } from '../../game/GameConfig.js';
 import {
-  HAND_ART, HAND_COLS, mirrorArt, handGlyphColor, BARRIER_ROWS, BARRIER_GLYPHS, ROCK_COLOR,
+  HAND_COLS, handGlyphColor, BARRIER_ROWS, BARRIER_GLYPHS, ROCK_COLOR,
   ROCK_EDGE_COLOR, ROCK_GLYPH, ROCK_CAP_GLYPH, STREAK_COLOR, FINGER_ART, FINGER_COLS,
   FINGER_KNUCKLE_EVERY, FINGER_TEXTURE, FINGER_TEXTURE_DENSITY, GRASP_COLOR, GRASP_NAIL_COLOR,
   GRASP_CREASE_COLOR, CLUTCH_COLOR, CLUTCH_SIZE, GRASP_TUNING as T,
 } from '../../data/grasp.js';
+import { handRows } from '../../systems/grasp/greatHands.js';
 
 const CS = GRID.CELL_SIZE;
 const HALF = CS / 2;
 const FLOOR_TOP = (GRID.ROWS - 1) * CS;
 const FLASH_COLOR = '#ffffff';
 const TRAP_LINE_Y = (GRID.ROWS - 1 - T.TRAP_LINE_ROWS) * CS;
-
-const HAND_FRAMES = {
-  left: HAND_ART,
-  right: Object.fromEntries(Object.entries(HAND_ART).map(([k, rows]) => [k, mirrorArt(rows)])),
-};
-const FRAME_FOR_STATE = { rise: 'grip', grip: 'grip', flex: 'flex', reach: 'open', grab: 'fist', retract: 'open', flee: 'open' };
-// A hand passes through `half` for this long as it opens to reach or
-// unclenches into a retract.
-const HALF_FRAME_TIME = 0.12;
-// Reaching, it twitches between `open` and `openB` once per this many seconds.
-const RESTLESS_PERIOD = 0.35;
-
-/** Which HAND_ART frame a hand shows this frame, from its state and timer. */
-function handFrame(hand) {
-  const reaching = hand.state === 'reach';
-  if ((reaching || hand.state === 'retract') && hand.timer < HALF_FRAME_TIME) return 'half';
-  if (!reaching) return FRAME_FOR_STATE[hand.state] ?? 'grip';
-  // Once splayed near its target it holds the splay until the grab.
-  if (hand.splayed) return 'splay';
-  return Math.floor(hand.timer / RESTLESS_PERIOD) % 2 ? 'openB' : 'open';
-}
 
 // Paint `share` (0..1) of a border row open, from the middle outward, so the
 // wall builds back from both ends toward the center as `share` falls to 0.
@@ -113,7 +93,7 @@ export function drawGraspScenery(renderer, game) {
 // Each glyph sits on a cell of bare ground, so a hand draped over the North
 // Barrier reads in front of the rock rather than tangled in its glyphs.
 function drawHand(renderer, hand, ground) {
-  const rows = HAND_FRAMES[hand.side][handFrame(hand)];
+  const rows = handRows(hand);
   const flash = hand.flash > 0;
   const ctx = renderer.fgCtx;
   ctx.fillStyle = ground;

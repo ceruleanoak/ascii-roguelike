@@ -1102,9 +1102,11 @@ identity, not standard programming terms.
   that flex and reach for a Trine body. Any body that comes near a reaching hand's palm is
   caught and Held, and the rest of the Trine is knocked back down; the hand stays still until a
   blow lands on it, which lets the body go. They can be hurt only while out over the arena
-  (reaching, holding or pulling back), and share one HP pool. At 0 they flee.
+  (reaching, holding or pulling back), and only where their art is drawn (each row from its
+  first glyph to its last), and share one HP pool. A reaching hand stays inside the side walls.
+  At 0 they flee.
 - **In code:** `src/systems/grasp/greatHands.js`; `GraspSystem.hands`, pool `handsHp`; art
-  `HAND_ART` (mirrored for the right hand).
+  `HAND_ART` (mirrored for the right hand); hit area `handOverlapsBox` (via `GraspUnit.overlapsBox`).
 - **Not:** the Clutch (small single-glyph hands); a GooHead-style boss grab (it borrows the shape
   but grabs any Trine body, not only `game.player`).
 

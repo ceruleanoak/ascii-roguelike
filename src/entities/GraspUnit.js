@@ -1,5 +1,6 @@
 import { Enemy } from './Enemy.js';
 import { GRASP_NAME, GRASP_DESCRIPTION, GRASP_COLOR } from '../data/grasp.js';
+import { handOverlapsBox } from '../systems/grasp/greatHands.js';
 
 // One strikeable part of the Grasp — a Great Hand, a Clutch hand or a Finger.
 // Position, hitbox, glyph and HP all belong to GraspSystem; this class carries
@@ -49,6 +50,13 @@ export class GraspUnit extends Enemy {
   // The drawn extent, not one cell: position is the top-left of the art.
   getHitbox() {
     return { x: this.position.x, y: this.position.y, width: this.width, height: this.height };
+  }
+
+  // CombatSystem's finer test after the rect overlaps (overlapsBox): a Great
+  // Hand is struck only where its art is drawn; every other part fills its
+  // rect.
+  overlapsBox(box) {
+    return this.kind !== 'hand' || handOverlapsBox(this.part, box);
   }
 
   // Only the iframe timer runs here; velocity stays zero so PhysicsSystem

@@ -288,7 +288,6 @@ export const GRASP_TUNING = {
   // A held body takes this much, through armor, every tick until the hand is struck.
   HAND_SQUEEZE_DAMAGE: 2,
   HAND_SQUEEZE_TICK: 2.0,
-  HAND_SWIPE_DAMAGE: 2,
   // Below this share of the pool both hands may reach at once.
   HANDS_BOTH_REACH_AT: 0.5,
 
