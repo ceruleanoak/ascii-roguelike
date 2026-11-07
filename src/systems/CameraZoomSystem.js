@@ -1,6 +1,10 @@
 import { GRID, GAME_STATES, ZOOM } from '../game/GameConfig.js';
 import { isDeathHeldOffSurface, isInteriorActive, activeInteriorFloor } from './PlaneSystem.js';
 
+// Time constant (seconds) of a scripted frame's pan toward a moved focus:
+// ~95% of the way there in three of these.
+const SCRIPTED_FOCUS_EASE_SECONDS = 0.3;
+
 /**
  * CameraZoomSystem — combat-proximity camera zoom.
  *
@@ -66,8 +70,11 @@ export class CameraZoomSystem {
     this._noEnemyElapsedMs = Infinity;
     this._lastState = null;
     this._compassOpenedMaze = false;
-    // A scripted frame (holdZoom): { scale, focus } where focus() returns the
-    // canvas-pixel point to frame on, or null to keep the player as the focus.
+    // A scripted frame (holdZoom): { scale, focus, at } where focus() returns
+    // the canvas-pixel point to frame on, or null to keep the player as the
+    // focus, and `at` is where the frame is actually centered — it eases
+    // toward focus() (_easeScriptedFocus) so a jump in the focus is a pan,
+    // not a cut.
     this.scripted = null;
   }
 
@@ -78,7 +85,7 @@ export class CameraZoomSystem {
    * whole room on screen (the Grasp's climb) uses it that way.
    */
   holdZoom(scale, focus = null) {
-    this.scripted = { scale, focus };
+    this.scripted = { scale, focus, at: null };
   }
 
   /** Hand the frame back to the combat trigger. */
@@ -205,7 +212,7 @@ export class CameraZoomSystem {
       // A scripted frame overrides every trigger above, focus included.
       if (this.scripted) {
         desiredScale = this.scripted.scale;
-        const focus = this.scripted.focus?.();
+        const focus = this._easeScriptedFocus(deltaTime);
         if (focus && desiredScale > 1) {
           this.originXPercent = this._computeClampedOrigin((focus.x / GRID.WIDTH) * 100, roomLeftPercent, roomRightPercent, desiredScale);
           this.originYPercent = this._computeClampedOrigin((focus.y / GRID.HEIGHT) * 100, roomTopPercent, roomBottomPercent, desiredScale);
@@ -222,6 +229,24 @@ export class CameraZoomSystem {
     }
 
     this._tickZoom(desiredScale, deltaTime, state, justDied);
+  }
+
+  // The scripted frame's center, eased toward its focus(). A focus can jump —
+  // the Mist Battle's Act 2 frames the centroid of the bodies still standing,
+  // so it leaps the moment one falls — and a snapped pivot would cut the
+  // frame. The first point is taken as-is, so a hold starts where it aims.
+  _easeScriptedFocus(deltaTime) {
+    const target = this.scripted.focus?.();
+    if (!target) return this.scripted.at;
+    const at = this.scripted.at;
+    if (!at) {
+      this.scripted.at = { x: target.x, y: target.y };
+    } else {
+      const k = 1 - Math.exp(-deltaTime / SCRIPTED_FOCUS_EASE_SECONDS);
+      at.x += (target.x - at.x) * k;
+      at.y += (target.y - at.y) * k;
+    }
+    return this.scripted.at;
   }
 
   /** The tightest scale this layer's frame can reach. */
