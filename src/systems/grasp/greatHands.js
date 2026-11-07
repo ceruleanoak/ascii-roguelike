@@ -213,6 +213,15 @@ export function resolveGrabs(grasp) {
   }
 }
 
+/** A revived body slips the grip: whichever hand holds it lets go and pulls back. */
+export function letGoOf(grasp, body) {
+  for (const hand of grasp.hands) {
+    if (hand.body !== body) continue;
+    release(grasp, hand);
+    startRetract(hand);
+  }
+}
+
 /** End of phase 1: every hand lets go and rises off the top. */
 export function letGo(grasp) {
   for (const hand of grasp.hands) {

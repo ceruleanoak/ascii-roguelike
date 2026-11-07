@@ -361,6 +361,16 @@ export class GraspSystem {
     return this.mist.hurt(body, damage, { isBullet: false, element: null, attacker, ignoresArmor }, from);
   }
 
+  /**
+   * A Held body revived by a death save (main.js _clearReviveMovementLocks)
+   * slips the hand's grip. Released here, through the hand, so the hand
+   * drops it too: clearing only the body's own flags left the hand pinning
+   * a body the other hand could then grab as well.
+   */
+  releaseRevived(body) {
+    greatHands.letGoOf(this, body);
+  }
+
   _releaseBody(body) {
     if (!body?.grabbedBy?.isGraspUnit) return;
     body.grabbed = false;
