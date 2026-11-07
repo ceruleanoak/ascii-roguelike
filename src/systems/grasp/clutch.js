@@ -14,7 +14,11 @@ const CS = GRID.CELL_SIZE;
 const SIZE = CLUTCH_SIZE;
 const SLOTS = CLUTCH_FORMATION.rows.flatMap(row => CLUTCH_FORMATION.cols.map(col => ({ col, row })));
 const OFF_TOP = -2 * CS;
-const OFF_BOTTOM = GRID.HEIGHT + CS;
+// The box a dive stays in: inside the side walls, down to the floor row.
+const DIVE_LEFT = CS;
+const DIVE_RIGHT = (GRID.COLS - 1) * CS - SIZE;
+const DIVE_BOTTOM = (GRID.ROWS - 1) * CS - SIZE;
+const clampX = (x) => Math.min(DIVE_RIGHT, Math.max(DIVE_LEFT, x));
 
 const randIn = ([lo, hi]) => lo + Math.random() * (hi - lo);
 
@@ -102,11 +106,15 @@ function startDive(grasp, member) {
   const swing = (member.x < GRID.WIDTH / 2 ? -1 : 1) * 5 * CS;
   member.state = 'dive';
   member.t = 0;
+  // Every control point inside the walls keeps the whole curve inside them
+  // (a bezier stays within its control points' hull): a hand never swings
+  // through a side wall or dives out past the floor.
   member.path = {
     p0: { x: member.x, y: member.y },
-    p1: { x: member.x + swing, y: member.y + 6 * CS },
-    // Aimed past the body, so a dive that misses carries on through.
-    p2: { x: target.position.x, y: target.position.y + 3 * CS },
+    p1: { x: clampX(member.x + swing), y: member.y + 6 * CS },
+    // Aimed past the body, so a dive that misses carries on through — as
+    // far as the floor.
+    p2: { x: clampX(target.position.x), y: Math.min(DIVE_BOTTOM, target.position.y + 3 * CS) },
     time: T.CLUTCH_DIVE_TIME,
   };
 }
@@ -182,11 +190,7 @@ export function update(grasp, dt) {
     m.unit.position.y = m.y;
   }
 
-  // Off the top for good (retreat) or off the bottom (a dive gone long:
-  // it re-enters from the top).
-  for (const m of c.members) {
-    if (m.state === 'return' && m.y > OFF_BOTTOM) m.y = OFF_TOP;
-  }
+  // Off the top for good (retreat).
   const gone = c.members.filter(m => m.state === 'retreat' && m.y < OFF_TOP);
   for (const m of gone) grasp.removeUnit(m.unit);
   if (gone.length) c.members = c.members.filter(m => !gone.includes(m));
