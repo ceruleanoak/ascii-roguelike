@@ -26,7 +26,7 @@ import { planeOf, inSamePlane, isInteriorActive } from './PlaneSystem.js';
 import { MAX_PIPS } from './StatusEffects.js';
 import { absorbsZap } from './ImbuePoolSystem.js';
 import { findStrikeSpire, spireStruck } from './LightningSpire.js';
-import { enemyInRadius, enemyNearestPoint } from './enemyHitTest.js';
+import { enemyInRadius, enemyNearestPoint, enemyVisualAnchor } from './enemyHitTest.js';
 
 const FLASH_DURATION = 0.12;
 const DEFAULT_RADIUS = GRID.CELL_SIZE * 1.2;
@@ -130,7 +130,8 @@ export class LightningStrikeSystem {
         // An Imbue-capable enemy takes the bolt as its electric Imbue instead.
         if (absorbsZap(enemy)) continue;
         enemy.takeDamage(s.damage);
-        game.combatSystem.createDamageNumber(s.damage, enemy.position.x, enemy.position.y, '#ffff88');
+        const at = enemyVisualAnchor(enemy);
+        game.combatSystem.createDamageNumber(s.damage, at.x, at.y, '#ffff88');
       }
     }
 
@@ -204,18 +205,20 @@ export class LightningStrikeSystem {
       nearestEnemy.takeDamage(actualDamage);
       pips -= 1;
       if (pips > 0) nearestEnemy.applyStatusEffect('zap', stunDur, pips);
-      game.combatSystem.createDamageNumber(actualDamage, nearestEnemy.position.x, nearestEnemy.position.y, '#00ffff');
+      const at = enemyVisualAnchor(nearestEnemy);
+      game.combatSystem.createDamageNumber(actualDamage, at.x, at.y, '#00ffff');
       if (isWet) {
-        game.combatSystem.createDamageNumber('ϟ', nearestEnemy.position.x, nearestEnemy.position.y - 12, '#ffff00');
+        game.combatSystem.createDamageNumber('ϟ', at.x, at.y - 12, '#ffff00');
       }
 
-      const cs = (currentEnemy.width || GRID.CELL_SIZE) / 2;
-      const ns = (nearestEnemy.width || GRID.CELL_SIZE) / 2;
+      // Each end of the arc sits on its enemy as drawn (enemyVisualAnchor).
+      const from = enemyVisualAnchor(currentEnemy, (currentEnemy.width || GRID.CELL_SIZE) / 2);
+      const to = enemyVisualAnchor(nearestEnemy, (nearestEnemy.width || GRID.CELL_SIZE) / 2);
       game.combatSystem.chainArcs.push({
-        x1: currentEnemy.position.x + cs,
-        y1: currentEnemy.position.y + cs,
-        x2: nearestEnemy.position.x + ns,
-        y2: nearestEnemy.position.y + ns,
+        x1: from.x,
+        y1: from.y,
+        x2: to.x,
+        y2: to.y,
         color: isWet ? '#ffff66' : '#88ddff',
         timer: 0.18,
         duration: 0.18

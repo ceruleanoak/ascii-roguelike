@@ -15,7 +15,7 @@ import { Particle } from '../entities/Particle.js';
 import { GRID } from '../game/GameConfig.js';
 import { tagInteriorPlane, planeOf } from './PlaneSystem.js';
 import { MAX_PIPS } from './StatusEffects.js';
-import { enemyDistance, enemyNearestPoint } from './enemyHitTest.js';
+import { enemyDistance, enemyNearestPoint, enemyVisualAnchor } from './enemyHitTest.js';
 
 // Mana yield per ingredient char. Phase 1 only Goo is exposed in the UI;
 // remaining entries are reserved for the Phase 2 conversion menu expansion.
@@ -610,17 +610,16 @@ export class MagicSystem {
     // takes the full bolt (pip 3); each hop after it carries one pip less
     // (LightningStrikeSystem.createChainLightning).
     nearest.applyStatusEffect('zap', 2.0, MAX_PIPS);
-    this.game.combatSystem.createDamageNumber?.(
-      damage, nearest.position.x, nearest.position.y, '#88ddff'
-    );
+    const at = enemyVisualAnchor(nearest);
+    this.game.combatSystem.createDamageNumber?.(damage, at.x, at.y, '#88ddff');
 
     // Visual arc from caster to the seed enemy
-    const cs = (nearest.width || GRID.CELL_SIZE) / 2;
+    const end = enemyVisualAnchor(nearest, (nearest.width || GRID.CELL_SIZE) / 2);
     this.game.combatSystem.chainArcs?.push({
       x1: attack.position.x,
       y1: attack.position.y,
-      x2: nearest.position.x + cs,
-      y2: nearest.position.y + cs,
+      x2: end.x,
+      y2: end.y,
       color: '#ffff66',
       timer: 0.18,
       duration: 0.18

@@ -1,7 +1,7 @@
 import { DEATH_CAUSES } from '../data/deathCauses.js';
 import { inSamePlane } from './PlaneSystem.js';
 import { MAX_PIPS } from './StatusEffects.js';
-import { enemyInRadius } from './enemyHitTest.js';
+import { enemyInRadius, enemyVisualAnchor } from './enemyHitTest.js';
 
 // Wet-enemy/player electrical conduction — extracted from CombatSystem so a
 // projectile/melee electric hit on a conductive object can chain into anyone
@@ -26,8 +26,9 @@ export function conductElectricity(combatSystem, sourceObj, damage, enemies, pla
       // 'zap', not 'stun' — electric immobilization with the shake visual;
       // electric-affinity enemies are auto-immune via EFFECT_AFFINITY.
       enemy.applyStatusEffect('zap', 3.5, CONDUCTED_PIPS);
-      combatSystem.createDamageNumber(dmg, enemy.position.x, enemy.position.y, '#00ffff');
-      combatSystem.createDamageNumber('ϟ', enemy.position.x, enemy.position.y - 10, '#ffff00');
+      const at = enemyVisualAnchor(enemy);
+      combatSystem.createDamageNumber(dmg, at.x, at.y, '#00ffff');
+      combatSystem.createDamageNumber('ϟ', at.x, at.y - 10, '#ffff00');
     }
   }
 

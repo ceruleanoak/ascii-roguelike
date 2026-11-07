@@ -5,7 +5,7 @@ import { createDebris } from '../entities/Debris.js';
 import { Particle, createFootstep, createWetDrop, createSteamPuff, createChaff, WET_DROP_COLOR } from '../entities/Particle.js';
 import { statusEffectColor } from './StatusEffectVisuals.js';
 import { inSamePlane, tagInteriorPlane } from './PlaneSystem.js';
-import { enemyDistance, enemyInRadius } from './enemyHitTest.js';
+import { enemyDistance, enemyInRadius, enemyVisualAnchor } from './enemyHitTest.js';
 
 const MAX_GOO_BLOBS = 20;
 const IDLE_ECHO_DURATION = 0.5; // seconds — must match the radius/alpha envelope in RestRenderer
@@ -517,7 +517,8 @@ export class WorldEffectsSystem {
               game.combatSystem.createDamageNumber(sw.damage, entity.position.x, entity.position.y, entity.color);
             } else {
               entity.takeDamage(sw.damage);
-              game.combatSystem.createDamageNumber(sw.damage, entity.position.x, entity.position.y, '#ffffff');
+              const at = enemyVisualAnchor(entity);
+              game.combatSystem.createDamageNumber(sw.damage, at.x, at.y, '#ffffff');
             }
           }
           // Optional ignite (e.g. Bomb's RipenMechanic detonation) — opt-in via
@@ -805,7 +806,8 @@ export class WorldEffectsSystem {
       if (enemyInSteam) {
         enemy.steamTrailTimer = (enemy.steamTrailTimer || 0) - deltaTime;
         if (enemy.steamTrailTimer <= 0) {
-          particles.push(tagInteriorPlane(game, createSteamPuff(enemy.position.x, enemy.position.y)));
+          const at = enemyVisualAnchor(enemy);
+          particles.push(tagInteriorPlane(game, createSteamPuff(at.x, at.y)));
           enemy.steamTrailTimer = 0.15 + Math.random() * 0.07;
         }
       } else {
@@ -847,8 +849,9 @@ export class WorldEffectsSystem {
     entity[timerKey] -= deltaTime;
     if (entity[timerKey] > 0) return;
     const dropCount = Math.random() < 0.4 ? 2 : 1;
+    const at = enemyVisualAnchor(entity); // the player has no anchor, so it drips from its position
     for (let d = 0; d < dropCount; d++) {
-      this.game.particles.push(tagInteriorPlane(this.game, createWetDrop(entity.position.x, entity.position.y, color)));
+      this.game.particles.push(tagInteriorPlane(this.game, createWetDrop(at.x, at.y, color)));
     }
     const left = status.duration;
     entity[timerKey] = left > 4 ? 0.10 : left > 2 ? 0.14 : 0.20;

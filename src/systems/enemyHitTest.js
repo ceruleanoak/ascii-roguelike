@@ -92,3 +92,25 @@ export function enemyDistance(enemy, x, y, anchor = 'corner') {
 export function enemyInRadius(enemy, x, y, radius, anchor = 'corner') {
   return enemyNearestPoint(enemy, x, y, anchor, radius).dist <= radius;
 }
+
+/**
+ * Where a visual tied to the enemy is drawn: a damage number, a status word,
+ * a burst, a drip, a chain arc's end. An ordinary enemy gets exactly its
+ * anchor point (as above: 'corner' = position, 'center', 'hitbox', or a
+ * number added to both axes of the position), so every spawn point stays
+ * where it was.
+ *
+ * An enemy that names where its damage numbers rise (`damageNumberAnchor`,
+ * a cell's top-left) gets that cell instead, since its position can be
+ * nowhere near its art (a Great Hand's is the empty top-left corner of its
+ * frame, a Finger's the top edge it hangs from): 'corner' is the cell's
+ * top-left, and any anchor into the body (center, hitbox, an offset) is the
+ * cell's middle. A caller's own nudge (a word raised 14px above the number)
+ * is added after, the same for both.
+ */
+export function enemyVisualAnchor(enemy, anchor = 'corner') {
+  const cell = enemy.damageNumberAnchor?.();
+  if (!cell) return anchorPoint(enemy, anchor);
+  const off = anchor === 'corner' || anchor === 0 ? 0 : CS / 2;
+  return { x: cell.x + off, y: cell.y + off };
+}

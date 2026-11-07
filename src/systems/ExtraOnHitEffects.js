@@ -12,6 +12,7 @@
 // the branch exists once instead of three times.
 
 import { MAX_PIPS } from './StatusEffects.js';
+import { enemyVisualAnchor } from './enemyHitTest.js';
 
 // Applies `effect` to `enemy` for `duration`. `effect` should already be
 // past the stun->zap dual-key translation if the caller does one. An ice hit
@@ -53,6 +54,7 @@ export function applyExtraOnHitEffects(combatSystem, enemy, extraOnHitList, colo
     if (!enemy.shouldApplyStatusEffect(onHit)) continue;
 
     applyOnHitStatusEffect(enemy, onHit, baseDuration * elementalMod * (durationScale?.[onHit] ?? 1));
-    combatSystem.impactEffects.push({ x: enemy.position.x, y: enemy.position.y, onHit, color });
+    const at = enemyVisualAnchor(enemy);
+    combatSystem.impactEffects.push({ x: at.x, y: at.y, onHit, color });
   }
 }

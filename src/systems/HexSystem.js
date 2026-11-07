@@ -3,7 +3,7 @@ import { Enemy } from '../entities/Enemy.js';
 import { ENEMIES } from '../data/enemies.js';
 import { inSamePlane, tagInteriorPlane } from './PlaneSystem.js';
 import { MAX_PIPS, hasStatusImmunity } from './StatusEffects.js';
-import { enemyDistance } from './enemyHitTest.js';
+import { enemyDistance, enemyVisualAnchor } from './enemyHitTest.js';
 
 /** The Hex Witch enemy whose curse the Witch companion casts, aimed at enemies instead. */
 const HEX_WITCH = ENEMIES['H'];
@@ -116,7 +116,7 @@ export class HexSystem {
     } else {
       enemy.applyStatusEffect('hexed', SPELL_COOLDOWN);
       enemy.applyStatusEffect(hex.effect, hex.duration, MAX_PIPS);
-      this._burst(enemy.position);
+      this._burst(enemyVisualAnchor(enemy));
     }
     return true;
   }

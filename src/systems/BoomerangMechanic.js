@@ -1,6 +1,6 @@
 import { GRID } from '../game/GameConfig.js';
 import { inSamePlane, canReachLoot } from './PlaneSystem.js';
-import { enemyInRadius, enemyNearestPoint } from './enemyHitTest.js';
+import { enemyInRadius, enemyNearestPoint, enemyVisualAnchor } from './enemyHitTest.js';
 
 // Bounce-target search radius used only for puzzle-room switch chaining
 // (onObjectHit below) — deliberately its own constant rather than reusing
@@ -45,7 +45,8 @@ export const BoomerangMechanic = {
     if (!enemy.shouldApplyStatusEffect('stun')) return;
     proj._boomerangStunUsed = true;
     enemy.applyStatusEffect('stun', 4.0);
-    combat.createDamageNumber('STUN', enemy.position.x, enemy.position.y - 14, '#ffff44');
+    const at = enemyVisualAnchor(enemy);
+    combat.createDamageNumber('STUN', at.x, at.y - 14, '#ffff44');
   },
 
   // Fetch tool: scoop up any ingredient the boomerang passes over, on both legs
@@ -248,7 +249,8 @@ export const BoomerangMechanic = {
       if (!enemyInRadius(other, enemy.position.x, enemy.position.y, r)) continue;
       const chainDamaged = other.takeDamage(proj.damage, proj.attackId);
       if (chainDamaged !== false) {
-        combat.createDamageNumber(proj.damage, other.position.x, other.position.y, other.color);
+        const at = enemyVisualAnchor(other);
+        combat.createDamageNumber(proj.damage, at.x, at.y, other.color);
         combat.physicsSystem.applyHitstop(other, 0.04);
         proj._boomerangHitEnemies.add(other);
       }
@@ -268,7 +270,8 @@ export const BoomerangMechanic = {
     if (proj.ricochetDamage) {
       const damaged = enemy.takeDamage(proj.damage, proj.attackId);
       if (damaged !== false && !damaged?.dodged) {
-        combat.createDamageNumber(proj.damage, enemy.position.x, enemy.position.y, enemy.color);
+        const at = enemyVisualAnchor(enemy);
+        combat.createDamageNumber(proj.damage, at.x, at.y, enemy.color);
       }
     }
     if (proj.knockback) combat.applyKnockback(enemy, proj);

@@ -1,5 +1,5 @@
 import { planeOf, inSamePlane, objectOnPlane } from './PlaneSystem.js';
-import { enemyOverlapsBox } from './enemyHitTest.js';
+import { enemyOverlapsBox, enemyVisualAnchor } from './enemyHitTest.js';
 
 /**
  * Red Warrior's damage dodge-roll: smashes enemies and background objects on
@@ -44,7 +44,8 @@ export function updateRollDamage(combatSystem, player, enemies, backgroundObject
       combatSystem._rollHitEnemies.add(enemy);
       const result = enemy.takeDamage(1);
       if (result) {
-        combatSystem.createDamageNumber(1, enemy.position.x, enemy.position.y, '#ff4444');
+        const at = enemyVisualAnchor(enemy);
+        combatSystem.createDamageNumber(1, at.x, at.y, '#ff4444');
         // Knockback in the roll direction
         enemy.velocity.vx = dir.x * 300;
         enemy.velocity.vy = dir.y * 300;

@@ -39,7 +39,7 @@ import { ITEMS } from '../data/items.js';
 import { tagInteriorPlane, tagLootLayer, planeOf } from './PlaneSystem.js';
 import { fizzleToSpark } from './MagicSystem.js';
 import { applyDotTicks } from './StatusEffects.js';
-import { enemyInRadius } from './enemyHitTest.js';
+import { enemyInRadius, enemyVisualAnchor } from './enemyHitTest.js';
 
 const C = GRID.CELL_SIZE;
 const DUST_BURST_RADIUS = C * 2.5;
@@ -105,7 +105,8 @@ export class WeaponEffectsSystem {
       enemy.pinnedDuration = Math.max(enemy.pinnedDuration || 0, attack.rootDuration);
       enemy.velocity.vx = 0;
       enemy.velocity.vy = 0;
-      this.game.combatSystem.createDamageNumber('ROOT', enemy.position.x, enemy.position.y - 14, '#77aa44');
+      const at = enemyVisualAnchor(enemy);
+      this.game.combatSystem.createDamageNumber('ROOT', at.x, at.y - 14, '#77aa44');
     }
   }
 
@@ -128,13 +129,15 @@ export class WeaponEffectsSystem {
     const mass = enemy.mass ?? enemy.data?.mass ?? 1;
     const huge = enemy.isBoss || enemy.isBossEntity || enemy.data?.tier === 'boss' || mass >= HUGE_MASS;
     if (huge) {
-      this.game.combatSystem.createDamageNumber('SHRUG', enemy.position.x, enemy.position.y - 14, '#c8a060');
+      const at = enemyVisualAnchor(enemy);
+      this.game.combatSystem.createDamageNumber('SHRUG', at.x, at.y - 14, '#c8a060');
       return;
     }
     enemy.pinnedDuration = Infinity;
     enemy.velocity.vx = 0;
     enemy.velocity.vy = 0;
-    this.game.combatSystem.createDamageNumber('SNARED', enemy.position.x, enemy.position.y - 14, '#c8a060');
+    const at = enemyVisualAnchor(enemy);
+    this.game.combatSystem.createDamageNumber('SNARED', at.x, at.y - 14, '#c8a060');
   }
 
   // The source weapon's bolt, thrown along the swing's facing. Costs the
@@ -199,7 +202,8 @@ export class WeaponEffectsSystem {
     const y = enemy.position.y + C / 2;
     const others = this.game._activeEnemies().filter(e => e !== enemy);
     this.game.combatSystem.applyAOEStatus({ x, y }, SHATTER_RADIUS, 'freeze', SHATTER_FREEZE_SECONDS, others, attack.shooterPlane ?? 0);
-    this.game.combatSystem.createDamageNumber('SHATTER', enemy.position.x, enemy.position.y - 16, '#aaeeff');
+    const at = enemyVisualAnchor(enemy);
+    this.game.combatSystem.createDamageNumber('SHATTER', at.x, at.y - 16, '#aaeeff');
   }
 
   // Runs right after CombatSystem's disarm branch flagged the enemy: drops the

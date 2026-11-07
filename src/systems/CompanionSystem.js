@@ -3,6 +3,7 @@ import { isCrowFeed, isFeed } from './feed.js';
 import { NPCRat } from '../entities/NPCRat.js';
 import { Ingredient } from '../entities/Ingredient.js';
 import { planeOf, PLANE_SURFACE, tagInteriorPlane, isInteriorActive, canReachLoot, lootOnActiveLayer, lootOnSurface } from './PlaneSystem.js';
+import { enemyVisualAnchor } from './enemyHitTest.js';
 import { GolemCompanion } from '../entities/GolemCompanion.js';
 import { CAMP_NPC_STATE } from '../entities/CampNPC.js';
 import { GOLEM_TYPES, GOLEM_CAP } from '../data/golems.js';
@@ -193,8 +194,9 @@ export class CompanionSystem {
       const result = rat.update(deltaTime, enemies, game.player, siblings);
       if (result?.attacked) {
         const victim = result.attacked;
+        const at = enemyVisualAnchor(victim);
         game.combatSystem.createDamageNumber?.(result.damage ?? 1,
-                                               victim.position.x, victim.position.y,
+                                               at.x, at.y,
                                                victim.color || '#ffffff');
       }
 
@@ -384,8 +386,9 @@ export class CompanionSystem {
       const result = golem.update(deltaTime, enemies, game.player, siblings);
       if (result?.attacked) {
         const victim = result.attacked;
+        const at = enemyVisualAnchor(victim);
         game.combatSystem.createDamageNumber?.(result.damage ?? 1,
-                                               victim.position.x, victim.position.y,
+                                               at.x, at.y,
                                                victim.color || '#ffffff');
       }
       if (result?.died && !result.resurrecting) {
@@ -1010,10 +1013,11 @@ export class CompanionSystem {
         }
         const attackVariant = `crow_attack_${1 + Math.floor(Math.random() * 3)}`;
         game.audioSystem?.playSFX?.(attackVariant);
-        game.combatSystem.createDamageNumber(dmg, hitEnemy.position.x, hitEnemy.position.y, '#ffdd66');
+        const at = enemyVisualAnchor(hitEnemy);
+        game.combatSystem.createDamageNumber(dmg, at.x, at.y, '#ffdd66');
         // Small impact burst
-        const ix = hitEnemy.position.x + GRID.CELL_SIZE / 2;
-        const iy = hitEnemy.position.y + GRID.CELL_SIZE / 2;
+        const ix = at.x + GRID.CELL_SIZE / 2;
+        const iy = at.y + GRID.CELL_SIZE / 2;
         for (let i = 0; i < 6; i++) {
           const a = (i / 6) * Math.PI * 2;
           game.particles.push(tagInteriorPlane(game, {

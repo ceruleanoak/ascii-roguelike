@@ -1,7 +1,7 @@
 import { ITEMS } from '../data/items.js';
 import { planeOf, objectOnPlane } from './PlaneSystem.js';
 import { createExplosionAftermath, createBurstParticles } from './WorldEffectsSystem.js';
-import { enemyInRadius, enemyNearestPoint } from './enemyHitTest.js';
+import { enemyInRadius, enemyNearestPoint, enemyVisualAnchor } from './enemyHitTest.js';
 
 // Area-effect combat helpers — extracted from CombatSystem (proximity check,
 // AOE status application, explosion damage/knockback/object destruction).
@@ -75,7 +75,8 @@ export function createExplosion(combatSystem, x, y, radius, damage, enemies, bac
       const explosionDamage = Math.ceil(damage * damageFalloff);
 
       enemy.takeDamage(explosionDamage);
-      combatSystem.createDamageNumber(explosionDamage, enemy.position.x, enemy.position.y, '#ff8800');
+      const at = enemyVisualAnchor(enemy);
+      combatSystem.createDamageNumber(explosionDamage, at.x, at.y, '#ff8800');
 
       // Knockback and hitstop from explosion center
       if (dist > 0) {

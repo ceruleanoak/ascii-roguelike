@@ -1,5 +1,6 @@
 import { GRID } from '../game/GameConfig.js';
 import { charmTargetOf } from './charmHits.js';
+import { enemyVisualAnchor } from './enemyHitTest.js';
 
 // Frog tongue attacks: extend → hold → retract. Extracted out of
 // CombatSystem.js (which still owns spawning via createEnemyAttack and all
@@ -70,7 +71,8 @@ export class TongueAttackSystem {
                 if (target.invulnerabilityTimer > 0) { tongue.hasHit = true; continue; }
                 const result = target.takeDamage(tongue.damage, owner);
                 if (result) {
-                  cs.createDamageNumber?.(tongue.damage, target.position.x, target.position.y, target.color);
+                  const at = enemyVisualAnchor(target);
+                  cs.createDamageNumber?.(tongue.damage, at.x, at.y, target.color);
                   if (isGolemTarget && result.died && !result.resurrecting) {
                     game.physicsSystem.removeEntity(target);
                     const idx = game.golems.indexOf(target);

@@ -9,7 +9,7 @@ import { isInteriorActive, tagInteriorPlane, planeOf, objectOnPlane } from './Pl
 import { createLightningSpire } from './LightningSpire.js';
 import { createExplosionAftermath, createGooBurst } from './WorldEffectsSystem.js';
 import { applyExtraOnHitEffects } from './ExtraOnHitEffects.js';
-import { enemyDistance, enemyInRadius } from './enemyHitTest.js';
+import { enemyDistance, enemyInRadius, enemyVisualAnchor } from './enemyHitTest.js';
 
 // True when any quick slot holds a weapon — the "armed" test for the
 // thrown-weapon pointer.
@@ -775,7 +775,8 @@ export class TrapSystem {
       const dmg = this._thrownWeaponDamage(t, speed);
       if (dmg > 0) {
         enemy.takeDamage(dmg);
-        game.combatSystem?.createDamageNumber?.(dmg, enemy.position.x, enemy.position.y, t.color || '#ffffff');
+        const at = enemyVisualAnchor(enemy);
+        game.combatSystem?.createDamageNumber?.(dmg, at.x, at.y, t.color || '#ffffff');
       }
       t.hitEnemies.add(enemy);
       if (t.oilOnHits?.length) applyExtraOnHitEffects(game.combatSystem, enemy, t.oilOnHits, t.color);
@@ -972,12 +973,14 @@ export class TrapSystem {
     const game = this.game;
     const affinity = trapData.affinity;
     if (affinity && enemy.data?.affinities?.includes(affinity)) {
-      game.combatSystem?.createDamageNumber?.('IMMUNE', enemy.position.x, enemy.position.y, '#cccccc');
+      const at = enemyVisualAnchor(enemy);
+      game.combatSystem?.createDamageNumber?.('IMMUNE', at.x, at.y, '#cccccc');
       return false;
     }
     if (damage > 0) {
       enemy.takeDamage(damage);
-      game.combatSystem?.createDamageNumber?.(damage, enemy.position.x, enemy.position.y, color);
+      const at = enemyVisualAnchor(enemy);
+      game.combatSystem?.createDamageNumber?.(damage, at.x, at.y, color);
     }
     return true;
   }
@@ -1271,7 +1274,8 @@ export class TrapSystem {
         if (enemyInRadius(enemy, cx, cy, r, GRID.CELL_SIZE / 2)) {
           enemy.takeDamage(dmg);
           enemy.applyStatusEffect('burn', 3.0);
-          game.combatSystem.createDamageNumber(dmg, enemy.position.x, enemy.position.y, '#ff6600');
+          const at = enemyVisualAnchor(enemy);
+          game.combatSystem.createDamageNumber(dmg, at.x, at.y, '#ff6600');
         }
       }
       // Player takes damage if within blast radius
@@ -1315,7 +1319,8 @@ export class TrapSystem {
         enemy.velocity.vx = 0;
         enemy.velocity.vy = 0;
         caught = true;
-        game.combatSystem.createDamageNumber('SNARED', enemy.position.x, enemy.position.y, '#8b6914');
+        const at = enemyVisualAnchor(enemy);
+        game.combatSystem.createDamageNumber('SNARED', at.x, at.y, '#8b6914');
       }
       // Wild crows are beast-adjacent fauna but never routed through `targets`
       // (they're not Enemy instances — see game.currentRoom.crows) — catch

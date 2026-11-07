@@ -28,7 +28,7 @@ import { projectileSailsOver, tagLaunchPit } from './pits.js';
 import { vaultWallBlocksReach } from './vaultWalls.js';
 import { strikeWatcherEye } from './WatcherEye.js';
 import { knockbackTakenScale } from '../entities/knockbackTaken.js';
-import { enemyOverlapsBox, enemyNearestPoint } from './enemyHitTest.js';
+import { enemyOverlapsBox, enemyNearestPoint, enemyVisualAnchor } from './enemyHitTest.js';
 
 // Default maximum travel distance (in pixels) for gun bullets. Roughly 2/3 of a
 // room — keeps cross-room sniping in check while still feeling powerful.
@@ -570,7 +570,7 @@ export class CombatSystem {
         if (this.checkProjectileCollision(proj, enemy)) {
           // A part whose position isn't where it's drawn (a Grasp Finger hangs
           // from the top edge) names where its damage numbers rise from.
-          const at = enemy.damageNumberAnchor?.() ?? enemy.position;
+          const at = enemyVisualAnchor(enemy);
           // Missed shot — show MISS once per enemy and pass through. Bullet keeps traveling
           // (and can still hit other enemies normally; only this enemy was missed).
           if (proj.missed) {
@@ -702,7 +702,7 @@ export class CombatSystem {
               const modifiedDuration = baseDuration * elementalMod;
               applyOnHitStatusEffect(enemy, projStatus, modifiedDuration);
               // Emit impact effect for visual feedback
-              this.impactEffects.push({ x: enemy.position.x, y: enemy.position.y, onHit: proj.onHit, color: proj.color });
+              this.impactEffects.push({ x: at.x, y: at.y, onHit: proj.onHit, color: proj.color });
             } else if (proj.onHit && !enemy.shouldApplyStatusEffect(projStatus)) {
               this.createDamageNumber('RESIST', at.x, at.y - 12, '#888888');
             }
@@ -980,7 +980,7 @@ export class CombatSystem {
           // Sniper stays hittable while sniperHidden — see the projectile-loop comment above.
 
           if (this.checkMeleeCollision(attack, enemy)) {
-            const at = enemy.damageNumberAnchor?.() ?? enemy.position; // see the projectile loop
+            const at = enemyVisualAnchor(enemy); // see the projectile loop
             if (attack.missed) {
               this.createDamageNumber('MISS', at.x, at.y, '#888888');
               attack.hasHit = true;
@@ -1127,7 +1127,7 @@ export class CombatSystem {
                 const modifiedDuration = statusDuration * elementalMod * (attack.statusDurationScale?.[attackStatus] ?? 1);
                 applyOnHitStatusEffect(enemy, attackStatus, modifiedDuration);
                 // Emit impact effect for visual feedback
-                this.impactEffects.push({ x: enemy.position.x, y: enemy.position.y, onHit: attack.onHit, color: attack.color });
+                this.impactEffects.push({ x: at.x, y: at.y, onHit: attack.onHit, color: attack.color });
               } else if (attack.onHit && !enemy.shouldApplyStatusEffect(attackStatus)) {
                 this.createDamageNumber('RESIST', at.x, at.y - 12, '#888888');
               }
@@ -1549,7 +1549,7 @@ export class CombatSystem {
 
       // Create damage numbers for DOT damage
       if (updateResult && updateResult.dotDamage) {
-        const at = enemy.damageNumberAnchor?.() ?? enemy.position;
+        const at = enemyVisualAnchor(enemy);
         for (const dotEvent of updateResult.dotDamage) {
           const color = DOT_COLORS[dotEvent.effect] || '#ffffff';
           this.createDamageNumber(dotEvent.damage, at.x, at.y, color);

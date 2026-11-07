@@ -10,6 +10,7 @@
 // resolution, not general combat); CombatSystem and TongueAttackSystem call in.
 
 import { planeOf } from './PlaneSystem.js';
+import { enemyVisualAnchor } from './enemyHitTest.js';
 import { attackHitsBox } from '../game/Telegraph.js';
 
 // The enemy a charmed owner is fighting, or null when the owner isn't
@@ -39,7 +40,8 @@ export function tagCharmedProjectile(proj, player) {
 function landCharmedHit(combatSystem, target, damage) {
   const result = target.takeDamage(damage);
   if (!result || result.dodged) return;
-  combatSystem.createDamageNumber(damage, target.position.x, target.position.y, '#ff44ff');
+  const at = enemyVisualAnchor(target);
+  combatSystem.createDamageNumber(damage, at.x, at.y, '#ff44ff');
 }
 
 // Charmed melee swing. Returns whether it connected; a target on another

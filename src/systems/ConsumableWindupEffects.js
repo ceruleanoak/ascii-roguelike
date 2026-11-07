@@ -24,7 +24,7 @@ import { isInteriorActive } from './PlaneSystem.js';
 import { detonateBomb } from './ExplosionEffects.js';
 import { clearStatusEffect } from './StatusEffects.js';
 import { splashLiquid } from './LiquidSplash.js';
-import { enemyInRadius } from './enemyHitTest.js';
+import { enemyInRadius, enemyVisualAnchor } from './enemyHitTest.js';
 
 export class ConsumableWindupEffects {
   // Ticks the in-flight windup list (owned by InventorySystem) and resolves
@@ -79,7 +79,8 @@ export class ConsumableWindupEffects {
         for (const enemy of enemies) {
           if (enemyInRadius(enemy, px, py, cd.radius, 20)) {
             enemy.takeDamage(cd.damage);
-            combatSystem.createDamageNumber(cd.damage, enemy.position.x, enemy.position.y, '#ffffff');
+            const at = enemyVisualAnchor(enemy);
+            combatSystem.createDamageNumber(cd.damage, at.x, at.y, '#ffffff');
           }
         }
         createBurstParticles(inv.game, particles, px, py, 25, '#9900ff');
@@ -90,7 +91,8 @@ export class ConsumableWindupEffects {
         for (const enemy of enemies) {
           if (enemyInRadius(enemy, px, py, 50, 20)) {
             enemy.applyStatusEffect('freeze', cd.duration || 10, 1);
-            combatSystem.createDamageNumber('~', enemy.position.x, enemy.position.y, '#00ff00');
+            const at = enemyVisualAnchor(enemy);
+            combatSystem.createDamageNumber('~', at.x, at.y, '#00ff00');
           }
         }
         createBurstParticles(inv.game, particles, px, py, 15, '#00ff00');
@@ -101,7 +103,8 @@ export class ConsumableWindupEffects {
         for (const enemy of enemies) {
           if (enemyInRadius(enemy, px, py, 55, 20)) {
             if (enemy.shouldApplyStatusEffect('poison')) enemy.applyStatusEffect('poison', 8);
-            combatSystem.createDamageNumber('☠', enemy.position.x, enemy.position.y, '#44ff44');
+            const at = enemyVisualAnchor(enemy);
+            combatSystem.createDamageNumber('☠', at.x, at.y, '#44ff44');
           }
         }
         createBurstParticles(inv.game, particles, px, py, 18, '#44ff44');
@@ -116,7 +119,8 @@ export class ConsumableWindupEffects {
         for (const enemy of enemies) {
           if (enemyInRadius(enemy, ix, iy, radius, 20)) {
             enemy.takeDamage(damage);
-            combatSystem.createDamageNumber(damage, enemy.position.x, enemy.position.y, '#ffff00');
+            const at = enemyVisualAnchor(enemy);
+            combatSystem.createDamageNumber(damage, at.x, at.y, '#ffff00');
           }
         }
         // Spark burst at impact + four ring offsets so the AoE reads "large"
@@ -139,7 +143,8 @@ export class ConsumableWindupEffects {
             if (enemy.statusEffects.burn?.active) clearStatusEffect(enemy, 'burn');
           }
           if (enemy.data?.wetDot && enemy.takeDamage(cd.slimeDamage) !== false) {
-            combatSystem.createDamageNumber(cd.slimeDamage, enemy.position.x, enemy.position.y, '#4488ff');
+            const at = enemyVisualAnchor(enemy);
+            combatSystem.createDamageNumber(cd.slimeDamage, at.x, at.y, '#4488ff');
           }
         }
         createBurstParticles(inv.game, particles, px, py, 25, windup.consumable.color);
