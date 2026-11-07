@@ -54,6 +54,7 @@ import { CHARACTER_TYPES } from '../data/characters.js';
 import { PUZZLE_ROOM_TEMPLATES } from '../data/dungeonPuzzleTemplates.js';
 import { steerToward } from './npcSteering.js';
 import { tryDeathSave } from './DeathSaveSystem.js';
+import { createPlayerStatusSlots } from './StatusEffectSystem.js';
 import { canMirror, mirrorPress, mirrorRelease, mirrorAutoAttack, tickMirroredWeapon, reportHit } from './mirroredWeapon.js';
 import { createExplosion } from '../entities/Particle.js';
 import { DEATH_CAUSES } from '../data/deathCauses.js';
@@ -968,13 +969,18 @@ export class MistBattleSystem {
 
   // A body at 0 HP lies Dormant: it stays in physics and keeps its corner of
   // the Trine, but does nothing else (flanks(), rotate() and the Grasp's
-  // targeting all skip hp <= 0) until _updateDormant wakes it.
+  // targeting all skip hp <= 0) until _updateDormant wakes it. Its Status
+  // Effects end here, the way death ends them: a body that wakes at full HP
+  // wakes clean, not still burning from the blow that put it down.
   _goDormant(member) {
     const body = member.body;
     body.hp = 0;
     body.velocity.vx = 0;
     body.velocity.vy = 0;
     body.heldItem?.cancelChargeAndReload?.();
+    body.statusEffects = createPlayerStatusSlots();
+    body.emberStacks = 0;
+    body.emberStackTimer = 0;
     member.dormant = DORMANT_TIME;
   }
 
