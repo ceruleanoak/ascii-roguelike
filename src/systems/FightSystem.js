@@ -4,6 +4,7 @@ import { HeldKeySteering } from './heldKeySteering.js';
 import { entityCenter } from '../game/Telegraph.js';
 import { planeOf, isInteriorActive } from './PlaneSystem.js';
 import { getThrowProfile } from './TrapSystem.js';
+import { PlayerInputSystem } from './PlayerInputSystem.js';
 
 const CELL = GRID.CELL_SIZE;
 
@@ -277,7 +278,7 @@ export class FightSystem {
   locksFacing() {
     if (!this.active) return false;
     const held = this.game.player.heldItem;
-    if (held) return !!(held.windupActive || (held.isCharging && held.data.weaponType !== 'BOW'));
+    if (held) return PlayerInputSystem.swingHoldsFacing(held);
     return this.game.punchSystem.isPunching();
   }
 

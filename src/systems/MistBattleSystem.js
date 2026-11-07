@@ -53,6 +53,7 @@ import { ITEMS, ITEM_TYPES, WEAPON_TYPES, AFFINITY_POOLS } from '../data/items.j
 import { CHARACTER_TYPES } from '../data/characters.js';
 import { PUZZLE_ROOM_TEMPLATES } from '../data/dungeonPuzzleTemplates.js';
 import { steerToward } from './npcSteering.js';
+import { PlayerInputSystem } from './PlayerInputSystem.js';
 import { tryDeathSave } from './DeathSaveSystem.js';
 import { createPlayerStatusSlots } from './StatusEffectSystem.js';
 import { canMirror, mirrorPress, mirrorRelease, mirrorAutoAttack, tickMirroredWeapon, reportHit } from './mirroredWeapon.js';
@@ -1044,8 +1045,10 @@ export class MistBattleSystem {
 
   // A Flank faces its nearest living enemy (eight directions, the Act 2
   // bodies' facingToward), so its mirrored attacks fly at its own target.
-  // With nothing to aim at it keeps the Primary's facing.
+  // With nothing to aim at it keeps the Primary's facing. A swing keeps the
+  // facing it started with, as the Primary's does while SPACE is held.
   _aimFlank(body, lead) {
+    if (PlayerInputSystem.swingHoldsFacing(body.heldItem)) return;
     const cx = body.position.x + CELL / 2;
     const cy = body.position.y + CELL / 2;
     let best = null;
