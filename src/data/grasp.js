@@ -26,8 +26,9 @@ export const GRASP_CREASE_COLOR = '#8a8278';
 // uppercase is the skin's outline and the knuckles (B C D), lowercase the
 // creases, digits the nails, mismatched. The fingers are single bony
 // columns, too long, with one joint too many. The palm cell (bottom center,
-// where a grabbed body is pinned) stays empty in `open` and `fist`, so the
-// body shows between the fingers.
+// where a grabbed body is pinned) stays empty in every reaching frame and `fist`, so the
+// body shows between the fingers. Which frame shows when is GraspDraw's
+// (handFrame).
 export const HAND_ART = {
   // Knuckles hooked over the North Barrier's lip, nails dug into the rock.
   // Only the bottom rows hang below the top edge.
@@ -64,7 +65,8 @@ export const HAND_ART = {
     '             ',
     '             ',
   ],
-  // Reaching down at the Trine, fingers and thumb spread.
+  // Reaching down at the Trine, fingers and thumb spread. Alternates with
+  // `openB` while it reaches, a slow restless twitch.
   open: [
     '    A   A    ',
     '    A z A    ',
@@ -80,6 +82,58 @@ export const HAND_ART = {
     '0  A   Az A  ',
     '   A    A  0 ',
     '   6    9    ',
+  ],
+  // The restless twin of `open`: tips curl a cell in, the thumb twitches,
+  // the creases crawl.
+  openB: [
+    '    A   A    ',
+    '    A z A    ',
+    '   A  z  A   ',
+    '   A  z z A  ',
+    '  A  z z  Az ',
+    '  A z  w   AB',
+    ' B   m    A A',
+    ' C D  B C z z',
+    ' A A  A A  A ',
+    'A  A   A A 0 ',
+    ' B Cz  D  B  ',
+    ' 0 A   zA A  ',
+    '  A     A 0  ',
+    '  6     9    ',
+  ],
+  // Almost on its target: every finger stretched as wide as the hand goes.
+  splay: [
+    '    A   A    ',
+    '    A z A    ',
+    '   A  z  A   ',
+    '   A z  z A  ',
+    '  A  z z  Az ',
+    '  A z   w  AB',
+    ' B    m   A z',
+    ' C D  B C  zA',
+    'A  A  A A   0',
+    'BxA    A A   ',
+    'A C     DxBz ',
+    'A Ax    A  A ',
+    '0 A      A  A',
+    '  6      9  0',
+  ],
+  // Half curled, between a closed hand and `open`; shown only for a moment.
+  half: [
+    '    A   A    ',
+    '    A z A    ',
+    '   A  z  A   ',
+    '   A z  z A  ',
+    '  A  z z  Az ',
+    '  A z   w  A ',
+    ' B    m    B ',
+    ' C D  B C  A ',
+    ' A A  A A  z ',
+    ' A B  D B A  ',
+    ' B A   A z   ',
+    '  z z  9     ',
+    '   06        ',
+    '             ',
   ],
   // Closed on a body: fingers wrap it from the outside, the thumb crosses
   // from the inside, nails turned in.
