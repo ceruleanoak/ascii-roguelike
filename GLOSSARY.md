@@ -1176,7 +1176,8 @@ identity, not standard programming terms.
   Primary at the apex, pointing where the Primary faces, with a Flank behind on each side. The
   three attack on one press (each Flank aimed at its own nearest enemy), swap weapons together,
   and roll together. Only the Primary (and a Held body) takes damage. A body brought to 0 HP goes Dormant
-  rather than dying; the Trine dies only when every body is down.
+  rather than dying. The Trine dies when the Primary falls with no Flank left to take the apex
+  (the others Held or Dormant): every body goes to 0 HP and goes out, and the run ends.
 - **In code:** `MistBattleSystem.members` (clockwise ring; `primaryIndex` is the apex), formation
   slots `FLANK_BACK` / `FLANK_SIDE`; drawn by `drawTrine` (`src/rendering/effects/TrineDraw.js`).
 - **Not:** a party or companion group (every body is a full `Player`); "triad" (that word
@@ -1224,10 +1225,10 @@ identity, not standard programming terms.
 ### Dormant (Trine)
 - **Definition:** A Trine body brought to 0 HP in Act 1. Instead of dying it hands the apex
   to the next awake body, rides along in its corner doing nothing, and wakes at full HP
-  after 15 seconds as a Flank. Its Status Effects end when it goes Dormant, so it wakes clean. A Primary falling while both other bodies are Dormant dies,
-  and the run ends.
+  after 15 seconds as a Flank. Its Status Effects end when it goes Dormant, so it wakes clean. A Primary falling while no
+  Flank is awake (the others Dormant or Held) dies, and every body goes out with it.
 - **In code:** `member.dormant` (seconds left; 0 = awake) on `MistBattleSystem.members`,
-  set by `_goDormant`, counted down by `_updateDormant` (`DORMANT_TIME`). A Dormant body has
+  set by `_goDormant` (the Trine's fall: `_catchPrimaryDeath` → `_extinguishOthers`), counted down by `_updateDormant` (`DORMANT_TIME`). A Dormant body has
   `hp` 0, so `flanks()`, `livingBodies()`, `rotate()` and the Grasp's targeting skip it;
   `presentBodies()` includes it (mist clearing, Climb Scenery blocking). Drawn faint and
   brightening by `drawTrine`.

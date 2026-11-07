@@ -1014,18 +1014,35 @@ export class MistBattleSystem {
     return this._catchPrimaryDeath();
   }
 
-  // The Primary is down. With a Flank still awake the Trine doesn't end:
-  // an equipped death save gets its normal chance first, then the next awake
+  // The Primary is down. An equipped death save gets its normal chance
+  // first. With a Flank still awake the Trine doesn't end: the next awake
   // body is promoted and the old Primary goes Dormant in its corner. With
-  // every other body Dormant, the Primary dies through main.js's normal path.
+  // no Flank (every other body Held or Dormant) the Trine is over: the other
+  // bodies go out with it, and the Primary dies through main.js's normal
+  // path (#531).
   _catchPrimaryDeath() {
     const primary = this.primary;
-    if (!primary || primary.body.hp > 0 || this.flanks().length === 0) return false;
+    if (!primary || primary.body.hp > 0) return false;
     if (tryDeathSave(this.game)) return true;
+    if (this.flanks().length === 0) {
+      this._extinguishOthers(primary);
+      return false;
+    }
     this.rotate();
     this._goDormant(primary);
     this.glide = null; // the new Primary holds its ground; the apex is empty
     return true;
+  }
+
+  // The Trine has fallen: every body but the Primary (Held or Dormant) drops
+  // to 0 HP and bursts. A hand holding one lets go of a body at 0 HP on its
+  // own (greatHands.resolveGrabs).
+  _extinguishOthers(primary) {
+    for (const member of this.members) {
+      if (member === primary || !this.presentBodies().includes(member.body)) continue;
+      member.dormant = 0;
+      this._fall(member);
+    }
   }
 
   // A body at 0 HP lies Dormant: it stays in physics and keeps its corner of
