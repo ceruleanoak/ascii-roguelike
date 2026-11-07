@@ -1,10 +1,13 @@
 // The Clutch (GraspSystem phase 2): small hands in Galaga formations over the
 // climb. Each wave streams in from the top along a bezier into a swaying
-// formation block; from there one or two at a time peel off and dive at a
-// Trine body, then swing back up to their slot. Every member has its own small
-// HP. The glyph tells what a hand is doing: its heading (☝☟☜☞) while it
-// travels, ☝ holding formation, ☚☛ diving to strike (the open hand and fist,
-// ✋✊, draw as color emoji).
+// formation block; from there one or two at a time shiver in their slot (the
+// tell), peel off and dive at a Trine body, then swing back up to their slot.
+// A returning hand is spent and harmless: it flies straight back on a line
+// nothing warned of, so only the told dive (and a hand still streaming in or
+// holding formation) hurts. Every member has its own small HP. The glyph
+// tells what a hand is doing: its heading (☝☟☜☞) while it travels, ☝ holding
+// formation, ☚☛ telling and diving to strike (the open hand and fist, ✋✊,
+// draw as color emoji).
 import { GRID } from '../../game/GameConfig.js';
 import {
   GRASP_TUNING as T, CLUTCH_GLYPHS, CLUTCH_FORMATION, CLUTCH_WAVES, CLUTCH_COLOR, CLUTCH_SIZE,
@@ -99,11 +102,20 @@ function headingGlyph(vx, vy) {
   return vy < 0 ? CLUTCH_GLYPHS.up : CLUTCH_GLYPHS.down;
 }
 
+// The tell: the hand shivers in its slot, already showing the dive glyph
+// for the side it will swing toward, for CLUTCH_TELL_TIME before it goes.
+function startTell(member) {
+  member.state = 'tell';
+  member.t = 0;
+}
+
+const swingSide = (member) => (member.x < GRID.WIDTH / 2 ? -1 : 1);
+
 function startDive(grasp, member) {
   const bodies = grasp.bodies();
   if (bodies.length === 0) return;
   const target = bodies[Math.floor(Math.random() * bodies.length)];
-  const swing = (member.x < GRID.WIDTH / 2 ? -1 : 1) * 5 * CS;
+  const swing = swingSide(member) * 5 * CS;
   member.state = 'dive';
   member.t = 0;
   // Every control point inside the walls keeps the whole curve inside them
@@ -146,7 +158,7 @@ export function update(grasp, dt) {
       c.diveTimer = randIn(T.CLUTCH_DIVE_INTERVAL);
       const ready = c.members.filter(m => m.state === 'formation');
       for (let i = 0; i < T.CLUTCH_DIVERS && ready.length > 0; i++) {
-        startDive(grasp, ready.splice(Math.floor(Math.random() * ready.length), 1)[0]);
+        startTell(ready.splice(Math.floor(Math.random() * ready.length), 1)[0]);
       }
     }
     if (c.waveIndex >= CLUTCH_WAVES.length && c.queue.length === 0) c.lingerTimer += dt;
@@ -177,6 +189,16 @@ export function update(grasp, dt) {
         m.y = slot.y;
         break;
       }
+      case 'tell': {
+        const slot = slotPosition(grasp, m.slot);
+        m.t += dt;
+        // A hard two-step shake, not a sine: the pixel art reads it as a shiver.
+        const shiver = Math.floor(m.t * T.CLUTCH_TELL_SHIVER_RATE) % 2 === 0 ? 1 : -1;
+        m.x = slot.x + shiver * T.CLUTCH_TELL_SHIVER;
+        m.y = slot.y;
+        if (m.t >= T.CLUTCH_TELL_TIME) startDive(grasp, m);
+        break;
+      }
       case 'retreat':
         m.y -= T.CLUTCH_RETREAT_SPEED * dt;
         break;
@@ -184,6 +206,7 @@ export function update(grasp, dt) {
     m.vx = (m.x - px) / Math.max(dt, 1e-6);
     m.vy = (m.y - py) / Math.max(dt, 1e-6);
     m.glyph = m.state === 'formation' ? CLUTCH_GLYPHS.formation
+      : m.state === 'tell' ? (swingSide(m) < 0 ? CLUTCH_GLYPHS.diveLeft : CLUTCH_GLYPHS.diveRight)
       : m.state === 'dive' ? (m.vx < 0 ? CLUTCH_GLYPHS.diveLeft : CLUTCH_GLYPHS.diveRight)
       : headingGlyph(m.vx, m.vy);
     m.unit.position.x = m.x;
@@ -215,10 +238,10 @@ export function onHit(grasp, member, amount) {
   grasp.clutch.members = grasp.clutch.members.filter(m => m !== member);
 }
 
-/** A Clutch hand touching any Trine body hurts it. */
+/** A Clutch hand touching any Trine body hurts it — unless it is spent (returning or retreating). */
 export function resolveContact(grasp) {
   for (const m of grasp.clutch.members) {
-    if (m.state === 'retreat') continue;
+    if (m.state === 'retreat' || m.state === 'return') continue;
     for (const body of grasp.bodies()) {
       const bw = body.width ?? CS;
       const bh = body.height ?? CS;

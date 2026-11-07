@@ -1127,7 +1127,8 @@ identity, not standard programming terms.
 ### Clutch
 - **Definition:** The Grasp's second phase: small hands in Galaga-style formations that stream in,
   sway, and dive at Trine bodies. Each glyph shows what the hand is doing: ☝☟☜☞ for heading, ☝
-  holding formation, ☚/☛ diving. A wave that finds the formation too full waits
+  holding formation, ☚/☛ diving. A hand about to dive shivers in its slot for `CLUTCH_TELL_TIME`,
+  already showing its dive glyph; one swinging back up from a dive is spent and harmless. A wave that finds the formation too full waits
   `CLUTCH_WAVE_WAIT`, then enters into whatever slots are free; after the last wave the survivors
   linger `CLUTCH_LINGER`, then retreat, so the phase ends whether or not a hand is struck.
 - **In code:** `src/systems/grasp/clutch.js`; `GraspSystem.clutch.members`, each with its own `hp`;

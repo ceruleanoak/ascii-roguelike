@@ -306,6 +306,11 @@ export const GRASP_TUNING = {
   CLUTCH_DIVE_TIME: 1.5,
   CLUTCH_DIVE_INTERVAL: [0.9, 1.8],
   CLUTCH_DIVERS: 2,
+  // The tell before a dive: the hand shivers this far each way (px), this
+  // many steps a second, for this long, in its slot.
+  CLUTCH_TELL_TIME: 0.3,
+  CLUTCH_TELL_SHIVER: 2,
+  CLUTCH_TELL_SHIVER_RATE: 20,
   // A wave that finds the block too full waits this long, then enters into
   // whatever slots are free.
   CLUTCH_WAVE_WAIT: 8,
