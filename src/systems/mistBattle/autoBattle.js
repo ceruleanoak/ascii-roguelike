@@ -65,13 +65,39 @@ const LINE_UP_ARRIVE = ALIGN_TOLERANCE * 0.4;
 // A weapon that can't fire for longer than this (data seconds: an emptied
 // bow reloading, a long cooldown) is set down for one of the other kind.
 const MAX_WAIT = 3;
+// Reaction Time: a body turns, lines up and swings at where its rival stood
+// this many seconds ago, not where it stands this frame — REACTION_MIN plus
+// up to REACTION_SPREAD, drawn once per body from the battle's seed. A rival
+// that steps aside as a swing starts gets away with it, and the three bodies
+// don't turn and strike in lockstep. Threats (tryRoll) are still seen at once.
+const REACTION_MIN = 0.1;
+const REACTION_SPREAD = 0.1;
 
 /** Fresh per-body AI state (MistBattleSystem stores it on the member). */
 export function createBrain() {
-  return { thinkTimer: 0, target: null, slotCooldown: 0, goal: null, goalRadius: 0 };
+  return {
+    thinkTimer: 0, target: null, slotCooldown: 0, goal: null, goalRadius: 0,
+    // Reaction Time in seconds; drawn on the body's first driven frame, inside
+    // the seeded tick (startAct2 itself runs on the real Math.random).
+    reaction: null,
+    clock: 0,      // seconds this brain has been driven
+    seen: [],      // { t, rival, x, y }: rival centers over the last `reaction`
+  };
 }
 
 const center = (body) => ({ x: body.position.x + CELL / 2, y: body.position.y + CELL / 2 });
+
+// Where the body sees `target`: its center one Reaction Time ago. Records this
+// frame's center, then drops every sample older than the newest one at or past
+// the reaction cutoff, so seen[] holds about `reaction` seconds. A target
+// picked up more recently than that is seen where it was first noticed.
+function perceive(brain, target) {
+  const now = center(target);
+  brain.seen.push({ t: brain.clock, rival: target, x: now.x, y: now.y });
+  const cutoff = brain.clock - brain.reaction;
+  while (brain.seen.length > 1 && brain.seen[1].t <= cutoff) brain.seen.shift();
+  return brain.seen.find(g => g.rival === target);
+}
 
 // Nothing in hand, or a spent item: what the player's SPACE Punches with.
 const emptyHanded = (item) => !item || !!item.isSpent?.();
@@ -348,6 +374,8 @@ function move(game, member, aligned) {
  */
 export function driveBody(game, member, rivals, arena, deltaTime, { fire, punch, onSlotSwitch }) {
   const { body, brain } = member;
+  if (brain.reaction === null) brain.reaction = REACTION_MIN + Math.random() * REACTION_SPREAD;
+  brain.clock += deltaTime;
   brain.slotCooldown = Math.max(0, brain.slotCooldown - deltaTime);
   brain.thinkTimer -= deltaTime;
   if (brain.thinkTimer <= 0 || !rivals.includes(brain.target)) {
@@ -361,7 +389,7 @@ export function driveBody(game, member, rivals, arena, deltaTime, { fire, punch,
     return;
   }
   const from = center(body);
-  const at = center(target);
+  const at = perceive(brain, target);
   const dx = at.x - from.x;
   const dy = at.y - from.y;
   // A swing keeps the facing it started with, as the player's does while

@@ -1230,6 +1230,17 @@ identity, not standard programming terms.
 - **Not:** the enemy Dormant State (`enemyStates/dormant.js`); a Flank (it doesn't attack,
   aim or roll); Act 2, where a body at 0 HP falls for good.
 
+### Reaction Time
+- **Definition:** How far behind an Act 2 body's eyes run: it turns, lines up and swings at
+  where its rival stood a beat ago (0.1–0.2s, fixed per body for the fight), not where the
+  rival stands now. A rival that steps aside as a swing starts gets away with it. A rival's
+  incoming shot or wind-up is still seen at once.
+- **In code:** `brain.reaction` (seconds), drawn from the seeded generator on the body's first
+  driven frame (`driveBody`, `REACTION_MIN` + `REACTION_SPREAD`); `perceive()` reads the
+  rival's center out of `brain.seen` in `src/systems/mistBattle/autoBattle.js`.
+- **Not:** the think interval (`THINK_INTERVAL`, how often a body re-decides its target, slot
+  and goal); an enemy's windup; anything in Act 1, where the Trine follows the player.
+
 ### Dragon Spirit
 - **Definition:** The passive consumable (Fire Essence + Scale, either order) that calls up
   the Echo while it is equipped in a consumable slot. It never triggers and is never spent;
