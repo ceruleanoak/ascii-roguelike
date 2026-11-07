@@ -937,6 +937,12 @@ export const RESET_REGISTRY = [
     why: "Room generator depth mirrors zoneDepths' reset for the title screen; enterExploreState re-sets it per room anyway.",
   },
   {
+    path: 'cameraZoomSystem.reset',
+    scope: 'title',
+    call: (game) => game.cameraZoomSystem.reset(),
+    why: "TITLE and the arcade demo it leads into open at full frame on their first frame. Without this the zoom eased out over the title from whatever the run left it at — the Mist Battle's Act 2 ends held tight on the Trine (GraspSystem.holdZoom), and graspSystem.reset's releaseZoom only drops the hold, not the scale. Title scope only: a death already eases out rapidly in GAME_OVER (ZOOM.TRANSITION_DEATH_MS), and room/REST transitions keep their eased disengage by design.",
+  },
+  {
     path: 'titleAnimationTime',
     scope: 'title',
     value: 0,

@@ -52,6 +52,7 @@ import { isDeathHeldOffSurface, isInteriorActive, activeInteriorFloor } from './
  * A scripted scene can take the frame over with holdZoom(scale, focus) — every
  * trigger above is ignored until releaseZoom(). The Grasp holds the climb
  * fully open at 1.0 and ends Act 1 by easing in on the Trine (GraspSystem).
+ * Entering TITLE snaps the frame open instead of easing (reset()).
  */
 export class CameraZoomSystem {
   constructor(game) {
@@ -83,6 +84,25 @@ export class CameraZoomSystem {
   /** Hand the frame back to the combat trigger. */
   releaseZoom() {
     this.scripted = null;
+  }
+
+  /**
+   * Snap the frame fully open with no easing and no scripted hold
+   * (RESET_REGISTRY `cameraZoomSystem.reset`, title scope). TITLE and the
+   * attract-mode demo it leads into are a fresh scene, not a camera move:
+   * a frame still zoomed from the run before (the Mist Battle's Act 2 ends
+   * held tight on the Trine) must not ease out over the title.
+   */
+  reset() {
+    this.scripted = null;
+    this.currentZoom = 1;
+    this.startZoom = 1;
+    this.targetZoom = 1;
+    this.elapsedMs = 0;
+    this.originXPercent = 50;
+    this.originYPercent = 50;
+    this._noEnemyElapsedMs = Infinity;
+    this._compassOpenedMaze = false;
   }
 
   /** True once the frame has finished easing to its current target. */
