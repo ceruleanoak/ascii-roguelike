@@ -96,7 +96,22 @@ export class CameraZoomSystem {
    * the frame can be, the camera decides how fast it gets there.
    */
   holdZoom(scale, focus = null) {
-    this.scripted = { scale, focus, at: null, fit: null };
+    this.scripted = { scale, focus, at: null, fit: null, cut: false };
+  }
+
+  /**
+   * Cut the scripted frame: on the next update it lands on the hold's focus
+   * and fitted scale at once, with no pan or ease. For a change of scene
+   * inside one hold — Act 2's bodies replacing the Trine's somewhere else in
+   * the room — where an eased pan would show frames of empty ground between
+   * the two. Applied at once, with a zero-length update: this frame's
+   * camera update has already run, and the frame drawn next would otherwise
+   * show the new scene through the old framing. No-op without a hold.
+   */
+  cutHold() {
+    if (!this.scripted) return;
+    this.scripted.cut = true;
+    this.update(0);
   }
 
   /** Hand the frame back to the combat trigger. */
@@ -265,10 +280,19 @@ export class CameraZoomSystem {
   // the scale follows the fit itself, eased here, and current and target
   // move together — _tickZoom's fixed-length transition would restart every
   // frame against a target that moves every frame, and crawl.
+  // A cut (cutHold) skips both easings: the scale and the pan land at once.
   _scriptedScale(deltaTime) {
     const s = this.scripted;
-    if (typeof s.scale !== 'function') return s.scale;
-    const want = s.scale();
+    const want = typeof s.scale === 'function' ? s.scale() : s.scale;
+    if (s.cut) {
+      s.cut = false;
+      s.at = null; // _easeScriptedFocus takes the next focus as-is
+      if (typeof s.scale === 'function') s.fit = want;
+      this.currentZoom = this.targetZoom = this.startZoom = want;
+      this.elapsedMs = 0;
+      return want;
+    }
+    if (typeof s.scale !== 'function') return want;
     if (s.fit === null) {
       s.fit = want;
       return want;

@@ -144,6 +144,8 @@ export class GraspSystem {
         if (this.game.cameraZoomSystem.isZoomSettled()) {
           this.phase = 'done';
           this.mist.startAct2();
+          // New bodies on new start points: cut to them, don't pan across.
+          this.game.cameraZoomSystem.cutHold();
         }
         break;
     }
