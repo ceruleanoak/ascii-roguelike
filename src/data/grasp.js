@@ -214,11 +214,16 @@ export const STREAK_COLOR = '#b0b0b8';
 // Glyph by action: heading (dominant axis of travel), holding formation, or
 // diving to strike (a filled hand, facing the side it swings toward). Only
 // the pointing hands U+261A-261F: the open hand and fist (✋✊) have emoji
-// presentation and draw as color emoji, whatever the font stack.
-export const CLUTCH_GLYPHS = {
+// presentation and draw as color emoji, whatever the font stack. ☝ can still
+// turn emoji when Unifont hasn't loaded and the fallback font decides, so
+// every glyph carries the text presentation selector (U+FE0E).
+const TEXT_PRESENTATION = String.fromCodePoint(0xFE0E);
+export const CLUTCH_GLYPHS = Object.fromEntries(Object.entries({
   up: '☝', down: '☟', left: '☜', right: '☞', formation: '☝', diveLeft: '☚', diveRight: '☛',
-};
+}).map(([action, hand]) => [action, hand + TEXT_PRESENTATION]));
 export const CLUTCH_COLOR = '#d8d0c4';
+// A Clutch hand is drawn and hit as a square this many px on a side (2 cells).
+export const CLUTCH_SIZE = 2 * CS;
 // Formation slots, in cells (top-left of the unit), swaying as one block.
 export const CLUTCH_FORMATION = {
   cols: [6, 9, 12, 15, 18, 21, 24],

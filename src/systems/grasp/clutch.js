@@ -7,10 +7,11 @@
 // ✋✊, draw as color emoji).
 import { GRID } from '../../game/GameConfig.js';
 import {
-  GRASP_TUNING as T, CLUTCH_GLYPHS, CLUTCH_FORMATION, CLUTCH_WAVES, CLUTCH_COLOR,
+  GRASP_TUNING as T, CLUTCH_GLYPHS, CLUTCH_FORMATION, CLUTCH_WAVES, CLUTCH_COLOR, CLUTCH_SIZE,
 } from '../../data/grasp.js';
 
 const CS = GRID.CELL_SIZE;
+const SIZE = CLUTCH_SIZE;
 const SLOTS = CLUTCH_FORMATION.rows.flatMap(row => CLUTCH_FORMATION.cols.map(col => ({ col, row })));
 const OFF_TOP = -2 * CS;
 const OFF_BOTTOM = GRID.HEIGHT + CS;
@@ -75,7 +76,7 @@ function enter(grasp, { wave, mirrored }) {
   };
   member.x = member.path.p0.x;
   member.y = member.path.p0.y;
-  member.unit = grasp.addUnit('clutch', member, member.x, member.y, CS, CS);
+  member.unit = grasp.addUnit('clutch', member, member.x, member.y, SIZE, SIZE);
   c.members.push(member);
 }
 
@@ -195,7 +196,7 @@ export function retreatAll(grasp) {
 export function onHit(grasp, member, amount) {
   member.hp -= amount;
   if (member.hp > 0) return;
-  grasp.burst(member.x + CS / 2, member.y + CS / 2, 10, CLUTCH_COLOR);
+  grasp.burst(member.x + SIZE / 2, member.y + SIZE / 2, 10, CLUTCH_COLOR);
   grasp.removeUnit(member.unit);
   grasp.clutch.members = grasp.clutch.members.filter(m => m !== member);
 }
@@ -207,10 +208,10 @@ export function resolveContact(grasp) {
     for (const body of grasp.bodies()) {
       const bw = body.width ?? CS;
       const bh = body.height ?? CS;
-      const inset = CS * 0.2;
-      if (m.x + inset < body.position.x + bw && m.x + CS - inset > body.position.x &&
-          m.y + inset < body.position.y + bh && m.y + CS - inset > body.position.y) {
-        grasp.hurt(body, T.CLUTCH_CONTACT_DAMAGE, { x: m.x + CS / 2, y: m.y + CS / 2 });
+      const inset = SIZE * 0.2;
+      if (m.x + inset < body.position.x + bw && m.x + SIZE - inset > body.position.x &&
+          m.y + inset < body.position.y + bh && m.y + SIZE - inset > body.position.y) {
+        grasp.hurt(body, T.CLUTCH_CONTACT_DAMAGE, { x: m.x + SIZE / 2, y: m.y + SIZE / 2 });
       }
     }
   }

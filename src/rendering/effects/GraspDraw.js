@@ -12,7 +12,7 @@ import {
   HAND_ART, HAND_COLS, mirrorArt, handGlyphColor, BARRIER_ROWS, BARRIER_GLYPHS, ROCK_COLOR,
   ROCK_EDGE_COLOR, ROCK_GLYPH, ROCK_CAP_GLYPH, STREAK_COLOR, FINGER_ART, FINGER_COLS,
   FINGER_KNUCKLE_EVERY, FINGER_TEXTURE, FINGER_TEXTURE_DENSITY, GRASP_COLOR, GRASP_NAIL_COLOR,
-  GRASP_CREASE_COLOR, CLUTCH_COLOR, GRASP_TUNING as T,
+  GRASP_CREASE_COLOR, CLUTCH_COLOR, CLUTCH_SIZE, GRASP_TUNING as T,
 } from '../../data/grasp.js';
 
 const CS = GRID.CELL_SIZE;
@@ -190,7 +190,12 @@ export function drawGraspParts(renderer, game) {
   const ground = game.zoneSystem.getBlendedEnvironmentColors(game.currentRoom.zone).background;
   for (const hand of grasp.hands) drawHand(renderer, hand, ground);
   for (const finger of grasp.fingers) drawFinger(renderer, finger, ground);
+  // The Clutch draw at CLUTCH_SIZE, a glyph filling the unit's whole square.
+  const ctx = renderer.fgCtx;
+  ctx.save();
+  ctx.font = `${CLUTCH_SIZE}px 'Unifont', monospace`;
   for (const m of grasp.clutch.members) {
-    renderer.drawTextWithAlpha(m.x + HALF, m.y + HALF, m.glyph, m.flash > 0 ? FLASH_COLOR : CLUTCH_COLOR, 1);
+    renderer.drawTextWithAlpha(m.x + CLUTCH_SIZE / 2, m.y + CLUTCH_SIZE / 2, m.glyph, m.flash > 0 ? FLASH_COLOR : CLUTCH_COLOR, 1);
   }
+  ctx.restore();
 }

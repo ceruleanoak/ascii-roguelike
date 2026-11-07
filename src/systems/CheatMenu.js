@@ -76,7 +76,7 @@ export class CheatMenu {
       // The final fight: a fresh random Trine (3 lost characters) every pick.
       { char: '△', name: 'MIST BATTLE (gray)',  type: 'mist_battle_test',      color: '#888888' },
       // The Grasp's phases, skipping the warm-up waves (GraspSystem.skipTo).
-      { char: '☝', name: 'GRASP: HANDS',   type: 'mist_battle_test', graspPhase: 'grip',    color: '#d8d0c4' },
+      { char: '☚', name: 'GRASP: HANDS',   type: 'mist_battle_test', graspPhase: 'grip',    color: '#d8d0c4' },
       { char: '☟', name: 'GRASP: CLUTCH',  type: 'mist_battle_test', graspPhase: 'clutch',  color: '#d8d0c4' },
       { char: '|', name: 'GRASP: FINGERS', type: 'mist_battle_test', graspPhase: 'fingers', color: '#d8d0c4' },
       { char: '▲', name: 'GRASP: SUMMIT',  type: 'mist_battle_test', graspPhase: 'summit',  color: '#d8d0c4' },
