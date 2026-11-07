@@ -48,6 +48,21 @@ export class GraspUnit extends Enemy {
     this.width = width;
     this.height = height;
     this.baseColor = GRASP_COLOR;
+
+    // Every status but charm is refused (IMMUNE, through the usual
+    // shouldApplyStatusEffect check). GraspSystem drives every part and reads
+    // none of them, and the part skips Enemy.update, so each would sit on it
+    // doing nothing: a freeze or stun wouldn't stop a hand, sleep is never
+    // broken (takeDamage below bypasses Enemy's wake), and a burn or poison
+    // tick would land on the unit's own 1 hp rather than the pool, and the
+    // world tick's removal pass would take the part. Charm stays open: it is
+    // the one a Boss part takes today, pending whether a Boss may be charmed
+    // at all (#546).
+    this.elementalAffinity = {
+      immunity: Object.keys(this.statusEffects).filter(effect => effect !== 'charm'),
+      resistance: {},
+      weakness: {},
+    };
   }
 
   // The drawn extent, not one cell: position is the top-left of the art.
@@ -82,13 +97,25 @@ export class GraspUnit extends Enemy {
     return this.game.graspSystem._isVulnerable(this);
   }
 
-  // Only the iframe timer runs here; velocity stays zero so PhysicsSystem
-  // never reads a unit as a charging body (see SeaSerpentUnit.update).
+  // Callers that don't ask shouldApplyStatusEffect first (the CHARM and
+  // SLEEP wishes, AOE sweeps) still meet the refusal here.
+  applyStatusEffect(effect, duration = 3.0, pips = null) {
+    if (!this.shouldApplyStatusEffect(effect)) return;
+    super.applyStatusEffect(effect, duration, pips);
+  }
+
+  // The iframe timer and the status countdown run here, through the same
+  // tick as every enemy, so a status the part does take wears off on
+  // schedule (#546: never ticked, a charm stayed for good). Velocity stays
+  // zero so PhysicsSystem never reads a unit as a charging body (see
+  // SeaSerpentUnit.update).
   update(deltaTime) {
     if (this.invulnerabilityTimer > 0) this.invulnerabilityTimer -= deltaTime;
+    this.dotBlinkTimer += deltaTime;
+    const dotDamage = this.updateStatusEffects(deltaTime);
     this.velocity.vx = 0;
     this.velocity.vy = 0;
-    return {};
+    return { dotDamage };
   }
 
   takeDamage(amount, attackId = null) {
