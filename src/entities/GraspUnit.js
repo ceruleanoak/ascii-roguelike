@@ -10,7 +10,7 @@ import { GRASP_NAME, GRASP_DESCRIPTION, GRASP_COLOR } from '../data/grasp.js';
 // unit stands for (a hand, a Clutch member, a finger).
 export class GraspUnit extends Enemy {
   constructor(kind, part, x, y, width, height) {
-    super('✋', x, y, 0, {
+    super('☝', x, y, 0, {
       name: GRASP_NAME,
       description: GRASP_DESCRIPTION,
       tier: 'boss',
@@ -24,7 +24,7 @@ export class GraspUnit extends Enemy {
       // Per-unit isBoss would trip LootSystem's boss drop on a part.
       isBoss: false,
       knockbackResistance: 1,
-      displayChar: '✋',
+      displayChar: '☝',
     });
 
     // HP lives on GraspSystem's pools (or the Clutch member); every unit

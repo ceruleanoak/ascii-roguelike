@@ -201,7 +201,7 @@ Rules:
 - New ingredients → letter/digit only. New crafted items → Unicode symbol only.
 - No emoji, no Unicode escapes (`\uXXXX`) — embed literal glyphs. No pure box-drawing chars on ingredients or crafted items.
 - Enemies, particles, UI icons → printable ASCII.
-  - Sanctioned exceptions, not precedent: the Grasp's Clutch hands (`☝☟☜☞✋✊`) are drawn as Unicode because the glyph *is* the animation, and its Fingers are math symbols (`+` strokes, `≠π÷≈√×∞` flecks), the counterpart to the Great Hands' letters (`src/data/grasp.js`). New enemies stay ASCII.
+  - Sanctioned exceptions, not precedent: the Grasp's Clutch hands (`☝☟☜☞☚☛`) are drawn as Unicode because the glyph *is* the animation, and its Fingers are math symbols (`+` strokes, `≠π÷≈√×∞` flecks), the counterpart to the Great Hands' letters (`src/data/grasp.js`). New enemies stay ASCII.
 - Background objects → any BMP glyph that isn't reserved, box drawing included (`claudedocs/set-dressing-rulebook.md` G1/G2).
 
 See `claudedocs/reference.md` for the legacy violations table and background object char map.

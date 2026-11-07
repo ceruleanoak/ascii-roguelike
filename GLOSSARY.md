@@ -1124,8 +1124,8 @@ identity, not standard programming terms.
 
 ### Clutch
 - **Definition:** The Grasp's second phase: small hands in Galaga-style formations that stream in,
-  sway, and dive at Trine bodies. Each glyph shows what the hand is doing: ☝☟☜☞ for heading, ✋
-  holding formation, ✊ diving.
+  sway, and dive at Trine bodies. Each glyph shows what the hand is doing: ☝☟☜☞ for heading, ☝
+  holding formation, ☚/☛ diving.
 - **In code:** `src/systems/grasp/clutch.js`; `GraspSystem.clutch.members`, each with its own `hp`;
   `CLUTCH_WAVES`, `CLUTCH_FORMATION`, `CLUTCH_GLYPHS`.
 - **Not:** ordinary enemies (they are `GraspUnit` proxies, not `ENEMIES` entries); the Great Hands.

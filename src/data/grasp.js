@@ -3,7 +3,7 @@
 // speeds px/s unless a name says otherwise.
 //
 // Glyph exceptions, sanctioned for the Grasp alone (CLAUDE.md, Character
-// Encoding Rule): the Clutch are enemies drawn with Unicode hands (☝☟☜☞✋✊),
+// Encoding Rule): the Clutch are enemies drawn with Unicode hands (☝☟☜☞☚☛),
 // and the Fingers are math symbols, Unicode ones included, the way the Great
 // Hands are letters.
 import { GRID } from '../game/GameConfig.js';
@@ -212,9 +212,11 @@ export const STREAK_COLOR = '#b0b0b8';
 
 // ── Clutch (phase 2) ───────────────────────────────────────────────────
 // Glyph by action: heading (dominant axis of travel), holding formation, or
-// diving to strike.
+// diving to strike (a filled hand, facing the side it swings toward). Only
+// the pointing hands U+261A-261F: the open hand and fist (✋✊) have emoji
+// presentation and draw as color emoji, whatever the font stack.
 export const CLUTCH_GLYPHS = {
-  up: '☝', down: '☟', left: '☜', right: '☞', formation: '✋', dive: '✊',
+  up: '☝', down: '☟', left: '☜', right: '☞', formation: '☝', diveLeft: '☚', diveRight: '☛',
 };
 export const CLUTCH_COLOR = '#d8d0c4';
 // Formation slots, in cells (top-left of the unit), swaying as one block.

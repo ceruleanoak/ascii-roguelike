@@ -3,7 +3,8 @@
 // formation block; from there one or two at a time peel off and dive at a
 // Trine body, then swing back up to their slot. Every member has its own small
 // HP. The glyph tells what a hand is doing: its heading (☝☟☜☞) while it
-// travels, ✋ holding formation, ✊ diving to strike.
+// travels, ☝ holding formation, ☚☛ diving to strike (the open hand and fist,
+// ✋✊, draw as color emoji).
 import { GRID } from '../../game/GameConfig.js';
 import {
   GRASP_TUNING as T, CLUTCH_GLYPHS, CLUTCH_FORMATION, CLUTCH_WAVES, CLUTCH_COLOR,
@@ -164,7 +165,7 @@ export function update(grasp, dt) {
     m.vx = (m.x - px) / Math.max(dt, 1e-6);
     m.vy = (m.y - py) / Math.max(dt, 1e-6);
     m.glyph = m.state === 'formation' ? CLUTCH_GLYPHS.formation
-      : m.state === 'dive' ? CLUTCH_GLYPHS.dive
+      : m.state === 'dive' ? (m.vx < 0 ? CLUTCH_GLYPHS.diveLeft : CLUTCH_GLYPHS.diveRight)
       : headingGlyph(m.vx, m.vy);
     m.unit.position.x = m.x;
     m.unit.position.y = m.y;
