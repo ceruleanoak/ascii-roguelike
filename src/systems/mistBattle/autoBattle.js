@@ -38,12 +38,12 @@ const MELEE_REACH = 1.5 * CELL;
 const WHIP_REACH = 3 * CELL;
 // The Punch lands one cell box about a cell out from the body's center
 // (PunchSystem: the Slime's hitShape), so an empty-handed body stands about
-// that far off its rival, and doesn't throw at a rival nearer than
-// PUNCH_TOO_CLOSE: the box would sit past it. Bodies don't collide with each
-// other, and two closing on each other ended up overlapped, punching the air
-// behind each other for the rest of the battle.
+// that far off its rival rather than walking into it. The bodies' soft
+// contact (PhysicsSystem.resolveBodyContacts) keeps two of them from closing
+// to where the box would sit past the rival; chasing the rival like a melee
+// body instead pressed the two together against that push and slowed
+// all-unarmed fights (median 26.4s → 29.0s over 30 seeds).
 const PUNCH_STANCE = 1.1 * CELL;
-const PUNCH_TOO_CLOSE = 0.6 * CELL;
 // A shot counts as lined up when the target is this close to one of the
 // shooter's eight lines.
 const ALIGN_TOLERANCE = CELL * 0.5;
@@ -317,7 +317,7 @@ function attack(member, dist, aligned, fire, punch) {
   // player's SPACE (main.js handleSpacePress). Thrown from melee reach;
   // PunchSystem gates its own windup and cooldown.
   if (emptyHanded(item)) {
-    if (dist >= PUNCH_TOO_CLOSE && dist <= MELEE_REACH && body.canAttack()) punch(member);
+    if (dist <= MELEE_REACH && body.canAttack()) punch(member);
     return;
   }
   const kind = weaponKind(item);

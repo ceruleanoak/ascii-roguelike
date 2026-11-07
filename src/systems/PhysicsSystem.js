@@ -25,6 +25,13 @@ export { inSamePlane };
 // ExploreRenderer._drawDeflectorTriangle) intentionally stays at full cell
 // size; only the collision box is inset.
 const DEFLECTOR_TRIANGLE_HITBOX_SCALE = 0.8;
+// Soft contact (resolveEntityContacts / resolveBodyContacts): two entities
+// closer than this are pushed apart, up to this much velocity at full overlap.
+const SOFT_CONTACT_DIST = GRID.CELL_SIZE * 1.2;
+const SOFT_CONTACT_FORCE = 120;
+// A rolling player passes through what it would otherwise be pushed off,
+// except the red character's ramming 'damage' roll.
+const rollsThrough = (body) => body.dodgeRoll?.active && body.dodgeRoll.type !== 'damage';
 
 // entity.hookedByWhip traversal (px/sec) — a whip strike landing on a Stump,
 // Tree, or the Whip Trial's hook posts grabs on and reels the player in.
@@ -145,9 +152,7 @@ export class PhysicsSystem {
    */
   resolveEntityContacts(player, enemies) {
     // Pass through enemies during roll (all types except 'damage' — red character rams enemies intentionally)
-    if (player.dodgeRoll?.active && player.dodgeRoll.type !== 'damage') return;
-    const MIN_DIST = GRID.CELL_SIZE * 1.2;
-    const FORCE = 120;
+    if (rollsThrough(player)) return;
     for (const enemy of enemies) {
       if (enemy.destroyed) continue;
       if (enemy.sapping) continue; // Sapping enemies are intentionally on the player — no separation
@@ -155,23 +160,47 @@ export class PhysicsSystem {
       if (enemy.chargeState === 'charging') continue; // Charging enemies (boar) plow through — soft push would cancel the dash hit
       if (enemy.data?.bump) continue; // Bumpers resolve contact by glyph box (BumpMechanic) — a 1.2-cell push would hold the glyphs apart
       if (!inSamePlane(player, enemy)) continue; // Cross-plane enemies are non-interactive
-      const dx = player.position.x - enemy.position.x;
-      const dy = player.position.y - enemy.position.y;
-      // A corrupted (NaN) enemy position must not propagate to the player:
-      // Math.sqrt(NaN) || 1 yields 1, which passes the overlap check below.
-      if (!Number.isFinite(dx) || !Number.isFinite(dy)) continue;
-      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-      if (dist < MIN_DIST) {
-        const overlap = (MIN_DIST - dist) / MIN_DIST;
-        const force = FORCE * overlap;
-        this.applyImpulse(player, dx, dy, force);
-        // Fully knockback-immune enemies (the Training Dummy on its stick) are
-        // rooted: the player slides off them instead of shoving them around.
-        if ((enemy.knockbackResistance ?? 0) < 1) {
-          this.applyImpulse(enemy, -dx, -dy, force);
-        }
+      // Fully knockback-immune enemies (the Training Dummy on its stick) are
+      // rooted: the player slides off them instead of shoving them around.
+      this._softPush(player, enemy, (enemy.knockbackResistance ?? 0) < 1);
+    }
+  }
+
+  /**
+   * The same soft separation between Player bodies — the Mist Battle's Act 2
+   * bodies, which otherwise walk through each other and stack. Every pair
+   * inside SOFT_CONTACT_DIST is pushed apart equally. A body mid-roll passes
+   * through the others the way the player rolls through enemies, and a body a
+   * Great Hand holds is left where the hand put it. The caller runs this after
+   * steering and before the physics step: a steered body's velocity is set
+   * fresh every frame, so a push added after the step would be lost.
+   */
+  resolveBodyContacts(bodies) {
+    for (let i = 0; i < bodies.length; i++) {
+      const a = bodies[i];
+      if (rollsThrough(a) || a.grabbed) continue;
+      for (let j = i + 1; j < bodies.length; j++) {
+        const b = bodies[j];
+        if (rollsThrough(b) || b.grabbed || !inSamePlane(a, b)) continue;
+        this._softPush(a, b, true);
       }
     }
+  }
+
+  // The push both contact passes share: inside SOFT_CONTACT_DIST of `b`, `a`
+  // is nudged away along the line of centers, harder the deeper the overlap,
+  // and `b` the opposite way when `pushB` (false = `b` is rooted).
+  _softPush(a, b, pushB) {
+    const dx = a.position.x - b.position.x;
+    const dy = a.position.y - b.position.y;
+    // A corrupted (NaN) position must not propagate to the other entity:
+    // Math.sqrt(NaN) || 1 yields 1, which passes the overlap check below.
+    if (!Number.isFinite(dx) || !Number.isFinite(dy)) return;
+    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+    if (dist >= SOFT_CONTACT_DIST) return;
+    const force = SOFT_CONTACT_FORCE * (SOFT_CONTACT_DIST - dist) / SOFT_CONTACT_DIST;
+    this.applyImpulse(a, dx, dy, force);
+    if (pushB) this.applyImpulse(b, -dx, -dy, force);
   }
 
   /**

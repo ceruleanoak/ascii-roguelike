@@ -574,6 +574,9 @@ export class MistBattleSystem {
       const rivals = living.filter(m => m !== member && m.body.hp > 0).map(m => m.body);
       driveBody(game, member, rivals, this.arena, deltaTime, { fire: this._fire, punch: this._punch, onSlotSwitch: this._flashSwap });
     }
+    // The bodies shoulder each other apart instead of stacking, pushed after
+    // steering so the push rides this frame's physics step.
+    if (!this.ending) game.physicsSystem.resolveBodyContacts(this.members.filter(m => m.body.hp > 0).map(m => m.body));
     if (this.ending) this._updateEnding(deltaTime);
   }
 
