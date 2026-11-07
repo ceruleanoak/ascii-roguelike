@@ -61,6 +61,7 @@ import { createExplosion } from '../entities/Particle.js';
 import { DEATH_CAUSES } from '../data/deathCauses.js';
 import { DemoSystem } from './DemoSystem.js';
 import { createBrain, driveBody, resolveRivalHits, facingToward } from './mistBattle/autoBattle.js';
+import { enemyNearestPoint } from './enemyHitTest.js';
 
 const CELL = GRID.CELL_SIZE;
 // Trine geometry, in cells, measured from the Primary along its facing.
@@ -1116,9 +1117,14 @@ export class MistBattleSystem {
       // A part no blow can hurt right now (a Great Hand rising or holding)
       // isn't worth facing.
       if (enemy.isVulnerable?.() === false) continue;
-      const box = enemy.getHitbox?.() ?? { x: enemy.position.x, y: enemy.position.y, width: CELL, height: CELL };
-      const dx = box.x + box.width / 2 - cx;
-      const dy = box.y + box.height / 2 - cy;
+      // Aim at the nearest point of its art (a Great Hand's hitbox middle
+      // can sit in the empty part of its frame); an ordinary enemy keeps its
+      // hitbox middle.
+      const at = enemy.getHitbox
+        ? enemyNearestPoint(enemy, cx, cy, 'hitbox')
+        : { x: enemy.position.x + CELL / 2, y: enemy.position.y + CELL / 2 };
+      const dx = at.x - cx;
+      const dy = at.y - cy;
       const dist = Math.hypot(dx, dy);
       if (dist < bestDist) { bestDist = dist; best = { dx, dy }; }
     }
