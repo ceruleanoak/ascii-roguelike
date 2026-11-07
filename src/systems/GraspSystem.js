@@ -155,6 +155,8 @@ export class GraspSystem {
   }
 
   _updateWarmup() {
+    // The warm-up ends on its last enemy falling, so none may sit out of reach.
+    climb.returnStrays(this);
     const mist = this.mist;
     if (mist.wavesEnabled && mist.wavesSpawned >= T.WARMUP_WAVES) mist.wavesEnabled = false;
     if (mist.wavesEnabled) return;

@@ -45,6 +45,57 @@ export function raiseBarrier(grasp) {
   }
   grasp.climb.barrier = true;
   grasp.room.backgroundRepaint = true;
+  returnStrays(grasp);
+}
+
+// An enemy cell is stray when it stands outside the border walls or inside
+// solid rock. Flyers that pass over walls on purpose are left alone.
+function isStray(enemy, map) {
+  if (enemy.isGraspUnit || enemy.ignoreBackgroundCollision) return false;
+  const col = Math.floor((enemy.position.x + CS / 2) / CS);
+  const row = Math.floor((enemy.position.y + CS / 2) / CS);
+  if (col < 1 || col > GRID.COLS - 2 || row < 1 || row > GRID.ROWS - 2) return true;
+  return map[row][col] === true;
+}
+
+/**
+ * Move every stray warm-up enemy to the nearest open cell inside the arena.
+ * The North Barrier rises under whatever already stands on rows 1..3, and
+ * physics then ejected such an enemy out through the side wall, where no
+ * blow could reach it and the warm-up waited on it forever. Run as the
+ * barrier rises and every warm-up frame after, so nothing the warm-up
+ * counts can stay out of reach.
+ */
+export function returnStrays(grasp) {
+  const map = grasp.room.collisionMap;
+  for (const enemy of grasp.room.enemies) {
+    if (!isStray(enemy, map)) continue;
+    const startCol = Math.min(GRID.COLS - 2, Math.max(1, Math.floor((enemy.position.x + CS / 2) / CS)));
+    const startRow = Math.min(GRID.ROWS - 2, Math.max(BARRIER_ROWS + 1, Math.floor((enemy.position.y + CS / 2) / CS)));
+    const cell = nearestOpenCell(map, startCol, startRow);
+    if (!cell) continue;
+    enemy.position.x = cell.col * CS;
+    enemy.position.y = cell.row * CS;
+    if (enemy.velocity) { enemy.velocity.vx = 0; enemy.velocity.vy = 0; }
+  }
+}
+
+// Breadth-first from (col, row) over the arena interior for a clear cell.
+function nearestOpenCell(map, col, row) {
+  const seen = new Set([`${col},${row}`]);
+  const queue = [{ col, row }];
+  while (queue.length > 0) {
+    const cell = queue.shift();
+    if (!map[cell.row][cell.col]) return cell;
+    for (const [dc, dr] of [[0, 1], [1, 0], [-1, 0], [0, -1]]) {
+      const c = cell.col + dc;
+      const r = cell.row + dr;
+      if (c < 1 || c > GRID.COLS - 2 || r < 1 || r > GRID.ROWS - 2 || seen.has(`${c},${r}`)) continue;
+      seen.add(`${c},${r}`);
+      queue.push({ col: c, row: r });
+    }
+  }
+  return null;
 }
 
 /** Rock specks shaken loose from the lip. */
