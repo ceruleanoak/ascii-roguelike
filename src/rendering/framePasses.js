@@ -25,6 +25,15 @@
  * interior check (the checker rejects `playerInInterior`/`isInteriorActive`
  * in owner renderers).
  *
+ * A pass marked `controlCue: true` is a read for the one the player steers —
+ * an aim, a meter, a count, what SPACE will use, which way the attack goes.
+ * game.player is always that body, except while the Mist Battle's Act 2 holds
+ * the Trine: then nobody is steered, and a cue would only single out
+ * whichever body game.player happens to point at (the victor, once one
+ * stands). drawFramePasses skips every control cue for all of Act 2. A pass
+ * that draws a body's own visible state (its status pips, its windup) is not
+ * a cue; drawTrine draws those for the other bodies too.
+ *
  * Coordinates: the PiP owners translate the canvas before calling, so a pass
  * draws in the active plane's own space. `interior` (floor/maze) selects the
  * PiP-tagged entries of the shared collections (`hutPlane`/`mazePlane`,
@@ -197,28 +206,23 @@ export const FRAME_PASSES = {
     // Fairy King in a Bottle ready: a fairy circles the player.
     { id: 'fairyKingOrbit', on: everywhere, draw: (rc, game, owner) => { if (!deathHeld(game, owner)) drawFairyKingOrbit(rc.renderer, game); } },
     // The Armed Consumable's glyph over the player (slot or Bottle) — ArmedGlyphDraw.
-    { id: 'armedGlyph', on: everywhere, draw: (rc, game, owner) => { if (!deathHeld(game, owner)) drawArmedGlyph(rc.renderer, game); } },
+    { id: 'armedGlyph', on: everywhere, controlCue: true, draw: (rc, game, owner) => { if (!deathHeld(game, owner)) drawArmedGlyph(rc.renderer, game); } },
     // A newly held weapon's glyph, for a moment — HeldGlyphSystem.
-    { id: 'heldGlyph', on: everywhere, draw: (rc, game, owner) => { if (!deathHeld(game, owner)) drawHeldGlyph(rc.renderer, game); } },
-    // Attack-direction '^' orbiting tight around the player. Hidden while the
-    // Mist Battle's Act 2 holds the Trine: no one is controlled, so the cue
-    // would only mark whichever body happens to be game.player (the victor,
-    // once one stands).
+    { id: 'heldGlyph', on: everywhere, controlCue: true, draw: (rc, game, owner) => { if (!deathHeld(game, owner)) drawHeldGlyph(rc.renderer, game); } },
+    // Attack-direction '^' orbiting tight around the player.
     {
       id: 'facingIndicator', on: { ...everywhere, rest: 'REST is the safe hub; the attack-direction cue is hidden there by design' },
-      draw: (rc, game, owner) => {
-        if (deathHeld(game, owner) || game.mistBattleSystem?.holdsTrine()) return;
-        drawPlayerFacingIndicator(rc.renderer, game);
-      }
+      controlCue: true,
+      draw: (rc, game, owner) => { if (!deathHeld(game, owner)) drawPlayerFacingIndicator(rc.renderer, game); }
     },
     { id: 'staffBlockStance', on: everywhere, draw: (rc, game) => er(rc).drawStaffBlockStance(game) },
-    { id: 'knownSpellHints', on: everywhere, draw: (rc, game) => { if (game.knownSpells?.size > 0) drawKnownSpellHints(rc.renderer, game); } },
+    { id: 'knownSpellHints', on: everywhere, controlCue: true, draw: (rc, game) => { if (game.knownSpells?.size > 0) drawKnownSpellHints(rc.renderer, game); } },
     { id: 'gemWandCharge', on: everywhere, draw: (rc, game) => er(rc).drawGemWandCharge(game) },
     { id: 'heldWindupCharge', on: everywhere, draw: (rc, game) => er(rc).drawHeldWindupCharge(game) },
     { id: 'hammerWindupPose', on: everywhere, draw: (rc, game) => er(rc).drawHammerWindupPose(game) },
-    { id: 'chargeCounts', on: everywhere, draw: (rc, game) => er(rc).drawChargeCounts(game) },
-    { id: 'trapReticule', on: everywhere, draw: (rc, game) => er(rc).drawTrapReticule(game) },
-    { id: 'throwPreview', on: everywhere, draw: (rc, game) => er(rc).drawThrowPreview(game) },
+    { id: 'chargeCounts', on: everywhere, controlCue: true, draw: (rc, game) => er(rc).drawChargeCounts(game) },
+    { id: 'trapReticule', on: everywhere, controlCue: true, draw: (rc, game) => er(rc).drawTrapReticule(game) },
+    { id: 'throwPreview', on: everywhere, controlCue: true, draw: (rc, game) => er(rc).drawThrowPreview(game) },
     { id: 'inFlightTraps', on: everywhere, draw: (rc, game, owner) => er(rc).drawInFlightTraps(game, isInterior(owner)) },
   ],
 
@@ -232,9 +236,9 @@ export const FRAME_PASSES = {
       on: { ...everywhere, maze: 'the Maze holds no unbreakable rock and no rockfall, so nothing rolls there', rest: 'REST has no rockfall and no unbreakable rock (Game State: REST)' },
       draw: (rc, game) => drawRollingRocks(rc.renderer, game)
     },
-    { id: 'bowChargeIndicator', on: everywhere, draw: (rc, game) => rc.bowChargeIndicator.render(game) },
-    { id: 'greenRangerIndicator', on: everywhere, draw: (rc, game) => rc.greenRangerIndicator.render(game) },
-    { id: 'cyanRogueIndicator', on: everywhere, draw: (rc, game) => rc.cyanRogueIndicator.render(game) },
+    { id: 'bowChargeIndicator', on: everywhere, controlCue: true, draw: (rc, game) => rc.bowChargeIndicator.render(game) },
+    { id: 'greenRangerIndicator', on: everywhere, controlCue: true, draw: (rc, game) => rc.greenRangerIndicator.render(game) },
+    { id: 'cyanRogueIndicator', on: everywhere, controlCue: true, draw: (rc, game) => rc.cyanRogueIndicator.render(game) },
     // Gray zone mist: last, so it hangs in front of everything the owner draws
     // — over a hut or dungeon interior as well as the surface. renderMist gates
     // itself to a gray room on Plane 0 (the cave fog owns Plane 1).
@@ -293,7 +297,9 @@ export function validateFramePasses(passes = FRAME_PASSES) {
  */
 export function drawFramePasses(rc, game, owner, layer) {
   if (resolveFrameOwner(game) !== owner) return;
+  const uncontrolled = game.mistBattleSystem?.holdsTrine() === true;
   for (const pass of FRAME_PASSES[layer]) {
-    if (pass.on[owner] === true) pass.draw(rc, game, owner);
+    if (pass.on[owner] !== true || (uncontrolled && pass.controlCue)) continue;
+    pass.draw(rc, game, owner);
   }
 }
