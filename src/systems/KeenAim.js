@@ -16,20 +16,20 @@
 
 import { GRID } from '../game/GameConfig.js';
 import { planeOf } from './PlaneSystem.js';
+import { enemyNearestPoint } from './enemyHitTest.js';
 
 // Nearest live enemy on `plane` within `maxDist` of (x, y), as the offset
-// from (x, y) to its center — or null when none is in reach.
+// from (x, y) to its center (for a shaped enemy, the nearest point of its
+// art — enemyHitTest) — or null when none is in reach.
 function findNearestEnemy(x, y, plane, enemies, maxDist) {
   let target = null;
   let bestDist = maxDist;
   for (const enemy of enemies) {
     if (!(enemy.hp > 0) || planeOf(enemy) !== plane) continue;
-    const dx = enemy.position.x + (enemy.width || GRID.CELL_SIZE) / 2 - x;
-    const dy = enemy.position.y + (enemy.height || GRID.CELL_SIZE) / 2 - y;
-    const dist = Math.hypot(dx, dy);
-    if (dist <= bestDist) {
-      bestDist = dist;
-      target = { dx, dy };
+    const p = enemyNearestPoint(enemy, x, y, 'center', bestDist);
+    if (p.dist <= bestDist) {
+      bestDist = p.dist;
+      target = { dx: p.x - x, dy: p.y - y };
     }
   }
   return target;

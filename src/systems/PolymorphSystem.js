@@ -2,7 +2,7 @@ import { GRID, PHYSICS } from '../game/GameConfig.js';
 import { inSamePlane, isInteriorActive } from './PlaneSystem.js';
 import { ENEMIES } from '../data/enemies.js';
 import { NeutralCharacter } from '../entities/NeutralCharacter.js';
-import { enemyOverlapsBox } from './enemyHitTest.js';
+import { enemyOverlapsBox, enemyNearestPoint } from './enemyHitTest.js';
 
 const FROG_SPEED = 130;        // matches ENEMIES['g'].speed
 const FROG_ACCEL = 800;        // matches ENEMIES['g'].acceleration
@@ -185,19 +185,17 @@ export class PolymorphSystem {
     const enemies = game._activeEnemies();
 
     // Pick nearest enemy for direction; fall back to facing direction
-    let nearestEnemy = null;
-    let minDistSq = Infinity;
+    // (its nearest point — a Great Hand's art rather than its frame; enemyHitTest)
+    let nearestPoint = null;
     for (const e of enemies) {
-      const dx = e.position.x - player.position.x;
-      const dy = e.position.y - player.position.y;
-      const d = dx * dx + dy * dy;
-      if (d < minDistSq) { minDistSq = d; nearestEnemy = e; }
+      const p = enemyNearestPoint(e, player.position.x, player.position.y);
+      if (p.dist < (nearestPoint?.dist ?? Infinity)) nearestPoint = p;
     }
 
     let dirX, dirY;
-    if (nearestEnemy) {
-      const dx = nearestEnemy.position.x - player.position.x;
-      const dy = nearestEnemy.position.y - player.position.y;
+    if (nearestPoint) {
+      const dx = nearestPoint.x - player.position.x;
+      const dy = nearestPoint.y - player.position.y;
       const dist = Math.sqrt(dx * dx + dy * dy) || 1;
       dirX = dx / dist;
       dirY = dy / dist;

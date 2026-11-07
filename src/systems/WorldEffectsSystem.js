@@ -5,7 +5,7 @@ import { createDebris } from '../entities/Debris.js';
 import { Particle, createFootstep, createWetDrop, createSteamPuff, createChaff, WET_DROP_COLOR } from '../entities/Particle.js';
 import { statusEffectColor } from './StatusEffectVisuals.js';
 import { inSamePlane, tagInteriorPlane } from './PlaneSystem.js';
-import { enemyInRadius } from './enemyHitTest.js';
+import { enemyDistance, enemyInRadius } from './enemyHitTest.js';
 
 const MAX_GOO_BLOBS = 20;
 const IDLE_ECHO_DURATION = 0.5; // seconds — must match the radius/alpha envelope in RestRenderer
@@ -443,9 +443,7 @@ export class WorldEffectsSystem {
                 if (emberHitEntities.has(enemy)) continue;
                 if (!enemy.shouldApplyStatusEffect('burn')) continue;
                 if ((enemy.emberStackCooldown || 0) > 0) continue;
-                const edx = enemy.position.x + GRID.CELL_SIZE / 2 - particle.x;
-                const edy = enemy.position.y + GRID.CELL_SIZE / 2 - particle.y;
-                if (Math.sqrt(edx * edx + edy * edy) < EMBER_RADIUS) {
+                if (enemyDistance(enemy, particle.x, particle.y, GRID.CELL_SIZE / 2) < EMBER_RADIUS) {
                   emberHitEntities.add(enemy);
                   enemy.emberStacks = (enemy.emberStacks || 0) + 1;
                   enemy.emberStackTimer = EMBER_STACK_WINDOW;

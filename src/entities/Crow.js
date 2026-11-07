@@ -1,4 +1,5 @@
 import { GRID } from '../game/GameConfig.js';
+import { enemyDistance, enemyNearestPoint } from '../systems/enemyHitTest.js';
 import { isFeed } from '../systems/feed.js';
 import { INGREDIENTS } from '../data/items.js';
 
@@ -752,8 +753,10 @@ export class Crow {
     if (this.diveState === 'windup') {
       this.diveWindupTimer -= deltaTime;
       if (this.diveWindupTimer <= 0) {
-        const dx = target.position.x - this.position.x;
-        const dy = target.position.y - this.position.y;
+        // At its nearest point — a Great Hand's art rather than its frame (enemyHitTest).
+        const aim = enemyNearestPoint(target, this.position.x, this.position.y);
+        const dx = aim.x - this.position.x;
+        const dy = aim.y - this.position.y;
         const d = Math.hypot(dx, dy) || 1;
         let dirX = dx / d;
         let dirY = dy / d;
@@ -781,9 +784,8 @@ export class Crow {
       this.diveDurationTimer -= deltaTime;
       // Hit check while dashing — missed dives never connect even if
       // the swerve trajectory happens to clip the enemy hitbox.
-      const dx = target.position.x - this.position.x;
-      const dy = target.position.y - this.position.y;
-      const hit = !this.diveWillMiss && !this.diveHasHit && Math.hypot(dx, dy) < DIVE_HIT_DIST;
+      const hit = !this.diveWillMiss && !this.diveHasHit
+        && enemyDistance(target, this.position.x, this.position.y) < DIVE_HIT_DIST;
       if (this.diveDurationTimer <= 0) {
         this.diveState = 'idle';
         this.diveTarget = null;
@@ -940,9 +942,7 @@ export class Crow {
     for (const e of list) {
       if (!e || e.isDead || e.dead || e.hp <= 0) continue;
       if (e.plane !== undefined && plane !== undefined && e.plane !== plane) continue;
-      const dx = e.position.x - this.position.x;
-      const dy = e.position.y - this.position.y;
-      const d = dx * dx + dy * dy;
+      const d = enemyDistance(e, this.position.x, this.position.y) ** 2;
       if (d < bestDistSq) { bestDistSq = d; best = e; }
     }
     return best;

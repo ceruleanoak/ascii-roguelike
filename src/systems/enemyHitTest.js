@@ -1,7 +1,9 @@
 import { GRID } from '../game/GameConfig.js';
 
 // The one test every damage path asks of an enemy: does this box touch it,
-// and how far is this point from it.
+// and how far is this point from it. Every path that picks or aims at an
+// enemy (homing, keen aim, auto-fired consumables, trap triggers, companion
+// chases) asks the same question, so it picks by and aims at the art too.
 //
 // An enemy whose drawn shape doesn't fill its rect declares `overlapsBox(box)`
 // (a Great Hand counts only where its art is — GraspUnit). Every path that
@@ -27,9 +29,14 @@ export function enemyOverlapsBox(enemy, box) {
 
 // Where an area effect measures an ordinary enemy from. 'corner' is its
 // position (the hitbox's top-left), 'center' the middle of its width/height,
-// a number an offset added to both axes of the position (the consumables'
+// 'hitbox' the middle of its getHitbox() rect (the boomerang's seek), a
+// number an offset added to both axes of the position (the consumables'
 // historic +20).
 function anchorPoint(enemy, anchor) {
+  if (anchor === 'hitbox') {
+    const box = enemy.getHitbox();
+    return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  }
   if (anchor === 'center') {
     return {
       x: enemy.position.x + (enemy.width || CS) / 2,

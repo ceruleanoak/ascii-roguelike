@@ -28,7 +28,7 @@ import { projectileSailsOver, tagLaunchPit } from './pits.js';
 import { vaultWallBlocksReach } from './vaultWalls.js';
 import { strikeWatcherEye } from './WatcherEye.js';
 import { knockbackTakenScale } from '../entities/knockbackTaken.js';
-import { enemyOverlapsBox } from './enemyHitTest.js';
+import { enemyOverlapsBox, enemyNearestPoint } from './enemyHitTest.js';
 
 // Default maximum travel distance (in pixels) for gun bullets. Roughly 2/3 of a
 // room — keeps cross-room sniping in check while still feeling powerful.
@@ -191,23 +191,19 @@ export class CombatSystem {
 
       // Homing behavior
       if (proj.homing && enemies.length > 0) {
-        let nearestEnemy = null;
-        let nearestDist = Infinity;
+        // Steers at the nearest point of the nearest enemy (enemyHitTest):
+        // an ordinary enemy's position, a Great Hand's art rather than the
+        // empty corner of its frame.
+        let nearestPoint = null;
 
         for (const enemy of enemies) {
-          const dx = enemy.position.x - proj.position.x;
-          const dy = enemy.position.y - proj.position.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-
-          if (dist < nearestDist) {
-            nearestEnemy = enemy;
-            nearestDist = dist;
-          }
+          const p = enemyNearestPoint(enemy, proj.position.x, proj.position.y);
+          if (p.dist < (nearestPoint?.dist ?? Infinity)) nearestPoint = p;
         }
 
-        if (nearestEnemy) {
-          const dx = nearestEnemy.position.x - proj.position.x;
-          const dy = nearestEnemy.position.y - proj.position.y;
+        if (nearestPoint) {
+          const dx = nearestPoint.x - proj.position.x;
+          const dy = nearestPoint.y - proj.position.y;
           const angle = Math.atan2(dy, dx);
           const speed = Math.sqrt(proj.velocity.vx ** 2 + proj.velocity.vy ** 2);
 

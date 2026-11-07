@@ -1,6 +1,6 @@
 import { GRID } from '../game/GameConfig.js';
 import { inSamePlane, canReachLoot } from './PlaneSystem.js';
-import { enemyInRadius } from './enemyHitTest.js';
+import { enemyInRadius, enemyNearestPoint } from './enemyHitTest.js';
 
 // Bounce-target search radius used only for puzzle-room switch chaining
 // (onObjectHit below) — deliberately its own constant rather than reusing
@@ -129,9 +129,10 @@ export const BoomerangMechanic = {
       if (targetGone) {
         proj.boomerangBounceTarget = null;
       } else {
-        const box = target.getHitbox();
-        const tx = box.x + box.width / 2 - proj.position.x;
-        const ty = box.y + box.height / 2 - proj.position.y;
+        // The middle of its hitbox; a Great Hand's art rather than its frame.
+        const aim = enemyNearestPoint(target, proj.position.x, proj.position.y, 'hitbox');
+        const tx = aim.x - proj.position.x;
+        const ty = aim.y - proj.position.y;
         const tdist = Math.hypot(tx, ty) || 1;
         proj.velocity.vx = (tx / tdist) * bSpeed;
         proj.velocity.vy = (ty / tdist) * bSpeed;
@@ -200,25 +201,24 @@ export const BoomerangMechanic = {
   _lockNextBounceTarget(proj, enemy, enemies) {
     const bounceRadius = proj.boomerangBounceRadius || 120;
     let bestTarget = null;
+    let bestPoint = null;
     let bestDist = Infinity;
     if (proj.boomerangBouncesLeft > 0) {
       for (const other of enemies) {
         if (other === enemy) continue;
         if (!inSamePlane(proj, other)) continue;
         if (proj._boomerangHitEnemies.has(other)) continue;
-        const ddx = other.position.x - proj.position.x;
-        const ddy = other.position.y - proj.position.y;
-        const d = Math.hypot(ddx, ddy);
-        if (d > bounceRadius) continue;
-        if (d < bestDist) { bestDist = d; bestTarget = other; }
+        const p = enemyNearestPoint(other, proj.position.x, proj.position.y, 'corner', bounceRadius);
+        if (p.dist > bounceRadius) continue;
+        if (p.dist < bestDist) { bestDist = p.dist; bestTarget = other; bestPoint = p; }
       }
     }
     if (bestTarget) {
       proj.boomerangBouncesLeft--;
       proj.boomerangBounceTarget = bestTarget;
       const spd = Math.hypot(proj.velocity.vx, proj.velocity.vy) || 250;
-      const tx = bestTarget.position.x - proj.position.x;
-      const ty = bestTarget.position.y - proj.position.y;
+      const tx = bestPoint.x - proj.position.x;
+      const ty = bestPoint.y - proj.position.y;
       const tdist = Math.hypot(tx, ty) || 1;
       proj.velocity.vx = (tx / tdist) * spd;
       proj.velocity.vy = (ty / tdist) * spd;

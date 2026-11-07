@@ -9,7 +9,7 @@ import { isInteriorActive, tagInteriorPlane, planeOf, objectOnPlane } from './Pl
 import { createLightningSpire } from './LightningSpire.js';
 import { createExplosionAftermath, createGooBurst } from './WorldEffectsSystem.js';
 import { applyExtraOnHitEffects } from './ExtraOnHitEffects.js';
-import { enemyInRadius } from './enemyHitTest.js';
+import { enemyDistance, enemyInRadius } from './enemyHitTest.js';
 
 // True when any quick slot holds a weapon — the "armed" test for the
 // thrown-weapon pointer.
@@ -1033,9 +1033,7 @@ export class TrapSystem {
         let triggered = false;
         for (const enemy of (armed ? enemies : [])) {
           if (enemy === entry.owner) continue;
-          const dx = enemy.position.x - tx;
-          const dy = enemy.position.y - ty;
-          if (Math.sqrt(dx * dx + dy * dy) <= trapData.triggerRadius) {
+          if (enemyInRadius(enemy, tx, ty, trapData.triggerRadius)) {
             triggered = true;
             break;
           }
@@ -1062,9 +1060,7 @@ export class TrapSystem {
           // Destroy on enemy overlap (< 16 px)
           let destroyed = false;
           for (const enemy of enemies) {
-            const dx = enemy.position.x - tx;
-            const dy = enemy.position.y - ty;
-            if (Math.sqrt(dx * dx + dy * dy) < 16) {
+            if (enemyDistance(enemy, tx, ty) < 16) {
               destroyed = true;
               break;
             }

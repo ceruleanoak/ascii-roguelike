@@ -3,7 +3,7 @@ import { GAME_STATES, GRID } from '../game/GameConfig.js';
 import { clearStatusEffect } from './StatusEffects.js';
 import { FAIRY_HEAL } from '../entities/Fairy.js';
 import { entityCenter } from '../game/Telegraph.js';
-import { enemyInRadius } from './enemyHitTest.js';
+import { enemyDistance, enemyInRadius, enemyNearestPoint } from './enemyHitTest.js';
 
 // Every consumable use is a throw: the item arcs up and lands before its
 // effect resolves (checkTriggerCondition only gates whether it CAN fire;
@@ -258,9 +258,7 @@ export class ConsumableTriggerSystem {
         // Bomb: nearest enemy within 60px — START WINDUP
         let nearestDist = Infinity;
         for (const enemy of enemies) {
-          const dx = (enemy.position.x + 20) - (player.position.x + 20);
-          const dy = (enemy.position.y + 20) - (player.position.y + 20);
-          nearestDist = Math.min(nearestDist, Math.sqrt(dx * dx + dy * dy));
+          nearestDist = Math.min(nearestDist, enemyDistance(enemy, player.position.x + 20, player.position.y + 20, 20));
         }
         if (manual || nearestDist <= 60) {
           return { windup: 1.5, effectType: 'explode' };
@@ -273,9 +271,7 @@ export class ConsumableTriggerSystem {
         const py = player.position.y + 20;
         let nearbyCount = 0;
         for (const enemy of enemies) {
-          const dx = (enemy.position.x + 20) - px;
-          const dy = (enemy.position.y + 20) - py;
-          if (Math.sqrt(dx * dx + dy * dy) <= 80) nearbyCount++;
+          if (enemyDistance(enemy, px, py, 20) <= 80) nearbyCount++;
         }
         if (manual || nearbyCount >= 3) {
           return { windup: 1.2, effectType: 'curse' };
@@ -302,9 +298,7 @@ export class ConsumableTriggerSystem {
         const py = player.position.y + 20;
         let nearestDist = Infinity;
         for (const enemy of enemies) {
-          const dx = (enemy.position.x + 20) - px;
-          const dy = (enemy.position.y + 20) - py;
-          nearestDist = Math.min(nearestDist, Math.sqrt(dx * dx + dy * dy));
+          nearestDist = Math.min(nearestDist, enemyDistance(enemy, px, py, 20));
         }
         if (manual || nearestDist <= 50) {
           return { windup: 0.8, effectType: 'slow' };
@@ -317,9 +311,7 @@ export class ConsumableTriggerSystem {
         const py = player.position.y + 20;
         let nearestDist = Infinity;
         for (const enemy of enemies) {
-          const dx = (enemy.position.x + 20) - px;
-          const dy = (enemy.position.y + 20) - py;
-          nearestDist = Math.min(nearestDist, Math.sqrt(dx * dx + dy * dy));
+          nearestDist = Math.min(nearestDist, enemyDistance(enemy, px, py, 20));
         }
         if (manual || nearestDist <= 55) {
           return { windup: 1.0, effectType: 'poison' };
@@ -349,18 +341,17 @@ export class ConsumableTriggerSystem {
         const py = player.position.y + 20;
         const live = enemies.filter(e => !e.isDying && e.hp > 0);
         if (!manual && live.length < 2) return false;
+        // The nearest point of the nearest enemy (enemyHitTest): an ordinary
+        // enemy's historic +20, a Great Hand's art rather than its frame.
         let nearest = null;
-        let bestDist = Infinity;
         for (const enemy of live) {
-          const dx = (enemy.position.x + 20) - px;
-          const dy = (enemy.position.y + 20) - py;
-          const d2 = dx * dx + dy * dy;
-          if (d2 < bestDist) { bestDist = d2; nearest = enemy; }
+          const p = enemyNearestPoint(enemy, px, py, 20);
+          if (p.dist < (nearest?.dist ?? Infinity)) nearest = p;
         }
         let targetX, targetY;
         if (nearest) {
-          targetX = nearest.position.x + 20;
-          targetY = nearest.position.y + 20;
+          targetX = nearest.x;
+          targetY = nearest.y;
         } else {
           ({ targetX, targetY } = facingThrowTarget(player, JOLT_FACING_THROW_DISTANCE));
         }
@@ -385,8 +376,7 @@ export class ConsumableTriggerSystem {
         const px = player.position.x + 20, py = player.position.y + 20;
         if (manual) return { windup: 0.5, effectType: 'firecracker' };
         for (const enemy of enemies) {
-          const dx = (enemy.position.x + 20) - px, dy = (enemy.position.y + 20) - py;
-          if (Math.sqrt(dx * dx + dy * dy) <= 50) return { windup: 0.5, effectType: 'firecracker' };
+          if (enemyDistance(enemy, px, py, 20) <= 50) return { windup: 0.5, effectType: 'firecracker' };
         }
         return false;
       }
@@ -409,8 +399,7 @@ export class ConsumableTriggerSystem {
           if (manual) return { windup: THROW_DURATION, effectType: 'damageBuff' };
           const px = player.position.x + 20, py = player.position.y + 20;
           for (const enemy of enemies) {
-            const dx = (enemy.position.x + 20) - px, dy = (enemy.position.y + 20) - py;
-            if (Math.sqrt(dx * dx + dy * dy) <= (cd.autoTrigger?.range ?? 80)) {
+            if (enemyDistance(enemy, px, py, 20) <= (cd.autoTrigger?.range ?? 80)) {
               return { windup: THROW_DURATION, effectType: 'damageBuff' };
             }
           }
@@ -427,9 +416,7 @@ export class ConsumableTriggerSystem {
         const critThreshold = cd.autoTrigger?.criticalHP ?? 0.12;
         if (manual || player.hp < player.maxHp * critThreshold) {
           for (const enemy of enemies) {
-            const dx = (enemy.position.x + 20) - px;
-            const dy = (enemy.position.y + 20) - py;
-            if (Math.sqrt(dx * dx + dy * dy) <= blindRadius) return { windup: THROW_DURATION, effectType: 'panic_blind' };
+            if (enemyDistance(enemy, px, py, 20) <= blindRadius) return { windup: THROW_DURATION, effectType: 'panic_blind' };
           }
           // No enemies in radius — still let the throw land (bone dust puffs
           // harmlessly) so a manual trigger doesn't silently no-op.

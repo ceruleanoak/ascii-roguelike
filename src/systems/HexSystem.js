@@ -3,6 +3,7 @@ import { Enemy } from '../entities/Enemy.js';
 import { ENEMIES } from '../data/enemies.js';
 import { inSamePlane, tagInteriorPlane } from './PlaneSystem.js';
 import { MAX_PIPS, hasStatusImmunity } from './StatusEffects.js';
+import { enemyDistance } from './enemyHitTest.js';
 
 /** The Hex Witch enemy whose curse the Witch companion casts, aimed at enemies instead. */
 const HEX_WITCH = ENEMIES['H'];
@@ -148,7 +149,7 @@ export class HexSystem {
       if (enemy.isDying || enemy.hp <= 0 || !accepts(enemy)) continue;
       if (commanded.includes(enemy) || enemy.isCharmed?.()) continue;
       if (!inSamePlane(enemy, caster)) continue;
-      const dist = Math.hypot(enemy.position.x - caster.position.x, enemy.position.y - caster.position.y);
+      const dist = enemyDistance(enemy, caster.position.x, caster.position.y);
       if (dist <= nearestDist) {
         nearest = enemy;
         nearestDist = dist;

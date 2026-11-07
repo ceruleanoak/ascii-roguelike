@@ -1,5 +1,6 @@
 import { GRID } from '../game/GameConfig.js';
 import { planeOf } from './PlaneSystem.js';
+import { enemyNearestPoint } from './enemyHitTest.js';
 
 // Bat weapons (data.batCharge — Bat, Rubber Bat): hold-to-windup swing.
 //
@@ -165,9 +166,10 @@ export class BatSystem {
     let bestDist = KEEN_RANGE;
     for (const other of this.game._activeEnemies()) {
       if (other === enemy || !(other.hp > 0) || planeOf(other) !== planeOf(enemy)) continue;
-      const dx = other.position.x - ex;
-      const dy = other.position.y - ey;
-      const dist = Math.hypot(dx, dy);
+      const p = enemyNearestPoint(other, ex, ey);
+      const dx = p.x - ex;
+      const dy = p.y - ey;
+      const dist = p.dist;
       if (dist === 0 || dist > bestDist || dx * x + dy * y <= 0) continue;
       bestDist = dist;
       target = { x: dx / dist, y: dy / dist };

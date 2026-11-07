@@ -1,5 +1,6 @@
 import { GRID } from '../game/GameConfig.js';
 import { steerToward } from '../systems/npcSteering.js';
+import { enemyDistance, enemyNearestPoint } from '../systems/enemyHitTest.js';
 import { objectOnPlane } from '../systems/PlaneSystem.js';
 
 /**
@@ -315,9 +316,7 @@ export class NPCRat {
       if (e.tamed) continue;
       if (e.hp <= 0 || e.isDying) continue;
       if ((e.plane ?? 0) !== this.plane) continue;
-      const dx = e.position.x - this.position.x;
-      const dy = e.position.y - this.position.y;
-      const d = dx * dx + dy * dy;
+      const d = enemyDistance(e, this.position.x, this.position.y) ** 2;
       if (d < bestDistSq) { bestDistSq = d; best = e; }
     }
     return best;
@@ -325,13 +324,13 @@ export class NPCRat {
 
   _chaseAndAttack(deltaTime) {
     const t = this.target;
-    const dx = t.position.x - this.position.x;
-    const dy = t.position.y - this.position.y;
-    const dist = Math.hypot(dx, dy) || 1;
+    // Its nearest point — a Great Hand's art rather than its frame (enemyHitTest).
+    const aim = enemyNearestPoint(t, this.position.x, this.position.y);
+    const dist = aim.dist || 1;
 
     if (dist > ATTACK_RANGE) {
       // Approach
-      this._steer(t.position.x, t.position.y, SPEED);
+      this._steer(aim.x, aim.y, SPEED);
       return null;
     }
     // In range — stand and bite
