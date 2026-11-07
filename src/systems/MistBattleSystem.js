@@ -246,7 +246,8 @@ export class MistBattleSystem {
    * they steer out to their corners, which keeps a spawn inside wall geometry
    * from ever trapping one.
    */
-  start(snapshots = this.rollTestSnapshots()) {
+  start(snapshots = null) {
+    snapshots ??= this.rollTestSnapshots(); // null as well as omitted
     const game = this.game;
     this.reset();
     this.snapshots = snapshots.slice(0, 3);
@@ -322,14 +323,15 @@ export class MistBattleSystem {
 
   /**
    * Open the Mist Battle arena: a gray combat room holding a Trine built from
-   * `snapshots` (random test loadouts when omitted). Depth is pinned below
+   * `snapshots` (random test loadouts when omitted or null). Depth is pinned below
    * ZONES.gray.maxDepth so applyRoomSwap's grayZoneSystem.onRoomEnter doesn't
    * arm the mist-out. The Trine is built AFTER applyRoomSwap — the swap's
    * room-scope reset clears physics and the previous Trine, so building it
    * first would lose the Flanks. `graspPhase` (optional, test entries) skips
    * the warm-up straight to a Grasp phase.
    */
-  enterArena(snapshots = this.rollTestSnapshots(), graspPhase = null) {
+  enterArena(snapshots = null, graspPhase = null) {
+    snapshots ??= this.rollTestSnapshots();
     const game = this.game;
     game.bossSystem.deactivate();
     const zone = 'gray';
