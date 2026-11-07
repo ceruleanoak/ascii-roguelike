@@ -350,12 +350,15 @@ export class GraspSystem {
   }
 
   // ── Damage to the Trine ───────────────────────────────────────────────
-  /** Grasp contact on one body, on its per-body cooldown. */
-  hurt(body, damage, from) {
+  /**
+   * Grasp contact on one body, on its per-body cooldown (`cooldown`, default
+   * CONTACT_COOLDOWN). `ignoresArmor` passes through to Player.takeDamage.
+   */
+  hurt(body, damage, from, { cooldown = T.CONTACT_COOLDOWN, ignoresArmor = false } = {}) {
     if ((this.contactCooldowns.get(body) ?? 0) > 0) return false;
-    this.contactCooldowns.set(body, T.CONTACT_COOLDOWN);
+    this.contactCooldowns.set(body, cooldown);
     const attacker = this.hands[0]?.unit ?? this.fingers[0]?.unit ?? this.clutch.members[0]?.unit ?? null;
-    return this.mist.hurt(body, damage, { isBullet: false, element: null, attacker }, from);
+    return this.mist.hurt(body, damage, { isBullet: false, element: null, attacker, ignoresArmor }, from);
   }
 
   _releaseBody(body) {

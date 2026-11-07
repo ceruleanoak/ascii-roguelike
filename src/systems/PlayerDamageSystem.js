@@ -60,7 +60,10 @@ export const PlayerDamageSystem = {
     if (player.luckDodgeBonus > 0 && Math.random() < player.luckDodgeBonus) {
       return { dodged: true, lucky: true };
     }
-    if (player.dodgeChance > 0 && Math.random() < player.dodgeChance) {
+    // A source that ignores armor (damageSource.ignoresArmor, the Grasp's
+    // Fingers) skips armor's dodge roll here and every cut below.
+    const armored = !damageSource.ignoresArmor;
+    if (armored && player.dodgeChance > 0 && Math.random() < player.dodgeChance) {
       return { dodged: true, lucky: false };
     }
 
@@ -118,7 +121,8 @@ export const PlayerDamageSystem = {
     const elementAbsorb = player.elementReduction?.[electric ? 'electric' : damageSource.element] || 0;
 
     // Apply defense (reduce damage, minimum 1)
-    const actualDamage = Math.max(1, amount - player.defense - meleeAbsorb - burnAbsorb - elementAbsorb);
+    const armorCut = armored ? player.defense + meleeAbsorb + burnAbsorb + elementAbsorb : 0;
+    const actualDamage = Math.max(1, amount - armorCut);
 
     player.hp -= actualDamage;
     if (player.hp < 0) player.hp = 0;
