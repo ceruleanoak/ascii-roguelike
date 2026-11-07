@@ -10,7 +10,7 @@
 import { GRID } from '../../game/GameConfig.js';
 import {
   HAND_ART, HAND_COLS, mirrorArt, handGlyphColor, BARRIER_ROWS, BARRIER_GLYPHS, ROCK_COLOR,
-  ROCK_EDGE_COLOR, ROCK_GLYPH, ROCK_CAP_GLYPH, STREAK_COLOR, FINGER_ART,
+  ROCK_EDGE_COLOR, ROCK_GLYPH, ROCK_CAP_GLYPH, STREAK_COLOR, FINGER_ART, FINGER_COLS,
   FINGER_KNUCKLE_EVERY, FINGER_TEXTURE, FINGER_TEXTURE_DENSITY, GRASP_COLOR, GRASP_NAIL_COLOR,
   GRASP_CREASE_COLOR, CLUTCH_COLOR, GRASP_TUNING as T,
 } from '../../data/grasp.js';
@@ -130,47 +130,56 @@ function drawHand(renderer, hand, ground) {
   }
 }
 
-const FINGER_PART_COLOR = { '+': GRASP_COLOR, o: GRASP_NAIL_COLOR, '=': GRASP_CREASE_COLOR };
-
 // A fixed 0..1 value per Finger cell, so a fleck stays put on the flesh.
-function fleckRoll(fingerX, row, col) {
-  let h = (fingerX * 73856093) ^ (row * 19349663) ^ (col * 83492791);
+function fleckRoll(laneX, row, col) {
+  let h = (laneX * 73856093) ^ (row * 19349663) ^ (col * 83492791);
   h = Math.imul(h ^ (h >>> 13), 1274126177);
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
 
-// The art row `i` rows up from the tip: tip rows, then shaft banded by knuckles.
+// The art row `i` rows up from the tip, and the color of its inner glyphs:
+// tip, nail plate, then shaft banded by knuckles.
 function fingerRow(i) {
-  if (i < FINGER_ART.tip.length) return FINGER_ART.tip[i];
-  const k = (i - FINGER_ART.tip.length) % FINGER_KNUCKLE_EVERY;
+  if (i === 0) return { row: FINGER_ART.tip, inner: GRASP_COLOR };
+  const nail = i - 1;
+  if (nail < FINGER_ART.nail.length) return { row: FINGER_ART.nail[nail], inner: GRASP_NAIL_COLOR };
+  const k = (nail - FINGER_ART.nail.length) % FINGER_KNUCKLE_EVERY;
   const band = FINGER_KNUCKLE_EVERY - FINGER_ART.knuckle.length;
-  return k >= band ? FINGER_ART.knuckle[k - band] : FINGER_ART.shaft;
+  if (k >= band) return { row: FINGER_ART.knuckle[k - band], inner: GRASP_CREASE_COLOR };
+  return { row: FINGER_ART.shaft, inner: GRASP_CREASE_COLOR };
 }
 
 // Bottom-up from the tip, one row per cell until the Finger leaves the top.
-// Every cell inside the outline is backed with bare ground, so the Finger reads
-// as one solid mass over the arena floor.
+// The art's columns spread evenly across the Finger's current width, so a
+// squeezed Finger swells with its outline on its edges. Every cell inside the
+// outline is backed with bare ground, so the Finger reads as one solid mass
+// over the arena floor.
 function drawFinger(renderer, finger, ground) {
   const flash = finger.flash > 0;
   const ctx = renderer.fgCtx;
-  ctx.fillStyle = ground;
+  const step = (finger.width - CS) / (FINGER_COLS - 1);
   for (let i = 0; ; i++) {
     const y = finger.tipY - (i + 1) * CS;
     if (y + CS < 0) break;
-    const row = fingerRow(i);
-    for (let col = 0; col < row.length; col++) {
-      const part = row[col];
-      if (part === ' ') continue;
-      ctx.fillRect(finger.x + col * CS, y, CS, CS);
-      let glyph = '+';
-      let color = FINGER_PART_COLOR[part];
-      if (part === '.') {
-        const roll = fleckRoll(finger.x, i, col);
+    const { row, inner } = fingerRow(i);
+    const first = row.search(/\S/);
+    const last = row.trimEnd().length - 1;
+    ctx.fillStyle = ground;
+    ctx.fillRect(finger.left + first * step, y, (last - first) * step + CS, CS);
+    for (let col = first; col <= last; col++) {
+      let glyph = row[col];
+      if (glyph === ' ') continue;
+      const edge = col === 0 || col === FINGER_COLS - 1;
+      let color = edge ? GRASP_COLOR : inner;
+      if (glyph === '.') {
+        const roll = fleckRoll(finger.laneX, i, col);
         if (roll >= FINGER_TEXTURE_DENSITY) continue;
         glyph = FINGER_TEXTURE[Math.floor(roll / FINGER_TEXTURE_DENSITY * FINGER_TEXTURE.length)];
         color = GRASP_CREASE_COLOR;
+      } else if (glyph === '+' && !edge) {
+        color = GRASP_COLOR;
       }
-      renderer.drawTextWithAlpha(finger.x + col * CS + HALF, y + HALF, glyph, flash ? FLASH_COLOR : color, 1);
+      renderer.drawTextWithAlpha(finger.left + col * step + HALF, y + HALF, glyph, flash ? FLASH_COLOR : color, 1);
     }
   }
 }

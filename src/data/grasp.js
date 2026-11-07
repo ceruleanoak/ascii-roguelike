@@ -233,20 +233,22 @@ export const CLUTCH_WAVES = [
 ];
 
 // ── Fingers (phase 3) ──────────────────────────────────────────────────
-// Four lanes, left column of each, in cells. A Finger is FINGER_COLS wide.
-export const FINGER_LANES = [3, 10, 17, 24];
-export const FINGER_COLS = 4;
+// Four lanes, left column of each, in cells. A Finger is FINGER_COLS wide,
+// which leaves a 1-cell gap at each wall and 2 cells between Fingers.
+export const FINGER_LANES = [2, 9, 16, 23];
+export const FINGER_COLS = 5;
 // Math symbols only, as the Great Hands are letters only.
 // A Finger is drawn bottom-up from its tip in heavy `+` strokes, the outline
-// of a thing too big to fit in the glyphs: the rounded tip, the nail as a
-// plate of strokes, then the shaft, banded by a knuckle every
-// FINGER_KNUCKLE_EVERY rows. In the art each glyph's code is its part, and
-// every part draws as `+` in its own color: '+' skin, 'o' nail, '=' knuckle
-// crease. A '.' is bare flesh that may carry a fleck of FINGER_TEXTURE.
+// of a thing too big to fit in the glyphs: the rounded tip, the nail plate,
+// then the shaft, banded by a knuckle every FINGER_KNUCKLE_EVERY rows. The
+// side columns are always the skin's `+` outline. Inside it, nail rows draw
+// in the nail color, knuckle `=` in the crease color, and a '.' is bare
+// flesh that may carry a fleck of FINGER_TEXTURE.
 export const FINGER_ART = {
-  tip: [' ++ ', '+oo+', '+oo+', '+==+'],   // bottom row first
-  shaft: '+..+',
-  knuckle: ['+==+', '+.=+'],                // bottom row first
+  tip: ' +++ ',
+  nail: ['+⌊=⌋+', '+| |+', '+⌈-⌉+'],      // bottom row first
+  shaft: '+...+',
+  knuckle: ['+===+', '+.=.+'],              // bottom row first
 };
 export const FINGER_KNUCKLE_EVERY = 6;
 // Flecks on the bare flesh, fixed to the Finger so they ride with it.
@@ -303,14 +305,19 @@ export const GRASP_TUNING = {
   // Struck, a Finger holds still this long before it reaches again...
   FINGER_STALL_TIME: 1.0,
   // ...and lilts side to side meanwhile: this far each way (px), at this rate
-  // (radians/s). A cell each way keeps it inside its lane.
-  FINGER_LILT: CS,
+  // (radians/s). Half a cell each way keeps it inside its lane.
+  FINGER_LILT: CS / 2,
   FINGER_LILT_RATE: 5,
   FINGER_MIN_TIP: 2 * CS,
-  FINGER_PRESS_DAMAGE: 1,
+  // Any touch of a Finger: armor doesn't soften it, once a second per body.
+  FINGER_TOUCH_DAMAGE: 1,
+  FINGER_TOUCH_COOLDOWN: 1.0,
   FINGER_WITHDRAW_SPEED: 260,
   // Trap Line: rows above the south edge a tip may reach before it presses.
   TRAP_LINE_ROWS: 7,
+  // Pressing, a Finger swells sideways as its tip nears the floor, until at
+  // full reach the gaps between Fingers are this many cells wide.
+  FINGER_SQUEEZE_GAP: 1,
 
   // Contact and crush
   CONTACT_COOLDOWN: 0.8,

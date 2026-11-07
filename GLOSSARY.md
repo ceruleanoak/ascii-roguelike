@@ -1133,16 +1133,17 @@ identity, not standard programming terms.
 ### Fingers
 - **Definition:** The Grasp's third phase: four massive nailed fingers reaching down their lanes
   while the climb runs fast. Any blow drives one far back up, where it stalls a moment and lilts
-  idly in its lane before it comes on again; all four share one HP pool. One
-  that reaches past the Trap Line presses down and hurts whoever is against it.
+  idly in its lane before it comes on again; all four share one HP pool. Touching one costs 1 HP,
+  armor or not, once a second. One that reaches past the Trap Line presses.
 - **In code:** `src/systems/grasp/fingers.js`; `GraspSystem.fingers`, pool `fingersHp`;
   `FINGER_LANES`, `FINGER_ART`, `FINGER_KNOCKBACK`.
 - **Not:** the Great Hands; Climb Scenery (a Finger blocks the Trine but is part of the foe).
 
 ### Trap Line
 - **Definition:** The row `TRAP_LINE_ROWS` cells above the south edge. A Finger whose tip passes it
-  is pressing, which walls off its lane and hurts any Trine body touching it.
-- **In code:** `TRAP_LINE_Y` / `isPressed` (`src/systems/grasp/fingers.js`); drawn as a dotted row
+  is pressing: it swells sideways as it nears the floor, until at full reach the gaps between
+  Fingers are `FINGER_SQUEEZE_GAP` (1) cell wide.
+- **In code:** `TRAP_LINE_Y` / `squeeze` (`src/systems/grasp/fingers.js`); drawn as a dotted row
   by `drawGraspScenery`.
 - **Not:** a trap (`TrapSystem`); a collision row.
 
