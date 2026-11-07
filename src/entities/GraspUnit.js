@@ -1,6 +1,9 @@
 import { Enemy } from './Enemy.js';
+import { GRID } from '../game/GameConfig.js';
 import { GRASP_NAME, GRASP_DESCRIPTION, GRASP_COLOR } from '../data/grasp.js';
-import { handOverlapsBox } from '../systems/grasp/greatHands.js';
+import { handOverlapsBox, handPalm } from '../systems/grasp/greatHands.js';
+
+const CS = GRID.CELL_SIZE;
 
 // One strikeable part of the Grasp — a Great Hand, a Clutch hand or a Finger.
 // Position, hitbox, glyph and HP all belong to GraspSystem; this class carries
@@ -57,6 +60,19 @@ export class GraspUnit extends Enemy {
   // rect.
   overlapsBox(box) {
     return this.kind !== 'hand' || handOverlapsBox(this.part, box);
+  }
+
+  // Where CombatSystem raises this part's damage numbers
+  // (damageNumberAnchor), as a cell's top-left in pixels: a Finger's tip, a
+  // Great Hand's palm, a Clutch hand's middle. Position is the rect's top-left,
+  // which for a Finger is the top edge it hangs from and for a hand gripping
+  // the lip is above the screen, so numbers rose out of sight. Kept below
+  // the top wall so a number on a part reaching in from above still shows.
+  damageNumberAnchor() {
+    const at = this.kind === 'finger' ? { x: this.part.left + this.part.width / 2 - CS / 2, y: this.part.tipY - CS }
+      : this.kind === 'hand' ? handPalm(this.part)
+      : { x: this.position.x + this.width / 2 - CS / 2, y: this.position.y + this.height / 2 - CS / 2 };
+    return { x: at.x, y: Math.max(CS, at.y) };
   }
 
   // Only the iframe timer runs here; velocity stays zero so PhysicsSystem

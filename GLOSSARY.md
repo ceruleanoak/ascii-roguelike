@@ -1094,7 +1094,9 @@ identity, not standard programming terms.
 - **In code:** `GraspSystem` (`src/systems/GraspSystem.js`; phase machine `warmup → tremble →
   grip → flee → clutch → fingers → summit → zoom → done`), mechanic files in
   `src/systems/grasp/`, data and tuning in `src/data/grasp.js`, draw in
-  `src/rendering/effects/GraspDraw.js`. Its hitboxes are `GraspUnit` proxies in `room.enemies`.
+  `src/rendering/effects/GraspDraw.js`. Its hitboxes are `GraspUnit` proxies in `room.enemies`;
+  a blow's damage number rises from a Finger's tip, a Great Hand's palm or a Clutch hand's
+  middle (`GraspUnit.damageNumberAnchor`, which `CombatSystem` asks of any enemy).
 - **Not:** a Boss (it is not in `BossSystem` and drops nothing); the Mist Battle as a whole.
 
 ### Great Hands

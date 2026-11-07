@@ -571,13 +571,16 @@ export class CombatSystem {
         if (projectileSailsOver(this.game?.activeRoom, enemy, proj) || enemy.aloft) continue;
 
         if (this.checkProjectileCollision(proj, enemy)) {
+          // A part whose position isn't where it's drawn (a Grasp Finger hangs
+          // from the top edge) names where its damage numbers rise from.
+          const at = enemy.damageNumberAnchor?.() ?? enemy.position;
           // Missed shot — show MISS once per enemy and pass through. Bullet keeps traveling
           // (and can still hit other enemies normally; only this enemy was missed).
           if (proj.missed) {
             if (!proj._missedEnemies) proj._missedEnemies = new Set();
             if (!proj._missedEnemies.has(enemy)) {
               proj._missedEnemies.add(enemy);
-              this.createDamageNumber('MISS', enemy.position.x, enemy.position.y, '#888888');
+              this.createDamageNumber('MISS', at.x, at.y, '#888888');
             }
             continue;
           }
@@ -638,7 +641,7 @@ export class CombatSystem {
 
           // Handle immunity
           if (elementalMod === 0.0) {
-            this.createDamageNumber('IMMUNE', enemy.position.x, enemy.position.y, '#cccccc');
+            this.createDamageNumber('IMMUNE', at.x, at.y, '#cccccc');
             if (!proj.pierce) {
               hit = true;
               break;
@@ -668,23 +671,23 @@ export class CombatSystem {
             weaponSubtype: proj.weaponSubtype,
           });
           if (damaged && damaged.dodged) {
-            this.createDamageNumber('DODGE', enemy.position.x, enemy.position.y, '#ffffff');
+            this.createDamageNumber('DODGE', at.x, at.y, '#ffffff');
           } else if (damaged !== false) {
             // Show damage number with color based on affinity (crit overrides color + scale)
             const damageColor = critRoll.isCrit ? '#ffff66' :
                                elementalMod < 1.0 ? '#888888' :   // Resisted
                                elementalMod > 1.0 ? '#ffff00' :   // Weakness
                                enemy.color;                       // Normal
-            this.createDamageNumber(finalDamage, enemy.position.x, enemy.position.y, damageColor, critRoll.isCrit ? 1.7 : 1);
+            this.createDamageNumber(finalDamage, at.x, at.y, damageColor, critRoll.isCrit ? 1.7 : 1);
 
             if (critRoll.isCrit) {
               const critLabel = critRoll.isLucky ? 'LUCKY CRIT' : 'CRIT';
-              this.createDamageNumber(critLabel, enemy.position.x, enemy.position.y - 14, '#ffff66');
+              this.createDamageNumber(critLabel, at.x, at.y - 14, '#ffff66');
             }
 
             // Show weakness indicator
             if (elementalMod > 1.0) {
-              this.createDamageNumber('!', enemy.position.x, enemy.position.y - 12, '#ff4400');
+              this.createDamageNumber('!', at.x, at.y - 12, '#ff4400');
             }
 
             // Moose (game animal): every arrow or bullet strike stacks a slowing effect
@@ -704,7 +707,7 @@ export class CombatSystem {
               // Emit impact effect for visual feedback
               this.impactEffects.push({ x: enemy.position.x, y: enemy.position.y, onHit: proj.onHit, color: proj.color });
             } else if (proj.onHit && !enemy.shouldApplyStatusEffect(projStatus)) {
-              this.createDamageNumber('RESIST', enemy.position.x, enemy.position.y - 12, '#888888');
+              this.createDamageNumber('RESIST', at.x, at.y - 12, '#888888');
             }
 
             // Extra onHit effects from equipped oils beyond the primary (see
@@ -980,8 +983,9 @@ export class CombatSystem {
           // Sniper stays hittable while sniperHidden — see the projectile-loop comment above.
 
           if (this.checkMeleeCollision(attack, enemy)) {
+            const at = enemy.damageNumberAnchor?.() ?? enemy.position; // see the projectile loop
             if (attack.missed) {
-              this.createDamageNumber('MISS', enemy.position.x, enemy.position.y, '#888888');
+              this.createDamageNumber('MISS', at.x, at.y, '#888888');
               attack.hasHit = true;
               break;
             }
@@ -992,10 +996,10 @@ export class CombatSystem {
               const reflectDmg = Math.ceil(attack.damage * (enemy.data.parryMechanic?.reflectDamage ? PARRY_REFLECT_FRACTION : 0));
               if (reflectDmg > 0 && attack.owner.takeDamage) {
                 attack.owner.takeDamage(reflectDmg, { isBullet: false, isMelee: true });
-                this.createDamageNumber('PARRY', enemy.position.x, enemy.position.y, '#eeeeff');
+                this.createDamageNumber('PARRY', at.x, at.y, '#eeeeff');
                 this.createDamageNumber(reflectDmg, attack.owner.position.x, attack.owner.position.y, '#eeeeff');
               } else {
-                this.createDamageNumber('PARRY', enemy.position.x, enemy.position.y, '#eeeeff');
+                this.createDamageNumber('PARRY', at.x, at.y, '#eeeeff');
               }
               attack.hasHit = true;
               // Counter-attack: schedule immediate melee retaliation
@@ -1073,7 +1077,7 @@ export class CombatSystem {
 
             // Handle immunity
             if (elementalMod === 0.0) {
-              this.createDamageNumber('IMMUNE', enemy.position.x, enemy.position.y, '#cccccc');
+              this.createDamageNumber('IMMUNE', at.x, at.y, '#cccccc');
               continue;
             }
 
@@ -1095,7 +1099,7 @@ export class CombatSystem {
             });
             if (damaged === true && attack.isBlade) enemy.killedByBlade = true;
             if (damaged && damaged.dodged) {
-              this.createDamageNumber('DODGE', enemy.position.x, enemy.position.y, '#ffffff');
+              this.createDamageNumber('DODGE', at.x, at.y, '#ffffff');
             } else if (damaged !== false) {
               // Show damage number with color based on affinity (crit overrides color + scale)
               const damageColor = critRoll.isCrit ? '#ffff66' :
@@ -1104,17 +1108,17 @@ export class CombatSystem {
                                  enemy.color;                       // Normal
               // Zero-damage hits (Rubber Bat) skip the number — the launch is the feedback
               if (finalDamage > 0) {
-                this.createDamageNumber(finalDamage, enemy.position.x, enemy.position.y, damageColor, critRoll.isCrit ? 1.7 : 1);
+                this.createDamageNumber(finalDamage, at.x, at.y, damageColor, critRoll.isCrit ? 1.7 : 1);
               }
 
               if (critRoll.isCrit) {
                 const critLabel = critRoll.isLucky ? 'LUCKY CRIT' : 'CRIT';
-                this.createDamageNumber(critLabel, enemy.position.x, enemy.position.y - 14, '#ffff66');
+                this.createDamageNumber(critLabel, at.x, at.y - 14, '#ffff66');
               }
 
               // Show weakness indicator
               if (elementalMod > 1.0) {
-                this.createDamageNumber('!', enemy.position.x, enemy.position.y - 12, '#ff4400');
+                this.createDamageNumber('!', at.x, at.y - 12, '#ff4400');
               }
 
               // Apply status effects with affinity-modified duration.
@@ -1128,7 +1132,7 @@ export class CombatSystem {
                 // Emit impact effect for visual feedback
                 this.impactEffects.push({ x: enemy.position.x, y: enemy.position.y, onHit: attack.onHit, color: attack.color });
               } else if (attack.onHit && !enemy.shouldApplyStatusEffect(attackStatus)) {
-                this.createDamageNumber('RESIST', enemy.position.x, enemy.position.y - 12, '#888888');
+                this.createDamageNumber('RESIST', at.x, at.y - 12, '#888888');
               }
 
               // Extra onHit effects from equipped oils beyond the primary (see
@@ -1142,23 +1146,23 @@ export class CombatSystem {
               if (attack.disarm && enemy.itemUsage && enemy.inventory?.length) {
                 enemy.shouldDropItems = true;
                 enemy._disarmed = true;
-                this.createDamageNumber('DISARM', enemy.position.x, enemy.position.y - 14, '#ffcc66');
+                this.createDamageNumber('DISARM', at.x, at.y - 14, '#ffcc66');
               }
 
               // Show electric indicator for wet-boosted hits
               if (isWet && attack.onHit === 'stun') {
-                this.createDamageNumber('ϟ', enemy.position.x, enemy.position.y - 12, '#ffff00');
+                this.createDamageNumber('ϟ', at.x, at.y - 12, '#ffff00');
               }
 
               // Show blunt-on-frozen / blade-on-snared bonus indicator
               const statusBonusIndicator = getMeleeStatusBonusIndicator(attack, { isFrozen, isSnared });
               if (statusBonusIndicator) {
-                this.createDamageNumber(statusBonusIndicator.text, enemy.position.x, enemy.position.y - 12, statusBonusIndicator.color);
+                this.createDamageNumber(statusBonusIndicator.text, at.x, at.y - 12, statusBonusIndicator.color);
               }
 
               // Show distance crit indicator (spear full-extension bonus)
               if (attack.distanceCrit) {
-                this.createDamageNumber('PIERCE', enemy.position.x, enemy.position.y - 14, '#ffff66');
+                this.createDamageNumber('PIERCE', at.x, at.y - 14, '#ffff66');
               }
 
               // Venom Blade poison stacking: 3 hits triggers a burst
@@ -1167,8 +1171,8 @@ export class CombatSystem {
                 if (enemy.poisonStackCount >= 3) {
                   enemy.hp = Math.max(0, enemy.hp - 2);
                   enemy.poisonStackCount = 0;
-                  this.createDamageNumber('BURST', enemy.position.x, enemy.position.y - 16, '#00ff88');
-                  this.createDamageNumber(2, enemy.position.x, enemy.position.y, '#00ff88');
+                  this.createDamageNumber('BURST', at.x, at.y - 16, '#00ff88');
+                  this.createDamageNumber(2, at.x, at.y, '#00ff88');
                 }
               }
 
@@ -1548,9 +1552,10 @@ export class CombatSystem {
 
       // Create damage numbers for DOT damage
       if (updateResult && updateResult.dotDamage) {
+        const at = enemy.damageNumberAnchor?.() ?? enemy.position;
         for (const dotEvent of updateResult.dotDamage) {
           const color = DOT_COLORS[dotEvent.effect] || '#ffffff';
-          this.createDamageNumber(dotEvent.damage, enemy.position.x, enemy.position.y, color);
+          this.createDamageNumber(dotEvent.damage, at.x, at.y, color);
         }
       }
 

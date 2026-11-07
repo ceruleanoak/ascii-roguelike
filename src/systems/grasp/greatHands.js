@@ -87,6 +87,22 @@ export function handOverlapsBox(hand, box) {
   return false;
 }
 
+/**
+ * The palm: the middle of the art's widest row (the knuckles across the
+ * back of the hand), as a cell's top-left in pixels. Where a blow's damage
+ * number rises from, instead of the frame's empty top-left corner.
+ */
+export function handPalm(hand) {
+  const spans = ROW_SPANS[hand.side][handFrame(hand)];
+  let best = 0;
+  let width = -1;
+  spans.forEach((span, r) => {
+    if (span && span[1] - span[0] > width) { width = span[1] - span[0]; best = r; }
+  });
+  const span = spans[best];
+  return { x: hand.x + ((span[0] + span[1]) / 2) * CS, y: hand.y + best * CS };
+}
+
 export function spawn(grasp) {
   grasp.hands = ['left', 'right'].map((side, i) => {
     const hand = {
