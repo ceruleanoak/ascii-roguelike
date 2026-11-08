@@ -121,6 +121,10 @@ export class CentipedeSystem {
     const cell = GRID.CELL_SIZE;
     const speed = this._chainSpeed(chain);
     const head = chain.units[0];
+    // The head steers the whole chain, so a fully asleep head (a Music Box)
+    // holds every segment where it lies until the sleep wears off or a hit
+    // wakes it (handleUnitHit).
+    if (head.isFullyAsleep()) return;
     const dist = speed * deltaTime;
 
     if (chain.facing.dx !== 0) {
@@ -348,6 +352,8 @@ export class CentipedeSystem {
     const chain = room.centipedeChains[chainIndex];
     const index = chain.units.indexOf(unit);
 
+    // A hit wakes the whole struck centipede, both halves it splits into.
+    for (const u of chain.units) u.wake();
     this._grantSplitInvulnerability(chain, index);
     this._convertToRock(unit, room);
     this._removeUnitFromRoom(room, unit);

@@ -51,7 +51,22 @@ export class CentipedeUnit extends Enemy {
   // updateResult.justAggrod on whatever this returns.
   update(deltaTime) {
     if (this.invulnerabilityTimer > 0) this.invulnerabilityTimer -= deltaTime;
+    // Status timers run down like any enemy's, so a Music Box's sleep wears
+    // off (CentipedeSystem halts a chain whose head is fully asleep). A unit's
+    // 1 HP is the split, not a pool: a DoT tick never splits or kills it.
+    this.updateStatusEffects(deltaTime);
+    this.hp = this.maxHp;
     return {};
+  }
+
+  // Sleep breaks on a hit, as Enemy.takeDamage does for any enemy.
+  wake() {
+    const sleep = this.statusEffects.sleep;
+    if (!sleep?.active) return;
+    sleep.active = false;
+    sleep.duration = 0;
+    sleep.stacks = 0;
+    this._clearEffectOrder('sleep');
   }
 
   // Bypasses Enemy's generic hp-decrement/death/drop pipeline entirely — a
