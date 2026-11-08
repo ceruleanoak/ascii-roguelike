@@ -19,9 +19,8 @@ import { GRID } from '../../game/GameConfig.js';
 // Data contract (enemies.js): ripenMechanic: { enabled, growDuration,
 // waggleAngle, waggleCycles, growthScales, blinkDelay, detonateRange,
 // detonateDamage, shockwaveMaxRadius, shockwaveSpeed, shockwaveDamage,
-// shockwaveKnockback, burnDuration, uninterruptible }. Timers are
-// double-seconds, matching every other Enemy.js/Mechanic timer
-// (PHYSICS.ENEMY_TIMER_RATE).
+// shockwaveKnockback }. Timers are double-seconds, matching every other
+// Enemy.js/Mechanic timer (PHYSICS.ENEMY_TIMER_RATE).
 //
 // Growth stage 0-3 is monotonic — once locked in, an interrupt only cancels
 // the *current attempt*, never regresses a stage already banked. The archetype
@@ -127,13 +126,13 @@ export const RipenMechanic = {
     }
   },
 
-  // Called from EnemyUpdateSystem's dead-enemy loop. A Bomb killed mid-blink
-  // with `uninterruptible` set still goes off where it died: once primed, the
-  // explosion is coming, and killing it is no longer a way to stop it. Returns
-  // the same explodeData updateBlink does, or null when nothing detonates.
+  // Called from EnemyUpdateSystem's dead-enemy loop. The primed blink is the
+  // Bomb's windup; on a windupImmune Bomb damage can't cancel it, and that
+  // includes the killing blow — it goes off where it died. Returns the same
+  // explodeData updateBlink does, or null when nothing detonates.
   onKilled(enemy) {
     const cfg = enemy.data.ripenMechanic;
-    if (!cfg?.enabled || !cfg.uninterruptible) return null;
+    if (!cfg?.enabled || !enemy.windupImmune) return null;
     if (!enemy.ripenPrimed || enemy.ripenDetonated) return null;
     enemy.ripenDetonated = true;
     return {

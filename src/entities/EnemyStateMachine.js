@@ -196,10 +196,6 @@ export class EnemyStateMachine {
   // a stunned enemy completes a leap, and windupTimer ticks above them too, so a
   // stunned enemy transitions windup→attack and is then overwritten.
   checkInterrupts(enemy) {
-    // An uninterruptible attack plays through every interrupt, hard ones
-    // included. The status is not lost: its timer keeps running underneath,
-    // and whatever is left of it takes hold once the attack is over.
-    if (this.isUninterruptible()) return null;
     const committed = this.isCommitted();
     for (const it of INTERRUPTS) {
       if (!it.test(enemy)) continue;
@@ -213,16 +209,6 @@ export class EnemyStateMachine {
     const state = STATES[this.current];
     const cfg = this.configFor(this.current);
     return cfg?.committed ?? state?.committed ?? false;
-  }
-
-  // Stronger than committed: nothing cuts this State short once it has begun —
-  // not damage during the windup (what `windupImmune` covers), and not the hard
-  // interrupts either (stun, freeze, sleep, zap, knockback). Authored as
-  // `uninterruptible: true` on the State's config, or on a single Strike band
-  // so one attack of several can carry it (the Miner's ring slam, not its
-  // point-blank swing). `band` is only set while Strike is current.
-  isUninterruptible() {
-    return !!(this.band?.uninterruptible || this.configFor(this.current)?.uninterruptible);
   }
 
   // `ctx` carries the per-frame facts every State needs and none of them should

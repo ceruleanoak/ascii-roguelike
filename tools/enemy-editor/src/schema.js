@@ -220,7 +220,7 @@ export const SECTIONS = [
       { key: 'idleBehavior', label: 'Idle behavior', type: 'select', options: IDLE_BEHAVIORS, default: 'wander' },
       { key: 'windupMovement', label: 'Windup movement', type: 'select', options: WINDUP_MOVEMENTS, default: 'stop' },
       { key: 'windupImmune', label: 'Windup immune (damage cannot cancel)', type: 'bool', default: false,
-        help: 'Damage during the windup does not cancel the Strike. Stun, freeze, sleep, zap and knockback still do — see Strike → Uninterruptible for an attack nothing stops.' },
+        help: 'Damage during the windup does not cancel the Strike. Stun, freeze, sleep, zap and knockback still do. Strike bands can set it for one attack alone.' },
     ]
   },
   {
@@ -383,11 +383,9 @@ export const SECTIONS = [
             help: "This band's own knockback, overriding the 300×knockbackMultiplier default. Blank inherits it." },
           { key: 'duration', label: 'Active duration (dbl-sec)', type: 'number', min: 0, step: 0.05, default: null,
             help: "How long this band's hitbox stays live once the windup ends, overriding the 0.30 default. Blank inherits it." },
-          { key: 'uninterruptible', label: 'Uninterruptible', type: 'bool', default: false,
-            help: "This band's attack plays out whatever happens: damage, stun, freeze, sleep, zap and knockback all wait until it ends (EnemyStateMachine.isUninterruptible). Either this or the Strike-wide setting below makes it so." },
+          { key: 'windupImmune', label: 'Windup immune', type: 'bool', default: false,
+            help: "Damage during this band's windup does not cancel it (Enemy.takeDamage). The enemy-wide Windup immune setting covers every band; this one covers only this band's attack." },
         ] },
-      { key: 'strike.uninterruptible', label: 'Uninterruptible', type: 'bool', default: false,
-        help: 'Every Strike plays out whatever happens: damage during the windup, stun, freeze, sleep, zap and knockback all wait until it ends. For area attacks, where the answer is moving out, not hitting first.' },
       { key: 'strike.duration', label: 'Post-windup duration (dbl-sec)', type: 'number', min: 0, step: 0.1, default: 0,
         help: "Extends the swing after the windup ends and before Recover, added to whichever windup was used (the picked band's, or attackWindup if no band matched)." },
     ]

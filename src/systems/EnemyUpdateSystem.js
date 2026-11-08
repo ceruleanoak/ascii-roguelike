@@ -671,7 +671,7 @@ export class EnemyUpdateSystem {
       }
       if (enemy.isDying && enemy.dyingTimer > 0) continue;
       if (enemy.hp <= 0) {
-        // A primed, uninterruptible Bomb killed mid-blink still goes off. Before
+        // A primed, windupImmune Bomb killed mid-blink still goes off. Before
         // loot: the detonation marks it spent, so it drops no Bomb.
         const killedBlast = RipenMechanic.onKilled(enemy);
         if (killedBlast) this._handleBombExplode(game.player, killedBlast, enemy);

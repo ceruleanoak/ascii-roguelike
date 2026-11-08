@@ -541,7 +541,8 @@ identity, not standard programming terms.
 - **Definition:** The attack itself, from its opening beat through its last — collapses the
   legacy `'windup'` and `'attack'` state ids, two ids for one event. The opening beat (the
   windup) breaks on damage — the Enemy drops back to Approach and the swing never lands —
-  unless the Enemy is `windupImmune`. Once the swing is live it is committed: only a hard
+  unless the Enemy, or the picked band, is `windupImmune` (stun, freeze and the other hard
+  interrupts still break it). Once the swing is live it is committed: only a hard
   interrupt (stun, freeze, etc.) can cut it short, not damage. `bands` lets the
   attack vary by distance, generalizing the bespoke per-enemy distance checks several bosses
   hardcoded.

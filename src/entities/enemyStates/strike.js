@@ -30,7 +30,8 @@ export default {
   id: 'strike',
   // A swing that damage can cancel is not a swing the player has to respect.
   // The windup before it is the exception: Enemy.takeDamage aborts the Strike
-  // while windupTimer > 0 (unless windupImmune), so hitting first is a counter.
+  // while windupTimer > 0 (unless the enemy or the picked band is windupImmune),
+  // so hitting first is a counter.
   committed: true,
 
   enter(enemy, ctx, machine) {
