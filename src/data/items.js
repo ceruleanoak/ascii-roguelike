@@ -1130,6 +1130,9 @@ export const ITEMS = {
     weaponType: WEAPON_TYPES.MELEE,
     weaponSubtype: 'staff',
     breaksRock: true,
+    // Raised overhead through its windup, like a hammer
+    // (WeaponPreviewDraw.drawRaisedWindupPose).
+    raisedWindup: true,
     damage: 3,
     windup: 0.35,
     recovery: 0.75,

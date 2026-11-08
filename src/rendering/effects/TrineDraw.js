@@ -18,7 +18,7 @@ import { GRID } from '../../game/GameConfig.js';
 import { drawStatusPips } from './StatusPipEffects.js';
 import { drawDizzyOrbitals } from './DizzyOrbitals.js';
 import { drawParryIndicator } from '../ui/ParryIndicator.js';
-import { drawGemWandCharge, drawHeldWindupCharge, drawHammerWindupPose, drawStaffBlockStance } from './WeaponPreviewDraw.js';
+import { drawGemWandCharge, drawHeldWindupCharge, drawRaisedWindupPose, drawStaffBlockStance } from './WeaponPreviewDraw.js';
 
 const FLANK_ALPHA_MULT = 0.7;
 const DORMANT_ALPHA_MIN = 0.2;
@@ -78,5 +78,5 @@ function drawBodyState(renderer, body) {
   drawStaffBlockStance(renderer, body);
   drawGemWandCharge(renderer, body);
   drawHeldWindupCharge(renderer, body);
-  drawHammerWindupPose(renderer, body);
+  drawRaisedWindupPose(renderer, body);
 }

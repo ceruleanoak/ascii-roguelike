@@ -132,15 +132,17 @@ export function drawHeldWindupCharge(renderer, body) {
   ctx.restore();
 }
 
-/** Hammer held raised overhead during its windup — the same anchor
+/** Hammer — or any weapon that sets `raisedWindup` (the Flail) — held raised
+ * overhead during its windup. For the hammer this is the same anchor
  * MeleeAttackDraw uses for drawAboveOwner, so the glyph doesn't jump when the
  * windup completes and createMeleeHammerRing's attack object takes over
  * drawing it for the strike itself. Static (no shake): the raised pose alone
  * reads as "about to swing" without competing with the impact-frame burst at
  * the strike. */
-export function drawHammerWindupPose(renderer, body) {
+export function drawRaisedWindupPose(renderer, body) {
   const held = body.heldItem;
-  if (held?.data?.attackPattern !== 'hammerRing' || !held.windupActive) return;
+  if (!held?.windupActive) return;
+  if (held.data?.attackPattern !== 'hammerRing' && !held.data?.raisedWindup) return;
   const C = GRID.CELL_SIZE;
   renderer.drawEntity(
     body.position.x + C / 2,

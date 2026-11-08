@@ -36,7 +36,7 @@ import { drawTamedRats, drawGolems } from '../ui/CompanionRenderers.js';
 import { PixelatedDissolve, SplitReveal } from '../effects/TextEffects.js';
 import { drawPlayerMeleeAttacks, drawEnemyMelee } from '../effects/MeleeAttackDraw.js';
 import {
-  drawConsumableWindups, drawGemWandCharge, drawHeldWindupCharge, drawHammerWindupPose,
+  drawConsumableWindups, drawGemWandCharge, drawHeldWindupCharge, drawRaisedWindupPose,
   drawTrapChargeCount, drawBombBagCount, drawStaffBlockStance
 } from '../effects/WeaponPreviewDraw.js';
 import { BossRenderer } from './BossRenderer.js';
@@ -1747,7 +1747,7 @@ export class ExploreRenderer {
   drawConsumableWindups(game) { drawConsumableWindups(this.renderer, game); }
   drawGemWandCharge(game) { drawGemWandCharge(this.renderer, game.player); }
   drawHeldWindupCharge(game) { drawHeldWindupCharge(this.renderer, game.player); }
-  drawHammerWindupPose(game) { drawHammerWindupPose(this.renderer, game.player); }
+  drawRaisedWindupPose(game) { drawRaisedWindupPose(this.renderer, game.player); }
   // Held trap charges + armed Bomb Bag ammo — the counts that float over the player.
   drawChargeCounts(game) {
     drawTrapChargeCount(this.renderer, game);
