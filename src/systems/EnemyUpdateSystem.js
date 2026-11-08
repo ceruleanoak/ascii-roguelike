@@ -322,11 +322,6 @@ export class EnemyUpdateSystem {
       const d = cDx * cDx + cDy * cDy;
       if (d < nearestDistSq) { nearestDistSq = d; nearestTarget = commanded; }
     }
-    // The Gray King fights all three Mist Battle bodies, not game.player alone.
-    for (const body of game.mistBattleSystem.kingTargets(enemy)) {
-      const d = (body.position.x - enemy.position.x) ** 2 + (body.position.y - enemy.position.y) ** 2;
-      if (d < nearestDistSq) { nearestDistSq = d; nearestTarget = body; }
-    }
     enemy.setTarget(nearestTarget);
   }
 

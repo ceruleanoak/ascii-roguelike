@@ -15,8 +15,9 @@
 //             one HP pool, `fingersHp`
 //   summit  — the climb slows to a stop; the north wall returns, the south
 //             stays open a moment, then closes
-//   zoom    — the camera closes in on the Trine; when it settles,
-//             MistBattleSystem.startAct2() takes over
+//   zoom    — the camera closes in on the Trine; when it settles, the Gray
+//             King comes (MistBattleSystem.startKing), and the zoom holds
+//             through the King's fight and Act 2
 //   done
 //
 // The climb moves the world through the fixed room rather than scrolling a
@@ -143,9 +144,7 @@ export class GraspSystem {
       case 'zoom':
         if (this.game.cameraZoomSystem.isZoomSettled()) {
           this.phase = 'done';
-          this.mist.startAct2();
-          // New bodies on new start points: cut to them, don't pan across.
-          this.game.cameraZoomSystem.cutHold();
+          this.mist.startKing();
         }
         break;
     }
@@ -229,23 +228,29 @@ export class GraspSystem {
     }
   }
 
-  // The camera closes in on the Trine; once it settles, Act 2 begins. The
-  // hold stays on through Act 2, fitted to the bodies still standing.
+  // The camera closes in on the Trine; once it settles, the Gray King comes.
+  // The hold stays on through the King's fight and Act 2, fitted to the
+  // bodies still standing (and the King or the crown on the ground).
   _startZoom() {
     this._setPhase('zoom');
     this.game.cameraZoomSystem.holdZoom(() => this._trineFitScale(), () => this._trineCenter());
   }
 
-  // Canvas-pixel box around the living Trine's cells, or null.
+  // Canvas-pixel box around the living Trine's cells, and the Gray King or
+  // the crown on the ground (MistBattleSystem.crownSpot) so the frame keeps
+  // them in sight; null with no body standing.
   _trineBounds() {
     const bodies = this.bodies();
     if (bodies.length === 0) return null;
+    const cells = bodies.map(b => ({ x: b.position.x, y: b.position.y }));
+    const crown = this.mist.crownSpot();
+    if (crown) cells.push({ x: crown.x - CS / 2, y: crown.y - CS / 2 });
     let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
-    for (const b of bodies) {
-      left = Math.min(left, b.position.x);
-      top = Math.min(top, b.position.y);
-      right = Math.max(right, b.position.x + CS);
-      bottom = Math.max(bottom, b.position.y + CS);
+    for (const c of cells) {
+      left = Math.min(left, c.x);
+      top = Math.min(top, c.y);
+      right = Math.max(right, c.x + CS);
+      bottom = Math.max(bottom, c.y + CS);
     }
     return { left, top, right, bottom };
   }
@@ -270,9 +275,9 @@ export class GraspSystem {
 
   /**
    * Test entry (CheatMenu BOSSES): skip the warm-up straight to `phase`
-   * ('grip' | 'clutch' | 'fingers' | 'summit' | 'act2'). The climb phases
+   * ('grip' | 'clutch' | 'fingers' | 'summit' | 'king'). The climb phases
    * start with the barrier already broken and the scroll already at speed;
-   * 'act2' goes straight to the Summit's zoom, which starts Act 2.
+   * 'king' goes straight to the Summit's zoom, which brings the Gray King.
    */
   skipTo(phase) {
     const room = this.room;
@@ -280,9 +285,9 @@ export class GraspSystem {
     room.enemies.length = 0;
     if (phase === 'grip') { this.startGrip(); return; }
     // Every later phase starts on the open ground the climb's break leaves:
-    // Act 2 included, or a test fight keeps the room's walls and rocks.
+    // the King's fight included, or a test fight keeps the room's walls and rocks.
     climb.breakLoose(this);
-    if (phase === 'act2') { this._startZoom(); return; }
+    if (phase === 'king') { this._startZoom(); return; }
     this.climb.speed = phase === 'clutch' ? T.CLIMB_SPEED : T.CLIMB_SPEED_FAST;
     if (phase === 'clutch') this.startClutch();
     else if (phase === 'fingers') this.startFingers();

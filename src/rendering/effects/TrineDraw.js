@@ -5,7 +5,7 @@
 // glance. In Act 2 nobody is steered, so every body draws at full strength.
 // After a 1/2/3 swap (or an Act 2 body drawing another weapon) every body,
 // Primary included, briefly shows its newly held weapon glyph above it —
-// except once the Gray King has dropped the Gray Crown: from then on the
+// except once the Gray King has fallen and dropped the Gray Crown: from then on the
 // crown is the only glyph above a head, so who wears it reads at once.
 // A Dormant body draws faint and brightens toward Flank strength as it
 // recovers, so its wake reads without a timer.
@@ -25,7 +25,8 @@ import { drawGemWandCharge, drawHeldWindupCharge, drawRaisedWindupPose, drawStaf
 
 const FLANK_ALPHA_MULT = 0.7;
 const DORMANT_ALPHA_MIN = 0.2;
-// The Gray Crown, worn by the Gray King and then fought over (MistBattleSystem).
+// The Gray Crown, worn by the Gray King, then taken by a body and fought
+// over in Act 2 (MistBattleSystem).
 const CROWN_GLYPH = '♛';
 
 export function drawTrine(renderer, game) {

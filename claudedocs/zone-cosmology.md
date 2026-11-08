@@ -156,16 +156,17 @@ are the THREE room — see "Endings" and "Path to Canon" below.)*
      when the Primary rolls (each with its own roll), 1/2/3 swaps all three,
      triple-tap SPACE **Rotates** the Primary clockwise, and only the Primary
      throws, drops or uses consumables. Mixed enemy waves keep coming; a fallen
-     Primary hands off to a living Flank.
-  2. **Act 2 — the yield.** After Act 1 is complete, a brief delay, then the
+     Primary hands off to a living Flank. Act 1 ends on the **Gray King** (`@`,
+     gray), wearing the **Gray Crown** (`♛`) above it, fought under control
+     (2026-11-08). Its fall drops the crown; the first body to reach it wears it
+     and turns gray.
+  2. **Act 2 — the yield.** After the crown is taken, a brief delay, then the
      three characters fight each other. **The player has no input.**
      Auto-battle, last one standing. (No credits — 2026-10-29.)
-     It opens on the **Gray King** (`@`, gray), wearing the **Gray Crown**
-     (`♛`) above it; the three fight it together (2026-11-08). When it falls
-     they fight each other over the crown: the first to take it wears it and
-     turns gray, a fallen wearer drops it for the next, and while the crown is
-     out it is the only glyph above a head (no weapon glyphs). The last one
-     standing, crowned, disappears into the gray.
+     They start exactly where they stood and fight over the crown: the others
+     go for the wearer, a fallen wearer drops it for the next, and while the
+     crown is out it is the only glyph above a head (no weapon glyphs). The
+     last one standing, crowned, disappears into the gray.
 - **The player authors but does not control** (Act 2). *Which* three characters
   you lost, with *what* gear, decides the field — then canon resolves it. The
   battle should be deterministic (seeded — the mulberry32/DemoSystem seam
@@ -179,16 +180,16 @@ are the THREE room — see "Endings" and "Path to Canon" below.)*
   they flee, the barrier breaks and the world scrolls north past a Galaga-style
   Clutch of small hands, then faster under massive Fingers that must be beaten
   back above the Trap Line. At the Summit the north wall returns, the south
-  stays open a moment, then closes, and the camera zooms in: Act 2 begins.
+  stays open a moment, then closes, and the camera zooms in: the Gray King comes.
 - **Status (2026-11-08)**: built end to end. The third gray mist-out enters the
   Mist Battle with the real snapshots (the CheatMenu BOSSES entries still roll
-  random characters). Act 2: the three fight fresh (full HP, their snapshotted
-  gear, fixed start points), weapon-driven (nearest rival, slot by range, own
-  roll, own consumables), seeded from the snapshots — first the Gray King side
-  by side, then each other over the Gray Crown. The crowned victor stands a
-  moment, then the gray mist closes over it and the run resets to title: no
-  text, no credits. A 90s stalemate cap per phase: the mist takes the King
-  (the crown drops), then crowns the wearer, else the highest HP share.
+  random characters). The Gray King closes Act 1 under control; taking its
+  crown holds the Trine still 1.5s. Act 2: the three fight fresh (full HP,
+  their snapshotted gear, standing where Act 1 left them), weapon-driven
+  (nearest rival, slot by range, own roll, own consumables), seeded from the
+  snapshots, over the Gray Crown. The crowned victor stands a moment, then the
+  gray mist closes over it and the run resets to title: no text, no credits.
+  A 90s stalemate cap on Act 2 crowns the wearer, else the highest HP share.
 
 ### Endings (restated 2026-10-09 — supersedes the Win/Know/Yield list)
 

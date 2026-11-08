@@ -28,18 +28,20 @@
 //
 // The fight: a warm-up of mixed gray waves (_updateWaves), then the Grasp
 // (GraspSystem) — a climb up a mountain that ends at the Summit, where the
-// camera closes in and startAct2() begins Act 2.
+// camera closes in and the Gray King comes (startKing).
+//
+// The Gray King ('@', data GRAY_KING) is Act 1's last foe: the Trine fights
+// it under the player's hand while it wears the Gray Crown. Its fall drops
+// the crown; the first Trine body to reach it wears it and turns gray, and
+// CROWN_HOLD seconds later Act 2 begins (startAct2). From the crown's drop
+// on, the weapon glyphs above the bodies are not drawn: the crown is the
+// only glyph above a head (TrineDraw).
 //
 // Act 2 (startAct2, the Act 2 sections below, AI in mistBattle/autoBattle.js):
-// - Three fresh bodies, built from the snapshots alone (full HP, snapshotted
-//   gear, fixed start points), so how Act 1 went never touches the outcome.
-// - The Gray King ('@', data GRAY_KING) stands among them wearing the Gray
-//   Crown. The three fight it side by side; when it falls the crown drops,
-//   and they fight each other over it. The first body to reach it wears it
-//   and turns gray; the others go for the wearer; a wearer that falls drops
-//   it for the next. While the crown is out, the weapon glyphs above the
-//   bodies are not drawn: the crown is the only glyph above a head
-//   (TrineDraw).
+// - Three fresh bodies, built from the snapshots (full HP, snapshotted gear),
+//   each standing exactly where its Act 1 body stood, facing the same way.
+// - They fight each other over the crown: the others go for the wearer; a
+//   wearer that falls drops it for the next to take.
 // - Seeded: the battle's generator is seeded from the snapshots' content and
 //   swapped in for Math.random through every Act 2 update tick (runTick), so
 //   the same three lost characters fight the same fight.
@@ -66,7 +68,7 @@ import { steerToward } from './npcSteering.js';
 import { PlayerInputSystem } from './PlayerInputSystem.js';
 import { tryDeathSave } from './DeathSaveSystem.js';
 import { createPlayerStatusSlots } from './StatusEffectSystem.js';
-import { canMirror, mirrorPress, mirrorRelease, mirrorAutoAttack, tickMirroredWeapon, reportHit, resolveEnemyHitsOn } from './mirroredWeapon.js';
+import { canMirror, mirrorPress, mirrorRelease, mirrorAutoAttack, tickMirroredWeapon, reportHit } from './mirroredWeapon.js';
 import { createExplosion } from '../entities/Particle.js';
 import { DEATH_CAUSES } from '../data/deathCauses.js';
 import { DemoSystem } from './DemoSystem.js';
@@ -108,15 +110,16 @@ const DORMANT_TIME = 15;
 
 /** How many characters the gray mist takes before the Mist Battle begins. */
 export const MIST_BATTLE_LOST = 3;
-// Act 2: the three bodies start on a triangle this many cells around the
-// room center, apex up, each facing the center.
-const ACT2_START_RADIUS = 3;
+// The Gray King comes this many cells ahead of the Trine's apex (north: the
+// Trine faces up the climb), on the nearest free cell to that spot.
+const KING_DISTANCE = 5;
+// Seconds the Trine stands still between a body taking the crown and Act 2.
+const CROWN_HOLD = 1.5;
 // Seconds the victor stands before the mist starts to close.
 const VICTOR_HOLD = 1.5;
-// A fight still going after this many seconds is ended by the mist anyway:
-// against the Gray King the mist takes the King and drops the crown; over
-// the crown, the wearer (else the body with the largest share of its HP
-// left) is the one it takes last. The clock restarts when the crown drops.
+// An Act 2 fight still going after this many seconds is ended by the mist
+// anyway: the wearer (else the body with the largest share of its HP left)
+// is the one it takes last.
 const STALEMATE_TIME = 90;
 // A body whose center comes this close to the fallen Gray Crown wears it.
 const CROWN_REACH = GRID.CELL_SIZE * 0.75;
@@ -238,10 +241,12 @@ export class MistBattleSystem {
     this.act2Clock = 0;
     this.rivalResolved = new WeakMap();
     this.ending = null;
-    // Act 2: the Gray King while it stands, then the Gray Crown it drops —
-    // { x, y } its center on the ground, `wearer` the member wearing it.
+    // The Gray King while it stands, then the Gray Crown it drops — { x, y }
+    // its center on the ground, `wearer` the member wearing it — and the
+    // seconds left of the still beat between the crown's taking and Act 2.
     this.king = null;
     this.crown = null;
+    this.crownHold = 0;
   }
 
   /**
@@ -382,12 +387,69 @@ export class MistBattleSystem {
     game.audioSystem.switchZoneMusic(zone, import.meta.env.BASE_URL);
   }
 
+  // ── The Gray King ────────────────────────────────────────────────────
+
+  /**
+   * The Summit: the camera has closed in, and the Gray King comes to the
+   * Trine wearing the Gray Crown — the last fight under the player's hand.
+   */
+  startKing() {
+    this.king = this._spawnKing();
+  }
+
+  // The Gray King, wired the way RoundCombatSystem wires a wave enemy, on
+  // the free cell nearest KING_DISTANCE cells north of the Primary.
+  _spawnKing() {
+    const game = this.game;
+    const room = game.currentRoom;
+    const lead = game.player.position;
+    const spot = this._freeCellNear(room, Math.round(lead.x / CELL), Math.round(lead.y / CELL) - KING_DISTANCE)
+      ?? { x: Math.round((GRID.COLS / 2) * CELL - CELL / 2), y: Math.round((GRID.ROWS / 2) * CELL - CELL / 2) };
+    const king = new Enemy('@', spot.x, spot.y, room.depth ?? 0, GRAY_KING);
+    king.setCollisionMap(room.collisionMap);
+    king.setBackgroundObjects(room.backgroundObjects);
+    king.setSteamClouds?.(game.steamClouds);
+    king.setTarget?.(game.player);
+    king.setGame?.(game);
+    king.setRoom?.(room);
+    game.roomGenerator.addEnemyToRoom(room, king);
+    game.physicsSystem.addEntity(king);
+    return king;
+  }
+
+  // The free cell (no wall, no background object, off the room's edge)
+  // nearest (col, row), as top-left pixel coords; null when there is none.
+  _freeCellNear(room, col, row) {
+    const map = room.collisionMap;
+    if (!map) return null;
+    const rows = map.length;
+    const cols = map[0]?.length ?? 0;
+    const occupied = new Set();
+    for (const obj of room.backgroundObjects || []) {
+      occupied.add(`${Math.floor(obj.position.x / CELL)},${Math.floor(obj.position.y / CELL)}`);
+    }
+    for (let ring = 0; ring < Math.max(rows, cols); ring++) {
+      for (let dr = -ring; dr <= ring; dr++) {
+        for (let dc = -ring; dc <= ring; dc++) {
+          if (Math.max(Math.abs(dr), Math.abs(dc)) !== ring) continue;
+          const c = col + dc;
+          const r = row + dr;
+          if (r < 1 || r >= rows - 1 || c < 1 || c >= cols - 1) continue;
+          if (map[r][c] || occupied.has(`${c},${r}`)) continue;
+          return { x: c * CELL, y: r * CELL };
+        }
+      }
+    }
+    return null;
+  }
+
   // ── Act 2 ─────────────────────────────────────────────────────────────
 
   /**
-   * The Summit: the camera has closed in and Act 1 is over. The Trine's
-   * bodies leave and three fresh ones are built from the snapshots on fixed
-   * start points; from here the battle runs itself, seeded.
+   * A body has worn the crown and the hold is over: Act 1 ends. Each Trine
+   * body is replaced by a fresh one built from its snapshot, standing where
+   * it stood and facing the same way; the wearer's keeps the crown. From
+   * here the battle runs itself, seeded.
    */
   startAct2() {
     const game = this.game;
@@ -408,11 +470,11 @@ export class MistBattleSystem {
     }
     grasp.climb.scenery = [];
 
-    // The Act 1 bodies leave; the fresh ones take their places in the ring.
-    const old = this.members.map(m => m.body);
-    for (const body of old) game.physicsSystem.removeEntity(body);
+    // The Act 1 bodies leave; the fresh ones take their places.
+    const old = this.members;
+    const wearerIndex = old.indexOf(this.crown?.wearer);
+    for (const { body } of old) game.physicsSystem.removeEntity(body);
     const collisionMap = game.player.collisionMap;
-    this.arena = { x: (GRID.COLS / 2) * CELL, y: (GRID.ROWS / 2) * CELL };
     this.rng = DemoSystem.mulberry32(snapshotSeed(this.snapshots));
     this.act2Clock = 0;
     this.rivalResolved = new WeakMap();
@@ -420,10 +482,8 @@ export class MistBattleSystem {
     this.glide = null;
 
     this.members = this.snapshots.map((snap, i) => {
-      const angle = -Math.PI / 2 + (Math.PI * 2 * i) / this.snapshots.length;
-      const cx = this.arena.x + Math.cos(angle) * ACT2_START_RADIUS * CELL;
-      const cy = this.arena.y + Math.sin(angle) * ACT2_START_RADIUS * CELL;
-      const body = new Player(Math.round(cx - CELL / 2), Math.round(cy - CELL / 2));
+      const from = old[i].body;
+      const body = new Player(from.position.x, from.position.y);
       body.setCollisionMap(collisionMap);
       game.physicsSystem.addEntity(body);
       game.characterSystem.applyCharacterTypeTo(body, snap.characterType);
@@ -431,54 +491,33 @@ export class MistBattleSystem {
       body.activeSlotIndex = 0;
       body.destroyedSlots = [false, false, false];
       body.hp = body.maxHp;
-      body.facing = { x: Math.sign(Math.round(-Math.cos(angle))), y: Math.sign(Math.round(-Math.sin(angle))) };
+      body.facing = { x: from.facing.x, y: from.facing.y };
       return {
         body, characterType: snap.characterType, swapFlash: 0,
         gear: this._makeGear(snap, body), brain: createBrain(), fallen: false, dormant: 0,
       };
     });
+    // The fight stays where it starts: its goals are leashed to the middle
+    // of the bodies as they stand.
+    const n = this.members.length;
+    this.arena = {
+      x: this.members.reduce((sum, m) => sum + m.body.position.x, 0) / n + CELL / 2,
+      y: this.members.reduce((sum, m) => sum + m.body.position.y, 0) / n + CELL / 2,
+    };
 
     this.primaryIndex = 0;
     game.player = this.members[0].body;
     game.activeCharacterType = this.members[0].characterType;
     for (const member of this.members) this._projectGear(member);
     this._loadGear(this.primary);
-    this.crown = null;
-    this.king = this._withSeed(() => this._spawnKing());
+    if (wearerIndex >= 0) this._crown(this.members[wearerIndex]);
     game.updateUI();
-  }
-
-  // The Gray King, at the center of the bodies' triangle, wired the way
-  // RoundCombatSystem wires a wave enemy.
-  _spawnKing() {
-    const game = this.game;
-    const room = game.currentRoom;
-    const king = new Enemy('@', Math.round(this.arena.x - CELL / 2), Math.round(this.arena.y - CELL / 2), room.depth ?? 0, GRAY_KING);
-    king.setCollisionMap(room.collisionMap);
-    king.setBackgroundObjects(room.backgroundObjects);
-    king.setSteamClouds?.(game.steamClouds);
-    king.setTarget?.(game.player);
-    king.setGame?.(game);
-    king.setRoom?.(room);
-    game.roomGenerator.addEnemyToRoom(room, king);
-    game.physicsSystem.addEntity(king);
-    return king;
-  }
-
-  /**
-   * The Act 2 bodies the Gray King may target besides game.player
-   * (EnemyUpdateSystem._selectTarget): it fights all three. Empty for any
-   * other enemy.
-   */
-  kingTargets(enemy) {
-    if (!this.king || enemy !== this.king) return [];
-    return this.livingBodies();
   }
 
   /**
    * Where the Gray Crown is drawn (TrineDraw) and the mist parts around it:
    * { x, y, worn } — the center of the head wearing it (the King's, then a
-   * body's), or of the spot it lies on. Null outside Act 2.
+   * body's), or of the spot it lies on. Null before the King comes.
    */
   crownSpot() {
     const wearer = this.king ?? this.crown?.wearer?.body;
@@ -487,15 +526,14 @@ export class MistBattleSystem {
     return { x: this.crown.x, y: this.crown.y, worn: false };
   }
 
-  // The King is down (or gone): the crown falls where it stood and the
-  // fight over it starts its own stalemate clock.
+  // The King is down (or gone): the crown falls where it stood. On the
+  // ground, the first living body to reach it wears it.
   _updateCrown() {
     const king = this.king;
     if (king) {
       if (king.hp > 0 && this.game._activeEnemies().includes(king)) return;
       this.crown = { x: king.position.x + CELL / 2, y: king.position.y + CELL / 2, wearer: null };
       this.king = null;
-      this.act2Clock = 0;
       return;
     }
     const crown = this.crown;
@@ -512,25 +550,29 @@ export class MistBattleSystem {
     }
   }
 
-  // `member` wears the Gray Crown, and its body turns gray.
+  // `member` wears the Gray Crown, and its body turns gray. Taken in Act 1,
+  // it starts the still beat before Act 2 (CROWN_HOLD).
   _crown(member) {
     this.crown.wearer = member;
     member.body.color = ZONE_COLORS.gray;
     member.body.baseColor = ZONE_COLORS.gray;
+    if (this.act === 1) this.crownHold = CROWN_HOLD;
   }
 
   // Act 2 is over once no body stands, or once the one body left wears the
-  // crown. A lone body with the King still up fights on; with the crown on
-  // the ground it walks to it.
+  // crown. A lone body with the crown on the ground walks to it.
   _isOver() {
     const living = this.livingBodies();
     if (living.length === 0) return true;
     return living.length === 1 && this.crown?.wearer?.body === living[0];
   }
 
-  /** Whether Act 2 holds the bodies (main.js movement lock: no WASD). */
+  /**
+   * Whether the bodies are out of the player's hands (main.js movement lock:
+   * no WASD; every key swallowed): Act 2, and the still beat before it.
+   */
   holdsTrine() {
-    return this.active && this.act === 2;
+    return this.active && (this.act === 2 || this.crownHold > 0);
   }
 
   /**
@@ -559,7 +601,7 @@ export class MistBattleSystem {
     }
   }
 
-  /** Act 2 takes no input: every key is swallowed. True when consumed. */
+  /** Act 2 and the beat before it take no input: every key is swallowed. True when consumed. */
   handleKeydown(e) {
     if (!this.holdsTrine()) return false;
     e.preventDefault();
@@ -615,23 +657,9 @@ export class MistBattleSystem {
   _resolveAct2() {
     const game = this.game;
     const living = this.members.filter(m => m.body.hp > 0);
-    if (this.king) {
-      // Against the King the bodies fight side by side: their attacks pass
-      // through each other, and the King's land on every body (CombatSystem
-      // lands enemy attacks on game.player alone).
-      for (const { body } of living) {
-        if (body === game.player) continue;
-        resolveEnemyHitsOn(game, body, this.rivalResolved, (damage, source, from, knockbackForce) => {
-          const result = body.takeDamage(damage ?? 1, source);
-          if (result !== false) reportHit(game, body, result, damage ?? 1, from, knockbackForce ?? PHYSICS.DEFAULT_DAMAGE_KNOCKBACK);
-          return result;
-        });
-      }
-    } else {
-      for (const member of living) {
-        const rivals = living.filter(m => m !== member).map(m => m.body);
-        resolveRivalHits(game, member.body, rivals, this.rivalResolved);
-      }
+    for (const member of living) {
+      const rivals = living.filter(m => m !== member).map(m => m.body);
+      resolveRivalHits(game, member.body, rivals, this.rivalResolved);
     }
     for (const member of this.members) {
       const body = member.body;
@@ -659,15 +687,10 @@ export class MistBattleSystem {
     }
   }
 
-  // The stalemate cap (STALEMATE_TIME). Against the King, the mist takes the
-  // King and the crown drops (_updateCrown). Over the crown, it ends the
-  // fight with the wearer — else the body holding the largest share of its
-  // HP — as the one left standing, crowned.
+  // The stalemate cap (STALEMATE_TIME): the mist ends the fight with the
+  // wearer — else the body holding the largest share of its HP — as the one
+  // left standing, crowned.
   _endStalemate() {
-    if (this.king) {
-      this.king.hp = 0;
-      return;
-    }
     const living = this.members.filter(m => m.body.hp > 0);
     if (living.length === 0) return this._beginEnding();
     const share = (m) => m.body.hp / m.body.maxHp;
@@ -736,11 +759,9 @@ export class MistBattleSystem {
     if (this.ending) this._updateEnding(deltaTime);
   }
 
-  // Who `member` goes for: the King while it stands; then the crown's wearer;
-  // the wearer itself (or anyone, while the crown lies on the ground) goes
-  // for every other body.
+  // Who `member` goes for: the crown's wearer; the wearer itself (or anyone,
+  // while the crown lies on the ground) goes for every other body.
   _rivalsOf(member, living) {
-    if (this.king) return this.king.hp > 0 ? [this.king] : [];
     const wearer = this.crown?.wearer;
     if (wearer && wearer !== member && wearer.body.hp > 0) return [wearer.body];
     return living.filter(m => m !== member && m.body.hp > 0).map(m => m.body);
@@ -1308,6 +1329,23 @@ export class MistBattleSystem {
     }
   }
 
+  // Act 1's end: the Gray King's crown, and once a body wears it the still
+  // beat before Act 2: every body stands where it is (no formation
+  // steering) until CROWN_HOLD runs out. True while the beat holds.
+  _updateCrownHold(deltaTime) {
+    if (this.king || (this.crown && !this.crown.wearer)) this._updateCrown();
+    if (this.crownHold <= 0) return false;
+    for (const body of this.presentBodies()) {
+      body.velocity.vx = 0;
+      body.velocity.vy = 0;
+      body.acceleration.ax = 0;
+      body.acceleration.ay = 0;
+    }
+    this.crownHold = Math.max(0, this.crownHold - deltaTime);
+    if (this.crownHold === 0) this.startAct2();
+    return true;
+  }
+
   // rest-parity: absent because the Mist Battle only exists in its EXPLORE arena.
   update(deltaTime) {
     if (!this.active) return;
@@ -1329,6 +1367,7 @@ export class MistBattleSystem {
 
     this._updateWaves(deltaTime);
     game.graspSystem.update(deltaTime);
+    if (this._updateCrownHold(deltaTime)) return;
 
     for (let k = 1; k < this.members.length; k++) {
       const member = this.members[(this.primaryIndex + k) % this.members.length];

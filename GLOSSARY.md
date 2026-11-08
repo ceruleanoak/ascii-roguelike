@@ -1075,37 +1075,39 @@ identity, not standard programming terms.
 ### Mist Battle
 - **Definition:** The false ending, triggered when the third character is lost to the gray
   mist. Two acts: Act 1 is a controlled final battle in which the player fights mixed waves
-  with all three lost characters at once as the Trine; after a brief delay, Act 2 has the three
-  fight the Gray King together, then each other over the Gray Crown, with no player input; the
-  last one standing, crowned, disappears into the gray. There are no credits.
+  with all three lost characters at once as the Trine, ending on the Gray King; when a body
+  takes the Gray Crown the King drops, then after a brief delay Act 2 has the three fight each
+  other over it with no player input; the last one standing, crowned, disappears into the gray.
+  There are no credits.
 - **In code:** `MistBattleSystem`, entered through `enterArena(snapshots)`: by the third gray
   mist-out (`GrayZoneSystem._finalizeMistOut` once `lostCharacters` reaches `MIST_BATTLE_LOST`,
   passing the last three `graySnapshots`), or from the CheatMenu BOSSES entries with random
   characters (`CheatWarpSystem.handleMistBattleTest`). Act 1 runs warm-up waves, then the Grasp
-  (`GraspSystem`), and ends at the Summit's zoom in `startAct2()`. Act 2 rebuilds the three as
-  fresh bodies (full HP, snapshotted gear, fixed triangle start), swallows all input
+  (`GraspSystem`), whose Summit zoom brings the Gray King (`startKing()`); a body taking the
+  crown holds every body still for `CROWN_HOLD` (`_updateCrownHold`, input swallowed through
+  `holdsTrine()`), then `startAct2()`. Act 2 rebuilds the three as fresh bodies (full HP,
+  snapshotted gear), each standing where its Act 1 body stood, swallows all input
   (`handleKeydown`), and ticks under a generator seeded from the snapshots (`runTick`). Each
   body's AI is in `src/systems/mistBattle/autoBattle.js`. Act 2 ends once no body stands or the
   one left wears the Gray Crown (`_isOver`): it holds a moment, then the gray mist closes over
   it (`GrayZoneSystem.closeOver`) and the run resets to title. A stalemate cap
-  (`STALEMATE_TIME`, restarted when the crown drops) ends each phase anyway: the mist takes the
-  Gray King, then crowns the wearer, else the highest HP share.
+  (`STALEMATE_TIME`) ends Act 2 anyway, crowning the wearer, else the highest HP share.
 - **Not:** a Boss fight; the mist-out itself (the per-character loss at gray depth 10).
 
 ### Gray King
-- **Definition:** The `@` in gray that opens Mist Battle Act 2, wearing the Gray Crown. The three
-  lost characters fight it side by side; its fall drops the crown.
+- **Definition:** The `@` in gray, wearing the Gray Crown, that comes at the Summit as Act 1's
+  last foe. The player fights it as the Trine; its fall drops the crown.
 - **In code:** data `GRAY_KING` in `src/data/enemies.js` (outside the `ENEMIES` registry, where
   `'@'` is the Training Dummy; `noLoot`, `knockbackResistance: 1`), spawned by
-  `MistBattleSystem._spawnKing()` in `startAct2()` and held as `mistBattleSystem.king`. It targets
-  all three bodies (`kingTargets`, read by `EnemyUpdateSystem._selectTarget`); its attacks land on
-  the bodies other than `game.player` through `resolveEnemyHitsOn` in `_resolveAct2`, and while
-  it stands the bodies' attacks don't hurt each other.
+  `MistBattleSystem._spawnKing()` from `startKing()` (`KING_DISTANCE` cells north of the Primary,
+  nearest free cell) and held as `mistBattleSystem.king`. Like any Act 1 enemy it targets and
+  hurts the Primary only.
 - **Not:** a Boss in `BossSystem`; the Training Dummy; a character.
 
 ### Gray Crown
 - **Definition:** What the Mist Battle's Act 2 is fought over. The Gray King wears it; when the
-  King falls it drops, and the first lost character to reach it wears it and turns gray. The
+  King falls it drops, and the first Trine body to reach it wears it and turns gray. Its taking
+  ends Act 1: a still beat (`CROWN_HOLD`), then Act 2, the wearer still crowned. The
   others go for the wearer; a wearer that falls drops it where it fell. The last one standing
   wears it into the gray. While it is out it is the only glyph drawn above a head.
 - **In code:** `mistBattleSystem.crown` (`{ x, y, wearer }`; `_updateCrown`, `_crown`,
@@ -1188,13 +1190,13 @@ identity, not standard programming terms.
 ### Summit
 - **Definition:** The end of the climb and of Act 1. The scroll stops, the north wall builds back,
   the south stays open for `SOUTH_EXPOSED_TIME`, then closes, and the camera zooms in on the
-  Trine. When the zoom settles, Act 2 begins. The zoom holds through Act 2, fitted to the bodies
-  still standing: as tight as `ZOOM_SCALE` while they and `ZOOM_FIT_MARGIN` around them fit the
+  Trine. When the zoom settles, the Gray King comes. The zoom holds through the King's fight
+  and Act 2, fitted to the bodies still standing (and the King or the crown on the ground): as tight as `ZOOM_SCALE` while they and `ZOOM_FIT_MARGIN` around them fit the
   screen, opening toward 1 as they spread, and closing back in on the lone victor.
 - **In code:** the `summit` / `zoom` phases of `GraspSystem`; `CameraZoomSystem.holdZoom` with a
   scale function (`GraspSystem._trineFitScale`, eased by `_scriptedScale`); ends in
-  `MistBattleSystem.startAct2()`.
-- **Not:** Act 2 itself; a Mountain room or the Ridge.
+  `MistBattleSystem.startKing()`.
+- **Not:** the Gray King's fight or Act 2; a Mountain room or the Ridge.
 
 ### Trine
 - **Definition:** The three-body formation the player controls in the Mist Battle's Act 1: the
