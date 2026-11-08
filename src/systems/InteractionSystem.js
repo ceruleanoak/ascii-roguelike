@@ -1,3 +1,4 @@
+import { unsealVault } from './vaultWalls.js';
 import { Item } from '../entities/Item.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { Leshy } from '../entities/Leshy.js';
@@ -187,6 +188,7 @@ export class InteractionSystem {
       game.currentRoom.collisionMap[bottomRow][col] = false;
     }
     vault.unlocked = true;
+    unsealVault(game.currentRoom, vault);
     // A bombable Vault's wall row is Bombable Wall objects — crack them all,
     // whichever method opened it.
     for (const wall of vault.wallObjects ?? []) {

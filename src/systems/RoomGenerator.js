@@ -15,6 +15,7 @@ import { spawnCellBlockedByBackground, findSafeSpawnPosition } from './safeSpawn
 import { maybeSpawnPeacefulFishingRoom, maybeSpawnRoamingAlchemist, buildVaultInteriorLoot, buildVaultCoinAbundance, buildVaultUnlockExtras, getIslandPosition, protectRegion, isCellProtected, cleanupStrayBackgroundObjects, resolveLavaHazards, seedCavern, rotatePattern, darkenColor, spawnBatFlock, spawnBelfryBats, stampHutFootprint, placeWhirlpool, generateSettlementRoom as generateSettlementRoomImpl, generateJewelerRoom, cellularCaveGrid, isCaveEntranceLanding, generateCalderaRoom, seedAscentZone, seedSinkholes, injectSinkholeLake, spawnMinibossOrFallback, generateGrassSwaths, generateSnowFields, generateRedZoneDeflectors, spawnGuaranteedItems, offerL1Weapon, offerWeaponIfUnarmed, seedTunnelZone, generateOceanTerrain as generateOceanTerrainImpl, stampWaterBlobs as stampWaterBlobsImpl, placeRoomLiquid } from './roomFeatures.js';
 import { pickUnspawnedItem, markItemSpawned } from './spawnedItems.js';
 import { placeVaultPushRock } from './PushRockSystem.js';
+import { attachVault } from './vaultWalls.js';
 import { generateRecipeSign, generateSpellSign } from './roomSigns.js';
 import { seedMetalPlatform, makeZoneLava, islandLavaFeatures } from './MetalPlatformSystem.js';
 
@@ -245,26 +246,8 @@ export class RoomGenerator {
       spawnGuaranteedItems(this, room);
     }
 
-    // Attach vault info if this is a vault room
-    if (this.currentVaultInfo) {
-      room.vaultInfo = this.currentVaultInfo;
-      this.currentVaultInfo = null; // Reset for next room
-    }
-
-    // Flush vault interior loot staged by placeVaultStructure
-    if (this.pendingVaultLoot?.length) {
-      room.backgroundObjects.push(...this.pendingVaultLoot);
-      this.pendingVaultLoot = [];
-    }
-
-    // Flush vault coins (non-gravitating ingredients) into game
-    if (this.pendingVaultCoins?.length) {
-      for (const coin of this.pendingVaultCoins) {
-        this.game?.ingredients?.push(coin);
-        this.game?.physicsSystem?.addEntity(coin);
-      }
-      this.pendingVaultCoins = [];
-    }
+    // Vault rooms: attach the Vault, seal its floor, flush its staged loot.
+    attachVault(this, room);
 
     // First-room flourish: a single idle crow in the very first green-zone
     // explore room, carrying a shiny it drops the first time it's scared.

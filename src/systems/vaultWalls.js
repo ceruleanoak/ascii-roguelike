@@ -53,3 +53,44 @@ export function vaultWallBlocksReach(room, attacker, target) {
   }
   return false;
 }
+
+/**
+ * Hand the Vault RoomGenerator.placeVaultStructure staged for this room over
+ * to the room: its vaultInfo, the seal on its floor, and the loot and coins
+ * staged inside it. No-op for every room without a Vault.
+ *
+ * A locked Vault's floor is open but has no walkable route in, so it is a
+ * sealed region (roomFeatures.isCellSealed): nothing may place the player
+ * there. The return from a neutral room lands on room centre, which is the
+ * Vault's centre, and stranded the player inside. Opening the wall lifts the
+ * seal (unsealVault).
+ */
+export function attachVault(generator, room) {
+  if (generator.currentVaultInfo) {
+    const vault = generator.currentVaultInfo;
+    generator.currentVaultInfo = null; // Reset for next room
+    room.vaultInfo = vault;
+    vault.sealedRegion = { kind: 'rect', minCol: vault.minCol, maxCol: vault.maxCol, minRow: vault.minRow, maxRow: vault.maxRow };
+    room.sealedRegions = [...(room.sealedRegions || []), vault.sealedRegion];
+  }
+
+  // Interior loot staged by placeVaultStructure
+  if (generator.pendingVaultLoot?.length) {
+    room.backgroundObjects.push(...generator.pendingVaultLoot);
+    generator.pendingVaultLoot = [];
+  }
+
+  // Coins (non-gravitating ingredients) go straight into the game
+  if (generator.pendingVaultCoins?.length) {
+    for (const coin of generator.pendingVaultCoins) {
+      generator.game?.ingredients?.push(coin);
+      generator.game?.physicsSystem?.addEntity(coin);
+    }
+    generator.pendingVaultCoins = [];
+  }
+}
+
+/** The Vault has a way in now: its floor is no longer sealed. */
+export function unsealVault(room, vault) {
+  room.sealedRegions = (room.sealedRegions || []).filter(region => region !== vault.sealedRegion);
+}
