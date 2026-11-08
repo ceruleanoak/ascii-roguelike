@@ -512,13 +512,19 @@ export class WorldEffectsSystem {
           game.physicsSystem.applyKnockback(entity, sw.x, sw.y, sw.knockback, 0.12);
           if (!isSlime && sw.damage > 0) {
             if (entity === game.player) {
-              // Credit the enemy whose landing/detonation threw the ring.
-              entity.takeDamage(sw.damage, { attacker: sw.owner });
-              game.combatSystem.createDamageNumber(sw.damage, entity.position.x, entity.position.y, entity.color);
+              // Credit the enemy whose landing/detonation threw the ring. The
+              // shared path honours a staff block and prints DODGE/BLOCK or the
+              // landed amount itself ([damage-number-desync]).
+              game.combatSystem._applyBlockableEnemyDamage(entity, sw.owner, sw.damage, { attacker: sw.owner });
             } else {
-              entity.takeDamage(sw.damage);
-              const at = enemyVisualAnchor(entity);
-              game.combatSystem.createDamageNumber(sw.damage, at.x, at.y, '#ffffff');
+              // A number only for a blow that landed: takeDamage returns false
+              // under iframes/shell form and { dodged } on a dodge.
+              const result = entity.takeDamage(sw.damage);
+              if (result !== false) {
+                const at = enemyVisualAnchor(entity);
+                if (result?.dodged) game.combatSystem.createDamageNumber('DODGE', at.x, at.y, '#ffffff');
+                else game.combatSystem.createDamageNumber(result?.actualDamage ?? sw.damage, at.x, at.y, '#ffffff');
+              }
             }
           }
           // Optional ignite (e.g. Bomb's RipenMechanic detonation) — opt-in via
