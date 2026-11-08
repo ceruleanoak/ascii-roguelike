@@ -660,12 +660,18 @@ export const MECHANICS = [
   {
     id: 'deathExplosion', title: 'Death explosion', gate: 'deathExplosion.enabled',
     fields: [
-      { key: 'deathExplosion.projectileCount', label: 'Projectile count', type: 'number', default: 8 },
-      { key: 'deathExplosion.projectileType', label: 'Projectile type', type: 'text', default: 'fire' },
-      { key: 'deathExplosion.speed', label: 'Speed (px/s)', type: 'number', default: 150 },
+      { key: 'deathExplosion.style', label: 'Style', type: 'select', options: ['', 'blast'], default: '',
+        help: "'' = projectile burst; 'blast' = Death Blast (blink, then the whole radius goes off)" },
+      { key: 'deathExplosion.projectileCount', label: 'Projectile count', type: 'number', default: 8, showIf: (d) => d.deathExplosion?.style !== 'blast' },
+      { key: 'deathExplosion.projectileType', label: 'Projectile type', type: 'text', default: 'fire', showIf: (d) => d.deathExplosion?.style !== 'blast' },
+      { key: 'deathExplosion.speed', label: 'Speed (px/s)', type: 'number', default: 150, showIf: (d) => d.deathExplosion?.style !== 'blast' },
+      { key: 'deathExplosion.spreadAngle', label: 'Spread angle (deg)', type: 'number', default: 360, showIf: (d) => d.deathExplosion?.style !== 'blast' },
+      { key: 'deathExplosion.element', label: 'Element (blast color)', type: 'text', default: 'magic', showIf: (d) => d.deathExplosion?.style === 'blast' },
+      { key: 'deathExplosion.radius', label: 'Blast radius', type: 'px', default: GRID_CELL * 2, showIf: (d) => d.deathExplosion?.style === 'blast' },
+      { key: 'deathExplosion.status', label: 'Blast status', type: 'text', default: '', showIf: (d) => d.deathExplosion?.style === 'blast' },
+      { key: 'deathExplosion.statusDuration', label: 'Status duration (s)', type: 'number', step: 0.1, default: 1.5, showIf: (d) => d.deathExplosion?.style === 'blast' },
       { key: 'deathExplosion.damage', label: 'Damage', type: 'number', default: 1 },
       { key: 'deathExplosion.deathDelay', label: 'Death delay (dbl-sec)', type: 'number', step: 0.1, default: 0 },
-      { key: 'deathExplosion.spreadAngle', label: 'Spread angle (deg)', type: 'number', default: 360 },
     ]
   },
   {

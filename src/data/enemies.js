@@ -1562,13 +1562,16 @@ export const ENEMIES = {
       shieldPhaseMovement: false,  // Doesn't retreat — it's a walking glacier
       shieldColor: '#aaeeff'
     },
+    // Death Blast: blinks over its blast circle, then the whole circle goes
+    // off at once and freezes what it catches (DeathExplosion.js)
     deathExplosion: {
       enabled: true,
-      projectileCount: 8,
-      projectileType: 'freeze',
-      speed: 80,
+      style: 'blast',
+      element: 'freeze',
+      radius: 56,
       damage: 2,
-      spreadAngle: 360,
+      status: 'freeze',
+      statusDuration: 1.5,
       deathDelay: 1.0
     },
     elementalAffinity: {
@@ -1981,11 +1984,13 @@ export const ENEMIES = {
     decisionInterval: 0.2,
     color: '#ffff88',
     float: true,
+    // Death Blast: the spark stops jittering, blinks over its blast circle
+    // and discharges all at once (DeathExplosion.js)
     deathExplosion: {
       enabled: true,
-      projectileCount: 4,
-      projectileType: 'magic',
-      speed: 100,
+      style: 'blast',
+      element: 'magic',
+      radius: 36,
       damage: 1,
       deathDelay: 0.8
     },

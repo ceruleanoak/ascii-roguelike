@@ -29,6 +29,7 @@ import { drawSinkholes } from '../effects/SinkholeEffects.js';
 import { drawDragonForge } from '../effects/DragonForgeDraw.js';
 import { drawDonationArc, drawCoinArc, drawWellRitual } from '../effects/ArcTossEffects.js';
 import { renderBombEnemy } from '../effects/BombEffects.js';
+import { dyingEnemyTell } from '../effects/DeathExplosionEffects.js';
 import { renderIceGolem, renderSmallEnemyUnderSnow, renderYetiFrenzyPip } from '../effects/CyanEnemyEffects.js';
 import { renderFishingPasses } from '../effects/FishingRenderEffects.js';
 import { drawStatusPips } from '../effects/StatusPipEffects.js';
@@ -951,18 +952,13 @@ export class ExploreRenderer {
         shakeY += Math.round(Math.cos(t * 137 + enemy.position.y) * 2);
       }
 
-      // Death-shake: enemy with deathExplosion shakes urgently before detonating
+      // Dying tell: a deathExplosion enemy shakes (burst) or blinks over its
+      // blast radius (Death Blast) before it goes off
       if (enemy.isDying) {
-        const t = Date.now() / 1000;
-        shakeX = Math.round(Math.sin(t * 120 + enemy.position.x) * 3);
-        shakeY = Math.round(Math.cos(t * 113 + enemy.position.y) * 3);
-        // Pulse toward the explosion color as the timer runs down
-        const de = enemy.data.deathExplosion;
-        const deathColor = de.projectileType === 'fire' ? '#ff6600'
-                         : de.projectileType === 'freeze' ? '#88ccff'
-                         : de.projectileType === 'magic' ? '#cc88ff'
-                         : '#ffcc44';
-        displayColor = Math.floor(Date.now() / 120) % 2 === 0 ? deathColor : displayColor;
+        const tell = dyingEnemyTell(this.renderer, enemy, displayColor);
+        shakeX = tell.shakeX;
+        shakeY = tell.shakeY;
+        displayColor = tell.color;
       }
 
       if (enemy.data?.isDummy) {
