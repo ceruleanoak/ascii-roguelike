@@ -30,8 +30,9 @@ import { enemyDistance, enemyNearestPoint } from '../systems/enemyHitTest.js';
  * (per CLAUDE.md's "printable ASCII for enemies/background objects"
  * convention — distinct from the Unicode-symbol rule that governs the
  * recipe-result sentinel chars in items.js); types are told apart by color.
- * equipWeapon() (feature-inbox: ground-weapon pickup) overrides the char to
- * the equipped weapon's glyph once armed — color still carries golem type.
+ * equipWeapon() (feature-inbox: ground-weapon pickup) never changes the
+ * char: the weapon is a held item, drawn above the golem's head in its own
+ * glyph and color (getWindupIndicator).
  */
 
 const RENDER_CHAR = 'g';
@@ -87,7 +88,7 @@ export class GolemCompanion {
     // per-type damage/range (see class comment).
     this.attackDamage = ATTACK_DAMAGE;
     this.attackRange = ATTACK_RANGE;
-    this.equippedWeaponChar = null;
+    this.equippedWeapon = null; // { char, color } of the held weapon, or null
     // A point it is sent to and holds (a Branch panel, DungeonPuzzleSystem);
     // null = follow the player. Enemies still come first.
     this.commandTarget = null;
@@ -223,7 +224,7 @@ export class GolemCompanion {
   // Render-path compatibility shim, mirrors Enemy's WindupTelegraphMechanic
   // surface so ExploreRenderer-style consumers can read a golem's windup the
   // same way they read an enemy's: guaranteed-white in the back half, plain
-  // red '!' the rest of the way (golems carry no equipped weapon to show).
+  // red '!' the rest of the way.
   isWindingUp() { return this.state === 'windup' && this.windupTimer > 0; }
 
   getWindupFlashColor() {
@@ -231,8 +232,15 @@ export class GolemCompanion {
     return this.windupTimer <= this.windupDuration / 2 ? '#ffffff' : null;
   }
 
+  // The head slot. An armed golem always shows its held weapon there, the
+  // weapon turning red through a windup so the tell is never lost; a
+  // bare-handed one shows the red '!' only while winding up.
   getWindupIndicator() {
-    if (!this.isWindingUp()) return null;
+    const windingUp = this.isWindingUp();
+    if (this.equippedWeapon) {
+      return { char: this.equippedWeapon.char, color: windingUp ? '#ff0000' : this.equippedWeapon.color, offsetY: -GRID.CELL_SIZE };
+    }
+    if (!windingUp) return null;
     return { char: '!', color: '#ff0000', offsetY: -GRID.CELL_SIZE };
   }
 
@@ -430,17 +438,16 @@ export class GolemCompanion {
     return best;
   }
 
-  // Simplified "equip": bump damage/range to the weapon's stats and swap
-  // the render char to it, so a weapon-carrying golem reads differently at
-  // a glance — no inventory slot, no use-cooldown, no unequip.
+  // Simplified "equip": bump damage/range to the weapon's stats and hold it
+  // above the golem's head (getWindupIndicator) — the golem's own glyph never
+  // changes. No inventory slot, no use-cooldown, no unequip.
   equipWeapon(item) {
     this.attackDamage = item.data.damage ?? this.attackDamage;
     // Not every melee entry carries `range` (resolveWeaponDefaults only
     // fills it via SUBTYPE_DEFAULTS for some subtypes) — keep the current
     // reach rather than collapsing it to 0 when the field is absent.
     this.attackRange = item.data.range ?? this.attackRange;
-    this.equippedWeaponChar = item.char;
-    this.char = item.char;
+    this.equippedWeapon = { char: item.char, color: item.data.color || item.color || '#ffffff' };
   }
 
   // bug-inbox #10: "Mud golems should be destroyed by water and lava. Magma

@@ -44,8 +44,9 @@ export function drawGolems(renderer, game, shouldRenderEntity) {
       golem.char,
       color
     );
-    // Windup telegraph ('!' above the head) — bug-inbox: golems attacked
-    // with no tell. Mirrors ExploreRenderer._drawHeadIndicator for enemies.
+    // Head slot: the held weapon, or the windup '!' when bare-handed —
+    // bug-inbox: golems attacked with no tell. Mirrors
+    // ExploreRenderer._drawHeadIndicator for enemies.
     const indicator = golem.getWindupIndicator?.();
     if (indicator) {
       renderer.drawEntity(
