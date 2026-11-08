@@ -976,6 +976,8 @@ class Game {
     this.player.quickSlots = [...this.inventorySystem.restQuickSlots];
     this.player.activeSlotIndex = this.inventorySystem.restActiveSlotIndex;
     this.player.destroyedSlots = [...(this._savedDestroyedSlots ?? [false, false, false])];
+    // Resting reloads every gun and bow in full
+    const restFletch = refillQuiversForNewRoom(this.player);
 
     // The hub room itself: bare walls with the north exit cut into them.
     this.currentRoom = this.roomGenerator.createRestRoom();
@@ -1042,6 +1044,8 @@ class Game {
 
     // Mark background dirty
     this.renderer.markBackgroundDirty();
+
+    if (restFletch) announceQuiverFull(this, restFletch);
 
     // Mute layer 2 (bassline) in REST mode
     this.audioSystem.setLayer2Enabled(false);
@@ -1188,6 +1192,8 @@ class Game {
 
     // Reset fishing system for new room
     this.fishingSystem.resetForNewRoom(this.player);
+    // A new room reloads every gun and bow in full
+    const fletch = refillQuiversForNewRoom(this.player);
 
     // Reset hut/dungeon/maze state on room transition
     this.interiorManager.reset();
@@ -1201,6 +1207,7 @@ class Game {
     // Physics + combat for the neutral room, enemies included (Limited Explore).
     this.wireRoomEnemies(this.currentRoom);
     this.registerRoomWorld(this.currentRoom);
+    if (fletch) announceQuiverFull(this, fletch);
 
     // Update collision map
     this.updateExitCollisions();

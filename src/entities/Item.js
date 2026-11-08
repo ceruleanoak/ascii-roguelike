@@ -1805,7 +1805,7 @@ export class Item {
     return n;
   }
 
-  // Reset bow and wand uses when entering a new room
+  // Reset bow and wand uses when entering a new room or REST
   resetUses() {
     // Reset bow uses
     if (this.maxUses !== null) {
@@ -1813,6 +1813,14 @@ export class Item {
       // Also clear the infinite cooldown if bow was depleted
       if (this.cooldownTimer > 1000) {
         this.cooldownTimer = 0;
+      }
+      // A full magazine ends any reload in progress: the gun leaves the room
+      // loaded rather than finishing a reload it no longer needs.
+      if (this._reloading) {
+        this._reloading = false;
+        this.cooldownTimer = 0;
+        this._reloadTicksPlayed = 0;
+        this._reloadTicksPending = 0;
       }
     }
 

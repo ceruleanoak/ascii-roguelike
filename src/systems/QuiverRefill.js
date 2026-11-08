@@ -1,7 +1,9 @@
 import { GRID } from '../game/GameConfig.js';
 
-// New room = fresh arrows: every quick-slot bow (and wand) refills, then a
-// worn Fletch of Arrows tops each bow past its quiver by its bonusArrows.
+// New room = fresh arrows: every quick-slot bow, gun (and wand) refills in
+// full, ending any reload in progress, then a worn Fletch of Arrows tops each
+// bow past its quiver by its bonusArrows. Called on every room the player
+// enters: an EXPLORE room, a neutral room, and REST.
 // Returns the Fletch that acted, or null, so the caller can float its
 // Passive Indicator once the room swap has settled (announceQuiverFull).
 export function refillQuiversForNewRoom(player) {
