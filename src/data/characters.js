@@ -66,17 +66,5 @@ export const CHARACTER_TYPES = {
       'gun': { fireRateBonus: 0.2 } // 20% faster gun fire rate
     },
     starterWeapon: '⚚' // Storm Staff — slot 1 when this character's loadout is first created
-  },
-  'gray': {
-    name: 'Gray Assassin',
-    color: '#888888',
-    rollType: 'dodge',
-    rollDuration: 0.12, // Faster dodge
-    rollCooldown: 0.35,
-    rollSpeed: 700,
-    rollIframes: 0.08, // Tightest tail — the Assassin rolls often and precisely
-    weaponAffinities: {
-      'trap': { additionalCharge: 1 } // +1 trap capacity (if traps exist)
-    }
   }
 };

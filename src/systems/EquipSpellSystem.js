@@ -170,8 +170,7 @@ function byScore(items, value) {
 // weaponAffinities favor (Green Ranger's bows, Red Warrior's melee, Yellow
 // Mage's guns) leans in, one it penalizes (Red Warrior's bows) leans out, and
 // a weapon of their Starter Weapon's kind (Cyan Rogue's daggers, Yellow Mage's
-// staves) leans in. A character with neither (Gold Hero, Gray Assassin, whose
-// trap affinity the utility slot already answers) leans nowhere.
+// staves) leans in. A character with neither (Gold Hero) leans nowhere.
 function characterLean(player) {
   const character = CHARACTER_TYPES[player?.characterType];
   if (!character) return () => 0;

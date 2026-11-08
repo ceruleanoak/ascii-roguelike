@@ -23,7 +23,7 @@ export class Captive extends NeutralCharacter {
     const color = Captive.getColorForType(characterType);
     super('@', color, x, y);
 
-    this.characterType = characterType; // 'red', 'cyan', 'yellow', 'gray'
+    this.characterType = characterType; // 'red', 'cyan', 'yellow'
     this.width = GRID.CELL_SIZE * 3; // Wider for cage
     this.height = GRID.CELL_SIZE * 3; // Taller for cage
     this.cageDestroyed = false; // First interaction: destroy cage
@@ -58,8 +58,7 @@ export class Captive extends NeutralCharacter {
       'green': '#00ff00',
       'red': '#ff4444',
       'cyan': '#44ffff',
-      'yellow': '#ffff44',
-      'gray': '#888888'
+      'yellow': '#ffff44'
     };
     return colors[type] || '#ffffff';
   }

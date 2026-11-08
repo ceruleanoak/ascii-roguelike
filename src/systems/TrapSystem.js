@@ -234,8 +234,9 @@ export class TrapSystem {
   }
 
   // A slotted trap's full per-room charge count: authored charges per copy
-  // owned, plus the character's trap affinity bonus (Gray Assassin's +1, the
-  // same bonus Player.pickupItem grants a newly picked-up trap).
+  // owned, plus the character's trap affinity bonus (`weaponAffinities.trap`,
+  // no character carries one today; the same bonus Player.pickupItem grants a
+  // newly picked-up trap).
   roomCharges(item) {
     const perCopy = item.data.charges ?? 3;
     const bonus = this.game.player?.weaponAffinities?.trap?.additionalCharge ?? 0;

@@ -586,7 +586,7 @@ export class Player {
   }
 
   pickupItem(item, selectedSlotIdx = 0) {
-    // Apply trap capacity affinity (e.g. Gray Assassin: +1 trap charge on pickup)
+    // Apply trap capacity affinity (`weaponAffinities.trap.additionalCharge`: +N trap charges on pickup)
     if (item?.data?.type === 'TRAP' && item.charges != null) {
       const affinity = this.weaponAffinities?.['trap'];
       if (affinity?.additionalCharge) item.charges += affinity.additionalCharge;
