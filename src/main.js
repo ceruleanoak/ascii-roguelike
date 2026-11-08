@@ -3538,8 +3538,8 @@ class Game {
   }
 
   // Rebuild physics and clear combat for the room now in currentRoom: the
-  // player, the room's enemies, the floor items, the camp NPC and the
-  // companions. Shared by applyRoomSwap and both edges of a NEUTRAL room
+  // player, the room's enemies, the floor items and ingredients, the camp NPC
+  // and the companions. Shared by applyRoomSwap and both edges of a NEUTRAL room
   // (transitionToNeutralRoom, NeutralRoomSystem.returnToSavedRoom) — the
   // world tick runs in both states, so whatever room it ticks must be the
   // one registered.
@@ -3552,6 +3552,11 @@ class Game {
     }
     for (const item of this.items) {
       this.physicsSystem.addEntity(item);
+    }
+    // A restored room's ingredients left unregistered get attraction set
+    // but never integrated, so they never drift in (#555).
+    for (const ingredient of this.ingredients) {
+      this.physicsSystem.addEntity(ingredient);
     }
     this.campNPCSystem?.registerWithPhysics(this.physicsSystem);
     this.companionSystem.registerCompanionsWithPhysics();
