@@ -44,7 +44,14 @@ export function applyAOEStatus(position, radius, statusType, duration, enemies, 
 // lighter falloff createExplosion below.
 export function detonateBomb(game, x, y, { damage, radius, enemies, particles, color }) {
   for (const enemy of enemies) {
-    if (enemyInRadius(enemy, x, y, radius, 20)) enemy.takeDamage(damage);
+    if (!enemyInRadius(enemy, x, y, radius, 20)) continue;
+    // A number only for a blow that landed: takeDamage returns false under
+    // iframes/shell form and { dodged } on a dodge ([damage-number-desync]).
+    const result = enemy.takeDamage(damage);
+    if (result === false) continue;
+    const at = enemyVisualAnchor(enemy);
+    if (result?.dodged) game.combatSystem.createDamageNumber('DODGE', at.x, at.y, '#ffffff');
+    else game.combatSystem.createDamageNumber(result?.actualDamage ?? damage, at.x, at.y, '#ff8800');
   }
   createBurstParticles(game, particles, x, y, 20, color || '#ff4400');
   createExplosionAftermath(game, x, y, { shake: 10, shakeDuration: 0.5, smoke: 16, spread: radius * 0.5 });
