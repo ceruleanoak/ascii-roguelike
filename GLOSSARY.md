@@ -1309,8 +1309,9 @@ identity, not standard programming terms.
 ### Captive
 - **Definition:** The unlockable character a zone's first Miniboss room gives up: an `@` in that
   character's color, held in a 5x5 Cage that lands near the room's center when the room clears. It
-  paces inside, leaning toward the player. The room's exits stay shut while the Cage stands. The
-  first SPACE breaks the Cage; the second recruits the character.
+  paces inside, leaning toward the player. The first SPACE breaks the Cage; the second recruits the
+  character. The room's exits stay open while the Cage stands, shut when it breaks, and open again
+  once the character is recruited.
 - **In code:** `Captive` (`src/entities/Captive.js`); `CaptiveSystem` places it and resolves both
   interactions; `game.captives` holds the room's Captives.
 - **Not:** a Companion (a Captive joins the playable roster); a Neutral Room NPC.

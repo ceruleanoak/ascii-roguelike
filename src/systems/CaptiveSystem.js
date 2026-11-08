@@ -16,7 +16,7 @@ const FOOTPRINT_RADII = [2, 1, 0];
  * The miniboss reward: places the Captive, runs its Cage Drop and the
  * character's pacing inside the cage, and resolves the two SPACE interactions
  * (break the cage, recruit the character). Exit locking stays in ExitSystem,
- * which holds a room shut while any cage stands.
+ * which holds a room shut between breaking a cage and recruiting its character.
  */
 export class CaptiveSystem {
   constructor(game) {
