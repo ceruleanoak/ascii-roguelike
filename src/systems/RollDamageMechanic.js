@@ -1,5 +1,18 @@
 import { planeOf, inSamePlane, objectOnPlane } from './PlaneSystem.js';
 import { enemyOverlapsBox, enemyVisualAnchor } from './enemyHitTest.js';
+import { GRID } from '../game/GameConfig.js';
+
+// What the roll hits for, enemy or object.
+const ROLL_DAMAGE = 2;
+// A solid object stops the roll where PhysicsSystem stops the player's body
+// (position + width/height, far wider than the damage hitbox), so the object
+// test measures from the body and reaches this far past it to count that
+// stop as contact.
+const ROLL_CONTACT_REACH = 2;
+// The roll strikes objects as the Flail does — a blunt blow that breaks Rock
+// and Glittering Rock (breaksRock) and is refused by everything else that
+// answers to a particular tool (InteractionSystem.resolveSmashRefusal).
+const ROLL_STRIKE = Object.freeze({ damage: ROLL_DAMAGE, isBlunt: true, breaksRock: true });
 
 /**
  * Red Warrior's damage dodge-roll: smashes enemies and background objects on
@@ -42,10 +55,10 @@ export function updateRollDamage(combatSystem, player, enemies, backgroundObject
     if (!inSamePlane(player, enemy)) continue;
     if (enemyOverlapsBox(enemy, hitbox)) {
       combatSystem._rollHitEnemies.add(enemy);
-      const result = enemy.takeDamage(1);
+      const result = enemy.takeDamage(ROLL_DAMAGE);
       if (result) {
         const at = enemyVisualAnchor(enemy);
-        combatSystem.createDamageNumber(1, at.x, at.y, '#ff4444');
+        combatSystem.createDamageNumber(ROLL_DAMAGE, at.x, at.y, '#ff4444');
         // Knockback in the roll direction
         enemy.velocity.vx = dir.x * 300;
         enemy.velocity.vy = dir.y * 300;
@@ -55,18 +68,38 @@ export function updateRollDamage(combatSystem, player, enemies, backgroundObject
   }
 
   // Smash background objects on contact (once per object per roll)
+  const interactionSystem = combatSystem.game?.interactionSystem;
+  const reach = ROLL_CONTACT_REACH;
+  const body = {
+    x: player.position.x, y: player.position.y,
+    width: player.width || GRID.CELL_SIZE, height: player.height || GRID.CELL_SIZE,
+  };
   for (const obj of backgroundObjects) {
     if (obj.destroyed || obj.isRecipeSign || obj.indestructible || obj.hp === null) continue;
     if (!objectOnPlane(obj, planeOf(player))) continue;
     if (combatSystem._rollHitObjects.has(obj)) continue;
     const ob = obj.getHitbox();
-    if (hitbox.x < ob.x + ob.width && hitbox.x + hitbox.width > ob.x &&
-        hitbox.y < ob.y + ob.height && hitbox.y + hitbox.height > ob.y) {
+    if (body.x - reach < ob.x + ob.width && body.x + body.width + reach > ob.x &&
+        body.y - reach < ob.y + ob.height && body.y + body.height + reach > ob.y) {
       combatSystem._rollHitObjects.add(obj);
-      const result = obj.takeDamage(1, false);
+      const damage = rollDamageTo(interactionSystem, obj);
+      if (damage <= 0) {
+        combatSystem.createDamageNumber('!', obj.position.x, obj.position.y, '#aaaaaa');
+        continue;
+      }
+      const result = obj.takeDamage(damage, false);
       if (result.effect) {
         combatSystem.objectDestroyEvents.push({ obj, effect: result.effect });
       }
     }
   }
+}
+
+// The roll's damage to one object, or 0 when the object refuses it — the
+// same answers a Flail swing gets from InteractionSystem.
+function rollDamageTo(interactionSystem, obj) {
+  if (!interactionSystem) return ROLL_DAMAGE;
+  if (obj.data?.glitteringRock) return interactionSystem.resolveGlitteringRockDamage(ROLL_STRIKE, obj);
+  if (interactionSystem.resolveSmashRefusal(ROLL_STRIKE, obj)) return 0;
+  return interactionSystem.resolveSmashDamage(ROLL_STRIKE, obj);
 }
