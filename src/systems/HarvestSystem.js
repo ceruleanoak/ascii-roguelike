@@ -58,7 +58,7 @@ const FORAGE_CHARS = new Set(['ŋ', '&', 'e', 'n', '8', '*', 'i']);
 // left out when the question is whether the player carries a tool for the
 // material at all). Trees fall only to an axe; rocks to the pickaxe, a
 // hammer or the Flail (InteractionSystem.resolveSmashRefusal). A Glittering
-// Rock is a rock too, but takes only the pickaxe or a hammer of its
+// Rock is a rock too, but takes only the pickaxe, the Flail or a hammer of its
 // minHammerLevel (InteractionSystem.resolveGlitteringRockDamage).
 // HARVEST works them in `stage` order: containers first, then trees, rocks and
 // Brush, Boulders and the forage together, then grass (any blade, richest
@@ -88,16 +88,17 @@ const MATERIALS = {
     is: obj => obj.data?.dropEffect === 'destroyObject:rockHarvest'
       || !!(obj.data?.glitteringRock && obj.data.showsGlitter),
     // Mirrors the strike rules: a pickaxe mines anything; a Glittering Rock
-    // takes only a hammer of its minHammerLevel
+    // takes the Flail (breaksRock) or a hammer of its minHammerLevel
     // (InteractionSystem.resolveGlitteringRockDamage); plain Rock takes any
-    // hammer or the Flail (breaksRock).
+    // hammer or the Flail.
     tool: (item, obj) => {
       const data = item?.data;
       if (data?.isPickaxe) return true;
       const isHammer = data?.weaponSubtype === 'hammer';
       if (obj?.data?.glitteringRock) {
         const minLevel = obj.data.minHammerLevel;
-        return isHammer && minLevel !== undefined && (data.weaponLevel ?? 0) >= minLevel;
+        if (minLevel === undefined) return false;
+        return !!data?.breaksRock || (isHammer && (data.weaponLevel ?? 0) >= minLevel);
       }
       return isHammer || !!data?.breaksRock;
     },

@@ -92,11 +92,15 @@ export class InteractionSystem {
   // at its stone bonus. A rock that declares `minHammerLevel` also gives to a
   // hammer of that weapon level or better, the same way a Boulder does: heft is
   // the level, not the damage, which is 3 on the base Hammer and most of its
-  // upgrades alike. The Vein Rock declares none: its secret stays the pickaxe's.
+  // upgrades alike. The Flail (`breaksRock`) breaks any rock a hammer could,
+  // whatever its level: breaking rock is its whole trade. The Vein Rock
+  // declares no minHammerLevel: its secret stays the pickaxe's.
   resolveGlitteringRockDamage(attack, obj) {
     if (attack.isPickaxe) return attack.damage * PICKAXE_ROCK_MULT;
     const minLevel = obj.data?.minHammerLevel;
-    if (attack.canSmash && minLevel !== undefined && attack.weaponLevel >= minLevel) return attack.damage;
+    if (minLevel === undefined) return 0;
+    if (attack.breaksRock) return attack.damage;
+    if (attack.canSmash && attack.weaponLevel >= minLevel) return attack.damage;
     return 0;
   }
 

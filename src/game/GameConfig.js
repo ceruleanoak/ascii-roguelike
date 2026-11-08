@@ -1046,7 +1046,8 @@ export const BACKGROUND_OBJECTS = {
     showsGlitter: true,
     // The weapon level a hammer needs to break it (InteractionSystem
     // .resolveGlitteringRockDamage): the base Hammer bounces off, any heavier
-    // hammer breaks through. The pickaxe ignores it.
+    // hammer breaks through. The pickaxe and the Flail ignore it; declaring it
+    // at all is what opens the rock to anything but the pickaxe.
     minHammerLevel: 2,
     solid: true,
     tunnelWall: false,
