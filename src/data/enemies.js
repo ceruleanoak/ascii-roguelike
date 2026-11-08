@@ -62,6 +62,37 @@ export const RABBIT = {
   tier: 'weak' // "1 meat, chance of fur" — modest drop count/rarity
 };
 
+// The Gray King: the Mist Battle's Act 2 opens with the three lost characters
+// fighting it together; it wears the Gray Crown, and its fall drops the
+// crown they then fight each other over (MistBattleSystem). Not in the
+// ENEMIES registry ('@' there is the Training Dummy): only MistBattleSystem
+// spawns it, by data override.
+export const GRAY_KING = {
+  char: '@',
+  name: 'Gray King',
+  description: 'Wears the crown.',
+  // Before the gray zone's hardMode +50% (45 HP, 5 damage in the arena).
+  // The three bring it down together in about 8s (median over 30 seeds).
+  hp: 30,
+  mass: 3.0,
+  // Stands its ground: knocked about, it drifted past the bodies' leash
+  // (autoBattle LEASH) where their melee goals stopped short of it.
+  knockbackResistance: 1,
+  speed: 32,
+  acceleration: 140,
+  damage: 3,
+  attackRange: GRID.CELL_SIZE * 2,
+  aggroRange: GRID.CELL_SIZE * 40, // the whole arena: it comes for them at once
+  attackCooldown: 1.3,
+  attackWindup: 1.0,
+  attackType: 'melee',
+  decisionInterval: 0.35,
+  color: '#888888', // ZONE_COLORS.gray
+  affinities: ['undead', 'humanoid'],
+  tier: 'boss',
+  noLoot: true // it drops the crown alone (LootSystem.spawnLoot)
+};
+
 // Enemy definitions
 // Note: 1 unit = GRID.CELL_SIZE = 16 pixels
 //

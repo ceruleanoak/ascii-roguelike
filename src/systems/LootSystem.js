@@ -136,6 +136,10 @@ export class LootSystem {
   spawnLoot(enemy) {
     const game = this.game;
 
+    // An enemy whose only drop is scripted elsewhere (the Gray King's crown,
+    // MistBattleSystem) drops nothing here: no roll, no coin, no mana.
+    if (enemy.data.noLoot) return;
+
     // Stolen goods (ThiefMechanic — Rat/Plague Rat coins, Monkey satchel):
     // whatever the thief is still carrying on death goes back to the player
     // unconditionally, not gated by affinities/tier/luck like a natural drop

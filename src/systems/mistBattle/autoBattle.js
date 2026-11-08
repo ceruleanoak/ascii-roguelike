@@ -269,12 +269,25 @@ function tryRoll(game, body, threat) {
   }
 }
 
-/** One decision: target, facing, slot, goal, and a roll if threatened. */
-function think(game, member, rivals, arena, onSlotSwitch) {
+/**
+ * One decision: target, facing, slot, goal, and a roll if threatened. With
+ * `seek` (a center point) the body heads there instead of to its fighting
+ * spot, and still strikes at whatever rival comes into reach on the way.
+ */
+function think(game, member, rivals, arena, onSlotSwitch, seek) {
   const { body, brain } = member;
   const target = nearestRival(body, rivals);
   brain.target = target;
-  if (!target) { brain.goal = null; return; }
+  // Not leashed: the crown lies where its wearer fell, and a goal clamped
+  // short of it would leave every body standing just out of reach.
+  if (seek) {
+    brain.goal = seek;
+    brain.goalRadius = 0;
+  }
+  if (!target) {
+    if (!seek) brain.goal = null;
+    return;
+  }
 
   const from = center(body);
   const at = center(target);
@@ -284,6 +297,7 @@ function think(game, member, rivals, arena, onSlotSwitch) {
   const threat = findThreat(game, body, rivals);
   if (threat) tryRoll(game, body, threat);
 
+  if (seek) return;
   const kind = weaponKind(body.heldItem);
   if (kind === 'ranged') {
     brain.goal = firingPost(from, at, arena);
@@ -370,9 +384,11 @@ function move(game, member, aligned) {
  * `arena` the center point goals are leashed to. `fire(member, attack)`
  * commits the body's attack as the player's own; `punch(member)` throws the body's Punch when it has
  * nothing to swing; `onSlotSwitch(member)` is told when the body draws a
- * different weapon.
+ * different weapon. `seek`, when given, is a center point the body makes for
+ * whatever its rivals do (the Gray Crown on the ground); with no rival left
+ * it still walks there.
  */
-export function driveBody(game, member, rivals, arena, deltaTime, { fire, punch, onSlotSwitch }) {
+export function driveBody(game, member, rivals, arena, deltaTime, { fire, punch, onSlotSwitch, seek = null }) {
   const { body, brain } = member;
   if (brain.reaction === null) brain.reaction = REACTION_MIN + Math.random() * REACTION_SPREAD;
   brain.clock += deltaTime;
@@ -380,12 +396,15 @@ export function driveBody(game, member, rivals, arena, deltaTime, { fire, punch,
   brain.thinkTimer -= deltaTime;
   if (brain.thinkTimer <= 0 || !rivals.includes(brain.target)) {
     brain.thinkTimer = THINK_INTERVAL + Math.random() * THINK_JITTER;
-    think(game, member, rivals, arena, onSlotSwitch);
+    think(game, member, rivals, arena, onSlotSwitch, seek);
   }
   const target = brain.target;
   if (!target) {
-    body.velocity.vx = 0;
-    body.velocity.vy = 0;
+    if (seek) move(game, member, false);
+    else {
+      body.velocity.vx = 0;
+      body.velocity.vy = 0;
+    }
     return;
   }
   const from = center(body);

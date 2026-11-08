@@ -160,6 +160,12 @@ are the THREE room — see "Endings" and "Path to Canon" below.)*
   2. **Act 2 — the yield.** After Act 1 is complete, a brief delay, then the
      three characters fight each other. **The player has no input.**
      Auto-battle, last one standing. (No credits — 2026-10-29.)
+     It opens on the **Gray King** (`@`, gray), wearing the **Gray Crown**
+     (`♛`) above it; the three fight it together (2026-11-08). When it falls
+     they fight each other over the crown: the first to take it wears it and
+     turns gray, a fallen wearer drops it for the next, and while the crown is
+     out it is the only glyph above a head (no weapon glyphs). The last one
+     standing, crowned, disappears into the gray.
 - **The player authors but does not control** (Act 2). *Which* three characters
   you lost, with *what* gear, decides the field — then canon resolves it. The
   battle should be deterministic (seeded — the mulberry32/DemoSystem seam
@@ -174,13 +180,15 @@ are the THREE room — see "Endings" and "Path to Canon" below.)*
   Clutch of small hands, then faster under massive Fingers that must be beaten
   back above the Trap Line. At the Summit the north wall returns, the south
   stays open a moment, then closes, and the camera zooms in: Act 2 begins.
-- **Status (2026-11-04)**: built end to end. The third gray mist-out enters the
+- **Status (2026-11-08)**: built end to end. The third gray mist-out enters the
   Mist Battle with the real snapshots (the CheatMenu BOSSES entries still roll
   random characters). Act 2: the three fight fresh (full HP, their snapshotted
   gear, fixed start points), weapon-driven (nearest rival, slot by range, own
-  roll, own consumables), seeded from the snapshots. The victor stands a moment,
-  then the gray mist closes over it and the run resets to title: no text, no
-  credits. A 90s stalemate cap closes the mist anyway (highest HP share stands).
+  roll, own consumables), seeded from the snapshots — first the Gray King side
+  by side, then each other over the Gray Crown. The crowned victor stands a
+  moment, then the gray mist closes over it and the run resets to title: no
+  text, no credits. A 90s stalemate cap per phase: the mist takes the King
+  (the crown drops), then crowns the wearer, else the highest HP share.
 
 ### Endings (restated 2026-10-09 — supersedes the Win/Know/Yield list)
 
@@ -197,8 +205,9 @@ way south, which gives the EXIT command in puzzle form."*
 4. **The non-ending conclusion** — EXITGAME itself: the player leaves the game and
    becomes the creator. See "Path to Canon."
 
-Still open from the old list: whether "all 3 zone bosses in one run" gets an
-end beat at all.
+The zone bosses, once beaten, lead the player to the Gray: this is the
+**warrior's path** (author, 2026-11-08). Paths always refer to paths "to the
+Gray." *(Open: how this reads against "Red — the Warrior's path" below.)*
 
 The Three's voice in its room (talk words, the True 3 riddles, wishes and **GIVE**,
 which trades a Three Room slot for a wish word and begins a Cursed Run) is planned

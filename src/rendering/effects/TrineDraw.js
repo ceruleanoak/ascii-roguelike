@@ -4,7 +4,9 @@
 // companions, a step dimmer than the Primary so the one you steer reads at a
 // glance. In Act 2 nobody is steered, so every body draws at full strength.
 // After a 1/2/3 swap (or an Act 2 body drawing another weapon) every body,
-// Primary included, briefly shows its newly held weapon glyph above it.
+// Primary included, briefly shows its newly held weapon glyph above it —
+// except once the Gray King has dropped the Gray Crown: from then on the
+// crown is the only glyph above a head, so who wears it reads at once.
 // A Dormant body draws faint and brightens toward Flank strength as it
 // recovers, so its wake reads without a timer.
 // The player-layer Frame Passes draw game.player's own visible state (status
@@ -15,6 +17,7 @@
 // Surface-plane only: the Mist Battle arena is a plain gray combat room with no
 // Interior, so there is no PiP pass to share this with.
 import { GRID } from '../../game/GameConfig.js';
+import { ZONE_COLORS } from '../../data/zones.js';
 import { drawStatusPips } from './StatusPipEffects.js';
 import { drawDizzyOrbitals } from './DizzyOrbitals.js';
 import { drawParryIndicator } from '../ui/ParryIndicator.js';
@@ -22,6 +25,8 @@ import { drawGemWandCharge, drawHeldWindupCharge, drawRaisedWindupPose, drawStaf
 
 const FLANK_ALPHA_MULT = 0.7;
 const DORMANT_ALPHA_MIN = 0.2;
+// The Gray Crown, worn by the Gray King and then fought over (MistBattleSystem).
+const CROWN_GLYPH = '♛';
 
 export function drawTrine(renderer, game) {
   const mist = game.mistBattleSystem;
@@ -29,7 +34,7 @@ export function drawTrine(renderer, game) {
   const half = GRID.CELL_SIZE / 2;
   for (const { body, swapFlash } of mist.members) {
     const weapon = body.heldItem;
-    if (swapFlash <= 0 || !weapon || body.hp <= 0) continue;
+    if (mist.crown || swapFlash <= 0 || !weapon || body.hp <= 0) continue;
     renderer.drawTextWithAlpha(
       body.position.x + half,
       body.position.y + half - GRID.CELL_SIZE,
@@ -63,6 +68,11 @@ export function drawTrine(renderer, game) {
       body.getDisplayColor(),
       DORMANT_ALPHA_MIN + (FLANK_ALPHA_MULT - DORMANT_ALPHA_MIN) * recovered
     );
+  }
+  // The crown: a cell above the head wearing it, or where it lies.
+  const crown = mist.crownSpot();
+  if (crown) {
+    renderer.drawTextWithAlpha(crown.x, crown.worn ? crown.y - GRID.CELL_SIZE : crown.y, CROWN_GLYPH, ZONE_COLORS.gray, 1);
   }
 }
 
