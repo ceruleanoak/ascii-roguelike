@@ -798,8 +798,8 @@ export class TrapSystem {
       }
 
       t.landed = true; // spear/non-spear alike stop on first enemy hit
-      t.x = ex;
-      t.y = ey;
+      t.x = enemy.position.x + C / 2;
+      t.y = enemy.position.y + C / 2;
       return;
     }
   }
