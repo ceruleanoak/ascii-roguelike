@@ -2,6 +2,7 @@ import { GRID, COLORS } from '../game/GameConfig.js';
 import { ITEMS, WEAPON_TYPES, TRAINING_TECHNIQUES, resolveWeaponDefaults } from '../data/items.js';
 import { canonStandIn } from '../systems/CanonOverlay.js';
 import { arrowCharForAngle } from './arrowGlyph.js';
+import { PlayerInputSystem } from '../systems/PlayerInputSystem.js';
 
 /**
  * Carrier interface (duck-typed)
@@ -273,6 +274,7 @@ export class Item {
       // Windup complete - execute attack
       if (this.windupTimer <= 0 && this.windupActive && this.pendingPlayer) {
         this.windupActive = false;
+        PlayerInputSystem.veerDizzySwing(this.pendingPlayer);
         const attack = this.executeAttack(this.pendingPlayer);
         this.pendingPlayer = null;
 

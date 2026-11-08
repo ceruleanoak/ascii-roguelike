@@ -13,6 +13,9 @@ const CHARGING_MELEE_SPEED = 0.25;
 // to start reading reversed, and stays reversed for DIZZY_FLIP_SECONDS.
 const DIZZY_FLIP_RATE = 0.35;
 const DIZZY_FLIP_SECONDS = 0.5;
+// Dizzy at the end of a windup: the chance the swing goes off in another
+// direction, one to three eighths of a turn either way.
+const DIZZY_SWING_VEER_CHANCE = 0.5;
 
 // Count an axis's flip down, or start one. Returns whether it's reversed.
 function tickDizzyFlip(slot, field, deltaTime) {
@@ -77,6 +80,19 @@ export const PlayerInputSystem = {
       up: read('w', 's', flipY), down: read('s', 'w', flipY),
       left: read('a', 'd', flipX), right: read('d', 'a', flipX),
     };
+  },
+
+  // A windup just ended on `body`: if it's dizzy, the swing may go off in a
+  // new direction (DIZZY_SWING_VEER_CHANCE), as an enemy's Dizzy aim does
+  // (Enemy._dizzyAngleOffset). Facing is 8-way, so the turn is whole eighths.
+  // An enemy's held weapon fires from a position-only stand-in with no
+  // isDizzy; its aim is already scrambled where the stand-in is built.
+  veerDizzySwing(body) {
+    if (!body?.isDizzy?.() || Math.random() >= DIZZY_SWING_VEER_CHANCE) return;
+    const eighths = (1 + Math.floor(Math.random() * 3)) * (Math.random() < 0.5 ? -1 : 1);
+    const angle = Math.atan2(body.facing.y, body.facing.x) + eighths * Math.PI / 4;
+    body.facing.x = Math.round(Math.cos(angle));
+    body.facing.y = Math.round(Math.sin(angle));
   },
 
   update(player, inputState, lockFacing = false) {
