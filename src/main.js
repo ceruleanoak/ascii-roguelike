@@ -1956,7 +1956,7 @@ class Game {
       const moveLocked = fishingBlocked || windupLocked || this.player.titleSpawnMovementLocked || this.mistBattleSystem.holdsTrine();
       // A curse wander, FIGHT and CHOP/MINE/HARVEST hold the keys while they run; Rusalka and Dizzy act on them either way.
       const keys = this.cursedRunSystem.heldKeys(this) ?? this.fightSystem.heldKeys() ?? this.harvestSystem.heldKeys() ?? this.keys;
-      this.player.updateInput(PlayerInputSystem.heldMoveInput(this.player, keys, moveLocked), lockFacing);
+      this.player.updateInput(PlayerInputSystem.heldMoveInput(this.player, keys, moveLocked, deltaTime), lockFacing);
     } else {
       // Stop player movement when menu is open or dodge rolling
       this.player.updateInput({

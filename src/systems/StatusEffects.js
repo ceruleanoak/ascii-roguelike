@@ -119,7 +119,9 @@ const STATUS_EFFECTS = {
   // vision in tighter (the cave-fog overlay — drawVisionFogOverlay in
   // torchLight.js).
   blind: { enemy: {}, player: { stacks: 0 } },
-  dizzy: { enemy: { stacks: 0, durationPerStack: true }, player: { stacks: 0, durationPerStack: true } },
+  // Player: flipX/flipY are the seconds left that an axis's keys read
+  // turned around (PlayerInputSystem.heldMoveInput).
+  dizzy: { enemy: { stacks: 0, durationPerStack: true }, player: { stacks: 0, durationPerStack: true, flipX: 0, flipY: 0 } },
   // Pip track on both sides: each pip slows harder (GOO_PIP_SPEED), and
   // staying in slime climbs a pip every GOO_CONTACT_STACK s. Pips drain one
   // per decayInterval once the last contact's hold runs out. The player also

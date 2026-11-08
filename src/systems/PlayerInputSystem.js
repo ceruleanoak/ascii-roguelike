@@ -9,6 +9,24 @@ import { PHYSICS } from '../game/GameConfig.js';
 // Speed fraction while a melee weapon charges (a bat) or holds its windup.
 const CHARGING_MELEE_SPEED = 0.25;
 
+// Dizzy turns a body's keys around: each second, each axis has this chance
+// to start reading reversed, and stays reversed for DIZZY_FLIP_SECONDS.
+const DIZZY_FLIP_RATE = 0.35;
+const DIZZY_FLIP_SECONDS = 0.5;
+
+// Count an axis's flip down, or start one. Returns whether it's reversed.
+function tickDizzyFlip(slot, field, deltaTime) {
+  if (slot[field] > 0) {
+    slot[field] -= deltaTime;
+    return true;
+  }
+  if (Math.random() < DIZZY_FLIP_RATE * deltaTime) {
+    slot[field] = DIZZY_FLIP_SECONDS;
+    return true;
+  }
+  return false;
+}
+
 export const PlayerInputSystem = {
   // How a body's own swing caps its speed: a gun firing drops it to about a
   // third, a charging bat or a held windup (the Exploding Mace and every other
@@ -41,16 +59,24 @@ export const PlayerInputSystem = {
   // The held WASD keys as this frame's movement input, after everything that
   // gets between the player and their keys: a movement lock, the Rusalka's
   // song (each key registers only with probability rusalkaInputScale) and
-  // Dizzy (15% of the time a key reads as its opposite). Lifted from main.js.
-  heldMoveInput(player, keys, locked) {
+  // Dizzy (an axis now and then reads reversed for DIZZY_FLIP_SECONDS). The
+  // flip is held on the dizzy slot: a reversal rolled fresh each frame lasted
+  // one frame, and the keys put the player straight back on course (#550).
+  // Lifted from main.js.
+  heldMoveInput(player, keys, locked, deltaTime) {
     if (locked) return { up: false, down: false, left: false, right: false };
     const rs = player.rusalkaInputScale;
-    const dizzy = player.isDizzy();
-    const read = (key, opposite) => {
-      if (dizzy && Math.random() < 0.15) return keys[opposite];
-      return rs >= 1.0 ? keys[key] : (Math.random() < rs && keys[key]);
+    const dizzy = player.isDizzy() ? player.statusEffects.dizzy : null;
+    const flipX = !!dizzy && tickDizzyFlip(dizzy, 'flipX', deltaTime);
+    const flipY = !!dizzy && tickDizzyFlip(dizzy, 'flipY', deltaTime);
+    const read = (key, opposite, flipped) => {
+      const k = flipped ? opposite : key;
+      return rs >= 1.0 ? keys[k] : (Math.random() < rs && keys[k]);
     };
-    return { up: read('w', 's'), down: read('s', 'w'), left: read('a', 'd'), right: read('d', 'a') };
+    return {
+      up: read('w', 's', flipY), down: read('s', 'w', flipY),
+      left: read('a', 'd', flipX), right: read('d', 'a', flipX),
+    };
   },
 
   update(player, inputState, lockFacing = false) {
