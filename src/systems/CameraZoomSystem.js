@@ -1,5 +1,6 @@
 import { GRID, GAME_STATES, ZOOM } from '../game/GameConfig.js';
 import { isDeathHeldOffSurface, isInteriorActive, activeInteriorFloor } from './PlaneSystem.js';
+import { isConcealedEnemy } from './enemyConcealment.js';
 
 // Time constant (seconds) of a scripted frame's pan toward a moved focus:
 // ~95% of the way there in three of these.
@@ -23,6 +24,8 @@ const SCRIPTED_FIT_IN_SECONDS = 1.2;
  * ZOOM.RELEASE_RANGE_CELLS (hysteresis, avoids flicker at the boundary)
  * and no threat is left inside the zoomed frame — an enemy the player can
  * still see keeps the frame (and its Motif) engaged.
+ * A concealed enemy (isConcealedEnemy) is no threat to the frame, and the
+ * Ancient Shell's phase 2 holds it fully open (BossSystem.holdsFrameOpen).
  * Inside the Maze interior, zoom is forced on permanently at the tighter
  * ZOOM.MAZE_SCALE regardless of ghost proximity — the corridor is narrow enough
  * that it's always relevant. A worn Compass instead opens the Maze's frame all
@@ -234,6 +237,10 @@ export class CameraZoomSystem {
       // (isEntityOnScreen gates committed attacks) and shrink the player's
       // view of the obstacle field the chain is bouncing around in.
       if (game.currentRoom?.centipedeChains?.length) desiredScale = 1;
+
+      // A boss phase that spans the whole arena (the Ancient Shell's phase-2
+      // ricochet) holds the frame open for the rest of the fight.
+      if (game.bossSystem?.holdsFrameOpen() && !isInteriorActive(game)) desiredScale = 1;
 
       // A scripted frame overrides every trigger above, focus included.
       if (this.scripted) {
@@ -497,14 +504,19 @@ export class CameraZoomSystem {
 }
 
 // Whether an entity counts toward the combat zoom: alive, not a pacifist,
-// and not a coward — an enemy currently running away (State Flee) or
-// glancing back mid-flight (State Lookback) is disengaging, not aggro, and
-// doesn't warrant the combat-tension zoom just because the player happens
-// to be nearby. Entities without a spine (e.g. Maze ghosts) fall through
-// unaffected via the optional chain.
+// not concealed, and not a coward — an enemy currently running away (State
+// Flee) or glancing back mid-flight (State Lookback) is disengaging, not
+// aggro, and doesn't warrant the combat-tension zoom just because the player
+// happens to be nearby. A concealed enemy (a Tortoise tucked in its shell
+// passing for a rock, a mimic, a sniper or anything faded into tall grass —
+// isConcealedEnemy) doesn't zoom the frame either: the zoom would give the
+// disguise away, the same reason offscreen arrows and LOOKHERE skip it.
+// Entities without a spine (e.g. Maze ghosts) fall through unaffected via
+// the optional chain.
 function isThreat(e) {
   if (e.hp !== undefined && e.hp <= 0) return false;
   if (e.data?.pacifist) return false;
+  if (isConcealedEnemy(e)) return false;
   const spineState = e.stateMachine?.current;
   return spineState !== 'flee' && spineState !== 'lookback';
 }

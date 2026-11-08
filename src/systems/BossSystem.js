@@ -161,6 +161,16 @@ export class BossSystem {
     room.isBossRoom = true;
   }
 
+  /**
+   * Whether the fight holds the camera's frame fully open (CameraZoomSystem).
+   * The Ancient Shell's phase 2 ricochets wall to wall and fans rocks off
+   * every bounce, so a frame zoomed on the player would keep losing the shell
+   * off-screen and snap in and out as it passes.
+   */
+  holdsFrameOpen() {
+    return this.active && this.turtleShell !== null && this.bossPhase >= 2;
+  }
+
   deactivate() {
     this.active    = false;
     this.dragon    = null;
