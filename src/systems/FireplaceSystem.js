@@ -157,7 +157,7 @@ export class FireplaceSystem {
         counts.set('C', clamCount);
         items.push('C');
       }
-      const fishCount = game.inventorySystem.consumableInventory.filter(it => it.char === FISH_CHAR).length;
+      const fishCount = game.inventorySystem.countConsumable(FISH_CHAR);
       if (fishCount > 0) {
         counts.set(FISH_CHAR, fishCount);
         items.push(FISH_CHAR);
@@ -172,7 +172,7 @@ export class FireplaceSystem {
         counts.set(SLURRY_CHAR, slurryCount);
         items.push(SLURRY_CHAR);
       }
-      const berryCount = game.inventorySystem.consumableInventory.filter(it => it.char === '❋').length;
+      const berryCount = game.inventorySystem.countConsumable('❋');
       if (berryCount > 0) {
         counts.set('❋', berryCount);
         items.push('❋');
@@ -238,15 +238,15 @@ export class FireplaceSystem {
       return;
     } else if (rawChar === FISH_CHAR) {
       if (!fireplace.burning) return;
-      const fish = game.inventorySystem.consumableInventory.find(it => it.char === FISH_CHAR);
-      if (!fish || !game.inventorySystem.removeFromConsumableInventory(fish)) return;
+      // Fish stack by count, so spend one unit off the stack — removing the
+      // stack item itself cooked one fish and burned the rest (#554).
+      if (!game.inventorySystem.removeOneConsumable(FISH_CHAR)) return;
       const cooked = new Item(COOKED_FISH_CHAR, game.player.position.x, game.player.position.y);
       const stacked = game.inventorySystem.stowConsumable(cooked, game.player);
       game.menuSystem.announceCrafted(cooked.char, stacked);
     } else if (rawChar === '❋') {
       if (!fireplace.burning) return;
-      const berry = game.inventorySystem.consumableInventory.find(it => it.char === '❋');
-      if (!berry || !game.inventorySystem.removeFromConsumableInventory(berry)) return;
+      if (!game.inventorySystem.removeOneConsumable('❋')) return;
       // Mana goes to the magic meter once it is active, like every other
       // Mana source (MenuSystem._collectCraftedIngredient); the pile otherwise.
       game.menuSystem._collectCraftedIngredient('𝑚');
