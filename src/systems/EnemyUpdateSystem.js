@@ -11,6 +11,7 @@ import { createExplosionAftermath } from './WorldEffectsSystem.js';
 import { BumpMechanic } from '../entities/enemyMechanics/BumpMechanic.js';
 import { DartMechanic } from '../entities/enemyMechanics/DartMechanic.js';
 import { ChargeMechanic } from '../entities/enemyMechanics/ChargeMechanic.js';
+import { RipenMechanic } from '../entities/enemyMechanics/RipenMechanic.js';
 import { glyphsTouch } from '../entities/enemyMechanics/glyphContact.js';
 import { beginVisionFrame } from '../entities/enemyVision.js';
 import { detonateDeathExplosion } from './DeathExplosion.js';
@@ -670,6 +671,11 @@ export class EnemyUpdateSystem {
       }
       if (enemy.isDying && enemy.dyingTimer > 0) continue;
       if (enemy.hp <= 0) {
+        // A primed, uninterruptible Bomb killed mid-blink still goes off. Before
+        // loot: the detonation marks it spent, so it drops no Bomb.
+        const killedBlast = RipenMechanic.onKilled(enemy);
+        if (killedBlast) this._handleBombExplode(game.player, killedBlast, enemy);
+
         // Blood Robe: blade kill heals 1HP
         if (enemy.killedByBlade && game.player?.bladeKillHeal) {
           game.player.hp = Math.min(game.player.hp + 1, game.player.maxHp);

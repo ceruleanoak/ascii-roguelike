@@ -370,6 +370,10 @@ export const ENEMIES = {
       attackShapeTurn: 90
     },
     windupImmune: true,
+    // Its slam covers a whole trapezoid in front of it — an area to walk out
+    // of, not a swing to beat. Once started it lands: stun, freeze or
+    // knockback wait until it has.
+    strike: { uninterruptible: true },
     isImpact: true,
     affinities: ['humanoid'],
     tier: 'elite'
@@ -992,6 +996,9 @@ export const ENEMIES = {
     attackWindup: 1.2,
     windupMovement: 'advance',  // Crashes inward during telegraph — visible commitment
     attackType: 'fire',
+    // A five-flame cone (createFireBreath): an area to sidestep, so once it
+    // starts nothing stops it.
+    strike: { uninterruptible: true },
     decisionInterval: 0.5,
     color: '#ff4400',
     lavaImmune: true,
@@ -1105,6 +1112,7 @@ export const ENEMIES = {
     attackCooldown: 1.5,
     attackWindup: 1.0,  // Minimum 1 second telegraph
     attackType: 'fire',
+    strike: { uninterruptible: true },   // five-flame cone — dodge it, it can't be stopped
     movementStyle: 'keeper',  // Stays at flame range; too close and it backs off
     movementConfig: {
       strafeFlipInterval: 1.75,  // Reverses its orbit on a cadence — restless flame, not a wind-up toy
@@ -1380,7 +1388,10 @@ export const ENEMIES = {
           movement: 'still',   // plants for the read instead of advancing through it
           windup: 2.2,         // big windup — "get out of the way"
           damage: 5,
-          knockback: 900
+          knockback: 900,
+          // The answer to the slam is stepping inside the ring, not hitting
+          // first: no hit or status stops it once the Miner has planted.
+          uninterruptible: true
         }
       ]
     },
@@ -1435,15 +1446,17 @@ export const ENEMIES = {
       shockwaveSpeed: 220,
       shockwaveDamage: 6,       // falls off slightly vs. the point-blank hit
       shockwaveKnockback: 320,
-      burnDuration: 3.0         // real seconds — ignites anything caught in the blast (matches Firecracker's burn duration)
+      burnDuration: 3.0,        // real seconds — ignites anything caught in the blast (matches Firecracker's burn duration)
+      uninterruptible: true     // once primed it goes off, even killed mid-blink (RipenMechanic.onKilled)
     },
     idleBehavior: 'wander',
     elementalAffinity: {
       weakness: { 'freeze': 2.0 }
     },
     affinities: ['beast'],
-    // Killed before it goes off, a Bomb also drops a Bomb. One that detonated
-    // doesn't (LootSystem reads `ripenDetonated`) — that bomb is spent.
+    // Killed before it primes, a Bomb also drops a Bomb. One that detonated
+    // doesn't (LootSystem reads `ripenDetonated`) — that bomb is spent, and
+    // killing a primed Bomb detonates it.
     drops: [{ char: '⊗', chance: 1.0 }],
     tier: 'weak'
   },
@@ -1882,6 +1895,7 @@ export const ENEMIES = {
     attackWindup: 1.2,
     windupMovement: 'advance',  // Visibly surges forward — clear "incoming" signal
     attackType: 'magic',
+    strike: { uninterruptible: true },   // the steam burst always comes — "DODGE OUT."
     decisionInterval: 0.4,
     color: '#dddddd',
     small: true,           // Hides under deep snow — visible as cyan bump

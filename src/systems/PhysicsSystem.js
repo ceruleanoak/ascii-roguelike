@@ -314,7 +314,8 @@ export class PhysicsSystem {
     // loop already idles the main state machine while knockback is active.
     // An interrupted attack hands the turn to the enemy's other attack kind
     // (ChargeMechanic: charge ↔ melee) rather than re-arming the same one.
-    if (entity.state === 'windup') {
+    // An uninterruptible attack is shoved but keeps winding up.
+    if (entity.state === 'windup' && !entity.stateMachine?.isUninterruptible()) {
       entity.state = 'chase';
       entity.windupTimer = 0;
       ChargeMechanic.onMeleeInterrupted(entity);

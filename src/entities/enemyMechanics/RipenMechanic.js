@@ -19,8 +19,9 @@ import { GRID } from '../../game/GameConfig.js';
 // Data contract (enemies.js): ripenMechanic: { enabled, growDuration,
 // waggleAngle, waggleCycles, growthScales, blinkDelay, detonateRange,
 // detonateDamage, shockwaveMaxRadius, shockwaveSpeed, shockwaveDamage,
-// shockwaveKnockback }. Timers are double-seconds, matching every other
-// Enemy.js/Mechanic timer (PHYSICS.ENEMY_TIMER_RATE).
+// shockwaveKnockback, burnDuration, uninterruptible }. Timers are
+// double-seconds, matching every other Enemy.js/Mechanic timer
+// (PHYSICS.ENEMY_TIMER_RATE).
 //
 // Growth stage 0-3 is monotonic — once locked in, an interrupt only cancels
 // the *current attempt*, never regresses a stage already banked. The archetype
@@ -124,6 +125,23 @@ export const RipenMechanic = {
       if (enemy.targetVelocity) { enemy.targetVelocity.vx = 0; enemy.targetVelocity.vy = 0; }
       return { suspend: true, result: { dotDamage: dotDamageEvents } };
     }
+  },
+
+  // Called from EnemyUpdateSystem's dead-enemy loop. A Bomb killed mid-blink
+  // with `uninterruptible` set still goes off where it died: once primed, the
+  // explosion is coming, and killing it is no longer a way to stop it. Returns
+  // the same explodeData updateBlink does, or null when nothing detonates.
+  onKilled(enemy) {
+    const cfg = enemy.data.ripenMechanic;
+    if (!cfg?.enabled || !cfg.uninterruptible) return null;
+    if (!enemy.ripenPrimed || enemy.ripenDetonated) return null;
+    enemy.ripenDetonated = true;
+    return {
+      x: enemy.position.x + GRID.CELL_SIZE / 2,
+      y: enemy.position.y + GRID.CELL_SIZE / 2,
+      plane: enemy.plane ?? 0,
+      cfg
+    };
   },
 
   // Called early, alongside RiseAgainMechanic.update.

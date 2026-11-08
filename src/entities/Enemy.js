@@ -777,12 +777,15 @@ export class Enemy {
     // a plain speed slow instead (getSpeedMultiplier).
     // Every AI override below skips ChargeMechanic.update, which would leave a
     // charge windup paused and resuming afterwards — interrupt it instead.
-    if (this.isFullyAsleep() || this.isStunned() || this.isZapped() || this.isFrozen() || this.isKnockedBack()) {
+    // An uninterruptible attack (EnemyStateMachine.isUninterruptible) skips
+    // every override: it plays out, and the status takes hold afterwards.
+    const playsThrough = this.stateMachine?.isUninterruptible() ?? false;
+    if (!playsThrough && (this.isFullyAsleep() || this.isStunned() || this.isZapped() || this.isFrozen() || this.isKnockedBack())) {
       ChargeMechanic.interrupt(this);
       FrostLungeMechanic.interrupt(this);
       DartMechanic.interrupt(this);
     }
-    if (this.isFullyAsleep()) {
+    if (!playsThrough && this.isFullyAsleep()) {
       this.targetVelocity.vx = 0;
       this.targetVelocity.vy = 0;
       this.state = 'idle';
@@ -790,7 +793,7 @@ export class Enemy {
     }
 
     // Stun/Zap override all AI
-    if (this.isStunned() || this.isZapped()) {
+    if (!playsThrough && (this.isStunned() || this.isZapped())) {
       this.targetVelocity.vx = 0;
       this.targetVelocity.vy = 0;
       this.state = 'idle';
@@ -798,7 +801,7 @@ export class Enemy {
     }
 
     // Frozen: full immobilization — cannot move or attack
-    if (this.isFrozen()) {
+    if (!playsThrough && this.isFrozen()) {
       this.targetVelocity.vx = 0;
       this.targetVelocity.vy = 0;
       this.state = 'idle';
@@ -806,7 +809,7 @@ export class Enemy {
     }
 
     // Knockback overrides AI (keeps velocity set by knockback)
-    if (this.isKnockedBack()) {
+    if (!playsThrough && this.isKnockedBack()) {
       this.state = 'idle';
       return { dotDamage: dotDamageEvents };
     }
@@ -2109,12 +2112,13 @@ export class Enemy {
     this.enraged = true;
 
     // Damage during Strike's opening beat cancels the swing (unless the enemy
-    // is windupImmune). Zeroing windupTimer alone is not a cancel — Strike reads
+    // is windupImmune, or the attack is uninterruptible). Zeroing windupTimer alone is not a cancel — Strike reads
     // an expired windup as "swing now", so a hit made the attack land sooner.
     // Leaving Strike is what stops it: the legacy state stops reading 'attack',
     // so Telegraph discards the windup visual instead of activating it, and no
     // cooldown is charged (Strike's exit never charges one).
-    if (this.stateMachine?.current === 'strike' && this.windupTimer > 0 && !this.windupImmune) {
+    if (this.stateMachine?.current === 'strike' && this.windupTimer > 0 && !this.windupImmune
+        && !this.stateMachine.isUninterruptible()) {
       this.windupTimer = 0;
       this.stateMachine.transition(this, null, 'approach', 'windup interrupted');
       ChargeMechanic.onMeleeInterrupted(this);
