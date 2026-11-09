@@ -175,6 +175,7 @@ export function update(grasp, dt) {
   const dy = c.speed * dt;
   for (const piece of c.scenery) piece.y += dy;
   c.scenery = c.scenery.filter(piece => piece.y < FLOOR_TOP);
+  rideClimb(grasp, dy);
   if (c.spawning) {
     c.untilSpawn -= dy;
     if (c.untilSpawn <= 0) spawnScenery(c);
@@ -190,6 +191,35 @@ export function update(grasp, dt) {
   for (const s of c.streaks) {
     s.y += dy * STREAK_SPEED_MULT;
     if (s.y > FLOOR_TOP) respawnStreak(s, true);
+  }
+}
+
+/**
+ * What lands on the mountain after it breaks loose — background objects made
+ * mid-fight, items and ingredients dropped on the ground — is part of the world, so it rides
+ * the climb down with the scenery and is gone past the floor, instead of
+ * hanging still while the rock streams by.
+ */
+function rideClimb(grasp, dy) {
+  const room = grasp.room;
+  const objects = room.backgroundObjects;
+  if (objects.length > 0) {
+    for (const obj of objects) obj.position.y += dy;
+    // Spliced in place: physics and every enemy hold this same array.
+    for (let i = objects.length - 1; i >= 0; i--) {
+      if (objects[i].position.y >= FLOOR_TOP) objects.splice(i, 1);
+    }
+    room.backgroundRepaint = true;
+  }
+  const game = grasp.game;
+  for (const list of ['items', 'ingredients']) {
+    if (game[list].length === 0) continue;
+    game[list] = game[list].filter(drop => {
+      drop.position.y += dy;
+      if (drop.position.y < FLOOR_TOP) return true;
+      game.physicsSystem.removeEntity(drop);
+      return false;
+    });
   }
 }
 
