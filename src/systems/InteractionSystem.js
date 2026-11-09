@@ -26,6 +26,8 @@ const PICKAXE_ROCK_MULT = 2;
 const ROCK_CHARS = new Set(['0', '9', 'Q']);
 const isRock = obj => ROCK_CHARS.has(obj.char) || !!obj.data?.glitteringRock;
 const BERRIES_PER_SHRUB = 3;
+// Chance a frozen object (Freeze Trap) drops Ice when cut or broken.
+const FROZEN_ICE_CHANCE = 0.08;
 
 // Reach for the armed-Bottle fairy catch (InteractionSystem.tryBottleFairy).
 // Wider than AlchemySystem's one-cell liquid radius: a liquid tile sits still
@@ -758,6 +760,16 @@ export class InteractionSystem {
     return char instanceof Fairy && !char.consumed && char.state === 'flutter';
   }
 
+  // A frozen object — tall grass cut or anything broken — sometimes leaves
+  // Ice, on top of its own drop. Rolled before every effect branch, since
+  // several of them return early.
+  _rollFrozenIce(effect, obj) {
+    if (!obj.frozen) return;
+    const broken = effect === 'cutGrass' || (obj.hp != null && obj.hp <= 0);
+    if (!broken || Math.random() >= FROZEN_ICE_CHANCE) return;
+    this.game.lootSystem.spawnIngredientDrop('i', obj.position.x, obj.position.y, null, obj);
+  }
+
   // Retrigger the HP heal-blink CSS animation by toggling the class off/on.
   _blinkHPDisplay() {
     const el = document.getElementById('hp-display');
@@ -849,6 +861,8 @@ export class InteractionSystem {
   handleObjectEffect(effect, obj, attack = null) {
     const game = this.game;
     if (!effect) return;
+
+    this._rollFrozenIce(effect, obj);
 
     // Key items (green Vault's Vault Key, dungeon Skull Key): destroying the
     // carrying object spawns a real, pickup-able Item — held like any
