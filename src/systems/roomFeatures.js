@@ -1041,13 +1041,25 @@ export function injectSinkholeLake(gen, room) {
   const COLS = GRID.COLS, ROWS = GRID.ROWS;
   const isInClearing = (col, row) =>
     clearings.some(c => col >= c.minCol && col <= c.maxCol && row >= c.minRow && row <= c.maxRow);
-  const occupied = (col, row) => {
-    const x = col * GRID.CELL_SIZE, y = row * GRID.CELL_SIZE;
-    return room.backgroundObjects.some(o => !o.surfaceOnly && o.position.x === x && o.position.y === y);
-  };
+  // Glittering Rocks ('5') are scattered through the cave passages before this
+  // runs. They give way to the water (lifted off any cell it takes) — left in
+  // place, one sat in the river as a boulder. Anything else on the cave plane
+  // (the Red Vein Marker) stays, and the river routes around it.
+  const atCell = (col, row) => o =>
+    !o.surfaceOnly && o.position.x === col * GRID.CELL_SIZE && o.position.y === row * GRID.CELL_SIZE;
+  const isGlitteringRock = o => o.char === '5' && !!o.data?.glitteringRock;
+  const occupied = (col, row) =>
+    room.backgroundObjects.some(o => atCell(col, row)(o) && !isGlitteringRock(o));
   const canStampWater = (col, row) =>
     caveGrid[row]?.[col] === 0 && !isInClearing(col, row) &&
     !isCaveEntranceLanding(col, row) && !occupied(col, row);
+  const stampWater = (col, row) => {
+    // Spliced in place: the cave's enemies already hold this array.
+    const here = atCell(col, row);
+    const rock = room.backgroundObjects.findIndex(o => here(o) && isGlitteringRock(o));
+    if (rock !== -1) room.backgroundObjects.splice(rock, 1);
+    room.backgroundObjects.push(new BackgroundObject('≈', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE));
+  };
 
   const openCells = [];
   for (let r = 1; r < ROWS - 1; r++) {
@@ -1073,18 +1085,19 @@ export function injectSinkholeLake(gen, room) {
       const col = lakeCenter.col + dc, row = lakeCenter.row + dr;
       if (!canStampWater(col, row)) continue;
       lakeKeys.add(`${col},${row}`);
-      room.backgroundObjects.push(new BackgroundObject('≈', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE));
+      stampWater(col, row);
     }
   }
 
   // River trail: guaranteed-open BFS path from the lake out to the farthest
   // reachable cave cell — that far end is where the player arrives.
-  const { farCell, path } = bfsFarthestOpenPath(caveGrid, lakeCenter.col, lakeCenter.row, isInClearing);
+  const { farCell, path } = bfsFarthestOpenPath(caveGrid, lakeCenter.col, lakeCenter.row,
+    (col, row) => isInClearing(col, row) || occupied(col, row));
   for (const { col, row } of path) {
     const k = `${col},${row}`;
     if (lakeKeys.has(k) || !canStampWater(col, row)) continue;
     lakeKeys.add(k);
-    room.backgroundObjects.push(new BackgroundObject('≈', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE));
+    stampWater(col, row);
   }
 
   room._sinkholeArrivalSpawn = { x: farCell.col * GRID.CELL_SIZE, y: farCell.row * GRID.CELL_SIZE };
