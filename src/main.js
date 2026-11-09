@@ -1708,6 +1708,8 @@ class Game {
     // Limited Explore: the same world tick as EXPLORE — liquids and drowning,
     // enemies, combat, the death catch-all, world effects and companions.
     if (this._updateRoomWorld(deltaTime, dotKilledPlayer)) return;
+    // The status bar follows the world tick's damage and heals, as in EXPLORE.
+    this.updateUI();
 
     // An Inner Room's way in, or — from inside one — the way back out.
     if (this.neutralRoomSystem.tryInnerRoomExit(this)) return;
