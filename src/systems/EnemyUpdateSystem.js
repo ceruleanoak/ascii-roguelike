@@ -339,7 +339,9 @@ export class EnemyUpdateSystem {
       // The ram lands only when the rendered bodies meet (glyphContact.js).
       if (glyphsTouch(enemy, player)) {
         enemy.chargeHasHit = true;
-        const damage = enemy.getEffectiveDamage();
+        // A charge may hit harder than the enemy's swing (damageMult on its
+        // chargeMechanic data); blind still zeroes it via getEffectiveDamage.
+        const damage = Math.ceil(enemy.getEffectiveDamage() * (enemy.data.chargeMechanic.damageMult ?? 1));
         const result = player.takeDamage(damage, { isMelee: true, isCharge: true, attacker: enemy });
         if (result?.guard === 'DEFLECT') {
           // Deflect: the ram glances off and the charger reels as if it hit a wall.

@@ -681,8 +681,11 @@ export const ENEMIES = {
     trueName: 'BOLVERK',
     mass: 2,
     hp: 22,
-    speed: 44,                       // Slow — the "player is distant" trigger fires often
-    acceleration: 70,
+    // Slower than his pack (Goblins 70) so the "player is distant" rally
+    // trigger still fires, but no longer a crawl: at 44 / acceleration 70
+    // friction held him to 38 px/s against the player's 180.
+    speed: 56,
+    acceleration: 220,
     damage: 3,
     attackRange: GRID.CELL_SIZE * 2.5,
     aggroRange: GRID.CELL_SIZE * 12,
@@ -692,11 +695,21 @@ export const ENEMIES = {
     attackType: 'melee',
     decisionInterval: 0.7,
     color: '#117711',
+    // The stone hammer: a big circle slam the size of his 2.5-cell reach,
+    // where the shapeless swing was one cell and missed at range. Impact, so
+    // a Staff block doesn't turn it (as with the Troll's slam).
+    telegraph: { area: 'circle', size: 'big', animation: 'blink' },
+    isImpact: true,
     chargeMechanic: {
       enabled: true,
-      chargeSpeed: 130,              // Bash is the bursty moment
-      chargeWindup: 1.0,             // Big telegraph — readable
-      chargeDuration: 0.55,
+      // The Bash is the bursty moment: 240 px/s (216 after friction) for
+      // 0.75 dbl-sec covers ~5 cells, the full chargeRange it triggers from,
+      // so a ram started at range reaches glyph contact (130 × 0.55 fell
+      // two cells short of the player it was aimed at).
+      chargeSpeed: 240,
+      chargeWindup: 1.2,             // Big telegraph — readable
+      chargeDuration: 0.75,
+      damageMult: 1.5,               // Bash lands harder than the hammer swing
       cooldown: 5.0,
       wallStunDuration: 1.6,
       chargeRange: GRID.CELL_SIZE * 5

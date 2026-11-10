@@ -566,6 +566,7 @@ export const MECHANICS = [
       { key: 'chargeMechanic.chargeSpeed', label: 'Charge speed (px/s)', type: 'number', default: 300 },
       { key: 'chargeMechanic.chargeWindup', label: 'Windup (dbl-sec)', type: 'number', step: 0.1, default: 0.8 },
       { key: 'chargeMechanic.chargeDuration', label: 'Duration (dbl-sec)', type: 'number', step: 0.1, default: 0.5 },
+      { key: 'chargeMechanic.damageMult', label: 'Charge damage ×', type: 'number', step: 0.1, default: 1 },
       { key: 'chargeMechanic.cooldown', label: 'Cooldown (dbl-sec)', type: 'number', step: 0.1, default: 3 },
       { key: 'chargeMechanic.wallStunDuration', label: 'Wall stun (dbl-sec)', type: 'number', step: 0.1, default: 1.5 },
       { key: 'chargeMechanic.chargeRange', label: 'Charge range', type: 'px', default: GRID_CELL * 7 },
