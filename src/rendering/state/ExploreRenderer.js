@@ -19,7 +19,7 @@
  * - Debug visualization (vectors, vision) when enabled
  */
 
-import { GRID, COLORS, ROOM_TYPES } from '../../game/GameConfig.js';
+import { GRID, COLORS, ROOM_TYPES, PHYSICS } from '../../game/GameConfig.js';
 import { drawExitLetters } from '../ui/ExitLetters.js';
 import { drawOffscreenEnemyIndicators } from '../ui/OffscreenEnemyIndicators.js';
 import { drawRestExitLabel, southExitShowsOpen, southDoorColor, REST_WORD, CRAFT_WORD } from '../ui/RestExitLabel.js';
@@ -1088,7 +1088,10 @@ export class ExploreRenderer {
       const ex = enemy.position.x + GRID.CELL_SIZE / 2;
       const ey = enemy.position.y + GRID.CELL_SIZE / 2;
       const cfg = enemy.data.chargeMechanic;
-      const length = cfg.chargeSpeed * cfg.chargeDuration;
+      // The line is the ground the dash crosses. chargeDuration is
+      // double-seconds (enemy timer clock), and PhysicsSystem's friction damps
+      // the held chargeSpeed once per frame, so it moves at speed × FRICTION.
+      const length = cfg.chargeSpeed * PHYSICS.FRICTION * cfg.chargeDuration / PHYSICS.ENEMY_TIMER_RATE;
       if (enemy.chargeState === 'windup') {
         const t = 1 - (enemy.chargeWindupTimer / cfg.chargeWindup);
         const tx = ex + (enemy.target.position.x - enemy.position.x) /

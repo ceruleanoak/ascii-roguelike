@@ -46,6 +46,23 @@ function rammedTree(enemy) {
   return false;
 }
 
+// The charge and the melee swing never run at once, so a charge windup or
+// dash cancels any Strike in progress. Zeroing windupTimer alone is not a
+// cancel: Strike reads an expired windup as "swing now", so the swing landed
+// the moment the charge ended, with no windup visual (the same shape
+// Enemy.takeDamage's windup interrupt documents). Leaving Strike is what stops
+// it, and Strike's exit charges no cooldown.
+function cancelMeleeStrike(enemy) {
+  if (enemy.stateMachine?.current === 'strike') {
+    enemy.windupTimer = 0;
+    enemy.stateMachine.transition(enemy, null, 'approach', 'charge took the turn');
+  }
+  if (enemy.state === 'windup' || enemy.state === 'attack') {
+    enemy.state = 'chase';
+    enemy.windupTimer = 0;
+  }
+}
+
 export const ChargeMechanic = {
   isEnabled(enemy) {
     return enemy.data.chargeMechanic?.enabled === true;
@@ -97,10 +114,7 @@ export const ChargeMechanic = {
       enemy.targetVelocity.vy = 0;
       enemy.velocity.vx = 0;
       enemy.velocity.vy = 0;
-      if (enemy.state === 'windup' || enemy.state === 'attack') {
-        enemy.state = 'chase';
-        enemy.windupTimer = 0;
-      }
+      cancelMeleeStrike(enemy);
       if (enemy.chargeWindupTimer <= 0) {
         enemy.chargeState = 'charging';
         enemy.chargeDurationTimer = cfg.chargeDuration;
@@ -146,12 +160,17 @@ export const ChargeMechanic = {
         enemy.targetVelocity.vy = 0;
         return;
       }
+      // Hold the dash at full speed for its whole duration, not just the
+      // launch frame. Left to the acceleration blend, friction bled a heavy
+      // charger (Goblin Brute, acceleration 70) from 130 to 55 px/s inside the
+      // dash, so it covered a quarter of the line its telegraph drew. Walls
+      // still end it: PhysicsSystem zeroes the blocked velocity after this,
+      // and EnemyUpdateSystem's speed-drop check reads that as the wall stun.
       enemy.targetVelocity.vx = enemy.chargeDir.x * cfg.chargeSpeed;
       enemy.targetVelocity.vy = enemy.chargeDir.y * cfg.chargeSpeed;
-      if (enemy.state === 'windup' || enemy.state === 'attack') {
-        enemy.state = 'chase';
-        enemy.windupTimer = 0;
-      }
+      enemy.velocity.vx = enemy.targetVelocity.vx;
+      enemy.velocity.vy = enemy.targetVelocity.vy;
+      cancelMeleeStrike(enemy);
       if (enemy.chargeDurationTimer <= 0) {
         enemy.chargeState = 'idle';
         enemy.chargeTimer = cooldownFor(enemy, cfg);
@@ -176,10 +195,7 @@ export const ChargeMechanic = {
           && enemy.hasVision(enemy.position, enemy.target.position, effectiveVisionLength, { ignoreCone: true })) {
         enemy.chargeState = 'windup';
         enemy.chargeWindupTimer = cfg.chargeWindup;
-        if (enemy.state === 'windup') {
-          enemy.state = 'chase';
-          enemy.windupTimer = 0;
-        }
+        cancelMeleeStrike(enemy);
       }
     }
   },
