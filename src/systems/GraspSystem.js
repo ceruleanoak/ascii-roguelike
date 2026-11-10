@@ -409,12 +409,14 @@ export class GraspSystem {
   }
 
   /**
-   * A Held body revived by a death save (main.js _clearReviveMovementLocks)
-   * slips the hand's grip. Released here, through the hand, so the hand
-   * drops it too: clearing only the body's own flags left the hand pinning
-   * a body the other hand could then grab as well.
+   * A Held body slips the hand's grip: one revived by a death save (main.js
+   * _clearReviveMovementLocks), or one the Trine needs because the Primary
+   * fell with no free Flank (MistBattleSystem._catchPrimaryDeath). Released
+   * here, through the hand, so the hand drops it too: clearing only the
+   * body's own flags left the hand pinning a body the other hand could then
+   * grab as well.
    */
-  releaseRevived(body) {
+  releaseHeld(body) {
     greatHands.letGoOf(this, body);
   }
 

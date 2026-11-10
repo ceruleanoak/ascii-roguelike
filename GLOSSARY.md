@@ -1203,8 +1203,9 @@ identity, not standard programming terms.
   Primary at the apex, pointing where the Primary faces, with a Flank behind on each side. The
   three attack on one press (each Flank aimed at its own nearest enemy), swap weapons together,
   and roll together. Only the Primary (and a Held body) takes damage. A body brought to 0 HP goes Dormant
-  rather than dying. The Trine dies when the Primary falls with no Flank left to take the apex
-  (the others Held or Dormant): every body goes to 0 HP and goes out, and the run ends.
+  rather than dying. A Primary falling with no free Flank but a body still Held has that body
+  let go to take the apex. The Trine dies only when the Primary falls with no body left awake
+  (the others Dormant): every body goes to 0 HP and goes out, and the run ends.
 - **In code:** `MistBattleSystem.members` (clockwise ring; `primaryIndex` is the apex), formation
   slots `FLANK_BACK` / `FLANK_SIDE`; drawn by `drawTrine` (`src/rendering/effects/TrineDraw.js`).
 - **Not:** a party or companion group (every body is a full `Player`); "triad" (that word
@@ -1242,12 +1243,13 @@ identity, not standard programming terms.
   its touch hurts and knocks the Primary back instead of catching it. A caught Primary hands the
   apex to the next free body. The third blow on the holding
   hand since the catch lets it go (any body's: the Primary, a Flank, or the Held Primary's own)
-  and it runs back to its slot, and so does a death save that revives it, or the Great Hands
-  fleeing; one that drops goes Dormant. Two hands, so at most two are
+  and it runs back to its slot. So does the grip slipping 5 seconds after the catch, a death
+  save that revives it, the Primary falling with no free Flank (the Trine needs the body), or
+  the Great Hands fleeing; one that drops goes Dormant. Two hands, so at most two are
   Held at once.
 - **In code:** `body.grabbedBy` is a hand's `GraspUnit`; `MistBattleSystem.isHeld(body)`,
-  `onHeld(body)`; `greatHands.grab`, `GraspSystem.releaseRevived` (death save), tuning `HAND_GRAB_RADIUS` / `HAND_HOLD_HITS` (hand
-  `holdHits`) / `HAND_SQUEEZE_DAMAGE` / `HAND_SQUEEZE_TICK`; the fist's lunge is
+  `onHeld(body)`; `greatHands.grab`, `GraspSystem.releaseHeld` (death save, the Trine's need), tuning `HAND_GRAB_RADIUS` / `HAND_HOLD_HITS` (hand
+  `holdHits`) / `HAND_HOLD_MAX_TIME` (hand `timer`) / `HAND_SQUEEZE_DAMAGE` / `HAND_SQUEEZE_TICK`; the fist's lunge is
   `greatHands.updatePunch` (hand `punchStage`, tuning `HAND_PUNCH_*`).
 - **Not:** Dormant (a Held body is awake); a GooHead or Hoardmaw grab (those hold `game.player`
   and leave it the Primary).
@@ -1256,7 +1258,8 @@ identity, not standard programming terms.
 - **Definition:** A Trine body brought to 0 HP in Act 1. Instead of dying it hands the apex
   to the next awake body, rides along in its corner doing nothing, and wakes at full HP
   after 15 seconds as a Flank. Its Status Effects end when it goes Dormant, so it wakes clean. A Primary falling while no
-  Flank is awake (the others Dormant or Held) dies, and every body goes out with it.
+  Flank is free first has a Held body let go to take the apex; with every other body Dormant it
+  dies, and every body goes out with it.
 - **In code:** `member.dormant` (seconds left; 0 = awake) on `MistBattleSystem.members`,
   set by `_goDormant` (the Trine's fall: `_catchPrimaryDeath` → `_extinguishOthers`), counted down by `_updateDormant` (`DORMANT_TIME`). A Dormant body has
   `hp` 0, so `flanks()`, `livingBodies()`, `rotate()` and the Grasp's targeting skip it;

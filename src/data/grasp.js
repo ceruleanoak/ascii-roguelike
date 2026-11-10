@@ -292,6 +292,9 @@ export const GRASP_TUNING = {
   // A held body is let go on this many blows on the holding hand, counted
   // from the catch; until then the hand neither lets go nor pulls back.
   HAND_HOLD_HITS: 3,
+  // ...or once it has held this long (s), whatever has landed: the grip
+  // slips, so a body nobody can reach isn't squeezed down to Dormant.
+  HAND_HOLD_MAX_TIME: 5.0,
   // How hard the rest of the Trine is knocked down when one is caught.
   HAND_GRAB_KNOCKBACK: 260,
   // Holding, a fist attacks the Primary: it waits this long, shivers (this

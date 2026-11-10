@@ -3295,7 +3295,7 @@ class Game {
     dr.justEnded = false;
     dr.hideTimer = 0;
     p.hidden = false;
-    this.graspSystem.releaseRevived(p); // a Great Hand lets go through its own release
+    this.graspSystem.releaseHeld(p); // a Great Hand lets go through its own release
     p.grabbed = false;
     p.hookedByWhip = false;
     p.activeSappingBats = [];

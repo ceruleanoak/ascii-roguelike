@@ -2,11 +2,12 @@
 // Each cycles grip → flex (the tell) → reach (toward the nearest Trine body)
 // → grab → retract. A reaching hand catches any free body that comes near its
 // palm and holds it, out of the Trine (MistBattleSystem.onHeld), squeezing,
-// until HAND_HOLD_HITS blows have landed on it. Holding, the fist still
+// until HAND_HOLD_HITS blows have landed on it, or HAND_HOLD_MAX_TIME has
+// passed since the catch (the grip slips). Holding, the fist still
 // fights: every so often it shivers (the tell) and lunges at the Primary,
 // and its art knocks the Primary back and hurts it instead of catching
-// (punch*). Only the body dropping, a death save, or the phase ending lets
-// go sooner. With two hands, at
+// (punch*). Only the body dropping, a death save, the Trine needing the
+// body (GraspSystem.releaseHeld), or the phase ending lets go sooner. With two hands, at
 // most two bodies are held at once. A hand can be struck only outside the
 // rim — reaching, grabbing or pulling back. Both hands spend one pool,
 // GraspSystem.handsHp.
@@ -276,11 +277,16 @@ export function update(grasp, dt) {
         if (caught) grab(grasp, hand, caught);
         break;
       }
-      // Held until HAND_HOLD_HITS blows land (onHit) or the body goes down.
+      // Held until HAND_HOLD_HITS blows land (onHit), HAND_HOLD_MAX_TIME
+      // passes (the grip slips), or the body goes down.
       case 'grab':
         if (!hand.body || hand.body.hp <= 0) {
           release(grasp, hand);
           startRetract(hand);
+          break;
+        }
+        if (hand.timer >= T.HAND_HOLD_MAX_TIME) {
+          throwOff(grasp, hand);
           break;
         }
         // Caught by the outer fingers, the body is drawn into the fist.
@@ -317,14 +323,19 @@ export function update(grasp, dt) {
 export function onHit(grasp, hand) {
   if (hand.state === 'grab') {
     hand.holdHits += 1;
-    if (hand.holdHits < T.HAND_HOLD_HITS) return;
-    const body = hand.body;
-    release(grasp, hand);
-    startRetract(hand);
-    if (body) grasp.game.physicsSystem.applyKnockback(body, hand.x + W / 2, hand.y, 160);
+    if (hand.holdHits >= T.HAND_HOLD_HITS) throwOff(grasp, hand);
   } else if (hand.state === 'reach') {
     hand.y -= HIT_RECOIL;
   }
+}
+
+// A holding hand lets its body go and pulls back; the body is thrown clear
+// of the fist so it isn't caught again on the way back to its slot.
+function throwOff(grasp, hand) {
+  const body = hand.body;
+  release(grasp, hand);
+  startRetract(hand);
+  if (body) grasp.game.physicsSystem.applyKnockback(body, hand.x + W / 2, hand.y, 160);
 }
 
 // The Primary a holding fist swings at: not the body in it, and not one the
@@ -397,7 +408,7 @@ export function resolveGrabs(grasp) {
   }
 }
 
-/** A revived body slips the grip: whichever hand holds it lets go and pulls back. */
+/** A body slips the grip: whichever hand holds it lets go and pulls back. */
 export function letGoOf(grasp, body) {
   for (const hand of grasp.hands) {
     if (hand.body !== body) continue;

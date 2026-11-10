@@ -1194,6 +1194,13 @@ export class MistBattleSystem {
     const primary = this.primary;
     if (!primary || primary.body.hp > 0) return false;
     if (tryDeathSave(this.game)) return true;
+    // No free Flank, but a body still alive in a Great Hand: the hand lets it
+    // go and it takes the apex, rather than the Trine falling with it in hand.
+    if (this.flanks().length === 0) {
+      for (const { body } of this.members) {
+        if (body.hp > 0 && this.isHeld(body)) this.game.graspSystem.releaseHeld(body);
+      }
+    }
     if (this.flanks().length === 0) {
       this._extinguishOthers(primary);
       return false;
