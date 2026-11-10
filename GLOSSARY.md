@@ -2053,7 +2053,10 @@ identity, not standard programming terms.
 - **Definition:** The auto-combat cast by the FIGHT Spell: the player is driven toward the
   nearest fightable enemy (alive, revealed, not aloft, not charmed, same plane) and attacks it
   with whatever is held (the Punch when nothing is), re-targeting as enemies fall, until none
-  are left or the player next presses a letter, SPACE, Shift or Enter. A gun or bow shoots from range and moves between shots: a dodge roll
+  are left or the player next presses a letter, SPACE, Shift or Enter. A hand holding one of
+  the player's bodies is fought before anything else. It aims at the nearest point it can
+  strike on a many-part foe (a Great Hand's art, a Finger), not its middle, and while every
+  foe is shut (a Grasp part that can't be hurt yet) it holds and waits rather than ending. A gun or bow shoots from range and moves between shots: a dodge roll
   across the line of fire when the target is within 3 cells, a sidestep otherwise, and a
   back-away to shooting range while the weapon reloads. When the player stops making progress
   (beside a one-cell gap) it is eased onto the cell grid. Damage still lands. EXPLORE only.

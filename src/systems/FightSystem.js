@@ -5,6 +5,7 @@ import { entityCenter } from '../game/Telegraph.js';
 import { planeOf, isInteriorActive } from './PlaneSystem.js';
 import { getThrowProfile } from './TrapSystem.js';
 import { PlayerInputSystem } from './PlayerInputSystem.js';
+import { enemyNearestPoint } from './enemyHitTest.js';
 
 const CELL = GRID.CELL_SIZE;
 
@@ -77,6 +78,14 @@ const GATE_LEAD = CELL * 1.5;
  * as enemies fall and ends when none are left, or when any key is pressed.
  * Enemies left only on the other layer of a tunnel or cave room don't end
  * it: FIGHT walks through the nearest gate to them (_gateKeys).
+ *
+ * A foe no blow can hurt right now (a Great Hand gripping the rim) isn't a
+ * target, but it isn't gone either: while only such foes are left the fight
+ * holds still and waits for one to open up (_waitingOn) instead of ending.
+ * A foe holding the player or a Trine body (`grabbedBy`) is the target
+ * before any other, so a caught body is struck free (_captor). A foe drawn
+ * larger than a cell is closed on and measured at the nearest point of what
+ * a blow can strike (_aimPoint), not its frame's middle.
  */
 export class FightSystem {
   constructor(game) {
@@ -108,7 +117,7 @@ export class FightSystem {
     const game = this.game;
     if (game.stateMachine?.getCurrentState() !== GAME_STATES.EXPLORE) return '...NOTHING.';
     if (!game.player || game.animationSystem.isAnimating(game.player)) return '...NOTHING.';
-    if (!this._nearestEnemy()) return 'NO ONE.';
+    if (!this._nearestEnemy() && !this._waitingOn()) return 'NO ONE.';
     this.active = true;
     this.reposition = null;
     this.trapThrow = null;
@@ -144,22 +153,23 @@ export class FightSystem {
     if (!target) return this._gateKeys() ?? none;
 
     const p = entityCenter(player);
-    const t = entityCenter(target);
+    const t = this._aimPoint(target, p);
     const dist = Math.hypot(t.x - p.x, t.y - p.y);
     const r = this.reposition;
     if (r?.kind === 'roll') return none; // the roll moves the player
+    const approach = () => this.steering.keysToward(t.x - player.width / 2, t.y - player.height / 2);
 
     // Swimming (the only way to the target was through deep water, or an edge
     // of the box slipped over a bank): no backing off, sidestepping or
     // standing to throw in the water, just on toward the target, which the
     // steering ends on dry ground.
-    if (player.inDeepWater) return this.steering.keysToward(target.position.x, target.position.y);
+    if (player.inDeepWater) return approach();
     if (r?.kind === 'step') return this.steering.keysToward(r.x, r.y);
     if (this._deployingTrap()) {
       if (this.throwAt !== null) return none; // stand still while the throw charges
       if (dist < TRAP_HOLD_MIN) return this._keysAway(p, t, dist);
       const reach = player.heldItem.data.wire ? Infinity : getThrowProfile(player.heldItem).maxDist;
-      if (dist > reach) return this.steering.keysToward(target.position.x, target.position.y);
+      if (dist > reach) return approach();
       return none;
     }
     if (player.heldItem?.data?.type === 'TRAP') return none; // thrown its one, nothing to swap to
@@ -170,7 +180,7 @@ export class FightSystem {
     const reach = this._reach();
     if (dist < reach.hold) return this._keysAway(p, t, dist, (reach.hold + reach.strike) / 2 - dist);
     if (dist <= reach.strike) return none;
-    return this.steering.keysToward(target.position.x, target.position.y);
+    return approach();
   }
 
   // Held keys backing the player `back` px (three cells unless told) straight
@@ -220,9 +230,11 @@ export class FightSystem {
     // begun by the shot that felled the last enemy; left standing, its roll
     // direction kept driving the dodge roll every frame. Enemies left on the
     // other layer keep it going: heldKeys walks through a gate to them.
+    // Foes no blow can hurt yet (_waitingOn) keep it going too: it holds
+    // still until one opens up.
     const target = this._nearestEnemy();
     if (!target) {
-      if (this._gateCrossing()) this.reposition = null;
+      if (this._gateCrossing() || this._waitingOn()) this.reposition = null;
       else this.reset();
       return;
     }
@@ -233,7 +245,7 @@ export class FightSystem {
     if (player.inDeepWater) return;
 
     const p = entityCenter(player);
-    const t = entityCenter(target);
+    const t = this._aimPoint(target, p);
     const dx = t.x - p.x, dy = t.y - p.y;
     const dist = Math.hypot(dx, dy);
     if (this._deployingTrap()) {
@@ -436,7 +448,7 @@ export class FightSystem {
     const target = this._nearestEnemy();
     if (!target || player.inDeepWater) return; // swimming: just get out (heldKeys)
     const p = entityCenter(player);
-    const t = entityCenter(target);
+    const t = this._aimPoint(target, p);
     const dist = Math.hypot(t.x - p.x, t.y - p.y);
     if (dist === 0) return;
     const roll = dist <= ROLL_RANGE;
@@ -469,7 +481,7 @@ export class FightSystem {
     if (!(player.activeSappingBats?.length > 0) || this.reposition?.kind === 'roll' || !this._canRoll()) return false;
     const target = this._nearestEnemy();
     const p = entityCenter(player);
-    const t = target ? entityCenter(target) : { x: p.x, y: p.y + 1 };
+    const t = target ? this._aimPoint(target, p) : { x: p.x, y: p.y + 1 };
     const dist = Math.hypot(p.x - t.x, p.y - t.y) || 1;
     const away = { x: (p.x - t.x) / dist, y: (p.y - t.y) / dist };
     const side = Math.random() < 0.5 ? 1 : -1;
@@ -568,14 +580,19 @@ export class FightSystem {
     }
   }
 
-  // Nearest enemy the player could fight on their own plane: alive, revealed,
-  // not overhead, and not on the player's side (charmed / commanded).
+  // The enemy FIGHT fights: one holding a body (_captor) first, else the
+  // nearest the player could fight on their own plane: alive, revealed, not
+  // overhead, not on the player's side (charmed / commanded), and open to a
+  // blow right now.
   _nearestEnemy() {
+    const foes = this._foes();
+    const captor = this._captor(foes);
+    if (captor) return captor;
     const p = entityCenter(this.game.player);
     let best = null;
     let bestDist = Infinity;
-    for (const e of this._foes()) {
-      const c = entityCenter(e);
+    for (const e of foes) {
+      const c = this._aimPoint(e, p);
       const d = Math.hypot(c.x - p.x, c.y - p.y);
       if (d < bestDist) { bestDist = d; best = e; }
     }
@@ -583,14 +600,45 @@ export class FightSystem {
   }
 
   // Every enemy FIGHT may target (see _nearestEnemy); with `anyPlane`, on
-  // either layer of the room.
-  _foes(anyPlane = false) {
+  // either layer of the room. With `shut`, the ones it may not yet: those no
+  // blow can hurt right now (isVulnerable, a Great Hand gripping the rim).
+  _foes(anyPlane = false, shut = false) {
     const game = this.game;
     const player = game.player;
     return (game._activeEnemies() || []).filter(e =>
-      !(e.hp <= 0 || e.dead || e.aloft)
+      !(e.hp <= 0 || e.dead || e.aloft || e.graspRemoved)
       && !game._isHiddenEnemy(e) && !e.isCharmed?.()
-      && (anyPlane || planeOf(e) === planeOf(player)));
+      && (anyPlane || planeOf(e) === planeOf(player))
+      && (e.isVulnerable?.() === false) === shut);
+  }
+
+  // Whether FIGHT has foes left on this plane that it can't strike yet: it
+  // waits on them rather than ending.
+  _waitingOn() {
+    return this._foes(false, true).length > 0;
+  }
+
+  // The foe among `foes` holding the player, or else a Trine body (a Great
+  // Hand's Held body), or null. Striking it is how the body gets free.
+  _captor(foes) {
+    const game = this.game;
+    const mist = game.mistBattleSystem;
+    const bodies = [game.player, ...(mist?.active ? mist.presentBodies() : [])];
+    for (const body of bodies) {
+      const captor = body?.grabbedBy;
+      if (captor && foes.includes(captor)) return captor;
+    }
+    return null;
+  }
+
+  // The point FIGHT closes on and measures range to, from `p` (the player's
+  // center): for a foe struck only where it is drawn (overlapsBox, a Grasp
+  // part far larger than a cell), the nearest point a blow can land on;
+  // otherwise its middle.
+  _aimPoint(target, p) {
+    if (!target.overlapsBox) return entityCenter(target);
+    const at = enemyNearestPoint(target, p.x, p.y, 'hitbox');
+    return Number.isFinite(at.dist) ? at : entityCenter(target);
   }
 
   // The way to enemies left only on the other layer of a tunnel or cave room
