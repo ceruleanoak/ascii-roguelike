@@ -556,6 +556,13 @@ export const RESET_REGISTRY = [
     why: 'A Beeline is a run to one room\'s exit; nothing of it survives the room it was cast in.',
   },
   {
+    path: 'packReinforcementSystem.reset',
+    scope: 'room',
+    call: (game) => game.packReinforcementSystem.reset(),
+    covers: [],
+    why: 'A reinforcement timer counts one room\'s continuous aggro; a new room starts with none.',
+  },
+  {
     path: 'influenceSystem.reset',
     scope: 'room',
     call: (game) => game.influenceSystem.reset(),

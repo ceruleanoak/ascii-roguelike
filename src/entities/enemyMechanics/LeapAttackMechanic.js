@@ -17,6 +17,20 @@ import { ThiefMechanic } from './ThiefMechanic.js';
 // while ThiefMechanic.canLeapSteal holds, homes on its target from takeoff
 // (a dizzy thief keeps its misjudged aim), and lands a steal, not a shockwave
 // (EnemyUpdateSystem._handleLeapLand).
+//
+// `cfg.holdTime` makes the Enemy keep its distance first (Frost Wolf): it must
+// hold leap range continuously for that many enemy timer seconds (data units,
+// half of real time, PHYSICS.ENEMY_TIMER_RATE) before it can launch.
+// Each aggroed packmate shortens the hold by `cfg.holdPerMate` (floor
+// `cfg.holdMin`), so a pack commits to its leaps sooner than a lone wolf.
+// `cfg.counterLeap: false` stops a struck Enemy answering with an immediate
+// leap, which would skip the hold.
+
+// How long a holding Enemy must stay in leap range before it may launch.
+function holdRequired(enemy, cfg) {
+  const aggroedMates = (enemy.packmates ?? []).filter(m => !m.isDying && m.enraged).length;
+  return Math.max(cfg.holdMin ?? 0, cfg.holdTime - (cfg.holdPerMate ?? 0) * aggroedMates);
+}
 
 // Point a leap at `target`. A dizzy leaper misjudges its landing, so a
 // player-aimed vector is rotated by the dizzy offset.
@@ -39,6 +53,7 @@ export const LeapAttackMechanic = {
 
   init(enemy) {
     enemy.leapCooldown = 2.0; // brief grace at spawn
+    enemy.leapHoldTimer = 0; // seconds held in leap range (cfg.holdTime)
     enemy.forcedLeapPending = false; // armed by Enemy.takeDamage; consumed the frame iframes expire
     enemy.leapWindupActive = false;
     enemy.leapWindupTimer = 0;
@@ -137,6 +152,7 @@ export const LeapAttackMechanic = {
   // landing.
   onDamaged(enemy) {
     if (enemy.data?.leapAttack?.enabled && !enemy.data.leapAttack.steal &&
+        enemy.data.leapAttack.counterLeap !== false &&
         !enemy.leapWindupActive && !enemy.leapAirborneActive) {
       enemy.forcedLeapPending = true;
     }
@@ -146,14 +162,23 @@ export const LeapAttackMechanic = {
   tryTrigger(enemy, ctx) {
     const cfg = enemy.data.leapAttack;
     if (!cfg?.enabled) return;
+    const { effectiveDistance, dotDamageEvents, deltaTime } = ctx;
+    const inRange = effectiveDistance >= cfg.triggerRangeMin && effectiveDistance <= cfg.triggerRangeMax;
+
+    // The distance hold is continuous: it runs only while the target is in
+    // range, in plane and on screen, and any break starts it over. Ticked
+    // before the early returns below so none of them can leave it running.
+    if (cfg.holdTime) {
+      const holding = inRange && ctx.onScreen && inSamePlane(enemy, enemy.target);
+      enemy.leapHoldTimer = holding ? enemy.leapHoldTimer + deltaTime : 0;
+    }
+
     if (enemy.spewWindupActive) return;
     if (cfg.steal && !ThiefMechanic.canLeapSteal(enemy)) return;
     // Wet, it can't leap at all — not even the counter-leap a hit arms.
     if (enemy.isWet()) { enemy.forcedLeapPending = false; return; }
     if (!inSamePlane(enemy, enemy.target)) return;
     if (!ctx.onScreen) return; // no ambushing from outside the zoomed frame
-
-    const { effectiveDistance, dotDamageEvents } = ctx;
 
     // Counterattack: a landed hit arms forcedLeapPending (Enemy.takeDamage).
     // The instant this boss's own post-hit iframes expire, the leap fires
@@ -163,8 +188,8 @@ export const LeapAttackMechanic = {
     // spewWindupActive above still gate it; only cooldown and range are
     // bypassed.
     const forced = enemy.forcedLeapPending && enemy.invulnerabilityTimer <= 0;
-    const inRange = effectiveDistance >= cfg.triggerRangeMin && effectiveDistance <= cfg.triggerRangeMax;
     if (!forced && (enemy.leapCooldown > 0 || !inRange)) return;
+    if (cfg.holdTime && enemy.leapHoldTimer < holdRequired(enemy, cfg)) return;
 
     // Windup scales down with lost HP — full HP leaps at cfg.windupTime,
     // 0 HP leaps at half that, linear in between. Makes the boss leap
@@ -184,6 +209,7 @@ export const LeapAttackMechanic = {
     enemy.velocity.vy = 0;
     if (enemy.targetVelocity) { enemy.targetVelocity.vx = 0; enemy.targetVelocity.vy = 0; }
     enemy.forcedLeapPending = false;
+    enemy.leapHoldTimer = 0;
     return { suspend: true, result: { dotDamage: dotDamageEvents } };
   }
 };

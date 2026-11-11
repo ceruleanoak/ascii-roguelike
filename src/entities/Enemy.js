@@ -751,7 +751,7 @@ export class Enemy {
     // Cyan well blessing shrinks the aggro radius (boss parts use Infinity aggro — unaffected)
     const effectiveAggroRange = this.target?.stealthBlessed ? this.aggroRange * 0.65 : this.aggroRange;
 
-    const leapTrigger = LeapAttackMechanic.tryTrigger(this, { effectiveDistance, dotDamageEvents, onScreen });
+    const leapTrigger = LeapAttackMechanic.tryTrigger(this, { effectiveDistance, dotDamageEvents, onScreen, deltaTime });
     if (leapTrigger?.suspend) return leapTrigger.result;
 
     const ripenDetonateTrigger = RipenMechanic.tryDetonateTrigger(this, { effectiveDistance, dotDamageEvents });

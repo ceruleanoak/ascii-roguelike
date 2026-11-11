@@ -1757,7 +1757,33 @@ export const ENEMIES = {
     movementConfig: {
       kiteDistance: GRID.CELL_SIZE * 4,     // Maintain 4 units from player
       retreatThreshold: GRID.CELL_SIZE * 3, // Retreat if player within 3 units during hover
+      dive: false,                          // Never closes to bite; it circles and leaps instead
     },
+    // Circles at leap range until it has held there holdTime (enemy timer
+    // seconds, half of real time; less for each aggroed packmate), then
+    // pounces. Its crouch is the tell.
+    leapAttack: {
+      enabled: true,
+      counterLeap: false,                   // A struck wolf keeps its distance discipline
+      triggerRangeMin: GRID.CELL_SIZE * 3,
+      triggerRangeMax: GRID.CELL_SIZE * 7,
+      holdTime: 1.5,
+      holdPerMate: 0.3,
+      holdMin: 0.3,
+      cooldown: 3.0,
+      windupTime: 0.9,
+      airTime: 0.6,
+      arcLift: GRID.CELL_SIZE,
+      landRadius: GRID.CELL_SIZE * 1.2,
+      landDamage: 2,
+      landKnockback: 160,
+      shockwaveMaxRadius: GRID.CELL_SIZE * 2,
+      shockwaveSpeed: GRID.CELL_SIZE * 8,
+      shockwaveDamage: 0,
+      shockwaveKnockback: 0
+    },
+    // Aggro held continuously for 8s brings one more wolf in at a random exit.
+    reinforcement: { after: 8.0 },
     packCoordination: true,  // Shares detection & memory marks with all wolves in room
     // Aggro doubles its pace: the chase (Approach) and the run to a memory
     // mark (Search) move at 2× speed; the wander stays at its base 60.

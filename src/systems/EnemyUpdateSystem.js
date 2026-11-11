@@ -88,7 +88,10 @@ export class EnemyUpdateSystem {
     this._tickSlowTimers(deltaTime, tickedList);
     this._updatePackBehavior(tickedList);
     this._runEnemyLoop(deltaTime, player, tickedList);
-    if (!interior) this._checkExitDespawn(enemies); // room exits only; commanded units never despawn at exits
+    if (!interior) {
+      this._checkExitDespawn(enemies); // room exits only; commanded units never despawn at exits
+      game.packReinforcementSystem.update(deltaTime, enemies); // queues into the flush below
+    }
     game.enemySpawnSystem.flush();
     this._handleEnemyItemPickup(tickedList);
   }

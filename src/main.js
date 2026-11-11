@@ -46,6 +46,7 @@ import { CaptiveSystem } from './systems/CaptiveSystem.js';
 import { MenuSystem } from './systems/MenuSystem.js';
 import { AnimationSystem } from './systems/AnimationSystem.js';
 import { EnemySpawnSystem } from './systems/EnemySpawnSystem.js';
+import { PackReinforcementSystem } from './systems/PackReinforcementSystem.js';
 import { HutSystem } from './systems/HutSystem.js';
 import { CavernSystem } from './systems/CavernSystem.js';
 import { PressSystem } from './systems/PressSystem.js';
@@ -230,6 +231,7 @@ class Game {
     this.menuSystem = new MenuSystem(this);
     this.animationSystem = new AnimationSystem(this);
     this.enemySpawnSystem = new EnemySpawnSystem(this);
+    this.packReinforcementSystem = new PackReinforcementSystem(this);
     this.hutSystem = new HutSystem(this);
     this.cavernSystem = new CavernSystem(this);
     this.pressSystem = new PressSystem(this);
