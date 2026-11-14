@@ -5,6 +5,7 @@
  */
 
 import { GRID } from '../../game/GameConfig.js';
+import { FIRE_BOLT_CHAR, FIRE_BOLT_COLOR } from '../../entities/golemFireBolt.js';
 
 // Minimal NPCRat render: char + color + iframe white-flash, falling back to
 // a red pulse under 25% hp (getLowHealthBlinkColor). Gilded rats (dungeon-
@@ -54,6 +55,15 @@ export function drawGolems(renderer, game, shouldRenderEntity) {
         golem.position.y + GRID.CELL_SIZE / 2 + indicator.offsetY,
         indicator.char,
         indicator.color
+      );
+    }
+    // The Fire Elemental's Fire Bolts in flight (golemFireBolt.js).
+    for (const bolt of golem.fireBolts) {
+      renderer.drawEntity(
+        bolt.x + GRID.CELL_SIZE / 2,
+        bolt.y + GRID.CELL_SIZE / 2,
+        FIRE_BOLT_CHAR,
+        FIRE_BOLT_COLOR
       );
     }
   }

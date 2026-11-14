@@ -4,6 +4,7 @@ import { getElementalModifierFor } from './elementalAffinity.js';
 import { WEAPON_TYPES } from '../data/items.js';
 import { steerToward } from '../systems/npcSteering.js';
 import { enemyDistance, enemyNearestPoint } from '../systems/enemyHitTest.js';
+import { launchFireBolt, advanceFireBolts } from './golemFireBolt.js';
 
 /**
  * GolemCompanion — summoned at the REST Combine Station (ingredient + Mana,
@@ -15,7 +16,9 @@ import { enemyDistance, enemyNearestPoint } from '../systems/enemyHitTest.js';
  * State machine (deliberately simpler than NPCRat — no flee/permaFlee; the
  * inbox description is "basic melee attacks" with no retreat behavior):
  *   'idle'   — no target; drifts toward player to stay close
- *   'chase'  — pursuing a hostile enemy, closes to attack range
+ *   'chase'  — pursuing a hostile enemy, closes to attack range. A ranged
+ *              type (GOLEM_TYPES[type].ranged — the Fire Elemental) holds at
+ *              its range instead, stepping back from anything that closes in.
  *   'windup' — in range, telegraphing a strike (bug-inbox: golems attacked
  *              instantly with no tell); holds position, target frozen, damage
  *              lands when windupTimer expires — same shape as Enemy's own
@@ -87,8 +90,10 @@ export class GolemCompanion {
     // Every golem type starts identical here; GOLEM_TYPES carries no
     // per-type damage/range (see class comment).
     this.attackDamage = ATTACK_DAMAGE;
-    this.attackRange = ATTACK_RANGE;
+    this.attackRange = def.ranged ? def.ranged.range * GRID.CELL_SIZE : ATTACK_RANGE;
     this.equippedWeapon = null; // { char, color } of the held weapon, or null
+    // Ranged type only: Fire Bolts in flight (golemFireBolt.js).
+    this.fireBolts = [];
     // A point it is sent to and holds (a Branch panel, DungeonPuzzleSystem);
     // null = follow the player. Enemies still come first.
     this.commandTarget = null;
@@ -149,6 +154,7 @@ export class GolemCompanion {
     }
     this.target = null;
     this.commandTarget = null;
+    this.fireBolts.length = 0;
     if (game) {
       this.game = game;
       this.room = game.currentRoom;
@@ -182,6 +188,8 @@ export class GolemCompanion {
       if (this.invulnerabilityTimer < 0) this.invulnerabilityTimer = 0;
     }
     if (this.attackTimer > 0) this.attackTimer -= deltaTime;
+    // Bolts already thrown keep flying whatever the golem does next.
+    if (this.fireBolts.length) advanceFireBolts(this, deltaTime, enemies);
 
     // Environmental reactions (bug-inbox #10, "targeted subset now" scope) —
     // checked every non-dead frame regardless of combat state, since a golem
@@ -346,6 +354,15 @@ export class GolemCompanion {
       this._steer(aim.x, aim.y, SPEED);
       return null;
     }
+    // Ranged: too close and it backs off along the line away from the target
+    // before it will throw — the hostile Fire Elemental's keeper stance.
+    const backOff = this.def.ranged ? this.def.ranged.backOffRange * GRID.CELL_SIZE : 0;
+    if (dist < backOff) {
+      const away = (this.attackRange - dist) / dist;
+      this._steer(this.position.x + (this.position.x - aim.x) * away,
+                  this.position.y + (this.position.y - aim.y) * away, SPEED);
+      return null;
+    }
     this._halt();
     if (this.attackTimer <= 0 && typeof t.takeDamage === 'function') {
       this.state = 'windup';
@@ -395,6 +412,11 @@ export class GolemCompanion {
     this.state = 'chase';
     this.attackTimer = ATTACK_COOLDOWN;
     const t = this.target;
+    // Ranged: the windup releases a Fire Bolt; it lands (or misses) in flight.
+    if (this.def.ranged) {
+      launchFireBolt(this, enemyNearestPoint(t, this.position.x, this.position.y));
+      return null;
+    }
     const dist = enemyDistance(t, this.position.x, this.position.y);
     if (dist <= this.attackRange && typeof t.takeDamage === 'function') {
       t.takeDamage(this.attackDamage);
@@ -420,6 +442,8 @@ export class GolemCompanion {
   // winning item from game.items/physicsSystem, mirroring how Enemy.js
   // leaves that removal to its own call site.
   findBetterGroundWeapon(items) {
+    // A ranged golem throws fire; a melee weapon would only shorten its reach.
+    if (this.def.ranged) return null;
     if (!items || items.length === 0) return null;
     const currentPower = this.attackDamage;
     let best = null;

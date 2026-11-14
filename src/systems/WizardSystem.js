@@ -20,7 +20,7 @@ const MANA_COMBOS = [
  *     every visit), never explaining that the player could brew Mana
  *     themselves — just a want-list.
  *   SUMMON GOLEM — scans the player's held ingredients for a golem
- *     ingredient (Slag/Bottle of Mud/Rock/Metal/Bottle of Magma) the player
+ *     ingredient (Slag/Bottle of Mud/Rock/Metal/Bottle of Magma/Fire Essence) the player
  *     also holds a complete Mana pair for, picks one such combo at random,
  *     consumes all 3 items, and — after a brief lightning strike on the
  *     hut's summoning circle (LightningStrikeSystem, same pipeline as the

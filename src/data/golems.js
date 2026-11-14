@@ -74,6 +74,32 @@ export const GOLEM_TYPES = {
     // molten body quenches and cools solid instead of dying outright.
     convertsToRockInWater: true,
   },
+  // Fire Essence + Mana (planning-inbox → design session 2026-11-14). The one
+  // ranged golem: it keeps its distance and throws Fire Bolts instead of
+  // closing to swing, and each bolt that lands may shake Mana loose from the
+  // enemy it struck. Fragile by design — it fights from the back line.
+  fire: {
+    name: 'Fire Elemental',
+    resultChar: '♝',
+    ingredientChar: 'F',   // Fire Essence
+    maxHp: 5,
+    color: '#ffaa22',      // flame yellow — the Magma Golem already wears Fire Essence's red-orange
+    resurrect: false,
+    // Same affinity as the hostile Fire Elemental (ENEMIES.F): fire-affine,
+    // so burn can't touch it, and frost bites twice as hard.
+    affinities: ['fire'],
+    elementalAffinity: {
+      weakness: { freeze: 2.0 },
+    },
+    // GolemCompanion's ranged branch. Distances in cells, times in seconds.
+    ranged: {
+      range: 5,               // the hostile Fire Elemental's flame range
+      backOffRange: 2.5,      // closer than this, it steps back before throwing
+      boltSpeed: 180,         // px/sec
+      burn: 2.0,              // seconds of burn on a landed bolt (the Magma Golem's burnOnHit)
+      manaDropChance: 0.15,   // per landed bolt: a Mana (𝑚) drops at the struck enemy
+    },
+  },
 };
 
 // Total golems (any type combined) the player may have summoned at once.
