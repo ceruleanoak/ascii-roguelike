@@ -8,7 +8,7 @@
  */
 
 import { GRID, COLORS } from '../../game/GameConfig.js';
-import { rowValue, caps } from '../../systems/cliTables.js';
+import { rowValue, caps } from '../../systems/cliRows.js';
 import { drawGlyphGlobe } from '../ui/GlyphGlobe.js';
 
 const SELECTED = '#ffff00';

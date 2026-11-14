@@ -73,6 +73,7 @@ Three tiers — pick the right one; don't reach for the CheatMenu when a headles
 - `npm run check:data` — static data-integrity gate (`tools/check-data.js`; runs inside `build`): duplicate/shadowed registry keys, affinity/dropTable/recipe referential integrity, rarity-weight zeroing. Pre-existing debt is allowlisted warns with bug refs; NEW violations fail the build.
 - `npm run check:frames` — Frame Pass gate (`tools/check-frame-passes.js`; runs inside `build`): checks that every pass declares every Frame Owner, that each owner renderer calls `drawFramePasses` once per layer, and that there are no hand-rolled interior gates or direct calls to registered helpers.
 - `npm run check:warps` — Dungeon warp gate (`tools/check-dungeon-warps.mjs`; runs inside `build`): drives every CheatMenu DUNGEON WARP entry through the real menu path in all four zones and asserts the landing floor/template. Changing a warp entry's shape, the menu's action mapping, or `debugWarpTo` must keep it green (#471).
+- `npm run check:canon` — Canon enemies gate (`tools/check-canon-enemies.mjs`; runs inside `build`): boots with a seeded canon and asserts authored enemies take their Enemy Style and spawn bands, Disabled Enemies leave random spawns without emptying a band, hostile store entries are skipped, and FORGET restores the shipped tables. Changing an Enemy Style's source enemy or the spawn tables' shape must keep it green.
 - `tools/lib/headless-game.mjs` — the shared headless Game boot (DOM/canvas/audio stubs, seeded RNG, Vite SSR `loadGame()`). New headless checks and `tools/debug/` scripts import it instead of copying the stubs.
 - `node tools/check-reset-parity.mjs` — headless reset-contract harness: drives the real Game through REST→EXPLORE with pickup dirt, applies each full-reset path, diffs contract-surface state against a virgin run. Run after touching any reset path or adding run-scoped state (~6s).
 - `node tools/audit-data-fields.mjs` — report-only scan for authored-but-never-read data fields (#201 shape). Verify hits by hand; dynamic access is invisible to it.
@@ -152,7 +153,7 @@ Avoid double-rendering by always drawing keys to a single layer. The 2× scaling
 
 **Runs never persist.** All run state resets on page refresh and on death. This is intentional.
 
-- **One exception: Canon Edits** (Path to Canon — `claudedocs/zone-cosmology.md`). What the player authors in the CLI (names, cheats, weapons/recipes, `Story.md`) persists in localStorage, read and written **only** by `src/systems/CanonStore.js` and applied at boot by the Canon Overlay. `npm run check:arch` fails on `localStorage`/`sessionStorage`/`indexedDB` anywhere else in `src/`.
+- **One exception: Canon Edits** (Path to Canon — `claudedocs/zone-cosmology.md`). What the player authors in the CLI (names, cheats, weapons/recipes, enemies, `Story.md`) persists in localStorage, read and written **only** by `src/systems/CanonStore.js` and applied at boot by the Canon Overlay. `npm run check:arch` fails on `localStorage`/`sessionStorage`/`indexedDB` anywhere else in `src/`.
 - Never persist run progress (inventory, depth, unlocks earned in play). If asked to, explain the design decision.
 
 ## Runtime-Fetched Assets Must Live in `public/`

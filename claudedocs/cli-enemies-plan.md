@@ -83,6 +83,13 @@ This widens the existing P1 backlog row on Canon Edits: the overlay now also wri
 - **Tools:** new `tools/check-canon-enemies.mjs`.
 - **Docs:** `GLOSSARY.md`, `docs/adr/BACKLOG.md`, `claudedocs/planning-inbox.md`.
 
+## As built (2026-11-13)
+- **DEPTH confirmed:** an authored enemy joins its band and every deeper band (`addEnemy()` in `CanonOverlay.js`).
+- **No `ENEMY_STYLE_FIELDS`:** only the style's name is stored, and the overlay copies that style's `keys`. A field whitelist over style keys had nothing to guard.
+- **GLYPH steps** over the free glyphs, and ADD AN ENEMY opens straight onto NAME with the first free glyph already set. The pool comes to **9 glyphs** (`'():;?\_` and the backtick) once background objects are cut, which caps a canon at 9 authored enemies. Widening it means freeing ASCII glyphs from background objects (rulebook G1/G2 lets those use any BMP glyph), and that is the user's call.
+- **Row model** moved to `src/systems/cliRows.js`, which both table modules share, so `cliTables` ↔ `cliEnemyTables` don't import each other.
+- **The check is in `build`** as `npm run check:canon`. It also drives CUSTOMIZE's refusal to empty a band.
+
 ## Verification
 - `npm run build` after every phase (`check:arch`, `check:data`, `check:frames`, `check:warps`).
 - `node tools/check-reset-parity.mjs`. There's no run state here, so it should be untouched.

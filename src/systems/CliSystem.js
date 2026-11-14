@@ -22,7 +22,8 @@
 
 import { menuIntent } from './MenuInput.js';
 import { CanonStore } from './CanonStore.js';
-import { LIST, actionRow, stepValue } from './cliTables.js';
+import { LIST } from './cliTables.js';
+import { actionRow, stepValue } from './cliRows.js';
 import { openGlobe, moveGlobe } from './glyphGlobe.js';
 import { GAME_STATES } from '../game/GameConfig.js';
 import { applyReset } from '../game/resetRegistry.js';

@@ -1,22 +1,6 @@
 /**
- * cliTables — the CLI's tables: the generic row model every CLI table is
- * built from, and the LIST content (Story.md, Names, Cheats, Weapons).
- *
- * The CLI reads in capitals: every label and value is built through caps().
- * Glyphs never are — ƒ and ⲯ are weapons whose capitals are other glyphs —
- * so a row puts its glyph beside caps(text), never inside it.
- *
- * A table is a function `(cli) => rows`, rebuilt on every key and frame, so a
- * row always shows the current Canon Edit. Row kinds:
- *   steps  — a value array stepped with left/right (SPACE steps forward).
- *            Toggles and numbers are both steps: [false, true], [1, 2, 3, …].
- *   text   — SPACE opens a text edit of the value.
- *   glyph  — SPACE opens the Unicode table to pick a glyph.
- *   table  — SPACE opens another table.
- *   action — SPACE runs it.
- *
- * Every edit writes the stored canon at once (cli.save()); none of it reaches
- * the registries until ☠ (PURE ROGUE) relaunches and CanonOverlay applies it.
+ * cliTables — the CLI's LIST content (Story.md, Names, Cheats, Weapons, and
+ * Enemies from cliEnemyTables). The row model is in cliRows.
  */
 
 import { ITEMS, INGREDIENTS, ITEM_TYPES, WEAPON_TYPES, SUBTYPE_DEFAULTS } from '../data/items.js';
@@ -24,44 +8,8 @@ import { findRecipe } from '../data/recipes.js';
 import { CHARACTER_TYPES } from '../data/characters.js';
 import { COLORS } from '../game/GameConfig.js';
 import { WEAPON_STYLES } from '../data/weaponStyles.js';
-
-/** Text as the CLI shows it. Never pass a glyph through this. */
-export const caps = text => String(text ?? '').toUpperCase();
-
-// ── Row model ──────────────────────────────────────────────────────────────
-
-export const stepRow = (label, values, get, set, format = String) =>
-  ({ kind: 'steps', label, values, get, set, format });
-export const toggleRow = (label, get, set) =>
-  stepRow(label, [false, true], get, set, v => (v ? 'ON' : 'OFF'));
-export const textRow = (label, get, set, max = 24) => ({ kind: 'text', label, get, set, max });
-export const glyphRow = (label, get, pick) => ({ kind: 'glyph', label, get, pick });
-export const tableRow = (label, build) => ({ kind: 'table', label, build });
-export const actionRow = (label, run) => ({ kind: 'action', label, run });
-
-/** The text a row shows beside its label (empty for table/action rows). */
-export function rowValue(row) {
-  if (row.kind === 'steps') return row.format(row.get());
-  if (row.kind === 'text') return caps(row.get());
-  if (row.kind === 'glyph') return row.get() ?? '';
-  return '';
-}
-
-/**
- * Step a steps row by dir (±1), wrapping. A value authored outside the array
- * (registry data such as damage 7) lands on the nearest step in that direction.
- */
-export function stepValue(row, dir) {
-  const { values } = row;
-  const current = row.get();
-  let i = values.indexOf(current);
-  if (i !== -1) {
-    row.set(values[(i + dir + values.length) % values.length]);
-    return;
-  }
-  i = dir > 0 ? values.findIndex(v => v > current) : values.findLastIndex(v => v < current);
-  row.set(values[i !== -1 ? i : (dir > 0 ? 0 : values.length - 1)]);
-}
+import { caps, stepRow, toggleRow, textRow, glyphRow, tableRow, actionRow, colorRow } from './cliRows.js';
+import { ENEMIES_TABLE } from './cliEnemyTables.js';
 
 // ── Registry snapshots ─────────────────────────────────────────────────────
 // Taken at module load, which is before the entry point runs CanonOverlay —
@@ -166,8 +114,6 @@ const CHEATS = (cli) => CHEAT_ROWS.map(([label, key]) => toggleRow(label,
 
 // ── Weapons ────────────────────────────────────────────────────────────────
 
-const PALETTE = [COLORS.ITEM, '#ffffff', '#aaaaaa', '#ff4444', '#ff8844', '#44ff44',
-  '#44ffff', '#4488ff', '#cc66ff', '#ff66cc'];
 const DAMAGE = [1, 2, 3, 4, 5, 6, 8, 10, 15, 20];
 const WINDUP = [0.1, 0.2, 0.3, 0.5, 0.8, 1.2];
 const RECOVERY = [0.2, 0.4, 0.6, 0.8, 1.2, 1.6];
@@ -273,7 +219,7 @@ function weaponRows(cli, glyph) {
     })));
   }
   rows.push(textRow('NAME', () => data.name, text => { if (text) set('name', text); }, 20));
-  rows.push({ ...stepRow('COLOR', PALETTE, () => data.color, v => set('color', v), () => '█'), valueColor: data.color });
+  rows.push(colorRow(() => data.color, v => set('color', v)));
 
   if (authored) {
     const kind = kindOf(data);
@@ -399,5 +345,6 @@ export const LIST = () => [
   tableRow('NAMES', NAMES),
   tableRow('CHEATS', CHEATS),
   tableRow('WEAPONS', WEAPONS),
+  tableRow('ENEMIES', ENEMIES_TABLE),
   actionRow('☠', () => window.location.reload()),
 ];
