@@ -7,6 +7,13 @@
 // (enemy behaviors are mechanics, not inline branches) — same velocity-write
 // contract the block always had: position integration stays with
 // PhysicsSystem next frame; this only decides the heading.
+
+import { GRID } from '../../game/GameConfig.js';
+
+// Within this range of the loaf (and in sight of it) the rat steers straight
+// at it every frame instead of through navigation's decision cadence.
+const ARRIVE_DIST = GRID.CELL_SIZE * 3;
+
 export const BreadSeekMechanic = {
   /**
    * @param {Enemy} enemy
@@ -42,7 +49,26 @@ export const BreadSeekMechanic = {
     // snap velocity to match (BOTH stores, as before) since this mechanic
     // returns early from Enemy.update() and skips the canonical _blendVelocity
     // smoothing step entirely.
-    enemy.updateVectorNavigation(1, { x: t.position.x, y: t.position.y }, deltaTime);
+    //
+    // This mechanic returns before Enemy.update ticks `decisionTimer`, and
+    // navigation only re-aims on a decision frame (or when stuck/obstructed),
+    // so the seek keeps that clock running itself. Without it the rat kept the
+    // heading of its first seek frame and walked straight past the loaf.
+    enemy.decisionTimer -= deltaTime;
+    const dx = t.position.x - enemy.position.x;
+    const dy = t.position.y - enemy.position.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < ARRIVE_DIST && enemy.hasLineOfSight(enemy.position, t.position, dist)) {
+      // Close and unobstructed: home in every frame. Navigation re-aims only
+      // a few times a second, which overshoots the tight eat radius
+      // (CompanionSystem EAT_DIST_SQ) and orbits the loaf.
+      const speed = enemy.speed * enemy.getSpeedMultiplier();
+      enemy.targetVelocity.vx = dist > 0 ? (dx / dist) * speed : 0;
+      enemy.targetVelocity.vy = dist > 0 ? (dy / dist) * speed : 0;
+    } else {
+      enemy.updateVectorNavigation(1, { x: t.position.x, y: t.position.y }, deltaTime);
+    }
+    if (enemy.decisionTimer <= 0) enemy.decisionTimer = enemy.decisionInterval;
     enemy.velocity.vx = enemy.targetVelocity.vx;
     enemy.velocity.vy = enemy.targetVelocity.vy;
     return true;
