@@ -19,7 +19,8 @@ const BREAK_RANGE = GRID.CELL_SIZE * 4;
  * (getDialogueLines is called) only once the last one has been told in full,
  * so a speech's side effects fire once per telling. `npc.spokenOnce` is set
  * when a speech's last line has been told — "heard them out" — which is what
- * trade gates (Fisherman, Weapons Master) wait on. Rendering lives in
+ * trade gates (Fisherman, Weapons Master) wait on. A speaker may also define
+ * `onLineTold(lineIndex, game)`, called as each line is told. Rendering lives in
  * rendering/ui/DialogueBox.js.
  *
  * The rule is the same for every speaker, NPC systems included: they call
@@ -134,6 +135,9 @@ export class DialogueSystem {
 
   _tell(npc, lines, lineIndex) {
     this.active = { npc, lines, lineIndex };
+    // Optional per-line hook (the Storyteller counts which lines of Story.md
+    // have been heard).
+    npc.onLineTold?.(lineIndex, this.game);
     if (lineIndex + 1 < lines.length) {
       this.speeches.set(npc, { lines, lineIndex: lineIndex + 1 });
     } else {
