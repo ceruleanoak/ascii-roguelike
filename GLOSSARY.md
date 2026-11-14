@@ -3108,6 +3108,61 @@ identity, not standard programming terms.
   `DungeonPuzzleSystem.revealEdges(floor, reveal)` opens the matching descents.
 - **Not:** a Lock Block (a template tile opened by a Simple Key); a Shutter.
 
+### Canon Edit
+- **Definition:** Something the player authors in the CLI after leaving the game through
+  CLOSEGAME / EXITGAME: Story.md, a character's name, a cheat, a weapon or an enemy. It is the
+  only thing that persists across sessions. FORGET erases every Canon Edit.
+- **In code:** the stored canon, read and written only by `CanonStore`
+  (`src/systems/CanonStore.js`); the CLI tables (`cliTables.js`, `cliEnemyTables.js`) edit
+  `cli.canon` and call `cli.save()`.
+- **Not:** run progress (inventory, depth, unlocks), which never persists; the CheatMenu,
+  whose toggles last one session.
+
+### Canon Overlay
+- **Definition:** The boot step that applies every Canon Edit to the game. It is the one
+  sanctioned write to the data registries, and it runs before the Game is constructed, so
+  nothing has read them yet. Stored values are untrusted: only fields the CLI can author are
+  copied, and an authored weapon or enemy never replaces a shipped one.
+- **In code:** `applyCanonOverlay(canon)` in `src/systems/CanonOverlay.js`, called from the
+  entry point in `main.js`; the CLI's ☠ (PURE ROGUE) relaunches so it re-applies.
+- **Not:** a runtime registry mutation (forbidden everywhere else); the CLI itself, which
+  only edits the stored canon.
+
+### Weapon Style
+- **Definition:** A named set of weapon behavior (how it swings or fires) that an authored
+  weapon takes on. A style is read off shipped weapons, so it follows their tuning.
+- **In code:** `WEAPON_STYLES` in `src/data/weaponStyles.js` (each style's `from` glyphs and
+  keys); the STYLE row of the CLI's Weapons table; `entry.style` on an authored weapon.
+- **Not:** a Weapon Subtype (sword, dagger, …), which the TYPE row picks.
+
+### Disabled Weapon
+- **Definition:** A weapon switched off in the CLI's Weapons CUSTOMIZE table. It never
+  appears in a run: no recipe crafts it, no upgrade climbs to it, and every other placement
+  (loot, room offerings, loadouts) gets an enabled stand-in of the same family.
+- **In code:** `canon.disabled[glyph]`; `disableWeapons()` and `canonStandIn(char)` in
+  `src/systems/CanonOverlay.js`.
+- **Not:** a deleted authored weapon (gone from the canon); a Disabled Enemy.
+
+### Enemy Style
+- **Definition:** A named behavior an authored enemy takes on: how it moves, attacks and
+  reads the player, and its affinities and tier, copied whole off one shipped enemy (CHASER
+  off the Skeleton, CHARGER off the Boar, …). The player never authors any of it; they pick a
+  style and step the enemy's name, color, HP, damage and speed. Only the style's name is
+  stored. The counterpart of a Weapon Style.
+- **In code:** `ENEMY_STYLES` / `findEnemyStyle(name)` in `src/data/enemyStyles.js` (each
+  style's `from` enemy and copied `keys`); the BEHAVIOR row of the CLI's Enemies table;
+  `entry.style` on an authored enemy, resolved by `addEnemy()` in `CanonOverlay.js`.
+- **Not:** `movementStyle` (one enemy data field a style copies); a Weapon Style.
+
+### Disabled Enemy
+- **Definition:** An enemy switched off in the CLI's Enemies CUSTOMIZE table. It never spawns
+  at random: it is cut from every zone and legacy spawn band. Bosses, summons and scripted
+  rooms still place it. The last enemy a band has left can't be switched off. The counterpart
+  of a Disabled Weapon.
+- **In code:** `canon.disabledEnemies[glyph]`; `disableEnemies()` in
+  `src/systems/CanonOverlay.js`; `wouldEmptyBand()` in `src/systems/cliEnemyTables.js`.
+- **Not:** a Disabled Weapon (which gets stand-ins); a deleted authored enemy.
+
 ## Conventions
 
 - **Casing:** types/classes PascalCase; functions/variables camelCase; constants

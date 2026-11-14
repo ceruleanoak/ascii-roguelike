@@ -23,7 +23,14 @@ function emptyCanon() {
   // story: Story.md, one line per newline. It is never blank to begin with;
   // its first line is the player's to keep, rewrite, or delete.
   // disabled: { glyph: true } — weapons CUSTOMIZE has switched out of every run.
-  return { exited: false, story: DEFAULT_STORY, names: {}, cheats: {}, weapons: {}, disabled: {} };
+  // enemies: { glyph: fields } — `authored: true` (+ `style`, `zone`, `depth`)
+  // marks an enemy the player created; otherwise the fields override a
+  // shipped enemy's name, color, HP, damage and speed.
+  // disabledEnemies: { glyph: true } — Disabled Enemies, cut from random spawns.
+  return {
+    exited: false, story: DEFAULT_STORY, names: {}, cheats: {}, weapons: {}, disabled: {},
+    enemies: {}, disabledEnemies: {},
+  };
 }
 
 export const CanonStore = {
