@@ -23,7 +23,7 @@ function emptyCanon() {
   // story: Story.md, one line per newline. It is never blank to begin with;
   // its first line is the player's to keep, rewrite, or delete.
   // disabled: { glyph: true } — weapons CUSTOMIZE has switched out of every run.
-  // enemies: { glyph: fields } — `authored: true` (+ `style`, `zone`, `depth`)
+  // enemies: { glyph: fields } — `authored: true` (+ `style`, `zone`, `tier`)
   // marks an enemy the player created; otherwise the fields override a
   // shipped enemy's name, color, HP, damage and speed.
   // disabledEnemies: { glyph: true } — Disabled Enemies, cut from random spawns.

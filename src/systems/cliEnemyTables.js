@@ -4,13 +4,14 @@
  * (claudedocs/cli-enemies-plan.md).
  *
  * The player steps six values — glyph, name, color, HP, damage, speed — and
- * picks one Enemy Style (the BEHAVIOR row) and one placement (ZONE + DEPTH).
+ * picks a ZONE, a Strength Tier (the TIER row: what level it spawns from)
+ * and one Enemy Style (the BEHAVIOR row).
  * Everything else an authored enemy does arrives with its style at boot, in
  * CanonOverlay; only the style's name is stored.
  */
 
 import { ENEMIES, ZONE_SPAWN_TABLES, SPAWN_TABLES } from '../data/enemies.js';
-import { ENEMY_STYLES } from '../data/enemyStyles.js';
+import { ENEMY_STYLES, STRENGTH_TIERS } from '../data/enemyStyles.js';
 import { isFreeEnemyGlyph, spawnTableEnemies } from './CanonOverlay.js';
 import { caps, stepRow, toggleRow, textRow, tableRow, actionRow, colorRow, PALETTE } from './cliRows.js';
 
@@ -34,6 +35,7 @@ const DAMAGE = [0, 1, 2, 3, 4, 5, 6, 8];
 const SPEED = [10, 15, 20, 25, 30, 35, 40, 50, 60, 75, 90, 110, 130];
 const ZONES = Object.keys(SHIPPED_TABLES);
 const bandsOf = zone => Object.keys(SHIPPED_TABLES[zone]).map(Number);
+const TIERS = Object.keys(STRENGTH_TIERS);
 
 const STYLE_NAMES = ENEMY_STYLES.map(style => style.name);
 const styleSource = name => ENEMY_STYLES.find(style => style.name === name)?.from;
@@ -61,6 +63,8 @@ const enemyGlyphs = (cli) => [
  */
 function authoredRows(entry, set) {
   return [
+    stepRow('ZONE', ZONES, () => entry.zone, v => set('zone', v), caps),
+    stepRow('TIER', TIERS, () => entry.tier, v => set('tier', v), v => caps(v ?? '—')),
     {
       ...stepRow('BEHAVIOR', STYLE_NAMES, () => entry.style, v => set('style', v)),
       valueColor: SHIPPED_DATA[styleSource(entry.style)]?.color,
@@ -69,11 +73,6 @@ function authoredRows(entry, set) {
     stepRow('DAMAGE', DAMAGE, () => entry.damage, v => set('damage', v)),
     stepRow('SPEED', SPEED, () => entry.speed, v => set('speed', v)),
     colorRow(() => entry.color, v => set('color', v)),
-    stepRow('ZONE', ZONES, () => entry.zone, zone => {
-      set('zone', zone);
-      if (!bandsOf(zone).includes(entry.depth)) set('depth', 0);
-    }, caps),
-    stepRow('DEPTH', bandsOf(entry.zone), () => entry.depth, v => set('depth', v)),
   ];
 }
 
@@ -143,7 +142,7 @@ function wouldEmptyBand(cli, glyph) {
   const empties = roster => roster.includes(glyph) && roster.every(off);
   for (const zone of ZONES) {
     for (const threshold of bandsOf(zone)) {
-      const placed = authored.filter(([, e]) => e.zone === zone && e.depth <= threshold).map(([g]) => g);
+      const placed = authored.filter(([, e]) => e.zone === zone && STRENGTH_TIERS[e.tier] <= threshold).map(([g]) => g);
       if (empties([...SHIPPED_TABLES[zone][threshold], ...placed])) return true;
     }
   }
@@ -168,7 +167,7 @@ const CUSTOMIZE = (cli) => enemyGlyphs(cli).map(glyph => {
 
 /**
  * ADD AN ENEMY: a draft form that opens straight onto its NAME, with the
- * first free glyph and a Chaser's stats in green's first band already set,
+ * first free glyph and a weak green Chaser's stats already set,
  * so an enemy can be made from one word. Nothing is saved until ADD; SHIFT
  * drops the draft. ADD keeps the enemy and turns the form into its edit table.
  */
@@ -177,7 +176,7 @@ function addEnemy(cli) {
   const { hp, damage, speed } = SHIPPED_DATA[style.from];
   const draft = {
     glyph: freeGlyphs(cli)[0] ?? null, name: '', style: style.name,
-    hp, damage, speed, color: PALETTE[3], zone: ZONES[0], depth: 0,
+    hp, damage, speed, color: PALETTE[3], zone: ZONES[0], tier: TIERS[0],
   };
   const set = (key, value) => { draft[key] = value; };
   const nameRow = textRow('NAME', () => draft.name, text => { draft.name = text; }, 20);

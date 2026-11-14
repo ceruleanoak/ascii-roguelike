@@ -5,7 +5,8 @@
  * source enemy and `keys` the blocks copied from it, so a style keeps up with
  * tuning done to the enemy it is drawn from.
  *
- * Name, color, HP, damage and speed are never copied: the player steps them.
+ * Name, color, HP, damage, speed and Strength Tier are never copied: the
+ * player steps them.
  * Neither is anything that is the source's own identity (its Motif, true
  * name, descriptions) or that ties it to another system by glyph (bread
  * taming, Brute formations).
@@ -24,8 +25,17 @@ const BODY = [
   'mass', 'acceleration', 'attackRange', 'aggroRange', 'attackCooldown', 'attackWindup',
   'windupMovement', 'attackType', 'projectileType', 'movementStyle', 'movementConfig',
   'decisionInterval', 'idleBehavior', 'grassStealth', 'telegraph', 'recover', 'approach',
-  'search', 'elementalAffinity', 'affinities', 'tier',
+  'search', 'elementalAffinity', 'affinities',
 ];
+
+/**
+ * The Strength Tiers an authored enemy may take, each with the depth it first
+ * spawns at in its zone (it stays in every deeper band). The depths follow
+ * the shipped tables: weak enemies open a zone, normal ones arrive at the
+ * first zone-change gate, elites in the last band. Every zone has a band at
+ * each of these depths. A tier also sets the enemy's `tier`, so its drops.
+ */
+export const STRENGTH_TIERS = { weak: 0, normal: 3, elite: 9 };
 
 export const ENEMY_STYLES = [
   { name: 'CHASER', from: 'S', keys: BODY },

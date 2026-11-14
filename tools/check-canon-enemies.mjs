@@ -49,7 +49,7 @@ const SHIPPED_TABLES = structuredClone(shipped.enemies.ZONE_SPAWN_TABLES);
 const SHIPPED_LEGACY = structuredClone(shipped.enemies.SPAWN_TABLES);
 const SHIPPED_KEYS = Object.keys(shipped.enemies.ENEMIES).sort();
 const SHIPPED_SKELETON = structuredClone(shipped.enemies.ENEMIES.S);
-const [glyph, badStyleGlyph, badZoneGlyph] = Array.from({ length: 94 }, (_, i) => String.fromCharCode(0x21 + i))
+const [glyph, badStyleGlyph, badZoneGlyph, badTierGlyph] = Array.from({ length: 94 }, (_, i) => String.fromCharCode(0x21 + i))
   .filter(shipped.overlay.isFreeEnemyGlyph);
 
 // CUSTOMIZE: with the Bumper (%) off, the Magma Slug (l) is all red's first
@@ -72,10 +72,11 @@ const authored = { authored: true, name: 'Tusker', color: '#ff4444', hp: 7, dama
 shipped.store.save({
   ...shipped.store.load(),
   enemies: {
-    [glyph]: { ...authored, style: 'CHARGER', zone: 'green', depth: 3 },
-    [badStyleGlyph]: { ...authored, style: 'NOPE', zone: 'green', depth: 0 },
-    [badZoneGlyph]: { ...authored, style: 'CHASER', zone: '__proto__', depth: 0 },
-    O: { ...authored, style: 'CHASER', zone: 'green', depth: 0 },  // a taken glyph
+    [glyph]: { ...authored, style: 'CHARGER', zone: 'green', tier: 'normal' },
+    [badStyleGlyph]: { ...authored, style: 'NOPE', zone: 'green', tier: 'weak' },
+    [badZoneGlyph]: { ...authored, style: 'CHASER', zone: '__proto__', tier: 'weak' },
+    [badTierGlyph]: { ...authored, style: 'CHASER', zone: 'green', tier: 'boss' },
+    O: { ...authored, style: 'CHASER', zone: 'green', tier: 'weak' },  // a taken glyph
     S: { name: 'Bonesy', hp: 'lots', color: 'red' },               // an edit, two fields bad
   },
   disabledEnemies: { r: true, l: true, '%': true, nope: true },
@@ -84,7 +85,7 @@ shipped.store.save({
 const seeded = await boot();
 const { ENEMIES, ZONE_SPAWN_TABLES, SPAWN_TABLES, getZoneRandomEnemy } = seeded.enemies;
 const data = ENEMIES[glyph];
-check(data?.char === glyph && data.name === 'Tusker' && data.hp === 7 && data.speed === 40,
+check(data?.char === glyph && data.name === 'Tusker' && data.hp === 7 && data.speed === 40 && data.tier === 'normal',
   `authored enemy ${glyph} missing or lacks its own fields`);
 check(data && isDeepStrictEqual(data.chargeMechanic, ENEMIES.b.chargeMechanic) && data.chargeMechanic !== ENEMIES.b.chargeMechanic,
   `authored enemy ${glyph} did not copy the CHARGER style (a clone of b's chargeMechanic)`);
@@ -100,6 +101,7 @@ check(spawned > 0, `authored enemy never spawned at green depth 3 in 500 rolls`)
 try { new seeded.Enemy(glyph, 100, 100, 3); } catch (e) { check(false, `new Enemy('${glyph}') threw: ${e.message}`); }
 
 check(!ENEMIES[badStyleGlyph], 'an authored enemy with an unknown style was registered');
+check(!ENEMIES[badTierGlyph], 'an authored enemy with a boss tier was registered');
 check(ENEMIES[badZoneGlyph] && Object.values(ZONE_SPAWN_TABLES).every(b => !bandsWith(b, badZoneGlyph).length),
   'an authored enemy with a bad zone was not registered unplaced');
 check(ENEMIES.O.name !== 'Tusker', 'an authored enemy replaced a shipped one (O)');

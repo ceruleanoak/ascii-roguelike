@@ -29,7 +29,7 @@ import { RECIPES, findRecipe } from '../data/recipes.js';
 import { CHARACTER_TYPES } from '../data/characters.js';
 import { STYLE_FIELDS } from '../data/weaponStyles.js';
 import { ENEMIES, ZONE_SPAWN_TABLES, SPAWN_TABLES } from '../data/enemies.js';
-import { findEnemyStyle } from '../data/enemyStyles.js';
+import { findEnemyStyle, STRENGTH_TIERS } from '../data/enemyStyles.js';
 import { BACKGROUND_OBJECTS } from '../game/GameConfig.js';
 
 /** The weapon fields the CLI's Weapons table can author (a Weapon Style's included). */
@@ -132,25 +132,28 @@ function applyEnemies(entries) {
 
 /**
  * An enemy the player created: its Enemy Style's blocks, copied off the
- * style's source, under its own name, color and stats. It joins the chosen
- * band of its zone and every deeper band, since each band lists the whole
- * roster for its depths. A bad zone or depth leaves it registered but never
- * spawned; a missing field, taken glyph or unknown style skips it outright.
+ * style's source, under its own name, color, stats and Strength Tier. It
+ * joins its zone at the band its tier first spawns in, and every deeper band,
+ * since each band lists the whole roster for its depths. A bad zone leaves it
+ * registered but never spawned; a missing field, unknown tier, taken glyph or
+ * unknown style skips it outright.
  */
 function addEnemy(glyph, entry, fields) {
   const style = findEnemyStyle(entry.style);
-  if (!style || !isFreeEnemyGlyph(glyph) || Object.keys(fields).length !== ENEMY_FIELDS.length) return;
+  const tierValid = typeof entry.tier === 'string' && Object.hasOwn(STRENGTH_TIERS, entry.tier);
+  if (!style || !tierValid || !isFreeEnemyGlyph(glyph) || Object.keys(fields).length !== ENEMY_FIELDS.length) return;
   const source = ENEMIES[style.from];
   const body = {};
   for (const key of style.keys) {
     if (source[key] !== undefined) body[key] = structuredClone(source[key]);
   }
-  ENEMIES[glyph] = { ...body, ...fields, char: glyph };
+  ENEMIES[glyph] = { ...body, ...fields, tier: entry.tier, char: glyph };
 
   const bands = Object.hasOwn(ZONE_SPAWN_TABLES, entry.zone) ? ZONE_SPAWN_TABLES[entry.zone] : null;
-  if (!bands || !Number.isInteger(entry.depth) || !Object.hasOwn(bands, entry.depth)) return;
+  if (!bands) return;
+  const depth = STRENGTH_TIERS[entry.tier];
   for (const threshold of Object.keys(bands)) {
-    if (Number(threshold) >= entry.depth) bands[threshold] = [...bands[threshold], glyph];
+    if (Number(threshold) >= depth) bands[threshold] = [...bands[threshold], glyph];
   }
 }
 

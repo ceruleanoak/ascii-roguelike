@@ -3145,14 +3145,23 @@ identity, not standard programming terms.
 
 ### Enemy Style
 - **Definition:** A named behavior an authored enemy takes on: how it moves, attacks and
-  reads the player, and its affinities and tier, copied whole off one shipped enemy (CHASER
-  off the Skeleton, CHARGER off the Boar, …). The player never authors any of it; they pick a
-  style and step the enemy's name, color, HP, damage and speed. Only the style's name is
-  stored. The counterpart of a Weapon Style.
+  reads the player, and its affinities, copied whole off one shipped enemy (CHASER off the
+  Skeleton, CHARGER off the Boar, …). The player never authors any of it; they pick a style
+  and step the enemy's name, color, HP, damage, speed, zone and Strength Tier. Only the
+  style's name is stored. The counterpart of a Weapon Style.
 - **In code:** `ENEMY_STYLES` / `findEnemyStyle(name)` in `src/data/enemyStyles.js` (each
   style's `from` enemy and copied `keys`); the BEHAVIOR row of the CLI's Enemies table;
   `entry.style` on an authored enemy, resolved by `addEnemy()` in `CanonOverlay.js`.
 - **Not:** `movementStyle` (one enemy data field a style copies); a Weapon Style.
+
+### Strength Tier
+- **Definition:** How strong an authored enemy is: weak, normal or elite. Its tier decides the
+  level it first spawns at in its zone (weak from depth 0, normal from 3, elite from 9; it stays
+  in every deeper band) and, since it is the enemy's `tier`, what it drops. Boss is not offered.
+- **In code:** `STRENGTH_TIERS` in `src/data/enemyStyles.js`; the TIER row of the CLI's
+  Enemies table; `entry.tier` on an authored enemy, placed by `addEnemy()` in `CanonOverlay.js`.
+- **Not:** a Boss Phase; a shipped enemy's spawn bands, which the tables list by hand and its
+  `tier` does not decide.
 
 ### Disabled Enemy
 - **Definition:** An enemy switched off in the CLI's Enemies CUSTOMIZE table. It never spawns

@@ -85,6 +85,7 @@ This widens the existing P1 backlog row on Canon Edits: the overlay now also wri
 
 ## As built (2026-11-13)
 - **DEPTH confirmed:** an authored enemy joins its band and every deeper band (`addEnemy()` in `CanonOverlay.js`).
+- **DEPTH → TIER (user, 2026-11-14):** "enemies need a zone, and strength tier (what level they spawn)". The raw DEPTH row is now a TIER row: WEAK, NORMAL or ELITE (`STRENGTH_TIERS` in `enemyStyles.js`). It sets the enemy's `tier`, which drives drops and is no longer copied from the style, and it sets where the enemy first spawns (depth 0, 3 or 9). ZONE and TIER now come right after NAME. Entries stored with the old `depth` field fail the tier check and are skipped until a TIER is stepped.
 - **No `ENEMY_STYLE_FIELDS`:** only the style's name is stored, and the overlay copies that style's `keys`. A field whitelist over style keys had nothing to guard.
 - **GLYPH steps** over the free glyphs, and ADD AN ENEMY opens straight onto NAME with the first free glyph already set. The pool comes to **9 glyphs** (`'():;?\_` and the backtick) once background objects are cut, which caps a canon at 9 authored enemies. Widening it means freeing ASCII glyphs from background objects (rulebook G1/G2 lets those use any BMP glyph), and that is the user's call.
 - **Row model** moved to `src/systems/cliRows.js`, which both table modules share, so `cliTables` ↔ `cliEnemyTables` don't import each other.
