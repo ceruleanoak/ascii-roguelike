@@ -248,6 +248,12 @@ export const RESET_REGISTRY = [
     why: 'Commanded warband dies with the run like every companion roster.',
   },
   {
+    path: 'weaponsMasterSystem.resetRunState',
+    scope: 'run',
+    call: (game) => game.weaponsMasterSystem.resetRunState(),
+    why: 'The Parry Lesson and the Weapons Master\'s Buckler are once per run; a lesson or training coin in flight dies with the run.',
+  },
+  {
     path: 'runTimerSystem.clear',
     scope: 'run',
     call: (game) => game.runTimerSystem.clear(),

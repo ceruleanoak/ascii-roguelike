@@ -26,6 +26,10 @@ export class NeutralCharacter {
     // that should only unlock after the player has heard the NPC out).
     this.spokenOnce = false;
 
+    // True while an activity owns SPACE near this speaker (the Weapons
+    // Master's Parry Lesson): DialogueSystem.tryOpenNearby passes it over.
+    this.talkSuspended = false;
+
     // PERSUADE (InfluenceSystem): `persuadeOwner` names the game system that
     // gives this NPC's transaction away without its cost. An NPC without one
     // refuses with `persuadeRefusal`, and no wish is spent.

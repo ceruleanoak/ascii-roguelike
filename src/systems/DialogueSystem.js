@@ -84,6 +84,8 @@ export class DialogueSystem {
 
     for (const npc of game.interiorManager.activeNpcs()) {
       if (typeof npc.getDialogueLines !== 'function') continue;
+      // A speaker whose activity owns SPACE (the Weapons Master mid Parry Lesson).
+      if (npc.talkSuspended) continue;
       if (!inSamePlane(npc, player) || !npc.isInRange(player)) continue;
       if (this.talk(npc)) return true;
     }

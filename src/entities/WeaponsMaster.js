@@ -1,4 +1,5 @@
 import { NeutralCharacter } from './NeutralCharacter.js';
+import { initParry } from './enemyMechanics/ParryMechanic.js';
 
 // One line of mechanically-grounded advice per weapon category. Melee weapons
 // key by weaponSubtype; ranged/wand weapons have no subtype and fall back to
@@ -49,27 +50,37 @@ export class WeaponsMaster extends NeutralCharacter {
   constructor(x, y) {
     super('m', '#c08840', x, y);
     this.persuadeOwner = 'weaponsMasterSystem';
+    // His parry, raised only during the Parry Lesson (ParryLesson).
+    initParry(this);
   }
 
   // Weapon first, then the armor remark as his secondary topic, then the
   // training offer last so it is what the player walks away with.
   getDialogueLines(game) {
     const remark = armorRemark(game);
+    // With nothing to train: the Parry Lesson, or the Buckler after it (ParryLesson).
+    const offer = game.weaponsMasterSystem?.parryLesson?.offerLine() ?? null;
     const category = resolveWeaponCategory(game.player?.heldItem);
     if (!category) {
-      return [remark, 'I TRAIN WEAPONS. YOU AREN\'T HOLDING ONE.'];
+      return [remark, 'I TRAIN WEAPONS. YOU AREN\'T HOLDING ONE.', ...(offer ? [offer] : [])];
     }
 
     const advice = WEAPON_MASTER_ADVICE[category] || 'I DON\'T KNOW THAT WEAPON.';
     const trained = game.inventorySystem?.characterInventories?.[game.activeCharacterType]?.trainedWeapons;
     if (trained?.[category]) {
-      return [advice, remark, 'YOU ARE ALREADY TRAINED IN THIS.'];
+      return [advice, remark, offer ?? 'YOU ARE ALREADY TRAINED IN THIS.'];
     }
     return [advice, remark, 'ONE COIN AND I WILL TRAIN YOU IN IT.'];
   }
 
   update(dt, game) {
     super.update(dt); // pulse animation
+    // Mid-lesson his parry tell ']' takes the place of the talk '!'.
+    if (game?.weaponsMasterSystem?.parryLesson?.isTeaching(this)) {
+      if (this.parryActive) this.setIndicator(']', '#eeeeff');
+      else this.clearIndicator();
+      return;
+    }
     this.updateTalkIndicator(game);
   }
 }
