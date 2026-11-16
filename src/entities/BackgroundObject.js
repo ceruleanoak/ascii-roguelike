@@ -81,6 +81,10 @@ export class BackgroundObject {
     // this class beyond the render-color override in update()/getRenderPosition().
     this.deepWater = options.deepWater || false;
 
+    // Deep Lava — a lava tile lava holds on all four sides; slows whatever is
+    // in it (see DeepLava.js, which sets it on finished lava bodies).
+    this.deepLava = options.deepLava || false;
+
     // Sunken Glint — a deep tile in a green Ocean hiding a coin or sea find,
     // shown only as a twinkle (see SunkenGlintSystem). Cleared on discovery.
     this.sunkenGlint = options.sunkenGlint || false;
@@ -888,6 +892,7 @@ export class BackgroundObject {
   // Transform this lava tile into a rock in-place (water quenches lava)
   solidifyToRock() {
     if (!this.isLava()) return;
+    this.deepLava = false;
     this.char = '0';
     this.originalChar = '0';
     this.typeId = null;

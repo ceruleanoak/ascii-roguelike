@@ -7,6 +7,7 @@ import { createBurstParticles } from './WorldEffectsSystem.js';
 import { isCellProtected } from './roomFeatures.js';
 import { createPushRock } from './PushRock.js';
 import { createWatcherEye } from './WatcherEye.js';
+import { markDeepLava } from './DeepLava.js';
 
 // Barricades stay out of the first two depths of a zone: the shape has to be
 // met somewhere it can be answered, and a run two rooms deep is still finding
@@ -209,6 +210,8 @@ export class BarricadeSystem {
       room.backgroundObjects.push(obj);
       objects.push(obj);
     }
+    // A hazard plug is a lava body like any other: its heart runs deep.
+    if (descriptor.shape === 'hazard') markDeepLava(room.backgroundObjects);
     room.barricade = {
       id: descriptor.id,
       shape: descriptor.shape,

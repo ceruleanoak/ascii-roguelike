@@ -229,7 +229,8 @@ const PUSH_LOCK = {
 // reaction the world already runs everywhere else.
 
 // Lava across the lane, deeper and wider than a plug needs to be so it reads as
-// a moat rather than a wall. Nothing blocks the way and nothing lifts — walking
+// a moat rather than a wall — wide enough that its heart runs deep (DeepLava.js),
+// so the crossing is slow as well as hot. Nothing blocks the way and nothing lifts — walking
 // it costs HP, and wet skin costs none (PhysicsSystem's lava-damage exemption).
 // The water has to be found before the lava is: the moat is where the lesson is
 // spent, not where it is learned.
@@ -237,8 +238,8 @@ const LAVA_MOAT = {
   id: 'lava_moat',
   shape: 'hazard',
   typeId: 'lava',
-  deep: 3,
-  spread: 2
+  deep: 4,
+  spread: 3
 };
 
 // A wall of ice, one lick of flame per block. Every other refusal in the game

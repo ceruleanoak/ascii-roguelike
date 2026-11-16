@@ -5,6 +5,7 @@ import { ITEMS } from '../data/items.js';
 import { cellsWithGlyph } from '../data/dungeon/tiles.js';
 import { setTriggerVisual } from './triggerMachine.js';
 import { createPushRock } from './PushRock.js';
+import { markDeepLava } from './DeepLava.js';
 
 /**
  * Template fixtures — the authored objects a dungeon template places on top
@@ -56,6 +57,7 @@ export function placeTemplateFixtures(data, { backgroundObjects, items, reserved
   for (const { row, col } of cellsWithGlyph(data.grid, '=', reservedCells)) {
     backgroundObjects.push(BackgroundObject.createVariant('lava', col * CS, row * CS));
   }
+  markDeepLava(backgroundObjects);
 
   // Hammer Trial fixtures: Cavern Rocks the Onyx Hammer rolls, and the
   // Deflectors that turn a rolling rock toward its target.

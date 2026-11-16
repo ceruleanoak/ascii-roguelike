@@ -12,6 +12,7 @@ import { CampNPC } from '../entities/CampNPC.js';
 import { Crow } from '../entities/Crow.js';
 import { Fairy } from '../entities/Fairy.js';
 import { spawnCellBlockedByBackground, findSafeSpawnPosition } from './safeSpawn.js';
+import { markDeepLava } from './DeepLava.js';
 import { maybeSpawnPeacefulFishingRoom, maybeSpawnRoamingAlchemist, buildVaultInteriorLoot, buildVaultCoinAbundance, buildVaultUnlockExtras, getIslandPosition, protectRegion, isCellProtected, cleanupStrayBackgroundObjects, resolveLavaHazards, seedCavern, rotatePattern, darkenColor, spawnBatFlock, spawnBelfryBats, stampHutFootprint, placeWhirlpool, generateSettlementRoom as generateSettlementRoomImpl, generateJewelerRoom, cellularCaveGrid, isCaveEntranceLanding, generateCalderaRoom, seedAscentZone, seedSinkholes, injectSinkholeLake, spawnMinibossOrFallback, generateGrassSwaths, generateSnowFields, generateRedZoneDeflectors, spawnGuaranteedItems, offerL1Weapon, offerWeaponIfUnarmed, seedTunnelZone, generateOceanTerrain as generateOceanTerrainImpl, stampWaterBlobs as stampWaterBlobsImpl, placeRoomLiquid } from './roomFeatures.js';
 import { pickUnspawnedItem, markItemSpawned } from './spawnedItems.js';
 import { placeVaultPushRock } from './PushRockSystem.js';
@@ -318,6 +319,10 @@ export class RoomGenerator {
     // (zone-agnostic — can happen via effectiveZone blending or depth-based
     // water→lava conversion regardless of room.zone) — roomFeatures.js.
     resolveLavaHazards(room);
+
+    // What lava is left gets its heart: tiles lava holds on all four sides
+    // become Deep Lava — DeepLava.js.
+    markDeepLava(room.backgroundObjects);
 
     return room;
   }
