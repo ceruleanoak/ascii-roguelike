@@ -1,45 +1,53 @@
 import { GRID, PHYSICS, COLORS } from '../game/GameConfig.js';
-import { ENEMIES } from '../data/enemies.js';
-import { resolveTelegraph } from '../game/TelegraphAnimation.js';
 import { entityCenter, updateEnemyMeleeAttack, activateWindupVisual } from '../game/Telegraph.js';
 
 const CELL = GRID.CELL_SIZE;
 
-// The Punch borrows the Slime's whole attack: its windup, its cooldown and its
-// Telegraph (the one-cell box that blinks). Read straight off the Slime's data
-// so the two can never drift apart — the player's bare-handed swing is the
-// first attack they learned to read, thrown back.
-const SLIME = ENEMIES.o;
-
 const PUNCH_DAMAGE = 1;
 const PUNCH_ACCURACY = 0.5;   // half the punches whiff (CombatSystem shows MISS)
 
+// The Punch is a short jab: no windup, thrown the instant SPACE lands, and
+// ready again 0.3 real seconds later. Its clock is the enemy-melee clock
+// (ENEMY_TIMER_RATE = 2), so the cooldown is written in double-seconds.
+const PUNCH_COOLDOWN = 0.3 * PHYSICS.ENEMY_TIMER_RATE;
+
+// The flash after the jab lands, in double-seconds (0.15 real seconds).
+const PUNCH_FLASH = 0.30;
+
+// The jab's reach and fist: a sub-cell box just past the thrower's edge, so it
+// touches only what is pressed against the player — one body, not an area.
+// Units are cells, in the Telegraph shape contract (offset + length along the
+// facing, width across it).
+const PUNCH_SHAPE = { kind: 'rect', length: 0.6, width: 0.6, offset: 0.5 };
+
+// The thrower's weight follows the fist: a small forward hop, handed to
+// CombatSystem as the attack's `lunge` (the hammer's mechanism). Friction eats
+// it within the flash — a step, not a dash (the hammer's is 90).
+const PUNCH_LUNGE_SPEED = 50;
+
 /**
- * PunchSystem — SPACE with no weapon held (or a spent one, Item.isSpent): a 1-damage, 50%-accuracy Punch with
- * the Slime's windup and projection, in yellow. The hand then returns to any slot that can still fight.
+ * PunchSystem — SPACE with no weapon held (or a spent one, Item.isSpent): a
+ * 1-damage, 50%-accuracy jab in yellow. No windup: the blow lands on the press,
+ * the thrower steps into it, and the next jab is ready 0.3 seconds later. The
+ * hand then returns to any slot that can still fight.
  *
- * The windup is the Slime's Telegraph lifecycle, stepped by the same Telegraph
- * helpers on the same double-second clock as an enemy melee attack, so it
- * blinks and flashes exactly as the Slime's does. When the windup completes the
- * blow itself is handed to CombatSystem as an ordinary player melee hitbox (one
- * cell, where the box sits), which is what lands the damage and rolls the miss.
- *
- * The windup visual lives here, not in CombatSystem's melee list: that list
- * only holds hitboxes that are already live, and a windup never deals damage.
- * Drawn by the `punches` Frame Pass.
+ * The blow itself is handed to CombatSystem as an ordinary player melee hitbox
+ * (a sub-cell box just ahead), which is what lands the damage and rolls the
+ * miss. The flash is a Telegraph-shaped record stepped by the Telegraph helpers
+ * and drawn by the `punches` Frame Pass.
  */
 export class PunchSystem {
   constructor(game) {
     this.game = game;
-    // Windup visuals in flight (at most one per body), each a Telegraph-shaped
-    // attack. One body outside the Mist Battle; each Act 2 body throws its own.
+    // Jab flashes in flight (at most one per body), each a Telegraph-shaped
+    // record. One body outside the Mist Battle; each Act 2 body throws its own.
     this.punches = [];
-    // Double-seconds until each body's next Punch may start (the Slime's
-    // attackCooldown), keyed by the body that threw the last one.
+    // Double-seconds until each body's next Punch may start (PUNCH_COOLDOWN),
+    // keyed by the body that threw the last one.
     this.cooldowns = new Map();
   }
 
-  /** Is a Punch of this body's winding up or still flashing? */
+  /** Is a Punch of this body's still flashing? */
   isPunching(player = this.game.player) {
     return this.punches.some(p => p.owner === player);
   }
@@ -60,34 +68,29 @@ export class PunchSystem {
     // A frog has no fists; otherwise the same gate every weapon swing passes.
     if (player.polymorphed || !player.canAttack()) return false;
 
-    const resolved = resolveTelegraph(SLIME.telegraph, 'Punch');
     const facing = Math.atan2(player.facing.y, player.facing.x);
-    const reach = this._reach(resolved.hitShape);
-    const windup = SLIME.attackWindup;
-
-    this.punches.push({
+    const reach = this._reach(PUNCH_SHAPE);
+    const punch = {
       type: 'punch',
       owner: player,
       position: this._hitPosition(player, facing, reach),
-      ownerOffsetX: Math.cos(facing) * reach - CELL / 2 + (player.width ?? CELL) / 2,
-      ownerOffsetY: Math.sin(facing) * reach - CELL / 2 + (player.height ?? CELL) / 2,
       width: CELL,
       height: CELL,
       color: COLORS.ITEM,
-      warnShape: resolved.warnShape,
-      hitShape: resolved.hitShape,
+      warnShape: PUNCH_SHAPE,
+      hitShape: PUNCH_SHAPE,
       facing,
-      telegraphPulses: resolved.pulses,
-      animation: resolved.animation,
-      animationName: resolved.animationName,
-      attackShape: resolved.attackShape,
-      attackShapeTurn: resolved.attackShapeTurn,
-      attackShapeCount: resolved.attackShapeCount,
+      telegraphPulses: null,
+      animation: null,
+      animationName: null,
+      attackShape: null,
+      attackShapeTurn: 0,
+      attackShapeCount: 1,
       reach,
-      // The same lifetime an enemy windup visual gets: windup, then one active window.
-      duration: windup + 0.30,
+      // No windup: the record is activated below, and lives for the flash.
+      duration: PUNCH_FLASH,
       windupPhase: true,
-      windupDuration: windup,
+      windupDuration: 0,
       windupElapsed: 0,
       alpha: 1.0,
       flashWhite: false,
@@ -96,10 +99,13 @@ export class PunchSystem {
       beatElapsed: 0,
       beatElapsedPrev: 0,
       hutPlane: this.game.combatSystem.activeHutPlane(),
-      // Read now, while the thrower's armor is the one worn (an Act 2 body's
-      // gear is only loaded while it acts): Dragon Gauntlets harden the blow.
-      armor: this.game.inventorySystem?.equippedArmor?.data ?? null,
-    });
+    };
+    activateWindupVisual(punch);
+    this.punches.push(punch);
+    // Read now, while the thrower's armor is the one worn (an Act 2 body's
+    // gear is only loaded while it acts): Dragon Gauntlets harden the blow.
+    this._land(punch, this.game.inventorySystem?.equippedArmor?.data ?? null);
+    this.cooldowns.set(player, PUNCH_COOLDOWN);
     return true;
   }
 
@@ -134,7 +140,7 @@ export class PunchSystem {
   }
 
   update(deltaTime) {
-    // Enemy-melee clock: the Slime's timings are double-seconds on it.
+    // Enemy-melee clock: the Punch's timings are double-seconds on it.
     const step = deltaTime * PHYSICS.ENEMY_TIMER_RATE;
     for (const [body, left] of this.cooldowns) {
       if (left - step > 0) this.cooldowns.set(body, left - step);
@@ -142,14 +148,7 @@ export class PunchSystem {
     }
 
     for (let i = this.punches.length - 1; i >= 0; i--) {
-      const punch = this.punches[i];
-      const expired = updateEnemyMeleeAttack(punch, step);
-      if (punch.windupPhase && punch.windupElapsed >= punch.windupDuration) {
-        activateWindupVisual(punch);
-        this._land(punch);
-        this.cooldowns.set(punch.owner, SLIME.attackCooldown);
-      }
-      if (expired && !punch.windupPhase) this.punches.splice(i, 1);
+      if (updateEnemyMeleeAttack(this.punches[i], step)) this.punches.splice(i, 1);
     }
   }
 
@@ -159,23 +158,32 @@ export class PunchSystem {
     this.cooldowns.clear();
   }
 
-  // Hand the blow to CombatSystem as a live player melee hitbox on the box's
-  // cell. Objects are skipped, a Brick Wall excepted: an unarmed SPACE beside
-  // one interacts with it (main.js), and the Punch's damage is not for objects.
-  _land(punch) {
+  // Hand the blow to CombatSystem as a live player melee hitbox on the fist's
+  // box, carrying the thrower's forward step as its `lunge`. Objects are
+  // skipped, a Brick Wall excepted: an unarmed SPACE beside one interacts with
+  // it (main.js), and the Punch's damage is not for objects.
+  _land(punch, armor) {
     const player = punch.owner;
     // Dragon Gauntlets (or any armor authoring punchDamage/punchKnockback)
-    // harden the blow; bare skin is the Slime's 1-damage, no-knockback hit.
-    const armor = punch.armor;
-    const position = this._hitPosition(player, punch.facing, punch.reach);
-    this._strikeBrickWall(position);
+    // harden the blow; bare skin is a 1-damage, no-knockback hit.
+    const fist = PUNCH_SHAPE.width * CELL;
+    const center = entityCenter(player);
+    const position = {
+      x: center.x + Math.cos(punch.facing) * punch.reach - fist / 2,
+      y: center.y + Math.sin(punch.facing) * punch.reach - fist / 2,
+    };
+    this._strikeBrickWall(this._hitPosition(player, punch.facing, punch.reach));
     this.game.combatSystem.createAttack({
       type: 'melee',
       char: '',
       telegraphDrawn: true,    // the Punch's Frame Pass draws it, not the melee pass
       position,
-      width: CELL,
-      height: CELL,
+      width: fist,
+      height: fist,
+      lunge: {
+        vx: Math.cos(punch.facing) * PUNCH_LUNGE_SPEED,
+        vy: Math.sin(punch.facing) * PUNCH_LUNGE_SPEED,
+      },
       damage: armor?.punchDamage ?? PUNCH_DAMAGE,
       accuracy: PUNCH_ACCURACY,
       knockback: armor?.punchKnockback ?? 0,
@@ -207,7 +215,8 @@ export class PunchSystem {
     return ((shape.offset ?? 0) + shape.length / 2) * CELL;
   }
 
-  // Top-left of the one-cell hitbox, `reach` out from the player's center.
+  // Top-left of the cell `reach` out from the player's center (the Brick Wall
+  // test and the flash's anchor).
   _hitPosition(player, facing, reach) {
     const c = entityCenter(player);
     return {
