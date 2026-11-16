@@ -12,11 +12,20 @@ const DAGGER_POST_DODGE_CRIT_WINDOW = 0.6;
 // Roll Combo: a roll in flight chains into a fresh roll when the held roll
 // direction turns one step (45°) to an adjacent direction: orthogonal to
 // diagonal or diagonal to orthogonal. Up to ROLL_COMBO_MAX_CHAINS chains per
-// roll, so → ↗ ↑ ↖ is one roll and three chains. A turn in the first
+// roll, so → ↗ ↑ ↖ is one roll and three chains (four rolls in all). The
+// first chain sets the combo's turn, clockwise or counterclockwise; a step
+// back the other way only curves the roll. Each chained roll runs
+// ROLL_COMBO_SHORTEN shorter than the roll before it. A turn in the first
 // ROLL_COMBO_INPUT_DELAY seconds of a roll is two arrows pressed together for
 // one diagonal, not a chain, so it only curves the roll.
 const ROLL_COMBO_MAX_CHAINS = 3;
 const ROLL_COMBO_INPUT_DELAY = 0.03;
+const ROLL_COMBO_SHORTEN = 0.3;
+
+// +1 or -1 for the way `b` turns from `a` (screen space, y down), 0 if neither.
+function turnSign(a, b) {
+  return Math.sign(a.x * b.y - a.y * b.x);
+}
 
 // One 45° step apart, with some slack for a non-arrow direction (FIGHT's
 // reposition roll): between 30° and 60°.
@@ -31,14 +40,16 @@ function isAdjacentDirection(a, b) {
 // by start() and chain() so a chained roll protects exactly like a fresh one.
 // A Cyan 'hide' roll's longer invisible window is start()'s alone: a chain
 // never re-triggers invisibility.
-function rollIframesFor(player) {
+// `rollTime` is this roll's own length: a chained roll is shorter than
+// `roll.duration` (ROLL_COMBO_SHORTEN).
+function rollIframesFor(player, rollTime = player.dodgeRoll.duration) {
   const roll = player.dodgeRoll;
   switch (roll.type) {
     case 'dodge':
     case 'hide':
-      return roll.iframes ? roll.duration + roll.postRollIframes + player.extraIframes : 0;
+      return roll.iframes ? rollTime + roll.postRollIframes + player.extraIframes : 0;
     case 'damage':
-      return roll.duration;
+      return rollTime;
     default:
       return 0;
   }
@@ -107,6 +118,8 @@ export const PlayerDodgeRollSystem = {
     // A fresh roll starts a fresh Roll Combo.
     player.dodgeRoll.comboChains = 0;
     player.dodgeRoll.comboInput = { x: direction.x, y: direction.y };
+    player.dodgeRoll.comboTurn = 0;
+    player.dodgeRoll.comboRollTime = player.dodgeRoll.duration;
 
     // Reset slope/ice lock state for fresh roll
     player.dodgeRoll.slopeTimer  = 0;
@@ -164,27 +177,33 @@ export const PlayerDodgeRollSystem = {
   // Roll Combo: called every frame a roll is in flight with the roll
   // direction held this frame. Returns true when it chained into a fresh
   // roll; false leaves the caller to curve the roll toward `direction`.
-  // A chain re-arms the roll's timer, cooldown and i-frames and keeps its
-  // speed and type (a Whirlwind spin stays a spin). A Pole Vault or a
-  // locked/gooey player never chains.
+  // A chain re-arms the roll's timer (ROLL_COMBO_SHORTEN shorter each
+  // chain), cooldown and i-frames and keeps its speed and type (a Whirlwind
+  // spin stays a spin). It turns the same way as the combo's first chain.
+  // A Pole Vault or a locked/gooey player never chains. The caller plays no
+  // roll sound for a chain: the combo sounds once, at its first roll.
   chain(player, direction) {
     const roll = player.dodgeRoll;
     const previous = roll.comboInput;
     roll.comboInput = { x: direction.x, y: direction.y };
     if (!roll.active || roll.vault || roll.type === 'blink') return false;
     if (roll.comboChains >= ROLL_COMBO_MAX_CHAINS) return false;
-    if (roll.duration - roll.timer < ROLL_COMBO_INPUT_DELAY) return false;
+    if (roll.comboRollTime - roll.timer < ROLL_COMBO_INPUT_DELAY) return false;
     if (player.isGooey() || player.isLocked()) return false;
     if (!previous || !isAdjacentDirection(previous, direction)) return false;
+    const turn = turnSign(previous, direction);
+    if (roll.comboTurn !== 0 && turn !== roll.comboTurn) return false;
 
     roll.comboChains++;
+    roll.comboTurn = turn;
+    roll.comboRollTime = roll.duration * Math.pow(1 - ROLL_COMBO_SHORTEN, roll.comboChains);
     roll.direction = { x: direction.x, y: direction.y };
-    roll.timer = roll.duration;
+    roll.timer = roll.comboRollTime;
     roll.cooldownTimer = roll.cooldown * player.rollCooldownMult;
     roll.slopeTimer = 0;
     roll.slopeActive = false;
     roll.slopeLocked = false;
-    player.invulnerabilityTimer = Math.max(player.invulnerabilityTimer, rollIframesFor(player));
+    player.invulnerabilityTimer = Math.max(player.invulnerabilityTimer, rollIframesFor(player, roll.comboRollTime));
     return true;
   },
 
@@ -203,6 +222,8 @@ export const PlayerDodgeRollSystem = {
     roll.invisRecoveryTimer = 0;
     roll.comboChains = 0;
     roll.comboInput = null;
+    roll.comboTurn = 0;
+    roll.comboRollTime = 0;
     player.ignoreBackgroundCollision = false;
     player.hidden = false;
   },
