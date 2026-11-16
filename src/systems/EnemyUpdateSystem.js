@@ -10,6 +10,7 @@ import { findNearbyOpenExitDirection, getExitDespawnPoint } from './ExitSystem.j
 import { createExplosionAftermath } from './WorldEffectsSystem.js';
 import { BumpMechanic } from '../entities/enemyMechanics/BumpMechanic.js';
 import { DartMechanic } from '../entities/enemyMechanics/DartMechanic.js';
+import { TrapShyMechanic } from '../entities/enemyMechanics/TrapShyMechanic.js';
 import { ChargeMechanic } from '../entities/enemyMechanics/ChargeMechanic.js';
 import { RipenMechanic } from '../entities/enemyMechanics/RipenMechanic.js';
 import { glyphsTouch } from '../entities/enemyMechanics/glyphContact.js';
@@ -273,6 +274,10 @@ export class EnemyUpdateSystem {
       enemy._frameUpdateResult = updateResult;
 
       if (!enemy.data) continue;
+
+      // Trap-Shy steers this tick's targetVelocity off placed traps; it needs
+      // game.placedTraps, which the enemy's own tick doesn't carry.
+      TrapShyMechanic.update(enemy);
 
       this._handleChargeContact(enemy, player, prevChargeSpeed);
       BumpMechanic.resolveContact(enemy, player, game, deltaTime);
