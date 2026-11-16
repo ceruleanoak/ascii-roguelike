@@ -101,7 +101,7 @@ export const STATE_IDS = ['dormant', 'alert', 'approach', 'anticipate', 'strike'
 // *key* does that, via `??`, and a list row can't emit "absent", only a value —
 // see the Strike bands section). Every row's movement is therefore a real,
 // working verb, never a silent freeze standing in for "unset".
-export const MOVEMENT_VERBS = ['close', 'hold', 'orbit', 'back', 'still', 'wander', 'lungeBack', 'flee'];
+export const MOVEMENT_VERBS = ['close', 'hold', 'orbit', 'dance', 'back', 'still', 'wander', 'lungeBack', 'flee'];
 
 // What a thrown potion applies on impact. All four are shipped on the Alchemist,
 // but only two of them do anything: `Player.applyStatusEffect` returns early for

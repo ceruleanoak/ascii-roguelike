@@ -129,6 +129,46 @@ export function moveKeeper(enemy, speedMultiplier, targetPos, deltaTime) {
 }
 
 /**
+ * dance: close to melee reach, then step from side to side across the
+ * target's line while the attack cools down — a fencer's footwork, not an
+ * orbit. Out of reach it closes like a chaser; inside it the sidestep flips
+ * every `danceStep` seconds, with a pull toward DANCE_HOLD of attackRange so
+ * the steps neither drift out of reach nor crowd the target. Strike still
+ * fires from Approach the moment the cooldown is up.
+ *
+ * Reuses the keeper's strafe fields (`keeperStrafeDir`, `keeperFlipTimer`),
+ * initialized by Enemy's constructor for movementStyle 'keeper' — a dancer
+ * declares that style and swaps its Approach verb to 'dance'.
+ *
+ * Config (movementConfig, optional — default shown):
+ *   danceStep = 0.45   seconds per side before the step turns
+ */
+const DANCE_HOLD = 0.75;
+export function moveDance(enemy, speedMultiplier, targetPos, deltaTime) {
+  const dx = targetPos.x - enemy.position.x;
+  const dy = targetPos.y - enemy.position.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  if (dist === 0) return;
+  if (dist > enemy.attackRange) return moveChaser(enemy, speedMultiplier, targetPos, deltaTime);
+
+  enemy.keeperFlipTimer -= deltaTime;
+  if (enemy.keeperFlipTimer <= 0) {
+    enemy.keeperFlipTimer = enemy.movementConfig.danceStep ?? 0.45;
+    enemy.keeperStrafeDir *= -1;
+  }
+
+  const dirX = dx / dist;
+  const dirY = dy / dist;
+  const side = enemy.keeperStrafeDir;
+  // Positive pull steps in, negative steps out, scaled by how far off the
+  // hold distance it stands.
+  const pull = (dist - enemy.attackRange * DANCE_HOLD) / enemy.attackRange;
+  const speed = enemy.speed * speedMultiplier;
+  enemy.targetVelocity.vx = (-dirY * side + dirX * pull) * speed;
+  enemy.targetVelocity.vy = ( dirX * side + dirY * pull) * speed;
+}
+
+/**
  * kiter: hold kiteDistance and circle-strafe while the core attack cooldown
  * ticks; when the attack is ready, dive straight in and let the core
  * windup → attack states deliver the hit (the windup '!' is the tell).
@@ -503,6 +543,7 @@ const VERBS = {
   close:  (enemy, mult, targetPos, dt) => moveChaser(enemy, mult, targetPos, dt),
   hold:   (enemy, mult, targetPos, dt) => moveKeeper(enemy, mult, targetPos, dt),
   orbit:  (enemy, mult, targetPos, dt) => moveKiter(enemy, mult, targetPos, dt),
+  dance:  (enemy, mult, targetPos, dt) => moveDance(enemy, mult, targetPos, dt),
   back:   (enemy, mult, targetPos) => moveBack(enemy, mult, targetPos),
   still:  (enemy) => moveStill(enemy),
   wander: (enemy, mult, targetPos, dt) => updateWanderMovement(enemy, mult, dt),

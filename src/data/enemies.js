@@ -798,7 +798,7 @@ export const ENEMIES = {
   'd': {
     char: 'd',
     name: 'Duelist',
-    description: 'Keeps its distance until you swing recklessly, then parries the attack and counters.',
+    description: 'Dances side to side within reach between attacks, then parries the attack and counters.',
     spellDescription: 'WATCH THE FLASH.',
     trueName: 'DIMICATOR',
     hp: 7,
@@ -814,11 +814,11 @@ export const ENEMIES = {
     attackType: 'melee',
     decisionInterval: 0.30,
     color: '#99aacc',
-    movementStyle: 'keeper',
+    movementStyle: 'keeper',            // keeper strafe fields; Approach swaps the verb to the dance
     movementConfig: {
-      preferredRange: GRID.CELL_SIZE * 4,  // Wider: retreat creates the gap the riposte crosses
-      rangeTolerance: GRID.CELL_SIZE * 1.0
+      danceStep: 0.45                   // seconds on each side before the step turns
     },
+    approach: { movement: 'dance' },    // closes to reach, then steps side to side between attacks
     parryMechanic: {
       enabled: true,
       parryArcDegrees: 100,    // Narrower than original — angling matters
