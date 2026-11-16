@@ -59,8 +59,9 @@ export class FishingSystem {
 
   // ── Condition checks ─────────────────────────────────────────────────────
 
+  // A lava lake (red L, RoomGenerator.generateLakeTerrain) holds no fish.
   isLakeRoom(game) {
-    return game.currentRoom?.letterTemplate?.name === 'Lake';
+    return game.currentRoom?.letterTemplate?.name === 'Lake' && !game.currentRoom.lavaLake;
   }
 
   // Ocean ('O') rooms fish like lakes but roll the dedicated 'ocean' table

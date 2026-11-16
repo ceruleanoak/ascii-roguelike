@@ -13,7 +13,7 @@ import { Crow } from '../entities/Crow.js';
 import { Fairy } from '../entities/Fairy.js';
 import { spawnCellBlockedByBackground, findSafeSpawnPosition } from './safeSpawn.js';
 import { markDeepLava } from './DeepLava.js';
-import { maybeSpawnPeacefulFishingRoom, maybeSpawnRoamingAlchemist, buildVaultInteriorLoot, buildVaultCoinAbundance, buildVaultUnlockExtras, getIslandPosition, protectRegion, isCellProtected, cleanupStrayBackgroundObjects, resolveLavaHazards, seedCavern, rotatePattern, darkenColor, spawnBatFlock, spawnPhalanx, spawnBelfryBats, stampHutFootprint, placeWhirlpool, generateSettlementRoom as generateSettlementRoomImpl, generateJewelerRoom, cellularCaveGrid, isCaveEntranceLanding, generateCalderaRoom, seedAscentZone, seedSinkholes, injectSinkholeLake, spawnMinibossOrFallback, generateGrassSwaths, generateSnowFields, generateRedZoneDeflectors, spawnGuaranteedItems, offerL1Weapon, offerWeaponIfUnarmed, seedTunnelZone, generateOceanTerrain as generateOceanTerrainImpl, stampWaterBlobs as stampWaterBlobsImpl, placeRoomLiquid } from './roomFeatures.js';
+import { maybeSpawnPeacefulFishingRoom, maybeSpawnRoamingAlchemist, buildVaultInteriorLoot, buildVaultCoinAbundance, buildVaultUnlockExtras, getIslandPosition, protectRegion, isCellProtected, cleanupStrayBackgroundObjects, resolveLavaHazards, seedCavern, rotatePattern, darkenColor, spawnBatFlock, spawnPhalanx, spawnBelfryBats, stampHutFootprint, placeWhirlpool, generateSettlementRoom as generateSettlementRoomImpl, generateJewelerRoom, cellularCaveGrid, isCaveEntranceLanding, generateCalderaRoom, seedAscentZone, seedSinkholes, injectSinkholeLake, spawnMinibossOrFallback, generateGrassSwaths, generateSnowFields, generateRedZoneDeflectors, spawnGuaranteedItems, offerL1Weapon, offerWeaponIfUnarmed, seedTunnelZone, generateOceanTerrain as generateOceanTerrainImpl, stampWaterBlobs as stampWaterBlobsImpl, generateLakeTerrain as generateLakeTerrainImpl, placeRoomLiquid } from './roomFeatures.js';
 import { pickUnspawnedItem, markItemSpawned } from './spawnedItems.js';
 import { placeVaultPushRock } from './PushRockSystem.js';
 import { attachVault } from './vaultWalls.js';
@@ -696,8 +696,10 @@ export class RoomGenerator {
     }
 
     // Inject letter-specific enemies (e.g., sea snakes always present in O rooms)
-    if (this.currentLetterTemplate?.enemyInjection) {
-      const inj = this.currentLetterTemplate.enemyInjection;
+    const inj = room.lavaLake
+      ? this.currentLetterTemplate?.lavaLakeInjection
+      : this.currentLetterTemplate?.enemyInjection;
+    if (inj) {
       const injCount = inj.minCount + Math.floor(Math.random() * (inj.maxCount - inj.minCount + 1));
       for (let i = 0; i < injCount; i++) {
         const allowLiquid = inj.preferLiquid === true;
@@ -1657,13 +1659,13 @@ export class RoomGenerator {
   }
 
   generateLakeTerrain(room) {
-    const config = this.currentLetterTemplate.lakeZone;
-    this.stampWaterBlobs(room, config.nodes, config.edgeNoise, config.waterDensity);
+    generateLakeTerrainImpl(this, room);
   }
 
   // Blob-fill + shoreline decoration; shared by generateLakeTerrain and Oasis.
-  stampWaterBlobs(room, nodes, edgeNoise, waterDensity) {
-    stampWaterBlobsImpl(this, room, nodes, edgeNoise, waterDensity);
+  // makeLiquid(col, row) replaces the water tile (a lava lake); null = water.
+  stampWaterBlobs(room, nodes, edgeNoise, waterDensity, makeLiquid = null) {
+    stampWaterBlobsImpl(this, room, nodes, edgeNoise, waterDensity, makeLiquid);
   }
 
   preloadRoomPreviews() {

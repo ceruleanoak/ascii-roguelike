@@ -284,7 +284,11 @@ export const LETTER_TEMPLATES = {
         { col: 13, row: 19, radius: 4.5 }
       ],
       edgeNoise: 2.2,
-      waterDensity: 0.88
+      waterDensity: 0.88,
+      // In a zone whose liquid is lava (red), the lake is a lava lake:
+      // RoomGenerator.generateLakeTerrain stamps lava, sets room.lavaLake,
+      // and lavaLakeInjection replaces enemyInjection. Not fishable.
+      lavaInLavaZones: true
     },
 
     bgObjectRules: {
@@ -298,6 +302,15 @@ export const LETTER_TEMPLATES = {
       minCount: 1,
       maxCount: 2,
       preferLiquid: true
+    },
+
+    // A lava lake's shore holds Bumpers instead, on land, to fling the
+    // player into the lava.
+    lavaLakeInjection: {
+      char: '%',
+      minCount: 2,
+      maxCount: 3,
+      preferLiquid: false
     },
 
     // Eligible for HuntingSystem's stillness-triggered moose/rabbit encounter.

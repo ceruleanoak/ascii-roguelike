@@ -15,7 +15,7 @@ import { WeaponsMaster } from '../entities/WeaponsMaster.js';
 import { Jeweler } from '../entities/Jeweler.js';
 import { PLANE_TUNNEL } from './PlaneSystem.js';
 import { hazardStep } from './ZoneSystem.js';
-import { islandLavaFeatures } from './MetalPlatformSystem.js';
+import { islandLavaFeatures, makeZoneLava } from './MetalPlatformSystem.js';
 import { createLightningSpire } from './LightningSpire.js';
 import { pickUnspawnedItem, markItemSpawned } from './spawnedItems.js';
 import { findSafeSpawnPosition } from './safeSpawn.js';
@@ -267,7 +267,7 @@ export function cellularCaveGrid(cols, rows, isOpen, seedChance = 0.45, generati
  * Returns true when the peaceful roll applied (caller skips exit locking).
  */
 export function maybeSpawnPeacefulFishingRoom(gen, room) {
-  const isFishingLetter = room.exitLetter === 'L' || room.exitLetter === 'O';
+  const isFishingLetter = (room.exitLetter === 'L' && !room.lavaLake) || room.exitLetter === 'O';
   if (!isFishingLetter || gen.currentDepth > 4 || Math.random() >= 0.35) return false;
 
   const fisherman = spawnShoreFisherman(gen, room);
@@ -2600,7 +2600,20 @@ export function generateOceanTerrain(gen, room) {
 
 // Moved out of RoomGenerator.js to stay within its architecture budget.
 // Blob-fill + shoreline decoration; shared by generateLakeTerrain and Oasis.
-export function stampWaterBlobs(gen, room, nodes, edgeNoise, waterDensity) {
+// The L template's lake (and any template's lakeZone): blob-stamped water,
+// or a lava lake in a lava zone (red) when the template sets
+// lakeZone.lavaInLavaZones. room.lavaLake tells the rest of the room
+// (lavaLakeInjection, no shore Fisherman, no fishing) which it is.
+export function generateLakeTerrain(gen, room) {
+  const config = gen.currentLetterTemplate.lakeZone;
+  const features = ZONES[room.zone]?.environmentalFeatures;
+  const lava = config.lavaInLavaZones && features?.liquidType === 'lava';
+  room.lavaLake = !!lava;
+  gen.stampWaterBlobs(room, config.nodes, config.edgeNoise, config.waterDensity,
+    lava ? makeZoneLava(features) : null);
+}
+
+export function stampWaterBlobs(gen, room, nodes, edgeNoise, waterDensity, makeLiquid = null) {
   // For each grid cell, check if it falls inside any blob node
   for (let col = 1; col < GRID.COLS - 1; col++) {
     for (let row = 1; row < GRID.ROWS - 1; row++) {
@@ -2633,7 +2646,9 @@ export function stampWaterBlobs(gen, room, nodes, edgeNoise, waterDensity) {
 
         // Deep water fills each blob's inner half (near its node center);
         // the outer half (near the noisy shoreline) stays normal depth.
-        const water = new BackgroundObject('~', cellX, cellY, { deepWater: isDeepWaterCell(col, row, nodes) });
+        const water = makeLiquid
+          ? makeLiquid(col, row)
+          : new BackgroundObject('~', cellX, cellY, { deepWater: isDeepWaterCell(col, row, nodes) });
         room.backgroundObjects.push(water);
       }
     }
@@ -2650,7 +2665,9 @@ export function stampWaterBlobs(gen, room, nodes, edgeNoise, waterDensity) {
 
       if (gen.isValidPosition(col, row, room) &&
           !gen.hasObjectAt(room, col * GRID.CELL_SIZE, row * GRID.CELL_SIZE)) {
-        const decChar = Math.random() < 0.6 ? '%' : '0';
+        // A lava shore is rock only: no bushes beside lava, and no '%' bush
+        // to mistake for a Bumper on the lava lake's shore.
+        const decChar = !makeLiquid && Math.random() < 0.6 ? '%' : '0';
         const decObj = new BackgroundObject(decChar, col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
         gen.applyZoneProperties(decObj, room.zone);
         room.backgroundObjects.push(decObj);
