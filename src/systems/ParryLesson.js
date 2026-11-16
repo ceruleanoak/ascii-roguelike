@@ -1,6 +1,6 @@
 import { GRID, PHYSICS } from '../game/GameConfig.js';
 import { TREASURE_CHARS, WEAPON_TYPES } from '../data/items.js';
-import { initParry, tickParry, expendParry } from '../entities/enemyMechanics/ParryMechanic.js';
+import { initParry, tickParry, expendParry, playParrySound } from '../entities/enemyMechanics/ParryMechanic.js';
 
 // The Weapons Master's own parry while he teaches, in real seconds. 360°: he
 // turns to meet a swing from any side. The cycle repeats for the whole lesson,
@@ -217,6 +217,7 @@ export class ParryLesson {
   _parried(master) {
     const game = this.game;
     const player = game.player;
+    playParrySound(game);
     player.applyStatusEffect('stun', PARRIED_STUN, 1);
     if (player.statusEffects?.stun) player.statusEffects.stun.disarm = false;
     game.physicsSystem?.applyKnockback(player, master.position.x, master.position.y, PARRIED_KNOCKBACK);

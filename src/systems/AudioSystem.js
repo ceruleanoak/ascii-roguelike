@@ -1498,6 +1498,7 @@ export class AudioSystem {
     this.loadSFX('goo_death_2', `${base}assets/audio/sfx-goo-death-2.mp3`);
     this.loadSFX('ghost_spawn', `${base}assets/audio/sfx-ghost-spawn.wav`);
     this.loadSFX('frog', `${base}assets/audio/sfx-frog.wav`);
+    this.loadSFX('parry', `${base}assets/audio/sfx-parry.wav`);   // any parry catching a blow (ParryMechanic.PARRY_SFX)
     this.loadSFX('hut_lower', `${base}assets/audio/sfx-hut-lower.wav`);
     this.loadSFX('polymorph', `${base}assets/audio/sfx-polymorph.wav`);
     this.loadSFX('wave_1', `${base}assets/audio/sfx-wave-01.wav`);

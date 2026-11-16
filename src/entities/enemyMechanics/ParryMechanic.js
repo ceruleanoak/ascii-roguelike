@@ -18,6 +18,18 @@
 // landing on the holder cancels a window winding up or open the same way
 // (cancelParry, called from the status core and PhysicsSystem's knockback).
 // No suspend signal — modifies holder state only.
+//
+// Held parry (`held: true`, the Phalanx): no timed cycle. The holder's own
+// mechanic raises and lowers it (holdParry) — raising takes parryWindup, a
+// stun or knockback still drops it and parryCooldown runs before it can be
+// raised again. It faces the holder's `guardAngle` rather than the attacker,
+// so its arc is a real front with a back behind it, and a catch does not
+// spend it: a held guard turns every melee blow from the front aside, and
+// is beaten by going around it, waiting for it to drop, or by any damage
+// that is not a melee hit (projectiles, traps, magic, the Red Warrior's roll).
+//
+// Every caught blow, from either holder, plays the one parry sound
+// (PARRY_SFX).
 
 import { inSamePlane } from '../../systems/PlaneSystem.js';
 import { PHYSICS } from '../../game/GameConfig.js';
@@ -32,6 +44,14 @@ const PARRY_OPEN_RANGE_MULT = 1.5;
 // of stun (RIPOSTE_STUN real seconds) and is knocked away from the player.
 const RIPOSTE_STUN = 1.0;
 const RIPOSTE_STUN_PIPS = 1;
+
+// The sound of any parry catching a blow — enemy, player or the Weapons
+// Master's lesson.
+export const PARRY_SFX = 'parry';
+
+export function playParrySound(game) {
+  game?.audioSystem?.playSFX?.(PARRY_SFX);
+}
 
 export function initParry(holder) {
   holder.parryActive = false;
@@ -76,6 +96,41 @@ export function expendParry(holder, cfg) {
   holder.parryCooldown = cfg?.parryCooldown ?? 0;
 }
 
+// Raises or lowers a held parry (cfg.held). Raising runs the parryWindup
+// first; lowering is instant. A cooldown left by cancelParry (a stun or
+// knockback) runs out before the guard can come back up.
+export function holdParry(holder, cfg, raised, deltaTime) {
+  if (holder.parryCooldown > 0) {
+    holder.parryCooldown -= deltaTime;
+    return;
+  }
+  if (!raised) {
+    holder.parryActive = false;
+    holder.parryWindupActive = false;
+    holder.parryWindupTimer = 0;
+    return;
+  }
+  if (holder.parryActive) return;
+  if (!holder.parryWindupActive) {
+    holder.parryWindupActive = true;
+    holder.parryWindupTimer = cfg.parryWindup ?? 0;
+  }
+  holder.parryWindupTimer -= deltaTime;
+  if (holder.parryWindupTimer <= 0) {
+    holder.parryWindupActive = false;
+    holder.parryActive = true;
+  }
+}
+
+// Whether a held parry is up right now. A holder that cannot act (stunned,
+// zapped, asleep, frozen, knocked back) skips the update that would lower
+// it, so the guard reads the holder's condition directly instead.
+export function isHeldParryUp(holder) {
+  if (!holder.parryActive) return false;
+  return !(holder.isStunned?.() || holder.isZapped?.() || holder.isFullyAsleep?.()
+    || holder.sleepTimer > 0 || holder.isFrozen?.() || holder.isKnockedBack?.());
+}
+
 // A stun or knockback on any holder cancels its parry. Safe on entities that
 // never parry (no window is ever open on them).
 export function cancelParry(entity) {
@@ -106,29 +161,41 @@ export const ParryMechanic = {
 
   init(enemy) {
     initParry(enemy);
+    // The way a held parry faces (radians). Its holder's mechanic turns it.
+    enemy.guardAngle = enemy.facingAngle ?? 0;
   },
 
   update(enemy, ctx) {
     const cfg = enemy.data.parryMechanic;
     if (!cfg?.enabled) return;
+    // A held parry is raised and lowered by its holder's own mechanic
+    // (holdParry), never by the timed cycle.
+    if (cfg.held) return;
     const { deltaTime, distance } = ctx;
     tickParry(enemy, cfg, deltaTime, () =>
       enemy.state === 'chase' && !enemy.isStunned()
         && distance < enemy.attackRange * PARRY_OPEN_RANGE_MULT);
   },
 
-  // An enemy holder faces its target, so its arc is measured toward `target`.
+  // An enemy holder faces its target, so its arc is measured toward `target`
+  // — except a held parry, which faces its `guardAngle`.
   // Called for every melee-hit enemy, including data-less bosses (LakeBoss),
   // so `data` is optional here — no data means no parry. A catch spends the
-  // window (expendParry): call it once per hit, as the hit resolves.
+  // window (expendParry) unless the parry is held: call it once per hit, as
+  // the hit resolves.
   catches(enemy, attackerPos, target) {
     const cfg = enemy.data?.parryMechanic;
     if (!cfg) return false;
-    const facing = target
-      ? { x: target.position.x - enemy.position.x, y: target.position.y - enemy.position.y }
-      : null;
+    let facing = null;
+    if (cfg.held) {
+      if (!isHeldParryUp(enemy)) return false;
+      facing = { x: Math.cos(enemy.guardAngle), y: Math.sin(enemy.guardAngle) };
+    } else if (target) {
+      facing = { x: target.position.x - enemy.position.x, y: target.position.y - enemy.position.y };
+    }
     if (!parryCatches(enemy, cfg, facing, attackerPos)) return false;
-    expendParry(enemy, cfg);
+    if (!cfg.held) expendParry(enemy, cfg);
+    playParrySound(enemy.game);
     return true;
   }
 };
@@ -169,6 +236,8 @@ export const PlayerParry = {
   // knockback straight away from the player. Enemy status time runs at
   // ENEMY_TIMER_RATE, so the stun is scaled to last RIPOSTE_STUN real seconds.
   riposte(player, attacker) {
+    // The attacker is a room enemy, which carries the game (wireRoomEnemies).
+    playParrySound(attacker?.game);
     if (!attacker || attacker.hp <= 0) return;
     attacker.applyStatusEffect?.('stun', RIPOSTE_STUN * PHYSICS.ENEMY_TIMER_RATE, RIPOSTE_STUN_PIPS);
     attacker.game?.physicsSystem?.applyKnockback(
