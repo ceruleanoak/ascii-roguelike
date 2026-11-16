@@ -1,6 +1,7 @@
 import { GRID } from '../game/GameConfig.js';
 import { inSamePlane, planeOf, objectOnPlane } from '../systems/PlaneSystem.js';
 import { LavaShyMechanic } from './enemyMechanics/LavaShyMechanic.js';
+import { countsAsBoss } from './bossTest.js';
 
 // Every question an Enemy asks about what it can see, in one place.
 //
@@ -61,6 +62,22 @@ export function initSenses(enemy) {
   enemy.hadVisualContact = false; // Set true on first real sighting; gates proximity-only re-aggro
   enemy.memoryMarkPlane = 0;  // Plane player was on when memory mark was created
   enemy.memoryStaleTimer = 2.0; // Countdown (sec) before a cross-plane-stale mark expires
+}
+
+// Whether an Enemy knows the player is there: the one test every
+// stealth-damage rule asks (the Cyan Rogue's backstab and its SNEAK ATTACK
+// word, the Green Ranger's unseen crit and its seen penalty, the Watcher's
+// mark). The `!` timer alone is not it: it lasts one second, so reading it
+// alone made an Enemy already chasing or fighting the player count as unseen
+// again a second after it noticed them (every Boss, every hit).
+//
+// Detected: a Boss or Boss part (always fighting), enraged, chasing a memory
+// mark, showing its `!`, or in any State but idle/rest.
+export function hasDetectedPlayer(enemy) {
+  if (countsAsBoss(enemy)) return true;
+  if (enemy.enraged || enemy.aggroMemoryActive) return true;
+  if (enemy.detectionIndicatorTimer > 0) return true;
+  return enemy.state !== 'idle' && enemy.state !== 'rest';
 }
 
 /**
