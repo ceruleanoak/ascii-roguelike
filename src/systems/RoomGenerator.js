@@ -13,7 +13,7 @@ import { Crow } from '../entities/Crow.js';
 import { Fairy } from '../entities/Fairy.js';
 import { spawnCellBlockedByBackground, findSafeSpawnPosition } from './safeSpawn.js';
 import { markDeepLava } from './DeepLava.js';
-import { maybeSpawnPeacefulFishingRoom, maybeSpawnRoamingAlchemist, buildVaultInteriorLoot, buildVaultCoinAbundance, buildVaultUnlockExtras, getIslandPosition, protectRegion, isCellProtected, cleanupStrayBackgroundObjects, resolveLavaHazards, seedCavern, rotatePattern, darkenColor, spawnBatFlock, spawnBelfryBats, stampHutFootprint, placeWhirlpool, generateSettlementRoom as generateSettlementRoomImpl, generateJewelerRoom, cellularCaveGrid, isCaveEntranceLanding, generateCalderaRoom, seedAscentZone, seedSinkholes, injectSinkholeLake, spawnMinibossOrFallback, generateGrassSwaths, generateSnowFields, generateRedZoneDeflectors, spawnGuaranteedItems, offerL1Weapon, offerWeaponIfUnarmed, seedTunnelZone, generateOceanTerrain as generateOceanTerrainImpl, stampWaterBlobs as stampWaterBlobsImpl, placeRoomLiquid } from './roomFeatures.js';
+import { maybeSpawnPeacefulFishingRoom, maybeSpawnRoamingAlchemist, buildVaultInteriorLoot, buildVaultCoinAbundance, buildVaultUnlockExtras, getIslandPosition, protectRegion, isCellProtected, cleanupStrayBackgroundObjects, resolveLavaHazards, seedCavern, rotatePattern, darkenColor, spawnBatFlock, spawnPhalanx, spawnBelfryBats, stampHutFootprint, placeWhirlpool, generateSettlementRoom as generateSettlementRoomImpl, generateJewelerRoom, cellularCaveGrid, isCaveEntranceLanding, generateCalderaRoom, seedAscentZone, seedSinkholes, injectSinkholeLake, spawnMinibossOrFallback, generateGrassSwaths, generateSnowFields, generateRedZoneDeflectors, spawnGuaranteedItems, offerL1Weapon, offerWeaponIfUnarmed, seedTunnelZone, generateOceanTerrain as generateOceanTerrainImpl, stampWaterBlobs as stampWaterBlobsImpl, placeRoomLiquid } from './roomFeatures.js';
 import { pickUnspawnedItem, markItemSpawned } from './spawnedItems.js';
 import { placeVaultPushRock } from './PushRockSystem.js';
 import { attachVault } from './vaultWalls.js';
@@ -666,6 +666,13 @@ export class RoomGenerator {
       // room (roomFeatures.js), not singles
       if (ENEMIES[enemyChar]?.flockBehavior) {
         if (!batFlocksSpawned.has(enemyChar) && spawnBatFlock(this, room, clusterAnchors, islandConfig, enemyChar)) {
+          batFlocksSpawned.add(enemyChar);
+        }
+        continue;
+      }
+      // A Phalanx spawns as one squad per room (roomFeatures.js), not singles.
+      if (ENEMIES[enemyChar]?.phalanx) {
+        if (!batFlocksSpawned.has(enemyChar) && spawnPhalanx(this, room, clusterAnchors, islandConfig, enemyChar)) {
           batFlocksSpawned.add(enemyChar);
         }
         continue;

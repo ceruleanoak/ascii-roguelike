@@ -70,8 +70,11 @@ export default {
     // to listen for, so it wanders like an Enemy with no one near. Holding
     // here froze every searcher that gave up beside a cloaked player for as
     // long as the player stayed still, which never read as returning to idle.
+    //
+    // `listen: false` never holds: an Enemy that chose to wander rather than
+    // search (Approach's `searchChance`) wanders even with the target near.
     const canActOnHearing = machine.resolve('search') !== 'alert';
-    if (!cfg.requirePursuit && canActOnHearing && !isTargetCloaked(enemy)
+    if (!cfg.requirePursuit && cfg.listen !== false && canActOnHearing && !isTargetCloaked(enemy)
         && ctx.effectiveDistance <= ctx.effectiveAggroRange) {
       moveStill(enemy);
       return;

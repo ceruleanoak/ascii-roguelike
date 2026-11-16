@@ -75,10 +75,20 @@ export default {
     // frame. `update()` above stops refreshing the mark the moment sight
     // breaks, so that beat is exactly what makes the mark stale: a slow Enemy
     // commits to a staler one than a sharp Enemy does.
+    //
+    // `searchChance` (default 1) is the odds this Enemy goes looking at all.
+    // Failing the roll lets the mark go and returns it to Alert's wander —
+    // the Phalanx rolls this per member, so a squad that loses you splits
+    // between searchers and wanderers.
     if (ctx.decisionFrame && !ctx.canSee) {
-      return enemy.lastKnownPosition
-        ? { id: 'search', cause: 'lost sight, have a mark' }
-        : { id: 'withdraw', cause: 'lost sight, no mark' };
+      if (!enemy.lastKnownPosition) return { id: 'withdraw', cause: 'lost sight, no mark' };
+      const searchChance = machine.configFor('approach')?.searchChance ?? 1;
+      if (searchChance < 1 && Math.random() >= searchChance) {
+        enemy.lastKnownPosition = null;
+        enemy.enraged = false;
+        return { id: 'alert', cause: 'lost sight, chose to wander' };
+      }
+      return { id: 'search', cause: 'lost sight, have a mark' };
     }
     return null;
   },

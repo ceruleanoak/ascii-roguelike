@@ -2,6 +2,7 @@ import { GRID, ROOM_TYPES, BACKGROUND_OBJECT_VARIANTS, WALL_STRUCTURES } from '.
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { Fisherman } from '../entities/Fisherman.js';
 import { Enemy } from '../entities/Enemy.js';
+import { PhalanxMechanic } from '../entities/enemyMechanics/PhalanxMechanic.js';
 import { Item } from '../entities/Item.js';
 import { Ingredient } from '../entities/Ingredient.js';
 import { ENEMIES, getZoneRandomEnemy, createBossEnemy, BOSS_ENCOUNTERS } from '../data/enemies.js';
@@ -1493,6 +1494,38 @@ export function spawnBatFlock(gen, room, clusterAnchors, islandConfig, batChar =
     spawned++;
   }
   return spawned > 0;
+}
+
+/**
+ * A Phalanx (any data.phalanx enemy) spawns as one squad of `squadSize`,
+ * clustered around a single anchor and linked by PhalanxMechanic.createSquad
+ * so they form up together. Returns true when at least one member spawned
+ * (the caller then skips further picks of that enemy for the room).
+ */
+export function spawnPhalanx(gen, room, clusterAnchors, islandConfig, char) {
+  const squadSize = ENEMIES[char].phalanx?.squadSize ?? 4;
+  const anchor = clusterAnchors.length > 0
+    ? clusterAnchors[Math.floor(Math.random() * clusterAnchors.length)]
+    : null;
+  const members = [];
+  for (let i = 0; i < squadSize; i++) {
+    let pos = anchor
+      ? gen.getClusteredPosition(anchor, room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects, false)
+      : null;
+    if (!pos) {
+      pos = islandConfig
+        ? getIslandPosition(islandConfig, room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects)
+        : gen.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects, false);
+    }
+    if (!pos) continue;
+    const member = new Enemy(char, pos.x, pos.y, gen.currentDepth);
+    member.setCollisionMap(room.collisionMap);
+    member.setBackgroundObjects(room.backgroundObjects);
+    gen.addEnemyToRoom(room, member);
+    members.push(member);
+  }
+  if (members.length > 1) PhalanxMechanic.createSquad(members);
+  return members.length > 0;
 }
 
 /**
