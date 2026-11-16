@@ -1,5 +1,6 @@
 import { GRID, COLORS } from '../../game/GameConfig.js';
 import { ConsumableTriggerSystem } from '../../systems/ConsumableTriggerSystem.js';
+import { SPELL_AREAS } from '../../systems/MagicSystem.js';
 import { blendColors } from '../../systems/ZoneSystem.js';
 
 /**
@@ -85,13 +86,15 @@ export function drawConsumableWindups(renderer, game) {
 }
 
 /** Gem wand held aloft with shake while charging — shake intensifies as the
- * spell nears completion. */
+ * spell nears completion — over its spell's ground, dotted with spaced '.'
+ * that brighten as the charge fills. */
 export function drawGemWandCharge(renderer, body) {
   const held = body.heldItem;
   if (!held?.data?.gemWand || !held.isCharging) return;
   const C = GRID.CELL_SIZE;
   const ctx = renderer.fgCtx;
   const t = Math.min(1, held.chargeTime / (held.data.chargeTime || 1));
+  drawSpellAreaDots(ctx, body, SPELL_AREAS[held.data.spellEffect], held.color || '#ffffff', t);
   const shakeAmp = 0.5 + 2.5 * t;
   const jitterX = (Math.random() - 0.5) * shakeAmp;
   const jitterY = (Math.random() - 0.5) * shakeAmp;
@@ -105,6 +108,60 @@ export function drawGemWandCharge(renderer, body) {
     body.position.x + C / 2 + jitterX,
     body.position.y - C * 0.6 + jitterY
   );
+  ctx.restore();
+}
+
+/** The ground a gem wand's spell will cover (SPELL_AREAS), one '.' per cell
+ * step from the caster's center — the point the cast resolves from
+ * (Item.createGemWandAttack). A `cells` spell dots the grid cells it will
+ * fill instead, skipping the caster's own cell and blocked cells as the cast
+ * does. Dim at the start of the charge, near full at release. */
+function drawSpellAreaDots(ctx, body, area, color, t) {
+  if (!area) return;
+  const C = GRID.CELL_SIZE;
+  const cx = body.position.x + (body.width ?? C) / 2;
+  const cy = body.position.y + (body.height ?? C) / 2;
+  const points = [];
+
+  if (area.kind === 'cells') {
+    const col0 = Math.floor(cx / C);
+    const row0 = Math.floor(cy / C);
+    const collision = body.collisionMap;
+    for (let dy = -area.radius; dy <= area.radius; dy++) {
+      for (let dx = -area.radius; dx <= area.radius; dx++) {
+        if (dx === 0 && dy === 0) continue;
+        if (Math.hypot(dx, dy) > area.radius + 0.5) continue;
+        const col = col0 + dx;
+        const row = row0 + dy;
+        if (row < 1 || row >= GRID.ROWS - 1 || col < 1 || col >= GRID.COLS - 1) continue;
+        if (collision?.[row]?.[col]) continue;
+        points.push(col * C + C / 2, row * C + C / 2);
+      }
+    }
+  } else {
+    const steps = Math.floor(area.radius / C);
+    const facingAngle = Math.atan2(body.facing?.y || -1, body.facing?.x || 0);
+    for (let dy = -steps; dy <= steps; dy++) {
+      for (let dx = -steps; dx <= steps; dx++) {
+        if (dx === 0 && dy === 0) continue;
+        if (Math.hypot(dx, dy) * C > area.radius) continue;
+        if (area.kind === 'cone') {
+          let delta = Math.abs(Math.atan2(dy, dx) - facingAngle);
+          if (delta > Math.PI) delta = 2 * Math.PI - delta;
+          if (delta > area.halfAngle) continue;
+        }
+        points.push(cx + dx * C, cy + dy * C);
+      }
+    }
+  }
+
+  ctx.save();
+  ctx.font = `${C}px 'Unifont', monospace`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = color;
+  ctx.globalAlpha = 0.3 + 0.5 * t;
+  for (let i = 0; i < points.length; i += 2) ctx.fillText('.', points[i], points[i + 1]);
   ctx.restore();
 }
 

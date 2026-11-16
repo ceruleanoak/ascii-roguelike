@@ -43,6 +43,23 @@ export const INGREDIENT_MANA_VALUES = {
 // across however many slots are active.
 const PER_SLOT_MANA_MAX = 10;
 
+// The ground each gem wand spell covers, centered on the caster at release.
+// Read by the casts below and by the charge preview (WeaponPreviewDraw
+// drawGemWandCharge), which dots this same ground while the wand charges.
+//   circle — every point within `radius` px
+//   cone   — within `radius` px and `halfAngle` of the caster's facing
+//   cells  — grid cells within `radius` cells of the caster's cell, less
+//            the caster's own (the Emerald Staff's grass disc)
+// chain_stun has no entry: it seeks the nearest enemy, wherever it stands.
+export const SPELL_AREAS = {
+  fire_aoe:     { kind: 'circle', radius: 60 },
+  blizzard:     { kind: 'circle', radius: 90 },
+  charm_aoe:    { kind: 'circle', radius: 80 },
+  grass_circle: { kind: 'cells', radius: 3 },
+  blind_cone:   { kind: 'cone', radius: 120, halfAngle: Math.PI / 4 }, // 90° total
+  force_blast:  { kind: 'cone', radius: 90, halfAngle: Math.PI / 3 },  // 120° total
+};
+
 // Meter mana spent per Mana (𝑚) picked from the crafting menu.
 const CRAFT_MANA_COST = 3;
 
@@ -543,7 +560,7 @@ export class MagicSystem {
   _castFireAOE(attack) {
     const enemies = this._activeEnemies();
     const objs = this._activeBackgroundObjects();
-    const radius = 60;
+    const { radius } = SPELL_AREAS.fire_aoe;
     const damage = 6;
     const burnDuration = 3.0;
 
@@ -568,7 +585,7 @@ export class MagicSystem {
   // around the player (a discrete hit: repeat casts escalate toward Frozen).
   _castBlizzard(attack) {
     const enemies = this._activeEnemies();
-    const radius = 90;
+    const { radius } = SPELL_AREAS.blizzard;
     const freezeDuration = 5.0;
     this.game.combatSystem.applyAOEStatus(
       attack.position, radius, 'freeze', freezeDuration, enemies, planeOf(attack.owner)
@@ -632,8 +649,7 @@ export class MagicSystem {
   // Onyx Staff — blinds enemies in a forward cone (90° spread, ~120px reach).
   _castBlindCone(attack) {
     const enemies = this._activeEnemies();
-    const reach = 120;
-    const halfAngle = Math.PI / 4; // 90° total
+    const { radius: reach, halfAngle } = SPELL_AREAS.blind_cone;
     const fx = attack.facing.x || 0;
     const fy = attack.facing.y || -1;
     const facingAngle = Math.atan2(fy, fx);
@@ -675,7 +691,7 @@ export class MagicSystem {
     const C = GRID.CELL_SIZE;
     const centerCol = Math.floor(attack.position.x / C);
     const centerRow = Math.floor(attack.position.y / C);
-    const radius = 3;
+    const { radius } = SPELL_AREAS.grass_circle;
 
     for (let dy = -radius; dy <= radius; dy++) {
       for (let dx = -radius; dx <= radius; dx++) {
@@ -719,7 +735,7 @@ export class MagicSystem {
   // Garnet Staff — charms all enemies in radius (they fight one another).
   _castCharmAOE(attack) {
     const enemies = this._activeEnemies();
-    const radius = 80;
+    const { radius } = SPELL_AREAS.charm_aoe;
     const charmDuration = 30.0; // dbl-sec (enemy status clock) = 15s real
     this.game.combatSystem.applyAOEStatus(
       attack.position, radius, 'charm', charmDuration, enemies, planeOf(attack.owner)
@@ -736,8 +752,7 @@ export class MagicSystem {
   // hurls them in the player's facing direction. Enemies pin to walls on impact.
   _castForceBlast(attack) {
     const enemies = this._activeEnemies();
-    const radius = 90;
-    const halfAngle = Math.PI / 3; // 120° total spread
+    const { radius, halfAngle } = SPELL_AREAS.force_blast;
     const rootDuration = 0.9;
     const blastForce = 900;
 
