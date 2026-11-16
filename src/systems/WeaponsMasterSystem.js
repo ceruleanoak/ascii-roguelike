@@ -102,7 +102,7 @@ export class WeaponsMasterSystem {
 
   /** He refuses only when there is nothing to train: no weapon held, or one already trained. */
   persuadeRefusal() {
-    if (this.coinAnim || !this._untrainedCategory()) return 'I HAVE NOTHING.';
+    if (this.coinAnim || !this._untrainedCategory()) return 'THERE IS NOTHING TO TRAIN.';
     return null;
   }
 

@@ -4,26 +4,26 @@ import { NeutralCharacter } from './NeutralCharacter.js';
 // key by weaponSubtype; ranged/wand weapons have no subtype and fall back to
 // weaponType (BOW/GUN) — see resolveWeaponCategory().
 const WEAPON_MASTER_ADVICE = {
-  sword:   'A SWORD REWARDS BALANCE — QUICK IN EITHER HAND.',
-  torch:   'FIRE SPREADS WHERE YOU LEAST EXPECT IT.',
-  dagger:  'A DAGGER FROM BEHIND CUTS DEEPEST.',
-  pickaxe: 'A PICKAXE OPENS STONE BEFORE IT OPENS A FOE.',
-  axe:     'AN AXE IS SLOW TO SWING BUT HEAVY TO MEET.',
-  hammer:  'A HAMMER DOES NOT CARE WHAT STANDS BETWEEN IT AND THE GROUND.',
-  spear:   'A SPEAR KEEPS DANGER AT A DISTANCE.',
-  staff:   'A STAFF HELD STEADY TURNS EVERY ARROW.',
-  bat:     'A BAT SENDS THEM BACK WHERE THEY CAME FROM.',
-  wand:    'A WAND SPEAKS THE ELEMENT IT WAS FORGED WITH.',
-  whip:    'A WHIP REACHES FAR AND STRIKES IN A LINE.',
-  BOW:     'A BOW REWARDS PATIENCE AND A STEADY DRAW.',
-  GUN:     'A GUN IS LOUD AND FAST — MIND YOUR SHOTS.'
+  sword:   'A SWORD CUTS IN AN ARC IN FRONT OF YOU.',
+  torch:   'A TORCH SETS WHAT IT HITS ON FIRE. DEEP WATER PUTS IT OUT.',
+  dagger:  'A DAGGER HAS SHORT REACH. IT STABS AT THE END OF A ROLL.',
+  pickaxe: 'A PICKAXE BREAKS ROCK. IT IS A WEAK WEAPON.',
+  axe:     'AN AXE IS SLOW AND HITS HARD. IT CUTS DOWN TREES.',
+  hammer:  'A HAMMER SENDS A SHOCKWAVE THROUGH THE GROUND. IT BREAKS ROCK.',
+  spear:   'A SPEAR HITS HARDEST AT THE FULL LENGTH OF ITS REACH.',
+  staff:   'HOLD A STAFF UP TO BLOCK. IT STOPS EVERY ARROW.',
+  bat:     'WIND A BAT UP LONGER TO HIT HARDER AND KNOCK THEM FURTHER.',
+  wand:    'A WAND CASTS THE ELEMENT OF ITS GEM. EACH CAST COSTS MANA.',
+  whip:    'A WHIP HITS IN A LONG LINE AND KNOCKS WEAPONS OUT OF HANDS.',
+  BOW:     'A BOW HAS A LIMITED NUMBER OF ARROWS IN EACH ROOM.',
+  GUN:     'A GUN EMPTIES, THEN TAKES A WHILE TO RELOAD. ITS SHOTS SPREAD.'
 };
 
 // What he says of worn armor that belongs to no Armor Flavor family (robes,
 // crowns, mantles), and of no armor at all. Family remarks live with the
 // families themselves: ARMOR_FLAVORS[x].masterRemark in items.js.
-const UNFAMILIAR_ARMOR_REMARK = 'THAT IS NO ARMOR I KNOW HOW TO JUDGE.';
-const BARE_REMARK = 'NOTHING ON YOUR BACK. BOLD, OR CARELESS.';
+const UNFAMILIAR_ARMOR_REMARK = 'I DON\'T KNOW THAT ARMOR.';
+const BARE_REMARK = 'YOU HAVE NO ARMOR ON.';
 
 /** His secondary topic: a remark on what the player is wearing. */
 function armorRemark(game) {
@@ -57,15 +57,15 @@ export class WeaponsMaster extends NeutralCharacter {
     const remark = armorRemark(game);
     const category = resolveWeaponCategory(game.player?.heldItem);
     if (!category) {
-      return [remark, 'COME BACK WHEN YOU CARRY A WEAPON.'];
+      return [remark, 'I TRAIN WEAPONS. YOU AREN\'T HOLDING ONE.'];
     }
 
-    const advice = WEAPON_MASTER_ADVICE[category] || 'EVERY WEAPON HAS ITS OWN LESSON.';
+    const advice = WEAPON_MASTER_ADVICE[category] || 'I DON\'T KNOW THAT WEAPON.';
     const trained = game.inventorySystem?.characterInventories?.[game.activeCharacterType]?.trainedWeapons;
     if (trained?.[category]) {
-      return [advice, remark, 'YOU HAVE ALREADY LEARNED ALL I CAN TEACH OF THIS.'];
+      return [advice, remark, 'YOU ARE ALREADY TRAINED IN THIS.'];
     }
-    return [advice, remark, "GOT A COIN? I CAN SHARPEN YOUR TECHNIQUE."];
+    return [advice, remark, 'ONE COIN AND I WILL TRAIN YOU IN IT.'];
   }
 
   update(dt, game) {

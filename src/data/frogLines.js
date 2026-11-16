@@ -26,7 +26,7 @@ import { WizardNPC } from '../entities/WizardNPC.js';
 export const FROG_LINES = new Map([
   [Witch,           'I should eat you up for entering my hut, but instead work for me. Bring me the heart of the Maw of Greed.'],
   [Fisherman,       'Talking frogs, now. Throw yourself back in the lake. Something down there kisses the lost ones.'],
-  [WeaponsMaster,   'No blade fits that grip. Go find the lake; what sings there breaks worse curses than yours.'],
+  [WeaponsMaster,   'You are a frog. I can\'t train a frog. Someone at the lake can lift the curse.'],
   [Hatter,          'A frog at my table! Hop along to the lake, dear. One cold kiss and you\'ll be late for tea again.'],
   [Storyteller,     'Ah, the oldest tale. The frog goes down to the deep water, and the one who waits there gives the kiss.'],
   [PuzzleSpirit,    'A curse is a lock. The lake keeps its key.'],
