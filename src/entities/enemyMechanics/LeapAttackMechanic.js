@@ -23,6 +23,9 @@ import { ThiefMechanic } from './ThiefMechanic.js';
 // half of real time, PHYSICS.ENEMY_TIMER_RATE) before it can launch.
 // Each aggroed packmate shortens the hold by `cfg.holdPerMate` (floor
 // `cfg.holdMin`), so a pack commits to its leaps sooner than a lone wolf.
+// `cfg.hop` makes the leap only a way to close distance (Bumper): it lands
+// with no impact (no landing hit, shockwave, or landing SFX), since
+// whatever the Enemy does on arrival is its threat.
 // `cfg.counterLeap: false` stops a struck Enemy answering with an immediate
 // leap, which would skip the hold.
 
@@ -100,6 +103,7 @@ export const LeapAttackMechanic = {
         enemy.leapCooldown = cfg.cooldown;
         const landedPool = enemy.leapPool;
         enemy.leapPool = null;
+        if (cfg.hop) return { suspend: true, result: { dotDamage: dotDamageEvents } };
         return {
           suspend: true,
           result: {
