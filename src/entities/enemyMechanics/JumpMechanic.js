@@ -1,6 +1,7 @@
 // Jumper archetype (frogs): replaces smooth chase movement with erratic
 // zigzag bursts. On land, deterministic perpendicular zigzag (flip each jump).
-// In water, swim nearly straight with small wobble. Reads params from
+// In water, swim nearly straight with small wobble — or, with
+// `movementConfig.waterGlide`, glide on plain chase movement instead. Reads params from
 // `movementConfig` (new-style) with fallback to legacy `data.jumpBehavior`.
 //
 // State and update only apply when `movementStyle === 'jumper'`. Init runs
@@ -50,6 +51,18 @@ export const JumpMechanic = {
     const jumpInterval = onWater ? (cfg.waterJumpInterval ?? jb?.waterJumpInterval ?? landInterval) : landInterval;
     const jumpSpeed    = onWater ? (cfg.waterJumpSpeed    ?? jb?.waterJumpSpeed    ?? landSpeed)    : landSpeed;
     const jumpDuration = onWater ? (cfg.waterJumpDuration ?? jb?.waterJumpDuration ?? landDuration) : landDuration;
+
+    // Water Glide (movementConfig.waterGlide — the Spark): over water the
+    // jumper stops hopping and drifts on its ordinary chase movement, which
+    // moveChaser has already written into targetVelocity this frame. Any hop
+    // in flight ends where it is, and the timer is held so a hop doesn't fire
+    // the frame it reaches the bank.
+    if (onWater && cfg.waterGlide) {
+      enemy.frogJumpActive = false;
+      enemy.jumpArcLift = 0;
+      enemy.frogJumpTimer = Math.max(enemy.frogJumpTimer, 0);
+      return;
+    }
 
     enemy.frogJumpTimer -= deltaTime;
 
