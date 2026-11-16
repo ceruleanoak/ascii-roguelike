@@ -9,6 +9,41 @@ import { stepPoleVault, endPoleVault } from './PoleVault.js';
 
 const DAGGER_POST_DODGE_CRIT_WINDOW = 0.6;
 
+// Roll Combo: a roll in flight chains into a fresh roll when the held roll
+// direction turns one step (45°) to an adjacent direction: orthogonal to
+// diagonal or diagonal to orthogonal. Up to ROLL_COMBO_MAX_CHAINS chains per
+// roll, so → ↗ ↑ ↖ is one roll and three chains. A turn in the first
+// ROLL_COMBO_INPUT_DELAY seconds of a roll is two arrows pressed together for
+// one diagonal, not a chain, so it only curves the roll.
+const ROLL_COMBO_MAX_CHAINS = 3;
+const ROLL_COMBO_INPUT_DELAY = 0.03;
+
+// One 45° step apart, with some slack for a non-arrow direction (FIGHT's
+// reposition roll): between 30° and 60°.
+function isAdjacentDirection(a, b) {
+  const la = Math.hypot(a.x, a.y), lb = Math.hypot(b.x, b.y);
+  if (la === 0 || lb === 0) return false;
+  const cos = (a.x * b.x + a.y * b.y) / (la * lb);
+  return cos < Math.cos(Math.PI / 6) && cos > Math.cos(Math.PI / 3);
+}
+
+// Seconds of invulnerability a roll of this type grants as it starts. Shared
+// by start() and chain() so a chained roll protects exactly like a fresh one.
+// A Cyan 'hide' roll's longer invisible window is start()'s alone: a chain
+// never re-triggers invisibility.
+function rollIframesFor(player) {
+  const roll = player.dodgeRoll;
+  switch (roll.type) {
+    case 'dodge':
+    case 'hide':
+      return roll.iframes ? roll.duration + roll.postRollIframes + player.extraIframes : 0;
+    case 'damage':
+      return roll.duration;
+    default:
+      return 0;
+  }
+}
+
 export const PlayerDodgeRollSystem = {
   // Returns true when the roll started, false when it was blocked.
   start(player, direction, enemies = []) {
@@ -69,6 +104,9 @@ export const PlayerDodgeRollSystem = {
     player.dodgeRoll.timer = player.dodgeRoll.duration;
     player.dodgeRoll.cooldownTimer = player.dodgeRoll.cooldown * player.rollCooldownMult;
     player.dodgeRoll.speed = rollSpeed; // Set dynamic speed
+    // A fresh roll starts a fresh Roll Combo.
+    player.dodgeRoll.comboChains = 0;
+    player.dodgeRoll.comboInput = { x: direction.x, y: direction.y };
 
     // Reset slope/ice lock state for fresh roll
     player.dodgeRoll.slopeTimer  = 0;
@@ -86,14 +124,12 @@ export const PlayerDodgeRollSystem = {
       case 'dodge':
         // Roll duration plus this character's brief post-roll tail, plus any
         // armor bonus. A roll with `iframes: false` (sprint) grants none.
-        player.invulnerabilityTimer = player.dodgeRoll.iframes
-          ? player.dodgeRoll.duration + player.dodgeRoll.postRollIframes + player.extraIframes
-          : 0;
+        player.invulnerabilityTimer = rollIframesFor(player);
         break;
       case 'hide':
         if (player.dodgeRoll.invisRecoveryTimer > 0) {
           // Recovering from a recent invisibility trigger: roll works normally, no invis effect
-          player.invulnerabilityTimer = player.dodgeRoll.duration + player.dodgeRoll.postRollIframes + player.extraIframes;
+          player.invulnerabilityTimer = rollIframesFor(player);
         } else {
           // Invisible to enemies + extended i-frames (cyan rogue specialty)
           player.hidden = true;
@@ -110,7 +146,7 @@ export const PlayerDodgeRollSystem = {
         break;
       case 'damage':
         // Minimal i-frames — only for the roll duration itself, no buffer (requires precision)
-        player.invulnerabilityTimer = player.dodgeRoll.duration;
+        player.invulnerabilityTimer = rollIframesFor(player);
         break;
       case 'whirlwind':
         // No i-frames — offensive spin, not defensive evasion
@@ -122,6 +158,33 @@ export const PlayerDodgeRollSystem = {
         break;
     }
 
+    return true;
+  },
+
+  // Roll Combo: called every frame a roll is in flight with the roll
+  // direction held this frame. Returns true when it chained into a fresh
+  // roll; false leaves the caller to curve the roll toward `direction`.
+  // A chain re-arms the roll's timer, cooldown and i-frames and keeps its
+  // speed and type (a Whirlwind spin stays a spin). A Pole Vault or a
+  // locked/gooey player never chains.
+  chain(player, direction) {
+    const roll = player.dodgeRoll;
+    const previous = roll.comboInput;
+    roll.comboInput = { x: direction.x, y: direction.y };
+    if (!roll.active || roll.vault || roll.type === 'blink') return false;
+    if (roll.comboChains >= ROLL_COMBO_MAX_CHAINS) return false;
+    if (roll.duration - roll.timer < ROLL_COMBO_INPUT_DELAY) return false;
+    if (player.isGooey() || player.isLocked()) return false;
+    if (!previous || !isAdjacentDirection(previous, direction)) return false;
+
+    roll.comboChains++;
+    roll.direction = { x: direction.x, y: direction.y };
+    roll.timer = roll.duration;
+    roll.cooldownTimer = roll.cooldown * player.rollCooldownMult;
+    roll.slopeTimer = 0;
+    roll.slopeActive = false;
+    roll.slopeLocked = false;
+    player.invulnerabilityTimer = Math.max(player.invulnerabilityTimer, rollIframesFor(player));
     return true;
   },
 
@@ -138,6 +201,8 @@ export const PlayerDodgeRollSystem = {
     roll.slopeLocked = false;
     roll.hideTimer = 0;
     roll.invisRecoveryTimer = 0;
+    roll.comboChains = 0;
+    roll.comboInput = null;
     player.ignoreBackgroundCollision = false;
     player.hidden = false;
   },
