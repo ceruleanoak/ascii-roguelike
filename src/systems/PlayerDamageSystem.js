@@ -183,8 +183,10 @@ export const PlayerDamageSystem = {
   //                 needs no recompute.
   //   Parry       — a melee hit caught by the Buckler's parry window — the
   //                 same parryMechanic cycle and catch rule enemies use
-  //                 (ParryMechanic.js). reflectDamage returns `reflect`,
-  //                 which the call site applies to the attacker.
+  //                 (ParryMechanic.js). The catch spends the window and
+  //                 ripostes: the attacker takes a pip of stun and is
+  //                 knocked back. reflectDamage returns `reflect`, which
+  //                 the call site applies to the attacker.
   //   Arrow Guard — bullets: shield blockChance (also melee with blockMelee),
   //                 then armor bulletResist.
   resolveGuard(player, amount, damageSource) {
@@ -195,6 +197,7 @@ export const PlayerDamageSystem = {
     const attacker = damageSource.attacker;
     if (damageSource.isMelee && player.parryMechanic?.enabled
         && PlayerParry.catches(player, attacker?.position)) {
+      PlayerParry.riposte(player, attacker);
       const reflect = player.parryMechanic.reflectDamage && attacker?.takeDamage
         ? Math.ceil(amount * PARRY_REFLECT_FRACTION) : 0;
       return reflect > 0

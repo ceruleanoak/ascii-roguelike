@@ -12,15 +12,26 @@
 //            attackRange (a player has no single reach of their own; the
 //            threat's reach is the same distance read from the other side).
 //            Resolved in PlayerDamageSystem.resolveGuard.
+// A catch spends the window: the parry closes on the hit it turns aside and
+// the cooldown starts, so a second swing straight after lands — a parry is
+// never a wall the attacker can't brute-force through. A stun or knockback
+// landing on the holder cancels a window winding up or open the same way
+// (cancelParry, called from the status core and PhysicsSystem's knockback).
 // No suspend signal — modifies holder state only.
 
 import { inSamePlane } from '../../systems/PlaneSystem.js';
+import { PHYSICS } from '../../game/GameConfig.js';
 
 // Fraction of a parried hit that reflectDamage sends back to the attacker.
 export const PARRY_REFLECT_FRACTION = 0.5;
 
 // Distance multiplier on attackRange that opens a parry window.
 const PARRY_OPEN_RANGE_MULT = 1.5;
+
+// The player's parry answers the blow it catches: the attacker takes one pip
+// of stun (RIPOSTE_STUN real seconds) and is knocked away from the player.
+const RIPOSTE_STUN = 1.0;
+const RIPOSTE_STUN_PIPS = 1;
 
 export function initParry(holder) {
   holder.parryActive = false;
@@ -52,6 +63,24 @@ export function tickParry(holder, cfg, deltaTime, shouldOpen) {
     holder.parryWindupActive = true;
     holder.parryWindupTimer = cfg.parryWindup;
   }
+}
+
+// Closes a window winding up or open and starts the cooldown. A holder
+// already cooling down (or idle) is left as it is.
+export function expendParry(holder, cfg) {
+  if (!holder.parryActive && !holder.parryWindupActive) return;
+  holder.parryActive = false;
+  holder.parryWindupActive = false;
+  holder.parryWindupTimer = 0;
+  holder.parryTimer = 0;
+  holder.parryCooldown = cfg?.parryCooldown ?? 0;
+}
+
+// A stun or knockback on any holder cancels its parry. Safe on entities that
+// never parry (no window is ever open on them).
+export function cancelParry(entity) {
+  if (!entity?.parryActive && !entity?.parryWindupActive) return;
+  expendParry(entity, entity.parryMechanic ?? entity.data?.parryMechanic);
 }
 
 // True when an active parry catches a hit coming from `attackerPos`.
@@ -90,14 +119,17 @@ export const ParryMechanic = {
 
   // An enemy holder faces its target, so its arc is measured toward `target`.
   // Called for every melee-hit enemy, including data-less bosses (LakeBoss),
-  // so `data` is optional here — no data means no parry.
+  // so `data` is optional here — no data means no parry. A catch spends the
+  // window (expendParry): call it once per hit, as the hit resolves.
   catches(enemy, attackerPos, target) {
     const cfg = enemy.data?.parryMechanic;
     if (!cfg) return false;
     const facing = target
       ? { x: target.position.x - enemy.position.x, y: target.position.y - enemy.position.y }
       : null;
-    return parryCatches(enemy, cfg, facing, attackerPos);
+    if (!parryCatches(enemy, cfg, facing, attackerPos)) return false;
+    expendParry(enemy, cfg);
+    return true;
   }
 };
 
@@ -125,8 +157,21 @@ export const PlayerParry = {
            < (e.attackRange ?? 0) * PARRY_OPEN_RANGE_MULT));
   },
 
+  // A catch spends the window (expendParry): call it once per hit.
   catches(player, attackerPos) {
     if (player.isDizzy?.()) return false;
-    return parryCatches(player, player.parryMechanic, player.facing, attackerPos);
+    if (!parryCatches(player, player.parryMechanic, player.facing, attackerPos)) return false;
+    expendParry(player, player.parryMechanic);
+    return true;
+  },
+
+  // The answer to a caught blow: one pip of stun on the attacker, and a
+  // knockback straight away from the player. Enemy status time runs at
+  // ENEMY_TIMER_RATE, so the stun is scaled to last RIPOSTE_STUN real seconds.
+  riposte(player, attacker) {
+    if (!attacker || attacker.hp <= 0) return;
+    attacker.applyStatusEffect?.('stun', RIPOSTE_STUN * PHYSICS.ENEMY_TIMER_RATE, RIPOSTE_STUN_PIPS);
+    attacker.game?.physicsSystem?.applyKnockback(
+      attacker, player.position.x, player.position.y, PHYSICS.DEFAULT_DAMAGE_KNOCKBACK);
   }
 };

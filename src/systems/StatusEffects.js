@@ -21,6 +21,7 @@
 // code path.
 
 import { PHYSICS } from '../game/GameConfig.js';
+import { cancelParry } from '../entities/enemyMechanics/ParryMechanic.js';
 
 export const MAX_PIPS = 3; // every stackable effect's Pip cap
 
@@ -241,6 +242,8 @@ export function applyStatusEffect(entity, effect, duration = 3.0, pips = null) {
 
   const effectiveDuration = slot.durationPerStack && slot.stacks ? duration * slot.stacks : duration;
   slot.duration = Math.max(slot.duration, effectiveDuration);
+  // A stun or knockback breaks a parry winding up or open (ParryMechanic).
+  if (effect === 'stun' || effect === 'knockback') cancelParry(entity);
   return slot;
 }
 
