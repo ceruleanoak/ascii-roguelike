@@ -219,7 +219,7 @@ class Game {
     this.combatSystem.game = this;
     this.fishingSystem = new FishingSystem();
     // New focused systems (instantiated after core systems so they can receive `this`)
-    new DIS(this);
+    this.diagonalInputSystem = new DIS(this);
     this.lootSystem = new LootSystem(this);
     this.trapSystem = new TrapSystem(this);
     this.bombBagSystem = new BombBagSystem(this);

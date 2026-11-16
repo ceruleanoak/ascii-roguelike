@@ -226,4 +226,5 @@ export function seedCanonCheats(game, canon) {
   if (cheats.godMode) game.cheatMenu.godMode = true;
   if (cheats.particleFireworks && !game.particleFireworks) game.particleFireworksTicker.toggle();
   if (cheats.showVectors) game.showVectors = true;
+  if (cheats.diagonalRolls) game.diagonalInputSystem.enabled = true;
 }

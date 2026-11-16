@@ -102,6 +102,7 @@ const CHEAT_ROWS = [
   ['GOD MODE', 'godMode'],
   ['PARTICLE FIREWORKS', 'particleFireworks'],
   ['SHOW VECTORS', 'showVectors'],
+  ['DIAGONAL ROLLS', 'diagonalRolls'],
 ];
 
 const CHEATS = (cli) => CHEAT_ROWS.map(([label, key]) => toggleRow(label,
