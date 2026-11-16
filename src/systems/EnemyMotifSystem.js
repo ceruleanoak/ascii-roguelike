@@ -10,6 +10,11 @@ const MOTIFS = [...new Map(
   Object.values(ENEMIES).filter(data => data.motif).map(data => [data.motif.name, data.motif])
 ).values()];
 
+// Enemy music is switched off (feature inbox, 2026-11-16): no Motif loads or
+// sounds. The authored `motif` data and the bounces stay in place, so turning
+// this back on is this one flag.
+const MOTIFS_ENABLED = false;
+
 /**
  * EnemyMotifSystem — loops an enemy type's Motif (GLOSSARY: Motif) while the
  * camera is zoomed in and that type is in the zoomed frame.
@@ -37,7 +42,7 @@ export class EnemyMotifSystem {
 
   update() {
     const audio = this.game.audioSystem;
-    if (!audio?.audioContext) return;
+    if (!audio?.audioContext || !MOTIFS_ENABLED) return;
     this._ensureLoaded(audio);
 
     const wanted = this._motifsInFrame();
