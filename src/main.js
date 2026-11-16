@@ -662,6 +662,7 @@ class Game {
       if (state !== GAME_STATES.TITLE && state !== GAME_STATES.ARCADE_DEMO) return;
       if (!this.launchButtonBounds) return;
       if (this.screenFade) return; // ignore clicks while the transition fade is running
+      if (!this.audioSystem.singleTrackReady) return; // title music still loading
 
       const canvas = document.getElementById('foreground-layer');
       const rect = canvas.getBoundingClientRect();
@@ -1904,9 +1905,13 @@ class Game {
     }
 
     // Pre-intro idle → arcade attract demo plays behind the title overlay.
-    if (!this.introAnimationStarted) {
+    // The idle clock runs only once the title music is in; the demo then
+    // also waits for its SFX (fetched here, during the idle wait) so it never
+    // plays silent.
+    if (!this.introAnimationStarted && this.audioSystem.singleTrackReady) {
+      this.audioSystem.loadGameplaySFX(import.meta.env.BASE_URL);
       this.titleIdleTimer += deltaTime;
-      if (this.titleIdleTimer >= this.TITLE_IDLE_THRESHOLD) {
+      if (this.titleIdleTimer >= this.TITLE_IDLE_THRESHOLD && this.audioSystem.sfxPending === 0) {
         this.titleIdleTimer = 0;
         this.stateMachine.transition(GAME_STATES.ARCADE_DEMO);
       }
@@ -2932,6 +2937,8 @@ class Game {
     const state = this.stateMachine.getCurrentState();
 
     if (state === GAME_STATES.TITLE) {
+      // The intro and its music start together, so wait for the music.
+      if (!this.audioSystem.singleTrackReady) return;
       if (!this.introAnimationStarted) {
         // Start the intro animation and music together
         this.introAnimationStarted = true;

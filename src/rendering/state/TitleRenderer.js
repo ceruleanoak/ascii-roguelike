@@ -316,7 +316,9 @@ export class TitleRenderer {
   }
 
   renderPreIntroScreen(game) {
-    // Pre-animation screen: centered button and credit
+    // Pre-animation screen: centered button and credit. Nothing shows until
+    // the title music has loaded — the button can't be clicked before then.
+    if (!game.audioSystem.singleTrackReady) return;
     this.renderer.fgCtx.save();
     this.renderer.fgCtx.font = `${GRID.CELL_SIZE}px 'VentureArcade', 'Unifont', monospace`;
     this.renderer.fgCtx.textAlign = 'center';

@@ -97,6 +97,11 @@ export class AudioSystem {
 
     // Single-track mode
     this.singleBuffer = null;
+    // True once the title track's load has settled (decoded or failed) —
+    // the title waits on it before it shows the launch button or takes input.
+    this.singleTrackReady = false;
+    // SFX fetches still in flight (loadSFX); the arcade demo waits for zero.
+    this.sfxPending = 0;
     this.singleSource = null;
     this.singleGain = null;
     this.loopStart = 0;
@@ -249,12 +254,16 @@ export class AudioSystem {
     this.armAutoResume();
     this.armStallWatchdog();
 
+    const loadId = this._musicLoadId;
     try {
       const audioData = await this.fetchAudioBuffer(audioPath);
       this.singleBuffer = await this.audioContext.decodeAudioData(audioData);
     } catch (error) {
       console.error('[Audio] Failed to load single track:', error);
     }
+    // A failed load still settles, so a missing file never locks the title.
+    // A dispose() during the fetch bumps _musicLoadId; that load is stale.
+    if (loadId === this._musicLoadId) this.singleTrackReady = true;
   }
 
   /**
@@ -496,6 +505,7 @@ export class AudioSystem {
       return true;
     }
 
+    this.sfxPending++;
     try {
       const audioData = await this.fetchAudioBuffer(path);
       const buffer = await this.audioContext.decodeAudioData(audioData);
@@ -515,6 +525,8 @@ export class AudioSystem {
     } catch (error) {
       console.error(`[Audio] Failed to load SFX ${name}:`, error);
       return false;
+    } finally {
+      this.sfxPending--;
     }
   }
 
@@ -2246,6 +2258,7 @@ export class AudioSystem {
     }
 
     this.singleBuffer = null;
+    this.singleTrackReady = false;
     this.singleGain = null;
     this.layer1Buffer = null;
     this.layer2Buffer = null;
