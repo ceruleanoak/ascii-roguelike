@@ -25,6 +25,8 @@
  *   - Burning entities (ambient scan below): an enemy with an active burn
  *     status — or the player on fire — ignites the flammable object on its
  *     own tile, mirroring ElectricitySystem's ambient source scan.
+ *   - Burning ground (same scan): a lava or fire trail puddle ignites the
+ *     flammable object in its cell.
  *
  * Rendering: the cached background canvas only redraws when dirty, so this
  * system marks the background dirty on every fire state TRANSITION (ignite,
@@ -33,7 +35,7 @@
  */
 
 import { GRID } from '../game/GameConfig.js';
-import { tagInteriorPlane } from './PlaneSystem.js';
+import { tagInteriorPlane, isInteriorActive } from './PlaneSystem.js';
 
 const IGNITE_INTERVAL = 0.4;  // seconds per spread step
 const SPREAD_CHANCE = 0.5;    // per-neighbor ignition chance each spread step
@@ -278,6 +280,21 @@ export class FireSystem {
     }
     const player = game.player;
     if (player?.isBurning()) igniteUnderEntity(player);
+
+    // Burning ground: a lava stamp (fire-imbued slime trail) or a fire trail
+    // puddle (Magma Slug) lights the flammable object in its cell — Tinder
+    // becomes a campfire, grass catches. A puddle's position is its center,
+    // so its cell is the floor of that point; only the active layer's puddles
+    // count (`hutPlane` is tagged at spawn by tagInteriorPlane).
+    const interior = isInteriorActive(game);
+    for (const puddle of game.puddles ?? []) {
+      if (puddle.type !== 'lava' && puddle.type !== 'fire') continue;
+      if (puddle.expired || !!puddle.hutPlane !== interior) continue;
+      const col = Math.floor(puddle.position.x / GRID.CELL_SIZE);
+      const row = Math.floor(puddle.position.y / GRID.CELL_SIZE);
+      const n = flammableMap.get(`${col},${row}`);
+      if (n && !n.onFire) this.igniteObject(n);
+    }
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────
