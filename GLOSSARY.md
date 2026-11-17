@@ -958,6 +958,17 @@ identity, not standard programming terms.
   fired from `InventorySystem.equipArmor` via `onArmorEquipped`.
 - **Not:** a stat readout or tooltip. Robes, crowns, and mantles have no family and float nothing.
 
+### Sturdy Grip
+- **Definition:** The bone Armor Flavor's passive: while a bone piece is worn, nothing is knocked
+  or snatched out of the player's hands. A zap/stun disarm or a Thief's weapon snatch leaves the
+  held item in hand, and a Monkey's satchel grab takes no ingredient. Its Passive Indicator is
+  `HELD`, in the bone family's color.
+- **In code:** `gripIndicator` on `ARMOR_FLAVORS.bone` (`src/data/items.js`);
+  `ArmorEffectsSystem.holdsGrip()`, checked by `disarmPlayer` (`StatusEffectSystem.js`) and
+  `ThiefMechanic._resolveSatchelTheft`.
+- **Not:** the Armor Flavor word 'STURDY' (said once, on equip); a Rat's coin theft (coins are
+  not held), which Sturdy Grip does not stop.
+
 ### Splinter
 - **Definition:** Bone armor breaking outright when a melee hit lands on the player. The piece is
   destroyed, not returned to inventory, and 'SPLINTER' floats in its Armor Flavor color. Padded

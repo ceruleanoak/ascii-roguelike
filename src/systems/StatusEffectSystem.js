@@ -200,10 +200,12 @@ export const StatusEffectSystem = {
  * Disarm: knock the player's held item out of their hand — it leaves from the
  * player and flies about DISARM_DISTANCE in a random direction, so the eye can
  * follow where it went — on the player's own plane. Returns the item, or null
- * if the hand was empty. Shared by the zap/stun lock and the Thief's snatch.
+ * if the hand was empty or Sturdy armor held the grip
+ * (ArmorEffectsSystem.holdsGrip). Shared by the zap/stun lock and the Thief's snatch.
  */
 export function disarmPlayer(game, pickupDelayMs = DISARM_PICKUP_DELAY_MS) {
   const player = game.player;
+  if (!player.heldItem || game.armorEffectsSystem?.holdsGrip()) return null;
   const item = player.dropItem();
   if (!item) return null;
   const angle = Math.random() * Math.PI * 2;

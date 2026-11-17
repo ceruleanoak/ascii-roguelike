@@ -247,6 +247,9 @@ export const ThiefMechanic = {
     const inv = game.inventorySystem;
     const thief = attack.owner;
 
+    // Sturdy armor holds everything in place: no ingredient, no weapon.
+    if (game.armorEffectsSystem?.holdsGrip()) return;
+
     let ejected = 0;
     for (let i = 0; i < 3; i++) {
       const char = inv.removeRandomIngredient();

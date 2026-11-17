@@ -41,6 +41,20 @@ export class ArmorEffectsSystem {
     );
   }
 
+  // Sturdy Grip: bone armor keeps anything from leaving the player's hands —
+  // a disarm (zap/stun lock, a thief's snatch) or a Monkey's satchel grab
+  // drops nothing. Each time it holds, its Passive Indicator floats in the
+  // family's color. Returns true when the drop is prevented.
+  holdsGrip() {
+    const flavor = this.game.inventorySystem.equippedArmor?.data?.flavor;
+    const player = this.game.player;
+    if (!flavor?.gripIndicator || !player) return false;
+    this.game.combatSystem.createDamageNumber(
+      flavor.gripIndicator, player.position.x, player.position.y - GRID.CELL_SIZE, flavor.color, 1, 1.2
+    );
+    return true;
+  }
+
   // Splinter: bone armor that a landed melee hit broke (PlayerDamageSystem sets
   // player.splinterPending) is destroyed — gone from the slot, not returned to
   // inventory. 'SPLINTER' floats in the piece's Armor Flavor color.

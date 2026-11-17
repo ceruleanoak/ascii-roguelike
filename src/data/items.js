@@ -61,7 +61,9 @@ export const WEAPON_TYPES = {
 //   fur   — Fur / Leather: light, quick, slips blows (speed + dodge)
 //   metal — slow, heavy, stands its ground
 //   block — shields and Chain Mail: catches the blow rather than slipping it
-//   bone  — sturdy, but can Splinter against weapons
+//   bone  — sturdy, but can Splinter against weapons; its Sturdy Grip
+//           (`gripIndicator`, the passive's own word) keeps anything from
+//           being knocked or snatched out of the player's hands
 // `masterRemark` is what the Weapons Master says on noticing the family worn
 // (WeaponsMaster.getDialogueLines).
 export const ARMOR_FLAVORS = {
@@ -79,7 +81,8 @@ export const ARMOR_FLAVORS = {
   },
   bone: {
     word: 'STURDY', color: '#f0e6c0',
-    masterRemark: 'BONE IS STURDY, BUT A HIT CAN BREAK IT.'
+    gripIndicator: 'HELD', // Sturdy Grip (ArmorEffectsSystem.holdsGrip): no disarm, no satchel snatch
+    masterRemark: 'BONE IS STURDY. NOTHING GETS KNOCKED FROM YOUR HANDS, BUT A HIT CAN BREAK IT.'
   },
 };
 
