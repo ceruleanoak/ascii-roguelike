@@ -60,6 +60,7 @@ export const LeapAttackMechanic = {
     enemy.forcedLeapPending = false; // armed by Enemy.takeDamage; consumed the frame iframes expire
     enemy.leapWindupActive = false;
     enemy.leapWindupTimer = 0;
+    enemy.leapWindupDuration = 0; // full length of the windup in progress (LungeTelegraphDraw fades its line across it)
     enemy.leapAirborneActive = false;
     enemy.leapAirTimer = 0;
     enemy.leapAirDuration = 0;
@@ -219,6 +220,7 @@ export const LeapAttackMechanic = {
     const hpFraction = enemy.maxHp > 0 ? Math.max(0, Math.min(1, enemy.hp / enemy.maxHp)) : 1;
     enemy.leapWindupActive = true;
     enemy.leapWindupTimer = cfg.windupTime * (0.5 + 0.5 * hpFraction);
+    enemy.leapWindupDuration = enemy.leapWindupTimer;
     // A forced leap from an un-imbued slime may aim at an Imbue Pool instead
     // (leapPoolTarget, set by ImbuePoolSystem) — otherwise at the player.
     const pool = forced ? enemy.leapPoolTarget : null;
