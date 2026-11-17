@@ -62,6 +62,18 @@ export function aimFacingAtNearestEnemy(player, enemies, maxDist) {
   player.facing.y = target.dy / dist;
 }
 
+// The angle a weapon actually swings or fires at, from the angle its wielder
+// wants. Facing is 8-way — the player's keys can only point in whole eighths
+// (45°) — so a weapon in an enemy's hands snaps to the nearest eighth too,
+// rather than tracking the player at an angle no player could answer with.
+// A keen weapon is the exception: the eye is what frees aim from the eighths,
+// for whoever holds it, so its angle passes through untouched.
+const EIGHTH = Math.PI / 4;
+export function weaponAimAngle(item, angle) {
+  if (item?.data?.keenAim) return angle;
+  return Math.round(angle / EIGHTH) * EIGHTH;
+}
+
 // Reach of a keen melee weapon, in pixels.
 export function keenStrikeReach(item) {
   return (item.data.keenAimCells ?? 2) * GRID.CELL_SIZE;

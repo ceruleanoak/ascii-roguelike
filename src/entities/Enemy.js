@@ -60,6 +60,7 @@ import {
   isEnemyFrozen
 } from '../systems/EnemyStatusEffects.js';
 import { absorbsZap } from '../systems/ImbuePoolSystem.js';
+import { weaponAimAngle } from '../systems/KeenAim.js';
 import { gooRenderScale, gooFontSize, gooBodyHitbox } from './gooBody.js';
 import { arrowCharForAngle } from './arrowGlyph.js';
 import { countsAsBoss } from './bossTest.js';
@@ -1674,10 +1675,13 @@ export class Enemy {
 
   // Aim for an equipped-weapon use. Dizzy scrambles it like every native
   // attack (_dizzyAngleOffset), so a confused goblin's sword swings wide too.
+  // The result snaps to whole eighths like the player's own facing, unless the
+  // weapon is keen (KeenAim.weaponAimAngle). Item windups and bow draws hold
+  // this vector as their stand-in's facing, so the swing fires where aimed.
   getFacingDirection() {
     const dx = this.target.position.x - this.position.x;
     const dy = this.target.position.y - this.position.y;
-    const angle = Math.atan2(dy, dx) + this._dizzyAngleOffset();
+    const angle = weaponAimAngle(this.equippedWeapon, Math.atan2(dy, dx) + this._dizzyAngleOffset());
     return { x: Math.cos(angle), y: Math.sin(angle) };
   }
 
