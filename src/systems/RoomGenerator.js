@@ -661,7 +661,8 @@ export class RoomGenerator {
 
     const batFlocksSpawned = new Set();
     for (let i = 0; i < enemyCount; i++) {
-      const enemyChar = getZoneRandomEnemy(this.currentDepth, room.zone);
+      const enemyChar = getZoneRandomEnemy(this.currentDepth, room.zone, this.currentLetterTemplate?.excludedEnemies);
+      if (!enemyChar) continue;
       // Bats (any flockBehavior enemy) spawn as one depth-scaled flock per
       // room (roomFeatures.js), not singles
       if (ENEMIES[enemyChar]?.flockBehavior) {
@@ -731,7 +732,7 @@ export class RoomGenerator {
     // Quagmire-style escalating rounds: round 1 is the spawn above; later waves
     // are driven by RoundCombatSystem off the room-cleared hook.
     if (this.currentLetterTemplate?.roundCombat?.enabled) {
-      this.game?.roundCombatSystem?.initRoom(room, this.currentLetterTemplate.roundCombat.rounds);
+      this.game?.roundCombatSystem?.initRoom(room, this.currentLetterTemplate.roundCombat.rounds, this.currentLetterTemplate.excludedEnemies);
     }
 
     // Exits are locked until all enemies defeated

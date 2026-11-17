@@ -21,9 +21,13 @@ export class RoundCombatSystem {
     this.game = game;
   }
 
-  /** Record round state on a freshly generated round-combat room (round 1 already seeded). */
-  initRoom(room, rounds = DEFAULT_ROUNDS) {
-    room.roundCombat = { total: Math.max(1, rounds | 0), current: 1 };
+  /**
+   * Record round state on a freshly generated round-combat room (round 1
+   * already seeded). `excluded` is the letter template's `excludedEnemies`,
+   * kept so every later wave leaves out what round 1 did.
+   */
+  initRoom(room, rounds = DEFAULT_ROUNDS, excluded = null) {
+    room.roundCombat = { total: Math.max(1, rounds | 0), current: 1, excluded };
   }
 
   /**
@@ -156,7 +160,7 @@ export class RoundCombatSystem {
       : room.playerStartPos;
     for (let i = 0; i < count; i++) {
       if (room.enemies.length >= ROOM_ENEMY_CAP) break;
-      const enemyChar = getZoneRandomEnemy(depth, room.zone);
+      const enemyChar = getZoneRandomEnemy(depth, room.zone, room.roundCombat?.excluded);
       if (!enemyChar || ENEMIES[enemyChar]?.flockBehavior) continue; // bats spawn as flocks, not singles
       const allowLiquid = ENEMIES[enemyChar]?.waterAffinity === true;
       const pos = gen.getRandomPosition(room.collisionMap, room.enemies, avoid, room.backgroundObjects, allowLiquid);

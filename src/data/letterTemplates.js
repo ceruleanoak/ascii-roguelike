@@ -379,6 +379,9 @@ export const LETTER_TEMPLATES = {
     // Marks the room a Quagmire for the post-clear Rusalka + the Whirlpool.
     quagmire: true,
 
+    // No Slimes in the mire: random spawns and every combat round skip them.
+    excludedEnemies: ['o'],
+
     // Frogs near the pools, like the Lake room.
     enemyInjection: {
       char: 'g',
