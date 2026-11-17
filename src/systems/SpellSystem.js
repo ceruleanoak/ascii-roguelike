@@ -97,10 +97,11 @@ export class SpellSystem {
       const spell = SPELLS[word];
       if (spell) {
         // Inside the Three Room the Three may answer for itself instead
-        // (talk words, Wish Spells — ThreeVoiceSystem).
+        // (talk words, Wish Spells — ThreeVoiceSystem). An empty answer is
+        // still an answer: the Spell was taken, and its success is silent.
         const voiced = this.game.threeVoiceSystem?.answer(word, spell);
-        if (voiced) {
-          this.game.spellResponse = { text: voiced, startTime: performance.now() };
+        if (voiced != null) {
+          if (voiced) this.game.spellResponse = { text: voiced, startTime: performance.now() };
           return;
         }
         if (this.game.knownSpells?.has(word)) this.game.castSpells.add(word);

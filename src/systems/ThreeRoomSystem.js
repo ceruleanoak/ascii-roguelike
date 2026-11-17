@@ -55,15 +55,7 @@ const DEATH_COLOR = '#dddddd';
 // Drawn DEATH_SCALE cells tall, centered on its cell (ThreeRoomRenderer).
 const DEATH_SCALE = 3;
 
-// It starts from a standstill and keeps gaining speed until it outruns the
-// player's walk (180) — the room is sealed, so running only buys time.
-// Striking it is the one answer: it takes no damage, but the blow throws it
-// back and its speed starts over from nothing.
-const DEATH_ACCEL = 45;          // px/s² gained while it comes
-const DEATH_MAX_SPEED = 200;     // px/s ceiling
-const DEATH_KNOCKBACK_SPEED = 260;
-const DEATH_KNOCKBACK_TIME = 0.35; // seconds thrown back before it comes again
-const DEATH_KNOCKBACK_DECAY = 6;   // knockback velocity bleed-off per second
+// How it moves once it walks is the Death Fight's (DeathFightSystem).
 // Contact distance for the kill, center to center: inside the skull's ink.
 const DEATH_KILL_RADIUS = GRID.CELL_SIZE * DEATH_SCALE * 0.35;
 // The struck area: most of the drawn glyph.
@@ -193,7 +185,7 @@ export class ThreeRoomSystem {
     return found;
   }
 
-  /** Every slot holds an offering — right or wrong. This is the door's gate. */
+  /** Every slot holds an offering — right or wrong. The door also needs none cracked. */
   _allFilled(room) {
     const slots = this._slots(room);
     return slots.length === SLOT_COUNT && slots.every(s => s?.threeFilled);
@@ -236,8 +228,8 @@ export class ThreeRoomSystem {
       slot.animationColor = SLOT_CRACKED_COLOR;
 
       // The crack is the curse. It lands on the wrong placement, not on the
-      // finished set — the remaining two slots can still be filled and the
-      // door still opens, but the run is already owed.
+      // finished set — the remaining two slots can still be filled, but the
+      // door stays shut on a cracked set: only three right offerings open it.
       this._crack(game, room, slot);
     }
 
@@ -379,6 +371,7 @@ export class ThreeRoomSystem {
     // Three Room this run finds (N×3 can summon it again) before its door was
     // ever touched.
     this.cinematic = null;
+    game.deathFightSystem.reset();
 
     // The Undead risen around a cracked slot belong to this room. The curse
     // they announce does not go with them — game.cursedRun outlives the room,
@@ -401,12 +394,30 @@ export class ThreeRoomSystem {
     return !!room?.isThreeRoom && !!game.cursedRun;
   }
 
+  /**
+   * The return exit, when the run is Cursed: the retreat walks home to REST.
+   * The saved EXPLORE state is dropped on purpose — the retreat is a retreat,
+   * and it costs the depth it was bought at. Only that depth progress is
+   * forfeited: the run's quick-slot loadout is not part of the cost and is
+   * saved same as any other REST entry (bug #276).
+   * Dispatched from main.js's NEUTRAL exit; true when it took the exit.
+   */
+  takeCursedRetreat(game, room) {
+    if (!this.retreatsToRest(game, room)) return false;
+    game.saveRestLoadout();
+    game.savedExploreState = null;
+    this.onRoomExit(game, room);
+    game.stateMachine.transition(GAME_STATES.REST);
+    return true;
+  }
+
   // ── The door ────────────────────────────────────────────────────────────────
 
   /**
    * SPACE near the shut door (dispatched from main.js's NEUTRAL branch).
-   * The door does not open until every slot holds an offering — anything at
-   * all, right or wrong. Returns true when the press was consumed.
+   * The door opens only on three offerings rightly placed — a power trio or
+   * the true 3. A cracked set never opens it, so the Death Fight behind it is
+   * always met by an uncursed run. Returns true when the press was consumed.
    */
   handleDoorPress(game) {
     const room = game.currentRoom;
@@ -416,6 +427,7 @@ export class ThreeRoomSystem {
     // Refused silently while the pattern is unfinished, like every other
     // non-instructive gate in the game.
     if (!this._allFilled(room)) return false;
+    if (this.readOffering(room) === 'refused') return false;
 
     door._opened = true;
     // The way north stands open.
@@ -425,8 +437,8 @@ export class ThreeRoomSystem {
     const { col, row } = door.threeDoorCell;
     if (room.collisionMap?.[row]) room.collisionMap[row][col] = false;
 
-    // What is behind the door depends on what was offered. The power trio (or
-    // anything refused) buys the north answer, and the north answer is Death.
+    // What is behind the door depends on what was offered. The power trio
+    // buys the north answer, and the north answer is Death.
     // The true 3 is the one set that opens the door and is spared — its way
     // out was never north; it is south of REST, which Phase 2 unseals.
     if (this.readOffering(room) !== 'true-three') this._beginCinematic(game);
@@ -565,10 +577,11 @@ export class ThreeRoomSystem {
     const death = room.backgroundObjects.find(o => o.isDeath);
     if (!death) return;
 
-    // The fight itself is the shared world tick's: SPACE swings through the
-    // NEUTRAL branch's fall-through to attack, and combat resolves against
-    // the script's combatObjects — Death alone.
-    this._moveDeath(dt, p, death);
+    // Blows are the shared world tick's: SPACE swings through the NEUTRAL
+    // branch's fall-through to attack, and combat resolves against the
+    // script's combatObjects — Death — and the fight's enemies. How Death
+    // moves, and what the fight brings, is the Death Fight's.
+    game.deathFightSystem.update(dt, death);
 
     const dist = Math.hypot(p.position.x - death.position.x, p.position.y - death.position.y);
     if (dist < DEATH_KILL_RADIUS) {
@@ -579,41 +592,6 @@ export class ThreeRoomSystem {
       p._lastDamageCause = null;
       this._resolveContactDeath(game);
     }
-  }
-
-  /**
-   * A struck Death is thrown straight back from the player, then its speed
-   * starts over from nothing; otherwise it homes on the player — straight
-   * line, through walls, no leash — a little faster every second.
-   */
-  _moveDeath(dt, p, death) {
-    const dx = p.position.x - death.position.x;
-    const dy = p.position.y - death.position.y;
-    const dist = Math.hypot(dx, dy) || 1;
-    const kb = death.knockback;
-
-    if (death.glitterHit) {
-      death.glitterHit = false;
-      kb.vx = -(dx / dist) * DEATH_KNOCKBACK_SPEED;
-      kb.vy = -(dy / dist) * DEATH_KNOCKBACK_SPEED;
-      kb.timer = DEATH_KNOCKBACK_TIME;
-      death.speed = 0;
-    }
-
-    if (kb.timer > 0) {
-      kb.timer -= dt;
-      death.position.x += kb.vx * dt;
-      death.position.y += kb.vy * dt;
-      const bleed = Math.max(0, 1 - DEATH_KNOCKBACK_DECAY * dt);
-      kb.vx *= bleed;
-      kb.vy *= bleed;
-      if (kb.timer <= 0) { kb.vx = 0; kb.vy = 0; death.speed = 0; }
-      return;
-    }
-
-    death.speed = Math.min(death.speed + DEATH_ACCEL * dt, DEATH_MAX_SPEED);
-    death.position.x += (dx / dist) * death.speed * dt;
-    death.position.y += (dy / dist) * death.speed * dt;
   }
 
   /**
@@ -633,6 +611,7 @@ export class ThreeRoomSystem {
     game.audioSystem.playSFX('player_death');
     game.combatSystem.clear();
     this.cinematic = null;
+    game.deathFightSystem.reset();
     game.stateMachine.transition(GAME_STATES.GAME_OVER);
   }
 }

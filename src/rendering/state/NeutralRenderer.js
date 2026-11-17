@@ -138,7 +138,10 @@ export class NeutralRenderer {
 
     // Enemies a script places in the room, through the EXPLORE helpers.
     const explore = this.renderController.exploreRenderer;
-    explore.drawNonSappingEnemies(game, game.currentRoom.enemies);
+    const threeRoom = this.renderController.threeRoomRenderer;
+    // In the Three Room's darkness the Death Fight's enemies are drawn after
+    // the dark, below.
+    if (!threeRoom.isDark(game)) explore.drawNonSappingEnemies(game, game.currentRoom.enemies);
     // The Sunken Hold's Sea Serpents: one HP bar per serpent, not per segment.
     drawSeaSerpentHealthBars(this.renderer, game.currentRoom);
 
@@ -159,7 +162,9 @@ export class NeutralRenderer {
 
     // The Three Room's slot frames and Death's darkness — under the combat and
     // player passes, so the player and their swings stay lit in the dark.
-    this.renderController.threeRoomRenderer.render(game);
+    threeRoom.render(game);
+    if (threeRoom.isDark(game)) explore.drawNonSappingEnemies(game, game.currentRoom.enemies);
+    threeRoom.renderDeath(game);
 
     // Shared combat + player Frame Passes. The player glyph pulses with the
     // room script here (getPulseAlpha) instead of the i-frame fade.

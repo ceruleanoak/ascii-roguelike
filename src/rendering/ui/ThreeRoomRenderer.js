@@ -53,6 +53,8 @@ const FRAME_TORCHLIT_COLORS = ['#ff4444', '#00cccc', '#ffff00'];
 // A refused frame: drained, with the cracks drawn across it.
 const FRAME_CRACKED_COLOR = '#5a5a5a';
 const CRACK_COLOR = '#3a3a3a';
+// The silhouette that runs ahead of Death's dash: dark, but not lost in the black.
+const DEATH_SHADOW_COLOR = '#2a2a2a';
 
 export class ThreeRoomRenderer {
   render(game) {
@@ -69,7 +71,25 @@ export class ThreeRoomRenderer {
     this._drawFrames(game, room, lit);
 
     const cin = game.threeRoomSystem.cinematic;
-    if (cin && cin.opacity > 0) this._drawArrival(game, room, cin);
+    if (cin && cin.opacity > 0) this._drawDarkness(game, cin);
+  }
+
+  /** True while the staged darkness is up — what is drawn after it stays lit. */
+  isDark(game) {
+    return !!game.currentRoom?.isThreeRoom && (game.threeRoomSystem.cinematic?.opacity ?? 0) > 0;
+  }
+
+  /**
+   * Death, and the shadow running ahead of its dash — drawn after the Death
+   * Fight's enemies so nothing stands in front of it.
+   */
+  renderDeath(game) {
+    if (!this.isDark(game)) return;
+    const death = game.currentRoom.backgroundObjects.find(o => o.isDeath);
+    if (!death) return;
+    const shadow = game.deathFightSystem.shadow();
+    if (shadow) this._drawDeathGlyph(game, death, shadow, DEATH_SHADOW_COLOR);
+    this._drawDeathGlyph(game, death, death.position, death.color);
   }
 
   /**
@@ -150,30 +170,26 @@ export class ThreeRoomRenderer {
     ctx.restore();
   }
 
-  /**
-   * The staged darkness, with Death standing in it at its drawScale.
-   */
-  _drawArrival(game, room, cin) {
+  /** The staged darkness. The player is the one thing it does not take. */
+  _drawDarkness(game, cin) {
     const ctx = game.renderer.fgCtx;
-    const cs = GRID.CELL_SIZE;
-
     ctx.save();
     ctx.globalAlpha = cin.opacity;
     ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, GRID.WIDTH, GRID.HEIGHT);
-    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
 
-    // The player is the one thing the dark does not take (drawn after this,
-    // by the player Frame Pass). And then it is not the only thing.
-    const death = room.backgroundObjects.find(o => o.isDeath);
-    if (death) {
-      ctx.font = `${cs * (death.drawScale || 1)}px 'Unifont', monospace`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillStyle = death.color;
-      ctx.fillText(death.char, death.position.x + cs / 2, death.position.y + cs / 2);
-    }
-
+  /** Death's glyph at its drawScale, centered on `at`'s cell. */
+  _drawDeathGlyph(game, death, at, color) {
+    const ctx = game.renderer.fgCtx;
+    const cs = GRID.CELL_SIZE;
+    ctx.save();
+    ctx.font = `${cs * (death.drawScale || 1)}px 'Unifont', monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = color;
+    ctx.fillText(death.char, at.x + cs / 2, at.y + cs / 2);
     ctx.restore();
   }
 }

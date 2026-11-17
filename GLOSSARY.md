@@ -2404,7 +2404,8 @@ identity, not standard programming terms.
   `PersistenceSystem` is permanently disabled to enforce full reset. Design philosophy in
   `claudedocs/zone-cosmology.md`.
 - **Not:** soft-lock or save-scumming. Death is final and intentional; mental progression is
-  the reward, not inventory accumulation.
+  the reward, not inventory accumulation. Not the Death behind the Three Room's north door —
+  that figure is Death (the Three's Figure).
 
 ### Death Save
 - **Definition:** A lethal hit that something catches before it becomes a Death: HP is
@@ -2698,12 +2699,14 @@ identity, not standard programming terms.
   Gray zone `'3'` room. What is placed in the slots decides how the run
   can end.
 - **In code:** `threeRoom` script in `src/data/neutralRooms.js`; `room.isThreeRoom`;
-  `ThreeRoomSystem` owns the offerings, the music and the door; `ThreeRoomRenderer` draws the
-  frames and the Death cinematic. Carrying torch light (`hasTorchLight`) colors each frame
+  `ThreeRoomSystem` owns the offerings, the music, the door and the Death cinematic;
+  `DeathFightSystem` owns the Death Fight that follows; `ThreeRoomRenderer` draws the
+  frames, the darkness and Death. Carrying torch light (`hasTorchLight`) colors each frame
   with its slot's REST role color — apex red, left cyan, right yellow (`FRAME_TORCHLIT_COLORS`).
   Inside it the Three answers for itself (`ThreeVoiceSystem`): talk words (TALK, SPEAK,
   HELLO, GREET) get its own line, and a Wish Spell is not granted but named by its Wish Kind
   (`FOR ENEMIES.` / `FOR GLORY.` / `FOR CONTROL.`), except REVIVE on the death screen.
+  While the Death Fight runs, Death answers first (`DeathFightSystem.answer`).
 - **Not:** "Triangle Room" (the superseded cosmology name), "puzzle room" (reserved — that is
   the dungeon side-room authoring pathway), "altar", "shrine".
 
@@ -2724,7 +2727,7 @@ identity, not standard programming terms.
 ### Power Trio
 - **Definition:** The set that satisfies the Three Room by **form** — a weapon in the apex
   slot (Instinct), armor in the left (Experience), a consumable in the right (Convention).
-  It opens the north door, and behind the north door is Death.
+  It opens the north door, and behind the north door is the Death Fight.
 - **In code:** `SLOT_FORMS` in `ThreeRoomSystem`.
 - **Not:** "the three powers", "correct set", "win condition".
 
@@ -2740,8 +2743,8 @@ identity, not standard programming terms.
 ### Cracked Slot
 - **Definition:** A Three Room slot that broke: either its offering was the wrong form for it
   (the slot goes gray and keeps the wrong glyph — the mistake stays visible), or GIVE cracked
-  it empty. Cracking is what curses the run, and a cracked slot still counts as filled for
-  opening the north door.
+  it empty. Cracking is what curses the run, and a set with a cracked slot never opens the
+  north door: only a Power Trio or the True 3 does, so the Death Fight is always met uncursed.
 - **In code:** `threeCracked` flag on the slot Background Object, set by
   `ThreeRoomSystem._crack` (from `placeOffering` or `crackSlot`); `FRAME_CRACKED_COLOR`,
   `CRACK_COLOR` and `_drawCracks` in `ThreeRoomRenderer`.
@@ -2759,6 +2762,57 @@ identity, not standard programming terms.
 - **Not:** an Offering (nothing is placed); not a Wish Spell itself (it carries no `wish`
   field, so the Three Room's wish comments never swallow it).
 
+### Death (the Three's Figure)
+- **Definition:** The Three's own figure, `☠` drawn three cells tall, met behind the Three
+  Room's north door. Its voice is the Three's voice. It takes no damage — a blow only throws
+  it back — and its touch ends the run outright: no Death Save catches it. Enemies and Death
+  never touch each other.
+- **In code:** a `BackgroundObject` with `isDeath` (`ThreeRoomSystem._releaseDeath`), moved
+  by hand by `DeathFightSystem`; the touch is `ThreeRoomSystem._resolveContactDeath`; drawn
+  by `ThreeRoomRenderer.renderDeath`.
+- **Not:** an Enemy (it is not in `ENEMIES` and has no State), a boss, "the Reaper". Not
+  Death / Permadeath, the run ending it causes.
+
+### Death Fight
+- **Definition:** What follows the north door: less a battle than a recruitment — Death's
+  invitation to take the Cursed Run on the way to the Gray Crown. It runs through the Death
+  Fight Phases in order and ends with Death killing the player: FULFILLMENT NEARS, SEEK THE
+  CROWN. Taking the offered CONSUME is the recruitment accepted.
+- **In code:** `DeathFightSystem` (`src/systems/DeathFightSystem.js`), ticked from
+  `ThreeRoomSystem.update` once the cinematic reaches `chasing`; `fight` is its state, reset
+  per room (Reset Registry). `game.deathSpokeConsume` is the run-scoped once-a-run flag for
+  the CONSUME line.
+- **Not:** a boss fight (nothing in it can be won), "the Death chase" (the chase is only its
+  first phase), "Death battle".
+
+### Death Fight Phase
+- **Definition:** One stage of the Death Fight, in order:
+  - **Hunt** — Death comes, faster and faster; a talk word stops it once for `DO YOU FEAR US?`.
+    After 15s: `FIGHT`.
+  - **Weak** — weak-tier enemies one at a time, Death still hunting. On the second spawn
+    Death says `CONSUME` (once a run). **Watch**: a nameless CONSUME takes the enemy free of
+    a wish and curses the run; Death says its true name, then `GOOD.`, and stands watching
+    until the weak tier is spent.
+  - **Live Forever** — `LIVE FOREVER`; the hunt again, slower than the player's walk. Normal
+    tier.
+  - **Horde** — every weak and normal entry again at once. With a wish left Death says
+    `PURGE!`, and PURGE then clears the room with no wish question, breaking a quick slot.
+    With none, the horde is fought down.
+  - **Dash** — elite, then boss tier. Death hovers, then every 5s a dark silhouette runs the
+    locked line ahead of it and Death crosses the room on that line.
+  - **Fulfillment** — the queue is spent; the closing lines, then Death arrives.
+- **In code:** `fight.phase` in `DeathFightSystem`: `'hunt'`, `'weak'` (Watch is
+  `fight.watching`), `'forever'`, `'horde'`, `'dash'`, `'fulfillment'`.
+- **Not:** a Telegraph or an Enemy State — Death has no State machine.
+
+### Library Queue
+- **Definition:** The ordered list the Death Fight spawns from: every enemy with a true name,
+  weak → normal → elite → boss, registry order inside a tier. Pacifists and water-bound
+  enemies are left out. Every Death Fight spawn rises next to a border wall, away from the
+  player.
+- **In code:** `buildLibraryQueue()` in `DeathFightSystem`; `fight.queue`.
+- **Not:** a zone spawn table (it ignores Zone and Depth).
+
 ### Cursed Run
 - **Definition:** The state a run enters the moment a Three Room slot cracks or the first
   CONSUME lands. Every way in looks the same: a Wish is spent if one is left (GIVE and CONSUME
@@ -2770,7 +2824,8 @@ identity, not standard programming terms.
   meets it with a cursed line, then stops coming; once REST has given way he returns once to
   say farewell, and from then on EXPLORE's way back to REST is shut, its door gray.
 - **In code:** `game.cursedRun`, set only by `CursedRunSystem.begin(game, { spendWish })` —
-  called from `ThreeRoomSystem._beginCurse` and `ConsumeSystem.confirm`; the hold is an
+  called from `ThreeRoomSystem._beginCurse`, `ConsumeSystem.confirm` and the Death Fight's
+  nameless CONSUME (`DeathFightSystem._consume`); the hold is an
   AnimationSystem lock, the draws are `CurseMarkDraw.js`, the muffle is `AudioSystem.muffle`. Everything the flag
   changes outside the Three Room is owned by `CursedRunSystem`, including when REST itself
   gives way (`isRestDecayed`), how Charon meets each REST visit (`charonVisit`), and whether

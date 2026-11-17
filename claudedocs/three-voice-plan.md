@@ -184,10 +184,9 @@ author's line, so it stands.
 **Edge cases.**
 - **No wishes left** (`wishesUsed >= 3`) → `NO.` A fallback; the price of wishing
   is the curse itself, which deepens (§7b).
-- **A GIVE crack is a Cracked Slot**: grayed, framed and counted as filled (no glyph
-  — draw the crack over the empty frame). So three GIVEs open the north door, and
-  Death is behind it. Three GIVEs also spend all three wishes, so no REVIVE is left
-  for Death's touch.
+- **A GIVE crack is a Cracked Slot**: grayed and framed (no glyph — draw the crack
+  over the empty frame). A cracked set never opens the north door (user, 2026-11-17:
+  only three offerings rightly placed open it), so GIVE closes the way to Death.
 - **Already Cursed** (an earlier wrong offering or GIVE): the flag isn't set twice,
   but the Undead still rise per crack — the existing `_beginCurse` behavior.
 - **Music** advances per crack (`_advanceMusic`), the same as an offering.
@@ -214,6 +213,14 @@ the Three Room, so `currentRoom.isThreeRoom` is still true at the game-over scre
 The intercept must skip when the state is `GAME_OVER`, or the wish-revive that
 `ThreeRoomSystem._resolveContactDeath` deliberately keeps live would be swallowed
 (`WishSystem.executeRevive` already resumes NEUTRAL there).
+
+**The Death Fight speaks first.** Behind the north door Death's voice is the
+Three's, and while the Death Fight runs `DeathFightSystem.answer` is asked before
+the lines above: the first talk word of the Hunt gets `DO YOU FEAR US?`; a bare
+CONSUME (no true name, no wish) takes the fight's current enemy and curses the run —
+in the Weak phase Death says its true name, then `GOOD.`; PURGE, once Death has said
+`PURGE!` in the Horde, spends a wish with no question and clears the room, silently.
+Anything else falls through to the room's lines. See GLOSSARY.md "Death Fight".
 
 ## 7. Cursed Spell Signs
 

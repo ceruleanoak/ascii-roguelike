@@ -18,7 +18,10 @@ import { wishSpellNames } from '../data/spells.js';
  * is read off the room's slots.
  *
  * SpellSystem.detect asks answer() before running a matched Spell; a string
- * back is the whole response.
+ * back is the whole response ('' is a silent one).
+ *
+ * While the Death Fight runs, Death answers first (DeathFightSystem.answer):
+ * the talk pause, the nameless CONSUME, the horde's PURGE.
  */
 
 /** Talk words, each answered by the Three in its room. Elsewhere they are TALK. */
@@ -75,8 +78,10 @@ export class ThreeVoiceSystem {
    */
   answer(word, spell) {
     if (!this.isListening()) return null;
+    const fought = this.game.deathFightSystem?.answer(word, spell);
+    if (fought != null) return fought;
     if (THREE_TALK_LINES[word]) return THREE_TALK_LINES[word];
-    if (spell.wish) return THREE_WISH_COMMENTS[spell.wish];
+    if (spell.wish) return THREE_WISH_COMMENTS[spell.wish] ?? null;
     return null;
   }
 

@@ -138,6 +138,7 @@ import { PearlSystem } from './systems/PearlSystem.js';
 import { CompanionSystem } from './systems/CompanionSystem.js';
 import { CommandSystem } from './systems/CommandSystem.js';
 import { ConsumeSystem } from './systems/ConsumeSystem.js';
+import { DeathFightSystem } from './systems/DeathFightSystem.js';
 import { WorldEffectsSystem } from './systems/WorldEffectsSystem.js';
 import { EnemyUpdateSystem } from './systems/EnemyUpdateSystem.js';
 import { PauseSystem } from './systems/PauseSystem.js';
@@ -325,6 +326,7 @@ class Game {
     this.companionSystem = new CompanionSystem(this);
     this.commandSystem = new CommandSystem(this);
     this.consumeSystem = new ConsumeSystem(this);
+    this.deathFightSystem = new DeathFightSystem(this); // the Death Fight in the Three Room
     this.worldEffectsSystem = new WorldEffectsSystem(this);
     this.enemyUpdateSystem = new EnemyUpdateSystem(this);
     this.dialogueSystem = new DialogueSystem(this);
@@ -1727,19 +1729,8 @@ class Game {
       const leavingNeutralRoom = this.currentRoom;
       this.neutralRoomSystem.onExit(this.currentRoom, this.player);
 
-      // A Cursed run is not given its room back — ThreeRoomSystem decides,
-      // this only dispatches. The saved EXPLORE state is dropped on purpose:
-      // the retreat is a retreat, and it costs the depth it was bought at.
-      if (this.threeRoomSystem.retreatsToRest(this, leavingNeutralRoom)) {
-        // Only the depth progress (savedExploreState) is forfeited by the
-        // retreat — the run's current quick-slot loadout is not part of that
-        // cost and must be saved same as any other REST entry (bug #276).
-        this.saveRestLoadout();
-        this.savedExploreState = null;
-        this.threeRoomSystem.onRoomExit(this, leavingNeutralRoom);
-        this.stateMachine.transition(GAME_STATES.REST);
-        return;
-      }
+      // A Cursed run is not given its room back (ThreeRoomSystem).
+      if (this.threeRoomSystem.takeCursedRetreat(this, leavingNeutralRoom)) return;
 
       // Back out into the room saved on the way in — its contents, its
       // collision, and which state that room belongs to.

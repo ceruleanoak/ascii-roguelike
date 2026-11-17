@@ -130,6 +130,14 @@ export class ConsumeSystem {
   }
 
   /**
+   * Consume one chosen enemy, no true name asked — the Death Fight's free
+   * CONSUME (DeathFightSystem). Same pull, same heal.
+   */
+  consumeEnemy(enemy) {
+    this._consume(enemy);
+  }
+
+  /**
    * The enemy leaves the world now — out of every enemy list and physics, a
    * latched bat let go — so it can't act during the pull. Not a death: no
    * loot, no corpse, no ledger.

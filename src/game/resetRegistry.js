@@ -266,6 +266,12 @@ export const RESET_REGISTRY = [
     why: "Three Room run-state: the gray '3' call can happen again next run, and the N×3 streak starts clean.",
   },
   {
+    path: 'deathSpokeConsume',
+    scope: 'run',
+    value: false,
+    why: 'Death offers the word CONSUME once a run, on the Death Fight\'s second spawn.',
+  },
+  {
     path: 'barricadeSystem.hardReset',
     scope: 'run',
     call: (game) => game.barricadeSystem.hardReset(),
@@ -560,6 +566,13 @@ export const RESET_REGISTRY = [
     call: (game) => game.consumeSystem.reset(),
     covers: [],
     why: 'A Consume Pull flies within one room, and an unanswered CONSUME wish question names an enemy of that room; neither outlives it.',
+  },
+  {
+    path: 'deathFightSystem.reset',
+    scope: 'room',
+    call: (game) => game.deathFightSystem.reset(),
+    covers: ['deathFightSystem.fight'],
+    why: 'The Death Fight lives behind one Three Room door; leaving the room (a wish-revive walk-out) or dying ends it.',
   },
   {
     path: 'beelineSystem.reset',
