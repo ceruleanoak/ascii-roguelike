@@ -162,6 +162,24 @@ export const LeapAttackMechanic = {
     }
   },
 
+  /**
+   * Cancel a leap still in its windup and pay the full cooldown, the same
+   * contract as ChargeMechanic.interrupt: sleep, stun, freeze, zap and
+   * knockback end the squat instead of letting it launch the moment the
+   * Enemy recovers. A leap already airborne is committed and lands. No-op
+   * when idle.
+   */
+  interrupt(enemy) {
+    const cfg = enemy.data?.leapAttack;
+    if (!cfg?.enabled || !enemy.leapWindupActive) return;
+    enemy.leapWindupActive = false;
+    enemy.leapWindupTimer = 0;
+    enemy.leapHoldTimer = 0;
+    enemy.forcedLeapPending = false;
+    enemy.leapPool = null;
+    enemy.leapCooldown = cfg.cooldown;
+  },
+
   // Mid-phase trigger: check if conditions are met to start a new leap.
   tryTrigger(enemy, ctx) {
     const cfg = enemy.data.leapAttack;

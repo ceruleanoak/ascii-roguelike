@@ -14,6 +14,7 @@
 // created) and a `chargeMechanic` block (supplies the launch's tuning).
 
 import { GRID } from '../../game/GameConfig.js';
+import { interruptDashes } from './dashInterrupt.js';
 
 export const ShellFormMechanic = {
   isEnabled(enemy) {
@@ -70,8 +71,11 @@ export const ShellFormMechanic = {
   // Called from Enemy.takeDamage on a non-lethal hit: retreat into the shell
   // (which arms the shell launch on the next update). A hammer-flipped enemy
   // (HammerFlipMechanic) stays on its back — the punish window holds.
+  // Ducking in ends any dash in progress, like every other interrupt: a
+  // Tortoise struck mid-charge stops, and only the shell launch rolls it out.
   onDamaged(enemy) {
     if (!this.isEnabled(enemy) || enemy.flipped) return;
+    interruptDashes(enemy);
     enemy.inShellForm = true;
     enemy.shellFormTimer = 2.5;
     enemy.knockbackResistance = 0.8; // Restore shell knockback reduction
