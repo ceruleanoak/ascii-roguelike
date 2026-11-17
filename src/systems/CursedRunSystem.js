@@ -195,6 +195,8 @@ export class CursedRunSystem {
     if (player && !game.animationSystem.isAnimating(player)) {
       game.animationSystem.play(player, [{ type: 'wait', duration: CURSE_MARK_DURATION }]);
     }
+    // The world goes muffled while the curse lands, opening back up as the gray fades.
+    game.audioSystem?.muffle(CURSE_MARK_DURATION, { release: CURSE_MARK_FADE });
   }
 
   /** True while the Curse Mark plays. */

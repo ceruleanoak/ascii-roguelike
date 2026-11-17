@@ -94,6 +94,11 @@ export class AudioSystem {
 
     // Shared Web Audio API context
     this.audioContext = null;
+    // The Muffle Bus: every music and SFX gain feeds this lowpass → gain pair
+    // on its way out (_output). Open (Nyquist, unity) except while muffle()
+    // pulls it down. Built per AudioContext; dispose() drops it.
+    this.muffleFilter = null;
+    this.muffleGain = null;
 
     // Single-track mode
     this.singleBuffer = null;
@@ -245,11 +250,11 @@ export class AudioSystem {
 
     this.singleGain = this.audioContext.createGain();
     this.singleGain.gain.value = volume;
-    this.singleGain.connect(this.audioContext.destination);
+    this.singleGain.connect(this._output());
 
     this.sfxGain = this.audioContext.createGain();
     this.sfxGain.gain.value = this.sfxVolume;
-    this.sfxGain.connect(this.audioContext.destination);
+    this.sfxGain.connect(this._output());
 
     this.armAutoResume();
     this.armStallWatchdog();
@@ -442,7 +447,7 @@ export class AudioSystem {
     // SFX gain is created unconditionally so sound effects work even if music fails to load
     this.sfxGain = this.audioContext.createGain();
     this.sfxGain.gain.value = this.sfxVolume;
-    this.sfxGain.connect(this.audioContext.destination);
+    this.sfxGain.connect(this._output());
 
     this.armAutoResume();
     this.armStallWatchdog();
@@ -461,8 +466,8 @@ export class AudioSystem {
       this.layer1Gain = this.audioContext.createGain();
       this.layer2Gain = this.audioContext.createGain();
 
-      this.layer1Gain.connect(this.audioContext.destination);
-      this.layer2Gain.connect(this.audioContext.destination);
+      this.layer1Gain.connect(this._output());
+      this.layer2Gain.connect(this._output());
 
       this.layer1Gain.gain.value = this.masterVolume;
       this.layer2Gain.gain.value = 0; // Start muted
@@ -535,6 +540,57 @@ export class AudioSystem {
    * @param {string} name - SFX identifier
    * @param {number} volume - Volume multiplier 0.0 to 1.0 (default 1.0)
    */
+  /**
+   * Where music and SFX gains connect: the Muffle Bus input, built on first
+   * use for the current AudioContext.
+   * @returns {AudioNode}
+   */
+  _output() {
+    if (!this.muffleFilter) {
+      const ctx = this.audioContext;
+      this.muffleFilter = ctx.createBiquadFilter();
+      this.muffleFilter.type = 'lowpass';
+      this.muffleFilter.frequency.value = ctx.sampleRate / 2;
+      this.muffleFilter.Q.value = Math.SQRT1_2; // flat passband, no resonant bump
+      this.muffleGain = ctx.createGain();
+      this.muffleGain.gain.value = 1;
+      this.muffleFilter.connect(this.muffleGain);
+      this.muffleGain.connect(ctx.destination);
+    }
+    return this.muffleFilter;
+  }
+
+  /**
+   * Muffle everything for `seconds`: the highs close down to `cutoff` and
+   * the level dips over `attack`, hold, then open back up over `release`,
+   * ending exactly at `seconds`. Speed and pitch are untouched, so the music
+   * stays on its bar grid. A new call replaces one already running.
+   * @param {number} seconds - total length, release included
+   * @param {{cutoff?: number, level?: number, attack?: number, release?: number}} [shape]
+   */
+  muffle(seconds, { cutoff = 450, level = 0.6, attack = 0.2, release = 0.3 } = {}) {
+    if (!this.audioContext || !this.muffleFilter) return;
+    const now = this.audioContext.currentTime;
+    const open = this.audioContext.sampleRate / 2;
+    const closedAt = now + Math.min(attack, seconds);
+    const releaseAt = now + Math.max(attack, seconds - release);
+    const end = now + seconds;
+    const freq = this.muffleFilter.frequency;
+    const gain = this.muffleGain.gain;
+    for (const param of [freq, gain]) {
+      const current = param.value;
+      param.cancelScheduledValues(now);
+      param.setValueAtTime(current, now);
+    }
+    // Frequency moves on an exponential ramp, which is how the ear hears it.
+    freq.exponentialRampToValueAtTime(cutoff, closedAt);
+    freq.setValueAtTime(cutoff, releaseAt);
+    freq.exponentialRampToValueAtTime(open, end);
+    gain.linearRampToValueAtTime(level, closedAt);
+    gain.setValueAtTime(level, releaseAt);
+    gain.linearRampToValueAtTime(1, end);
+  }
+
   playSFX(name, volume = 1.0) {
     // Registered placeholder (asset not authored yet) — silent no-op.
     if (name in this.sfxBuffers && this.sfxBuffers[name] === null) return;
@@ -2265,6 +2321,8 @@ export class AudioSystem {
     this.layer1Gain = null;
     this.layer2Gain = null;
     this.sfxGain = null;
+    this.muffleFilter = null;
+    this.muffleGain = null;
     this.sfxBuffers = {};
     this.sfxNodeGains = {};
     this.sfxActiveSources = {};

@@ -2762,7 +2762,7 @@ identity, not standard programming terms.
 ### Cursed Run
 - **Definition:** The state a run enters the moment a Three Room slot cracks or the first
   CONSUME lands. Every way in looks the same: a Wish is spent if one is left (GIVE and CONSUME
-  have spent theirs already), the screen shakes and flashes white, and the player is held still
+  have spent theirs already), the screen shakes and flashes white, every sound goes muffled, and the player is held still
   while power streams into them, turning them gray before the gray fades and they can move
   again. The Three Room can no
   longer be found for the rest of the run, the Graveyard fills as rooms are explored, and REST
@@ -2771,7 +2771,7 @@ identity, not standard programming terms.
   say farewell, and from then on EXPLORE's way back to REST is shut, its door gray.
 - **In code:** `game.cursedRun`, set only by `CursedRunSystem.begin(game, { spendWish })` —
   called from `ThreeRoomSystem._beginCurse` and `ConsumeSystem.confirm`; the hold is an
-  AnimationSystem lock and the draws are `CurseMarkDraw.js`. Everything the flag
+  AnimationSystem lock, the draws are `CurseMarkDraw.js`, the muffle is `AudioSystem.muffle`. Everything the flag
   changes outside the Three Room is owned by `CursedRunSystem`, including when REST itself
   gives way (`isRestDecayed`), how Charon meets each REST visit (`charonVisit`), and whether
   his farewell has shut the way back (`isRestSealed`).
