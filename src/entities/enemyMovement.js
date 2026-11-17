@@ -1,5 +1,6 @@
 import { GRID } from '../game/GameConfig.js';
 import { hasVisionBarrier } from './enemyVision.js';
+import { firingLineStep } from '../systems/KeenAim.js';
 
 // Every way an Enemy can drive its own targetVelocity, in one place.
 //
@@ -121,6 +122,17 @@ export function moveKeeper(enemy, speedMultiplier, targetPos, deltaTime) {
   } else if (dist > preferred + tolerance) {
     // Too far — approach using nav system to route around walls
     moveChaser(enemy, speedMultiplier, targetPos, deltaTime);
+  } else if (firingLineStep(enemy, targetPos)) {
+    // In range with a bow that fires only along eighths: step sideways onto
+    // the nearest line and hold it there, instead of strafing off it at
+    // random (Goblins). The step shrinks as the line nears, so it settles
+    // on the line rather than overshooting it.
+    const step = firingLineStep(enemy, targetPos);
+    const len = Math.hypot(step.x, step.y);
+    if (len < 1) { moveStill(enemy); return; }
+    const pace = enemy.speed * speedMultiplier * Math.min(1, len / GRID.CELL_SIZE);
+    enemy.targetVelocity.vx = (step.x / len) * pace;
+    enemy.targetVelocity.vy = (step.y / len) * pace;
   } else {
     // In preferred range — sidestep at 60% speed to avoid being a stationary target
     enemy.targetVelocity.vx = perpX * enemy.speed * speedMultiplier * 0.6;

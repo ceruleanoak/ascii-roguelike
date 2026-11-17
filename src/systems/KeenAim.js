@@ -74,6 +74,37 @@ export function weaponAimAngle(item, angle) {
   return Math.round(angle / EIGHTH) * EIGHTH;
 }
 
+// How far an enemy's target sits off the nearest line its weapon can fire
+// along, as the step the wielder would take to put it on that line. Only a bow
+// asks the question: an arrow loosed at a snapped eighth misses anything not
+// on it, while a swing's arc forgives the same error. A keen bow, or no bow,
+// has nothing to line up — the step is null.
+//
+// Measured where the arrow really flies: it spawns at the wielder's centre,
+// but its position is read as a box's top-left (hit test and draw alike), so
+// it travels half a cell down-right of that centre (bug #578). The target
+// side is the player's hitbox centre.
+const FIRING_LINE_TOLERANCE = GRID.CELL_SIZE * 0.25;
+const ARROW_PATH_OFFSET = GRID.CELL_SIZE / 2; // bug #578
+export function firingLineStep(enemy, targetPos) {
+  const item = enemy.equippedWeapon;
+  if (item?.data?.weaponType !== 'BOW' || item.data.keenAim) return null;
+  const dx = (targetPos.x + GRID.CELL_SIZE / 2) - (enemy.position.x + enemy.width / 2 + ARROW_PATH_OFFSET);
+  const dy = (targetPos.y + GRID.CELL_SIZE / 2) - (enemy.position.y + enemy.height / 2 + ARROW_PATH_OFFSET);
+  const angle = weaponAimAngle(item, Math.atan2(dy, dx));
+  const ux = Math.cos(angle);
+  const uy = Math.sin(angle);
+  const along = dx * ux + dy * uy;
+  return { x: dx - along * ux, y: dy - along * uy };
+}
+
+// True when the wielder can loose at the target: a bow's arrow would pass
+// within reach of it. Anything that isn't a snapping bow is always on line.
+export function onFiringLine(enemy, targetPos) {
+  const step = firingLineStep(enemy, targetPos);
+  return !step || Math.hypot(step.x, step.y) <= FIRING_LINE_TOLERANCE;
+}
+
 // Reach of a keen melee weapon, in pixels.
 export function keenStrikeReach(item) {
   return (item.data.keenAimCells ?? 2) * GRID.CELL_SIZE;

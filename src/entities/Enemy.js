@@ -60,7 +60,7 @@ import {
   isEnemyFrozen
 } from '../systems/EnemyStatusEffects.js';
 import { absorbsZap } from '../systems/ImbuePoolSystem.js';
-import { weaponAimAngle } from '../systems/KeenAim.js';
+import { weaponAimAngle, onFiringLine } from '../systems/KeenAim.js';
 import { gooRenderScale, gooFontSize, gooBodyHitbox } from './gooBody.js';
 import { arrowCharForAngle } from './arrowGlyph.js';
 import { countsAsBoss } from './bossTest.js';
@@ -932,7 +932,9 @@ export class Enemy {
       // checks are carried because both are asked.
       // `strikesOnlyInLava` (Tortoise): out of lava its body is the whole hit
       // (charge contact), so it never opens a native swing there.
+      // A snapping bow also waits until the target is on one of its eighths.
       canStrike: (!this.data.strikesOnlyInLava || this.inLava)
+        && onFiringLine(this, this.target.position)
         && this.hasVision(this.position, this.target.position, effectiveVisionLength, { ignoreCone: true }),
       // True on exactly one frame per `decisionInterval` (decremented above,
       // reset at the end of this update). States gate their *perception*
