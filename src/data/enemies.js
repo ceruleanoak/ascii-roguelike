@@ -2839,8 +2839,8 @@ export const ZONE_SPAWN_TABLES = {
     // Fire/scorched theme - NO green/ice enemies
     0: ['l', '%'],                                 // L1-2: Magma Slugs (intro trail mechanic), Bumpers (intro lava spacing)
     3: ['f', 't', 'l', '6', '4'],                  // L3-5: Add Fire Bats, Tortoises, Bombs, Phalanx squads
-    6: ['f', '0', 'F', 't', 'k', 'l', '6', '4'],   // L6-8: Add Living Rocks, Fire Elementals, Miners
-    9: ['f', '0', 'F', 'S', 't', 'k', '6', 'R', '4'] // L9-10: Add Skeletons (charred bones), Rockwardens
+    6: ['f', '0', 'F', 't', 'k', 'l', '6', '4', 'd'], // L6-8: Add Living Rocks, Fire Elementals, Miners, Duelists
+    9: ['f', '0', 'F', 'S', 't', 'k', '6', 'R', '4', 'd'] // L9-10: Add Skeletons (charred bones), Rockwardens
   },
 
   'cyan': {
