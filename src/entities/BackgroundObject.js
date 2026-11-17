@@ -475,6 +475,10 @@ export class BackgroundObject {
     if (this.isNonInteractive()) return; // see isNonInteractive()
     const animData = OBJECT_ANIMATIONS[type];
     if (animData) {
+      // A new animation replaces any in flight; a colour-only one must not
+      // inherit the last frame of an interrupted shake's offset.
+      this.animationOffset.x = 0;
+      this.animationOffset.y = 0;
       this.currentAnimation = {
         type,
         data: animData,
@@ -491,6 +495,8 @@ export class BackgroundObject {
   // restores this.color on expiry, same as any other animation ending.
   flashColor(color, duration = 0.25) {
     if (this.isNonInteractive()) return; // see isNonInteractive()
+    this.animationOffset.x = 0; // see _playAnimation
+    this.animationOffset.y = 0;
     this.currentAnimation = {
       type: 'flashColor',
       data: { duration, colorFrames: [color, color, color] },

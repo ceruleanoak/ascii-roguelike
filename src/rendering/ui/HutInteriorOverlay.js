@@ -183,20 +183,18 @@ export class HutInteriorOverlay {
       if (obj.destroyed) continue;
       if (obj.onFire && !obj.isCampfire) continue; // drawn by the shared flicker pass below
       const renderData = obj.getRenderPosition();
+      // animationOffset is the hit shake (render-only; collision stays put).
+      const cx = renderData.x + GRID.CELL_SIZE / 2 + obj.animationOffset.x;
+      const cy = renderData.y + GRID.CELL_SIZE / 2 + obj.animationOffset.y;
       // Deflectors draw as the same filled triangle the surface uses, so a
       // rolling rock's turn lines up with the shape on screen.
       if (obj.data?.boulderDeflector) {
         this.renderController.exploreRenderer._drawDeflectorTriangle(ctx,
-          renderData.x + GRID.CELL_SIZE / 2, renderData.y + GRID.CELL_SIZE / 2,
-          obj.data.deflectorElbow, renderData.color);
+          cx, cy, obj.data.deflectorElbow, renderData.color);
         continue;
       }
       ctx.fillStyle = renderData.color;
-      ctx.fillText(
-        renderData.char,
-        renderData.x + GRID.CELL_SIZE / 2,
-        renderData.y + GRID.CELL_SIZE / 2
-      );
+      ctx.fillText(renderData.char, cx, cy);
     }
 
     // Condenser reveal — base ingredient as Greek symbol, floating upward with dissolve

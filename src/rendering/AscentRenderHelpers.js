@@ -100,8 +100,8 @@ export function renderChargedObjects(renderer, game, shouldRender) {
     if (obj.char === '~') continue;
     if (!shouldRender(obj)) continue;
     renderer.drawEntity(
-      obj.position.x + GRID.CELL_SIZE / 2,
-      obj.position.y + GRID.CELL_SIZE / 2,
+      obj.position.x + GRID.CELL_SIZE / 2 + obj.animationOffset.x,
+      obj.position.y + GRID.CELL_SIZE / 2 + obj.animationOffset.y,
       obj.char,
       chargedColor(obj, obj.color)
     );

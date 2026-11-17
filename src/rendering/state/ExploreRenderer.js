@@ -58,6 +58,7 @@ import { drawCursedRecipeReveal } from '../ui/CursedRecipeReveal.js';
 import { drawParryIndicator } from '../ui/ParryIndicator.js';
 import { drawDizzyOrbitals } from '../effects/DizzyOrbitals.js';
 import { drawFramePasses, ownsFrame } from '../framePasses.js';
+import { animatingSetChanged } from '../animatingObjectRepaint.js';
 
 export class ExploreRenderer {
   constructor(renderer, renderController) {
@@ -82,6 +83,9 @@ export class ExploreRenderer {
     // Tracks the underground blackout so a plane change can force a background
     // repaint (the blackout is baked into the cached layer — see renderBackground).
     this._lastUndergroundDark = false;
+    // Background Objects mid-animation (hit shake, crack, flash) — they leave
+    // the cached layer while they move; see animatingObjectRepaint.js.
+    this._animatingObjects = new Set();
 
     // Vacuum particle state — pixel motes cycling downward into the south exit
     this._southVacuumParticles = [];
@@ -141,6 +145,12 @@ export class ExploreRenderer {
     const spectaclesOn = isSpectaclesActive(game);
     if (this._lastSpectaclesOn !== spectaclesOn) {
       this._lastSpectaclesOn = spectaclesOn;
+      this.renderer.backgroundDirty = true;
+    }
+
+    // An object that starts or stops animating (a hit's shake) leaves or rejoins
+    // the cached layer, so its still copy isn't left under the moving one.
+    if (animatingSetChanged(this._animatingObjects, game.backgroundObjects)) {
       this.renderer.backgroundDirty = true;
     }
 
@@ -364,8 +374,8 @@ export class ExploreRenderer {
       if (!obj.isCampfire || obj.destroyed) continue;
       const renderData = obj.getRenderPosition();
       this.renderer.drawEntity(
-        renderData.x + GRID.CELL_SIZE / 2,
-        renderData.y + GRID.CELL_SIZE / 2,
+        renderData.x + GRID.CELL_SIZE / 2 + obj.animationOffset.x,
+        renderData.y + GRID.CELL_SIZE / 2 + obj.animationOffset.y,
         renderData.char,
         renderData.color
       );
@@ -1631,8 +1641,8 @@ export class ExploreRenderer {
       const color = FIRE_COLORS[(Math.floor(obj.fireTimer * 8) + phase) % FIRE_COLORS.length];
       const offsetX = obj.grassRenderOffset ? obj.grassRenderOffset.x : 0;
       this.renderer.drawEntity(
-        obj.position.x + GRID.CELL_SIZE / 2 + offsetX,
-        obj.position.y + GRID.CELL_SIZE / 2,
+        obj.position.x + GRID.CELL_SIZE / 2 + offsetX + obj.animationOffset.x,
+        obj.position.y + GRID.CELL_SIZE / 2 + obj.animationOffset.y,
         obj.char,
         color
       );

@@ -2,6 +2,7 @@ import { GRID, COLORS } from '../../game/GameConfig.js';
 import { spectaclesTransformString, isSpectaclesActive } from '../../data/cipher.js';
 import { drawUndead } from '../ui/UndeadRenderer.js';
 import { drawFramePasses } from '../framePasses.js';
+import { animatingSetChanged } from '../animatingObjectRepaint.js';
 import { drawSunkenGlints } from '../effects/SparkleEffects.js';
 import { drawVisionFogOverlay } from '../ui/torchLight.js';
 import { drawSeaSerpentHealthBars } from '../ui/SeaSerpentHealthBars.js';
@@ -17,6 +18,9 @@ export class NeutralRenderer {
   constructor(renderer, renderController) {
     this.renderer = renderer;
     this.renderController = renderController;
+    // Background Objects mid-animation (hit shake, crack, flash) — they leave
+    // the cached layer while they move; see animatingObjectRepaint.js.
+    this._animatingObjects = new Set();
   }
 
   render(game) {
@@ -27,6 +31,12 @@ export class NeutralRenderer {
   }
 
   renderBackground(game) {
+    // An object that starts or stops animating (a hit's shake) leaves or rejoins
+    // the cached layer, so its still copy isn't left under the moving one.
+    if (animatingSetChanged(this._animatingObjects, game.currentRoom.backgroundObjects)) {
+      this.renderer.backgroundDirty = true;
+    }
+
     // Render background (only if dirty)
     if (!this.renderer.backgroundDirty) return;
 

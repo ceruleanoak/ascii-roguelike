@@ -2081,7 +2081,9 @@ export const WALL_STRUCTURES = {
 };
 
 export const OBJECT_ANIMATIONS = {
-  shake: { duration: 0.3, frames: [{ x: 2, y: 0 }, { x: -2, y: 0 }, { x: 1, y: 0 }, { x: -1, y: 0 }] },
+  // Hit shake: a brief, small horizontal jitter that decays (2px → 1px → rest),
+  // integer pixels so the pixel fonts stay crisp. Render-only (animationOffset).
+  shake: { duration: 0.18, frames: [{ x: 2, y: 0 }, { x: -2, y: 0 }, { x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 0 }] },
   bounce: { duration: 0.4, frames: [{ x: 0, y: -3 }, { x: 0, y: -5 }, { x: 0, y: -3 }, { x: 0, y: 0 }] },
   flash: { duration: 0.2, colorFrames: ['#ffffff', '#ffff00', '#ffffff'] },
   ripple: { duration: 0.5, frames: [{ scale: 1.0 }, { scale: 1.2 }, { scale: 1.1 }, { scale: 1.0 }] },

@@ -99,7 +99,10 @@ export class MazeInteriorOverlay {
       if (obj.destroyed) continue;
       const renderData = obj.getRenderPosition();
       ctx.fillStyle = renderData.color;
-      ctx.fillText(renderData.char, renderData.x + CS / 2, renderData.y + CS / 2);
+      // animationOffset is the hit shake (render-only; collision stays put).
+      ctx.fillText(renderData.char,
+        renderData.x + CS / 2 + obj.animationOffset.x,
+        renderData.y + CS / 2 + obj.animationOffset.y);
     }
 
     // ── 2a3. Rat Nests (shake while the player lingers; dim once emptied) ──
