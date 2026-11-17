@@ -115,6 +115,22 @@ export class CaptiveSystem {
     game.audioSystem.playSFX('cage_slam');
   }
 
+  /**
+   * OPEN (spells.js): every cage standing in the room breaks open from
+   * wherever the player is, as the first SPACE would. A cage still falling
+   * is left alone. Recruiting the character stays a SPACE beside it.
+   * @returns {boolean} true when at least one cage broke
+   */
+  openCages() {
+    let opened = false;
+    for (const captive of this.game.captives || []) {
+      if (captive.freed || captive.falling || captive.cageDestroyed) continue;
+      this._breakCage(captive);
+      opened = true;
+    }
+    return opened;
+  }
+
   _breakCage(captive) {
     const game = this.game;
     const centerX = captive.position.x + C / 2;

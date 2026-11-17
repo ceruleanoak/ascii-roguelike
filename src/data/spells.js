@@ -500,7 +500,9 @@ export const SPELLS = {
   // Silent when it starts.
   'CHOP':    { response: (game) => game.harvestSystem.cast(['tree']) },
   'MINE':    { response: (game) => game.harvestSystem.cast(['rock']) },
-  'OPEN':    { response: (game) => game.harvestSystem.cast(['container']) },
+  // OPEN breaks a miniboss Captive's cage first (CaptiveSystem.openCages),
+  // silently; with none standing it opens containers like HARVEST.
+  'OPEN':    { response: (game) => (game.captiveSystem.openCages() ? null : game.harvestSystem.cast(['container'])) },
   'HARVEST': { response: (game) => game.harvestSystem.cast(['container', 'tree', 'rock', 'grass', 'sand']) },
 
   // CRAFT — one random Recipe from what the player has on hand, REST or
