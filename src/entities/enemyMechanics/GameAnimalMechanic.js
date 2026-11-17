@@ -8,7 +8,9 @@ import { getExitSlotPosition } from '../../systems/ExitSystem.js';
 // burrows in place and reappears once the player is still again
 // (HuntingSystem.stillnessTimer) — but only until it takes its first hit.
 // After that it switches permanently to the same flee-to-exit behavior as
-// the moose; it never burrows again.
+// the moose; it never burrows again. A Rabbit that burrows in or beside cover
+// (a Shrub, Bush, Tall Grass — anything lightweight or cuttable) shakes it
+// every few seconds while it hides, the Leshy's bush tell (`isShaking`).
 //
 // Config (enemy.data.gameAnimal):
 //   role           'moose' | 'rabbit'
@@ -33,6 +35,7 @@ export const GameAnimalMechanic = {
     enemy.gaBurrowPosition = null;
     enemy.gaBurrowRunning = false;
     enemy.gaBurrowRunTimer = 0;
+    enemy.gaBurrowCover = null;
     enemy.gaHasBeenDamaged = false;
     enemy.gaMaxHpSeen = enemy.hp;
     enemy.gaSlowStacks = 0;
@@ -76,6 +79,8 @@ export const GameAnimalMechanic = {
 
     if (enemy.hp < enemy.gaMaxHpSeen) enemy.gaHasBeenDamaged = true;
     enemy.gaMaxHpSeen = Math.min(enemy.gaMaxHpSeen, enemy.hp);
+    // A wound ends burrowing for good, so the cover stops giving it away.
+    if (enemy.gaHasBeenDamaged) this._leaveCover(enemy);
 
     if (cfg.role === 'rabbit' && !enemy.gaHasBeenDamaged) {
       if (this._updateRabbitBurrow(enemy, game, cfg, deltaTime)) return;
@@ -140,6 +145,7 @@ export const GameAnimalMechanic = {
       if (stillness >= required) {
         enemy.gaBurrowed = false;
         enemy.plane = 0;
+        this._leaveCover(enemy);
         if (enemy.gaBurrowPosition) {
           enemy.position.x = enemy.gaBurrowPosition.x;
           enemy.position.y = enemy.gaBurrowPosition.y;
@@ -158,6 +164,8 @@ export const GameAnimalMechanic = {
         enemy.gaBurrowed = true;
         enemy.gaBurrowPosition = { x: enemy.position.x, y: enemy.position.y };
         enemy.plane = 1; // hidden — skips rendering/collision like other plane-1 entities
+        enemy.gaBurrowCover = this._coverAt(enemy, game);
+        if (enemy.gaBurrowCover) enemy.gaBurrowCover.isShaking = true;
         enemy.velocity.vx = 0; enemy.velocity.vy = 0;
         enemy.targetVelocity.vx = 0; enemy.targetVelocity.vy = 0;
         return true;
@@ -176,6 +184,30 @@ export const GameAnimalMechanic = {
       }
     }
     return false;
+  },
+
+  // The cover the Rabbit burrows into: the nearest standing lightweight or
+  // cuttable object (Shrub, Bush, Tall Grass) within a cell and a half of
+  // where it dug in. Null in the open — nothing there to shake.
+  _coverAt(enemy, game) {
+    const objects = game?._activeBackgroundObjects?.() ?? [];
+    let best = null;
+    let bestDist = GRID.CELL_SIZE * 1.5;
+    for (const obj of objects) {
+      if (obj.destroyed || !(obj.data?.lightweight || obj.data?.cuttable)) continue;
+      const dist = Math.hypot(obj.position.x - enemy.position.x, obj.position.y - enemy.position.y);
+      if (dist <= bestDist) { best = obj; bestDist = dist; }
+    }
+    return best;
+  },
+
+  // Stop the cover shaking — unless it is a Leshy's bush, which shakes for
+  // its own reason.
+  _leaveCover(enemy) {
+    const cover = enemy.gaBurrowCover;
+    if (!cover) return;
+    if (!cover.leshyBush) cover.isShaking = false;
+    enemy.gaBurrowCover = null;
   },
 
   // Straight-line run directly away from the player (used during the rabbit's

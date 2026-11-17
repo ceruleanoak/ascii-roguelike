@@ -2482,9 +2482,11 @@ identity, not standard programming terms.
 ### Burrow
 - **Definition:** The Rabbit's pre-damage evasion: on detecting the player it runs directly
   away for one second, then digs in and disappears at that spot, re-emerging there once the
-  player is still again. Ends permanently the first time the Rabbit takes damage — from then on
+  player is still again. Dug in under cover (a Shrub, Bush or Tall Grass), it shakes that cover
+  every few seconds, the way a Leshy's bush shakes. Ends permanently the first time the Rabbit takes damage — from then on
   it flees toward an exit like a Moose instead.
-- **In code:** `GameAnimalMechanic._updateRabbitBurrow` / `_fleeFromPlayer`; hidden via
+- **In code:** `GameAnimalMechanic._updateRabbitBurrow` / `_fleeFromPlayer`; the cover is
+  `enemy.gaBurrowCover` (`_coverAt`), shaken through `BackgroundObject.isShaking`; hidden via
   `enemy.plane = 1` (see Plane); reappearance gated on `HuntingSystem.stillnessTimer`.
 - **Not:** death or despawn — the rabbit persists, just hidden and non-interactable.
 
