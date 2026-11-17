@@ -247,7 +247,16 @@ export class BoulderSystem {
       if (!r.hitCooldowns.has(game.player)) {
         const dx = (game.player.position.x + GRID.CELL_SIZE / 2) - r.x;
         const dy = (game.player.position.y + GRID.CELL_SIZE / 2) - r.y;
-        if (dx * dx + dy * dy < HIT_RADIUS * HIT_RADIUS) {
+        const roll = game.player.dodgeRoll;
+        if (dx * dx + dy * dy < HIT_RADIUS * HIT_RADIUS && roll?.active && roll.type === 'damage') {
+          // The red Warrior's roll (rollType 'damage') bowls into the rock
+          // and turns it away, taking no damage and no knockback: the same
+          // redirect a hammer gives it, without the hammer's extra speed.
+          const away = this._awayFromPlayer(r.x, r.y);
+          r.vx = away.vx;
+          r.vy = away.vy;
+          r.hitCooldowns.set(game.player, HIT_COOLDOWN);
+        } else if (dx * dx + dy * dy < HIT_RADIUS * HIT_RADIUS) {
           const dmg = BOULDER_DAMAGE;
           const damageResult = game.player.takeDamage(dmg, { type: 'boulder', cause: DEATH_CAUSES.boulder });
           if (damageResult === true || (damageResult && damageResult.damaged)) {
@@ -362,8 +371,9 @@ export class BoulderSystem {
   }
 
   // Cardinal unit heading pointing away from the player, by the larger of
-  // |dx|/|dy| (a tie goes horizontal). Shared by both hammer strikes so a
-  // rolled rock always reads as "I knocked it that way", grid-true for
+  // |dx|/|dy| (a tie goes horizontal). Shared by both hammer strikes and the
+  // red Warrior's roll so a rolled rock always reads as "I knocked it that
+  // way", grid-true for
   // deterministic deflector bounces.
   _awayFromPlayer(x, y) {
     const p = this.game.player.position;
