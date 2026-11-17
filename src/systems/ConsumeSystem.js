@@ -1,6 +1,7 @@
 import { GRID } from '../game/GameConfig.js';
 import { findEnemyDataByTrueName } from '../data/enemies.js';
 import { tagInteriorPlane } from './PlaneSystem.js';
+import { ZONE_COLORS } from '../data/zones.js';
 
 // Seconds a consumed enemy's glyph takes to reach the player.
 const PULL_DURATION = 0.55;
@@ -12,7 +13,8 @@ const PULL_DURATION = 0.55;
  * bearer in the player's layer (same grammar as CALL, CommandSystem). The
  * enemy leaves the world at once — no loot, no corpse, no kill — and its
  * glyph is pulled into the player (a Consume Pull), where its remaining HP
- * heals them on arrival.
+ * heals them on arrival (shown in gray as the full amount eaten, even when
+ * the heal itself is capped at max HP).
  *
  * On an uncursed run the first CONSUME is a Power wish: the wish question,
  * YES spends the wish, the enemy is consumed and the run is Cursed
@@ -90,10 +92,11 @@ export class ConsumeSystem {
       if (pull.t < 1) continue;
       this.pulls.splice(i, 1);
       if (!player || pull.hp <= 0) continue;
+      // The number shows everything eaten, in the curse's gray, even past
+      // a full heart; the heal itself still stops at max HP.
       const gained = Math.min(pull.hp, player.maxHp - player.hp);
-      if (gained <= 0) continue;
-      player.heal(gained);
-      this.game.combatSystem.showHeal(gained, player.position.x, player.position.y, player);
+      if (gained > 0) player.heal(gained);
+      this.game.combatSystem.queueDamageNumber(player, `+${pull.hp}`, player.position.x, player.position.y, ZONE_COLORS.gray);
     }
   }
 

@@ -60,7 +60,7 @@ const NO_DODGE = { x: 0, y: 0 };
 // they are held still while power streams in (the first PULL share of the
 // mark), turning them gray; the gray holds, then fades over the last FADE
 // share, and the player moves again.
-const CURSE_MARK_DURATION = 1.6;
+const CURSE_MARK_DURATION = 4.8;
 const CURSE_MARK_PULL = 0.45;
 const CURSE_MARK_FADE = 0.3;
 // The same white flash GIVE uses, so every way into the curse looks alike.
