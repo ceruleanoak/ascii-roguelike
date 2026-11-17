@@ -1,3 +1,5 @@
+import { hasDetectedPlayer } from '../entities/enemyVision.js';
+
 // Player crit roll, extracted from CombatSystem._applyCritIfLucky (CombatSystem.js
 // was over its architecture budget). Pure: reads the attacking owner and the
 // struck enemy, returns the (possibly multiplied) damage.
@@ -6,7 +8,9 @@
 // by player.critChance (Lucky Coin / well ritual) or weapon's own critChance.
 // isLucky=true when the Lucky Coin/well is the crit source (shows "LUCKY CRIT");
 // isLucky=false when the weapon alone provides the chance (shows "CRIT").
-export function rollCrit(damage, owner, enemy) {
+// `stealthCrit` is false for a hit that can't take the Green Ranger's
+// unseen crit (a boomerang, which can strike the same enemy twice).
+export function rollCrit(damage, owner, enemy, { stealthCrit = true } = {}) {
   if (!owner?.quickSlots) return { damage, isCrit: false };
   let critChance = owner.critChance || 0;
   const isLucky = critChance > 0; // Lucky Coin or well is contributing
@@ -21,6 +25,12 @@ export function rollCrit(damage, owner, enemy) {
   // Punishing a telegraphed swing: a hit that lands in the back half of the
   // enemy's windup is a guaranteed crit.
   if (enemy?.isInCritWindow?.()) {
+    critChance = 1;
+  }
+  // Green Ranger: a hit on an enemy that hasn't detected the player is a
+  // guaranteed crit. A 0-damage hit (Flag) stays harmless and shows nothing.
+  if (stealthCrit && owner.characterType === 'green' && damage > 0
+      && enemy && !hasDetectedPlayer(enemy)) {
     critChance = 1;
   }
   if (!(critChance > 0)) return { damage, isCrit: false };

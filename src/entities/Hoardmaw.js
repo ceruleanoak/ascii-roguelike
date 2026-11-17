@@ -691,8 +691,8 @@ export class Hoardmaw extends Enemy {
       if (!t.alive) { this.spilledTreasure.splice(i, 1); continue; }
 
       if (retrieving) {
-        // Retrieval: pulled back in — Inhale's sole remaining job, same pull
-        // math LureMechanic uses, retargeted from the player to treasure.
+        // Retrieval: pulled back in — Inhale's sole remaining job: a steady
+        // pull of each spilled treasure toward the maw.
         const dx = mx - t.x, dy = my - t.y;
         const d = Math.hypot(dx, dy) || 1;
         if (d < GRID.CELL_SIZE * 0.6) { this.spilledTreasure.splice(i, 1); continue; }

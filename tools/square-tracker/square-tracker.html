@@ -1,0 +1,1113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Square Tracker</title>
+<style>
+  html, body { background:#000; color:#b8c0c8; margin:0; }
+  body { font: 14px/19px ui-monospace, "Cascadia Mono", Menlo, Consolas, "Courier New", monospace; padding:10px 14px; }
+  pre { margin:0; font:inherit; white-space:pre; }
+  #screen { user-select:none; cursor:default; outline:none; }
+  .title { color:#7f8a96; }
+  .dim { color:#5b6570; }
+  .sep { color:#33404c; }
+  .ctl { color:#d8dee4; cursor:pointer; }
+  .ctl:hover, .cell:hover, .hd:hover { text-decoration:underline; }
+  .cur { background:#2d4a86; color:#fff !important; }
+  .edit { background:#e6e6e6; color:#000 !important; }
+  .hd { color:#9fb0c0; cursor:pointer; }
+  .hd.muted { color:#ff5f5f; }
+  .rn { color:#4d5966; } .rn.strong { color:#8a98a6; }
+  .row.beat { background:#0b1620; }
+  .row.bar { background:#13243a; }
+  .row.currow { background:#1b2c48; }
+  .row.play { background:#3a2a10; }
+  .cell { cursor:pointer; }
+  .cell.empty { color:#3d4955; }
+  .mutedcell { opacity:.35; }
+  .fsel { background:#fff; color:#000 !important; }
+  .cell.off { color:#8a98a6; }
+  .msel { background:#1f3a5c; }
+  .status { color:#d8dee4; }
+  .msg { color:#8fd18f; } .err { color:#ff6b6b; }
+  #legend, #help { color:#7f8a96; margin-top:10px; }
+  #busy { position:fixed; top:10px; right:14px; background:#3a2a10; color:#ffb54a; padding:0 8px; display:none; }
+  body.busy { cursor:progress; } body.busy #busy { display:block; }
+</style>
+</head>
+<body>
+<pre class="title">SQUARE TRACKER  ::  square-wave staccato library  ::  48 kHz</pre>
+<pre id="busy"></pre>
+<pre id="screen" tabindex="0"></pre>
+<pre id="legend"></pre>
+<pre id="help">KEYS  arrows move . SPACE select/deselect . while selected: LEFT/RIGHT field (instrument . note . length), UP/DOWN change
+      SHIFT+UP/DOWN = octave (note) / 10 BPM / 1 vol . DEL clear . O note OFF . ENTER play/stop (loops), or click on the song bar/track headers . M mute track
+      TAB/SHIFT+TAB next/prev bar start . PGUP/PGDN bar . HOME/END . CTRL+Z/Y undo/redo . CTRL+C/V copy/paste . ESC or tap SHIFT deselect
+MOUSE click a note to select it, then wheel changes it (note, or the field you clicked; SHIFT = octave) . unselected: wheel moves rows . click a track's T#/ON to mute, its number to set volume
+      drag across cells to select many: starts on instrument, LEFT/RIGHT field, UP/DOWN (or wheel) changes every note in the box, DEL clears them
+      drag inside a selected box to move it . CTRL+C/V copy/paste the box (pastes at the selection or cursor)
+CELL  G1-4 = note G1, length step 4: 0-8 = the instrument's ladder (0 = 8 ms), H = held until the track's next note or OFF.
+      Colour = instrument. Notes C-2..G8, Logic naming (C3 = middle C).
+FILE  [LOAD] opens a .json project or a .mid file (chords split across as many tracks as needed) . [+TRK]/[-TRK] add a track / remove the cursor's</pre>
+<input type="file" id="file" accept=".json,.mid,.midi,application/json,audio/midi,audio/x-midi" hidden>
+<script>
+// ===== core: synth, song render, gapless MP3 tag, zip =====
+const SR = 48000;
+const INSTRUMENTS = [
+  { name: 'footsteps',       kind: 3, layered: false, color: '#6fd3ff' },
+  { name: 'percussive bass', kind: 3, layered: true,  color: '#4f8dff' },
+  { name: 'dark footsteps',  kind: 7, layered: false, color: '#c79bff' },
+  { name: 'knock',           kind: 7, layered: true,  color: '#ff79d6' },
+  { name: 'bounce',          kind: 8, layered: false, color: '#8dff6a' },
+  { name: 'bounce 2',        kind: 8, layered: true,  color: '#e9ff52' },
+  { name: 'tick',            kind: 9, layered: false, color: '#ffb54a' },
+  { name: 'halted',          kind: 9, layered: true,  color: '#ff6060' },
+];
+const LADDER_MAX = { 3: 0.117, 7: 0.144, 8: 0.156, 9: 0.063 };
+const LADDER_MIN = 0.030;
+function ladder(kind) {
+  const a = LADDER_MIN, b = LADDER_MAX[kind], out = [];
+  for (let i = 0; i < 8; i++) out.push(a * Math.pow(b / a, i / 7));
+  return out;
+}
+function hz(m) { return 440 * Math.pow(2, (m - 69) / 12); }
+// Length steps 0-8: 3-8 are ladder entries 3-8; 0-2 spread geometrically from SHORTEST_SEC up
+// to step 3, since the bottom of the 30 ms ladder bunches up. HELD = sounds until the track's
+// next note or OFF cell.
+const SHORTEST_SEC = 0.008;
+const HELD = 9;
+function stepSec(kind, l) {
+  const top = ladder(kind)[2];
+  return l >= 3 ? ladder(kind)[l - 1] : SHORTEST_SEC * Math.pow(top / SHORTEST_SEC, l / 3);
+}
+// Cells are null, a note {i, m, l}, or a note-off {off: 1}.
+function isNote(c) { return !!c && !c.off; }
+
+// Band-limited pulse: the sum of harmonics 1..top (Fourier series of a pulse of the given
+// width) depends only on phase, so one cycle is built per harmonic count and width with an
+// inverse FFT, cached, and read with linear interpolation. At least 32 table samples per cycle of
+// the top harmonic keep the interpolation error below audibility. Each note is normalized to its own peak.
+const _pulseTables = new Map();
+function pulseTable(top, width) {
+  const key = top + ':' + width;
+  let t = _pulseTables.get(key);
+  if (t) return t;
+  let size = 4096; while (size < top * 32 && size < 65536) size *= 2;
+  const re = new Float64Array(size), im = new Float64Array(size);
+  for (let k = 1; k <= top && k < size / 2; k++) {
+    const a = (2 / (k * Math.PI)) * Math.sin(k * Math.PI * width);
+    re[k] = Math.abs(a) > 1e-6 ? a : 0;
+  }
+  inverseFft(re, im);
+  t = new Float32Array(size + 1); // one guard sample so interpolation never wraps
+  for (let i = 0; i < size; i++) t[i] = re[i];
+  t[size] = t[0];
+  _pulseTables.set(key, t);
+  return t;
+}
+// In-place radix-2 inverse DFT without 1/N scaling: x[n] = sum_k X[k] e^(+2 pi i k n / N).
+function inverseFft(re, im) {
+  const n = re.length;
+  for (let i = 1, j = 0; i < n; i++) {
+    let bit = n >> 1;
+    for (; j & bit; bit >>= 1) j ^= bit;
+    j ^= bit;
+    if (i < j) { let x = re[i]; re[i] = re[j]; re[j] = x; x = im[i]; im[i] = im[j]; im[j] = x; }
+  }
+  for (let len = 2; len <= n; len <<= 1) {
+    const ang = 2 * Math.PI / len, wr = Math.cos(ang), wi = Math.sin(ang), half = len >> 1;
+    for (let i = 0; i < n; i += len) {
+      let cr = 1, ci = 0;
+      for (let k = 0; k < half; k++) {
+        const a = i + k, b = a + half;
+        const xr = re[b] * cr - im[b] * ci, xi = re[b] * ci + im[b] * cr;
+        re[b] = re[a] - xr; im[b] = im[a] - xi; re[a] += xr; im[a] += xi;
+        const nr = cr * wr - ci * wi; ci = cr * wi + ci * wr; cr = nr;
+      }
+    }
+  }
+}
+function square(f, n, width = 0.5, sweep = null) {
+  const out = new Float64Array(n);
+  const fmax = sweep ? Math.max(f, sweep[0]) : f;
+  const table = pulseTable(Math.floor((SR / 2) / fmax), width), size = table.length - 1;
+  let ph = 0, peak = 0; // phase in cycles
+  for (let i = 0; i < n; i++) {
+    const fi = sweep ? f + (sweep[0] - f) * Math.exp(-(i / SR) / sweep[1]) : f;
+    ph += fi / SR; ph -= Math.floor(ph);
+    const x = ph * size, j = x | 0, fr = x - j;
+    const s = table[j] + (table[j + 1] - table[j]) * fr;
+    out[i] = s;
+    const a = Math.abs(s); if (a > peak) peak = a;
+  }
+  const g = 1 / (peak + 1e-9);
+  for (let i = 0; i < n; i++) out[i] *= g;
+  return out;
+}
+
+function gate(n, L, attack = 0.002, release = 0.008, decay = null) {
+  const e = new Float64Array(n);
+  const Ls = Math.min(n, Math.floor(L * SR));
+  const a = Math.floor(attack * SR), r = Math.floor(release * SR);
+  for (let i = 0; i < Ls; i++) {
+    let v = 1;
+    if (decay) v *= Math.exp(-(i / SR) / decay);
+    if (i < a) v *= i / (a - 1 || 1);
+    if (i >= Ls - r) v *= (Ls - 1 - i) / (r - 1 || 1);
+    e[i] = v;
+  }
+  return e;
+}
+
+function note(kind, m, L) {
+  const n = Math.max(1, Math.floor(L * SR));
+  const f = hz(m);
+  const rel = Math.min(0.03, Math.max(0.004, L * 0.15));
+  let x;
+  if (kind === 3) {
+    x = square(f, n, 0.25); const e = gate(n, L, 0.002, rel);
+    for (let i = 0; i < n; i++) x[i] *= e[i];
+  } else if (kind === 7) {
+    const a = square(f, n), b = square(hz(m - 12), n); x = new Float64Array(n); let p = 0;
+    for (let i = 0; i < n; i++) { x[i] = 0.6 * a[i] + 0.6 * b[i]; p = Math.max(p, Math.abs(x[i])); }
+    const e = gate(n, L, 0.002, rel);
+    for (let i = 0; i < n; i++) x[i] = x[i] / p * e[i];
+  } else if (kind === 8) {
+    x = square(f, n, 0.5, [f * 4, 0.012]); const e = gate(n, L, 0.002, rel, L * 0.55);
+    for (let i = 0; i < n; i++) x[i] *= e[i];
+  } else {
+    x = square(f, n); const e = gate(n, L, 0.002, rel);
+    for (let i = 0; i < n; i++) x[i] *= e[i];
+  }
+  for (let i = 0; i < n; i++) x[i] *= 0.85;
+  return x;
+}
+
+const _hitCache = new Map();
+// Notes below C0 play at least step 3: too short a hit barely sounds.
+function minStep(m) { return m < 24 ? 3 : 0; }
+function hitBuffer(inst, m, step) { return voiceBuffer(inst, m, stepSec(INSTRUMENTS[inst - 1].kind, Math.max(step, minStep(m)))); }
+// One hit of instrument `inst` lasting L seconds, cached per instrument/note/length.
+function voiceBuffer(inst, m, L) {
+  const key = inst + ':' + m + ':' + L;
+  let b = _hitCache.get(key);
+  if (b) return b;
+  const I = INSTRUMENTS[inst - 1];
+  let x = note(I.kind, m, L);
+  if (I.layered) {
+    const y = note(I.kind, m - 12, L); let p = 0;
+    for (let i = 0; i < x.length; i++) { x[i] += y[i]; p = Math.max(p, Math.abs(x[i])); }
+    for (let i = 0; i < x.length; i++) x[i] = x[i] / (p + 1e-9) * 0.85;
+  }
+  b = Float32Array.from(x);
+  _hitCache.set(key, b);
+  return b;
+}
+
+// ---- song ----
+const ROWS_PER_BAR = 32; // 32nd notes in 4/4
+function songSamples(bpm, bars) { return Math.round(bars * 4 * 60 / bpm * SR); }
+function validLength(song) {
+  return Number.isInteger(song.bars) && song.bars >= 1 && song.bars <= 256 &&
+         Number.isInteger(song.bpm) && song.bpm >= 20 && song.bpm <= 400;
+}
+
+// Renders the song to a mono Float32Array of exactly songSamples() length.
+// Tracks are monophonic (a new note or an OFF cell cuts the previous note, 2 ms fade);
+// a HELD note is rendered exactly as long as the gap to the next one.
+// tail: 'wrap' folds sound past the end back to the start (loop-safe); 'cut' fades it out.
+function renderSong(song, opts = {}) {
+  const total = songSamples(song.bpm, song.bars);
+  const rows = song.bars * ROWS_PER_BAR;
+  const rowSec = 60 / song.bpm / 8;
+  const mix = new Float32Array(total);
+  const fade = Math.floor(0.002 * SR);
+  const solo = song.tracks.some(t => t.solo);
+  for (const t of song.tracks) {
+    if (t.mute || (solo && !t.solo)) continue;
+    const g = t.vol / 100;
+    const starts = [];
+    for (let r = 0; r < rows; r++) if (t.cells[r]) starts.push(r);
+    starts.forEach((r, idx) => {
+      const c = t.cells[r];
+      if (!isNote(c)) return;
+      const s0 = Math.round(r * rowSec * SR);
+      let limit;
+      if (idx + 1 < starts.length) limit = Math.round(starts[idx + 1] * rowSec * SR) - s0;
+      else if (song.tail === 'wrap' && starts.length) limit = total + Math.round(starts[0] * rowSec * SR) - s0;
+      else limit = Infinity;
+      const b = c.l === HELD ? voiceBuffer(c.i, c.m, (limit === Infinity ? total - s0 : limit) / SR) : hitBuffer(c.i, c.m, c.l);
+      const n = Math.min(b.length, limit);
+      for (let k = 0; k < n; k++) {
+        let v = b[k] * g;
+        if (n < b.length && k >= n - fade) v *= (n - 1 - k) / fade;
+        let idxS = s0 + k;
+        if (idxS >= total) {
+          if (song.tail === 'wrap') idxS -= total;
+          else { const over = idxS - total; if (over >= 0) break; }
+        }
+        mix[idxS] += v;
+      }
+    });
+  }
+  if (song.tail !== 'wrap') {
+    // nothing past the end; short fade on the final 2 ms to avoid a click
+    for (let k = 0; k < fade; k++) mix[total - 1 - k] *= k / fade;
+  }
+  let peak = 0;
+  for (let i = 0; i < total; i++) peak = Math.max(peak, Math.abs(mix[i]));
+  let leveled = false;
+  if (peak > 0.99) { const s = 0.99 / peak; for (let i = 0; i < total; i++) mix[i] *= s; leveled = true; }
+  return { pcm: mix, total, peak, leveled };
+}
+
+// ---- CRCs ----
+function crc16arc(bytes, start = 0, end = bytes.length) {
+  let crc = 0;
+  for (let i = start; i < end; i++) {
+    crc ^= bytes[i];
+    for (let b = 0; b < 8; b++) crc = (crc & 1) ? (crc >>> 1) ^ 0xA001 : crc >>> 1;
+  }
+  return crc & 0xFFFF;
+}
+const _crc32t = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(bytes) { let c = 0xFFFFFFFF; for (let i = 0; i < bytes.length; i++) c = _crc32t[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+
+// ---- WAV: 16-bit mono PCM at SR ----
+function wavBytes(pcm) {
+  const out = new Uint8Array(44 + pcm.length * 2), v = new DataView(out.buffer);
+  const tag = (o, s) => { for (let i = 0; i < 4; i++) out[o + i] = s.charCodeAt(i); };
+  tag(0, 'RIFF'); v.setUint32(4, 36 + pcm.length * 2, true); tag(8, 'WAVE');
+  tag(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, SR, true); v.setUint32(28, SR * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  tag(36, 'data'); v.setUint32(40, pcm.length * 2, true);
+  for (let i = 0; i < pcm.length; i++) v.setInt16(44 + i * 2, pcm[i], true);
+  return out;
+}
+
+// ---- MP3 frame parsing + gapless LAME "Info" tag ----
+// 320 kbps keeps the top end (LAME low-passes far lower at 160) that the bright pulses depend on.
+const MP3_KBPS = 320;
+const BR1 = [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320];
+const SR1 = [44100, 48000, 32000];
+function frameInfo(b, o) {
+  if (b[o] !== 0xFF || (b[o + 1] & 0xFE) !== 0xFA) return null; // MPEG-1 Layer III
+  const bri = b[o + 2] >> 4, sri = (b[o + 2] >> 2) & 3, pad = (b[o + 2] >> 1) & 1;
+  if (bri === 0 || bri === 15 || sri === 3) return null;
+  const size = Math.floor(144 * BR1[bri] * 1000 / SR1[sri]) + pad;
+  const mono = (b[o + 3] >> 6) === 3;
+  return { size, mono, sr: SR1[sri], kbps: BR1[bri] };
+}
+function splitFrames(b) {
+  const frames = []; let o = 0;
+  while (o + 4 <= b.length) {
+    const f = frameInfo(b, o);
+    if (!f) { o++; continue; }
+    frames.push({ o, ...f }); o += f.size;
+  }
+  return frames;
+}
+function isTagFrame(b, fr) {
+  const off = fr.o + 4 + (fr.mono ? 17 : 32);
+  const s = String.fromCharCode(b[off], b[off + 1], b[off + 2], b[off + 3]);
+  return s === 'Info' || s === 'Xing';
+}
+// raw: concatenated MP3 frames (no tag). samples: true PCM length. encDelay: encoder delay in samples.
+function addGaplessTag(raw, samples, encDelay = 576) {
+  let frames = splitFrames(raw);
+  if (frames.length && isTagFrame(raw, frames[0])) frames = frames.slice(1);
+  if (!frames.length) throw new Error('no MP3 frames');
+  const audio = raw.subarray(frames[0].o, frames[frames.length - 1].o + frames[frames.length - 1].size);
+  const F = frames.length;
+  const padding = F * 1152 - encDelay - samples;
+  if (padding < 0 || padding > 4095 || encDelay > 4095) throw new Error('padding out of range: ' + padding);
+  const h = raw.subarray(frames[0].o, frames[0].o + 4);
+  const hdr = [h[0], h[1], h[2] & ~0x02, h[3]];
+  const fi = frameInfo(new Uint8Array(hdr), 0);
+  const tag = new Uint8Array(fi.size);
+  tag.set(hdr, 0);
+  let p = 4 + (fi.mono ? 17 : 32);
+  const w32 = v => { tag[p++] = v >>> 24 & 255; tag[p++] = v >>> 16 & 255; tag[p++] = v >>> 8 & 255; tag[p++] = v & 255; };
+  const totalBytes = fi.size + audio.length;
+  tag.set([73, 110, 102, 111], p); p += 4;          // "Info"
+  w32(0x0F); w32(F); w32(totalBytes);
+  for (let i = 0; i < 100; i++) tag[p++] = Math.floor(i * 256 / 100);
+  w32(0);                                            // quality
+  const ls = p;                                      // LAME extension
+  'LAME3.100'.split('').forEach(c => tag[p++] = c.charCodeAt(0));
+  tag[p++] = 0x01;                                   // rev 0, CBR
+  tag[p++] = 0;                                      // lowpass
+  p += 4 + 2 + 2;                                    // peak, radio, audiophile
+  tag[p++] = 0;                                      // flags/ATH
+  tag[p++] = Math.min(255, fi.kbps);                 // bitrate
+  tag[p++] = encDelay >> 4;
+  tag[p++] = ((encDelay & 15) << 4) | (padding >> 8);
+  tag[p++] = padding & 255;
+  tag[p++] = 0; tag[p++] = 0; p += 2;                // misc, mp3gain, preset
+  w32(totalBytes);                                   // music length
+  const mcrc = crc16arc(audio);
+  tag[p++] = mcrc >> 8; tag[p++] = mcrc & 255;
+  if (p - ls !== 34) throw new Error('lame tag layout');
+  const tcrc = crc16arc(tag, 0, p);
+  tag[p++] = tcrc >> 8; tag[p++] = tcrc & 255;
+  const out = new Uint8Array(totalBytes);
+  out.set(tag, 0); out.set(audio, fi.size);
+  return { mp3: out, frames: F, padding, encDelay };
+}
+
+// ---- minimal ZIP (stored) ----
+function makeZip(files) { // [{name, data:Uint8Array}]
+  const enc = new TextEncoder(); const parts = []; const central = []; let off = 0;
+  const u16 = v => [v & 255, v >> 8 & 255], u32 = v => [v & 255, v >> 8 & 255, v >> 16 & 255, v >>> 24 & 255];
+  for (const f of files) {
+    const nm = enc.encode(f.name), c = crc32(f.data), sz = f.data.length;
+    const lh = new Uint8Array([...u32(0x04034b50), ...u16(20), ...u16(0), ...u16(0), ...u16(0), ...u16(0x21), ...u32(c), ...u32(sz), ...u32(sz), ...u16(nm.length), ...u16(0)]);
+    parts.push(lh, nm, f.data);
+    central.push(new Uint8Array([...u32(0x02014b50), ...u16(20), ...u16(20), ...u16(0), ...u16(0), ...u16(0), ...u16(0x21), ...u32(c), ...u32(sz), ...u32(sz), ...u16(nm.length), ...u16(0), ...u16(0), ...u16(0), ...u16(0), ...u32(0), ...u32(off)]), nm);
+    off += lh.length + nm.length + sz;
+  }
+  const cdSize = central.reduce((a, b) => a + b.length, 0);
+  const end = new Uint8Array([...u32(0x06054b50), ...u16(0), ...u16(0), ...u16(files.length), ...u16(files.length), ...u32(cdSize), ...u32(off), ...u16(0)]);
+  const all = [...parts, ...central, end]; const len = all.reduce((a, b) => a + b.length, 0);
+  const out = new Uint8Array(len); let o = 0; for (const a of all) { out.set(a, o); o += a.length; }
+  return out;
+}
+
+// ---- notes as text ----
+const NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+// ---- MIDI import ----
+// Reads a Standard MIDI File (format 0 or 1) into notes {start, dur, m} in ticks, plus tempo and meter.
+function parseMidi(b) {
+  let p = 0;
+  const u32 = () => ((b[p++] << 24) | (b[p++] << 16) | (b[p++] << 8) | b[p++]) >>> 0;
+  const u16 = () => (b[p++] << 8) | b[p++];
+  const tag = () => String.fromCharCode(b[p++], b[p++], b[p++], b[p++]);
+  const vlq = () => { let v = 0, c; do { c = b[p++]; v = v * 128 + (c & 127); } while (c & 128); return v; };
+  if (tag() !== 'MThd') throw new Error('not a MIDI file');
+  const hl = u32(); u16(); const ntrk = u16(), ppq = u16(); p = 8 + hl;
+  if (ppq & 0x8000) throw new Error('SMPTE-timed MIDI is not supported');
+  const notes = [], tempos = [], sigs = [];
+  for (let t = 0; t < ntrk && p < b.length; t++) {
+    if (tag() !== 'MTrk') throw new Error('corrupt MIDI track');
+    const len = u32(), end = p + len;
+    let tick = 0, run = 0;
+    const on = new Map(); // channel*128+key -> note-on
+    const close = (key, tickNow) => { const s = on.get(key); if (s) { notes.push({ start: s.start, dur: tickNow - s.start, m: s.m }); on.delete(key); } };
+    while (p < end) {
+      tick += vlq();
+      let st = b[p];
+      if (st & 0x80) p++; else st = run;
+      if (st === 0xFF) {
+        const type = b[p++], l = vlq();
+        if (type === 0x51) tempos.push({ tick, bpm: 60e6 / ((b[p] << 16) | (b[p + 1] << 8) | b[p + 2]) });
+        else if (type === 0x58) sigs.push(b[p] + '/' + (1 << b[p + 1]));
+        p += l;
+      } else if (st === 0xF0 || st === 0xF7) p += vlq();
+      else {
+        run = st;
+        const hi = st & 0xF0;
+        if (hi === 0xC0 || hi === 0xD0) { p += 1; continue; }
+        const m = b[p], v = b[p + 1], key = (st & 15) * 128 + m; p += 2;
+        if (hi === 0x90 && v > 0) { close(key, tick); on.set(key, { start: tick, m }); }
+        else if (hi === 0x80 || hi === 0x90) close(key, tick);
+      }
+    }
+    for (const key of [...on.keys()]) close(key, tick);
+    p = end;
+  }
+  tempos.sort((a, b) => a.tick - b.tick);
+  return { ppq, notes, tempos, sigs };
+}
+
+// Converts parsed MIDI to a song: 32nd-note grid, leading empty bars trimmed, chords split into
+// as many monophonic tracks as needed. A note keeps to the track whose last pitch is nearest and that is
+// free (its previous note has ended) so lines stay in lanes. Each note gets whichever length is closest to
+// its real duration: one of the instrument's steps (0 = 8 ms, so 0 ms artifacts land there) or HELD with
+// an OFF cell where it ends.
+function midiToSong(mid, inst = 1, tail = 'wrap') {
+  if (!mid.notes.length) throw new Error('no notes in MIDI file');
+  const warn = [];
+  const realBpm = mid.tempos.length ? mid.tempos[0].bpm : 120;
+  const bpm = Math.max(20, Math.min(400, Math.round(realBpm)));
+  if (Math.abs(bpm - realBpm) > 0.01) warn.push(`tempo ${realBpm.toFixed(3)} rounded to ${bpm}`);
+  if (new Set(mid.tempos.map(t => t.bpm.toFixed(3))).size > 1) warn.push('tempo changes ignored');
+  if (mid.sigs.some(s => s !== '4/4')) warn.push(`meter ${[...new Set(mid.sigs)].join(', ')} read as 4/4`);
+  const rowT = mid.ppq / 8, barT = mid.ppq * 4, msPerTick = 60000 / realBpm / mid.ppq, rowMs = 60000 / bpm / 8;
+  const trim = Math.floor(Math.min(...mid.notes.map(n => n.start)) / barT);
+  const off = trim * barT;
+  // same key struck twice at one tick (stacked regions): keep the longer
+  const uniq = new Map();
+  for (const n of mid.notes) { const k = n.start + ':' + n.m; const q = uniq.get(k); if (!q || n.dur > q.dur) uniq.set(k, n); }
+  const ns = [...uniq.values()].map(n => ({
+    m: n.m, ms: n.dur * msPerTick,
+    row: Math.round((n.start - off) / rowT), end: Math.round((n.start + n.dur - off) / rowT),
+  })).sort((a, b) => a.row - b.row || a.m - b.m);
+  const bars = Math.max(1, Math.min(256, Math.ceil(Math.max(...ns.map(n => Math.max(n.row + 1, n.end))) / 32)));
+  const nRows = bars * 32;
+  const steps = [0, 1, 2, 3, 4, 5, 6, 7, 8].map(l => ({ l, ms: stepSec(INSTRUMENTS[inst - 1].kind, l) * 1000 }));
+  const lanes = []; // {cells, end, last, m}
+  let held = 0, short = 0, dropped = 0;
+  // each chord is assigned as a whole: closest (note, free lane) pairs first, leftovers open new lanes
+  const place = [];
+  for (let k = 0; k < ns.length;) {
+    const row = ns[k].row, chord = [];
+    while (k < ns.length && ns[k].row === row) chord.push(ns[k++]);
+    if (row >= nRows) { dropped += chord.length; continue; }
+    const free = lanes.filter(L => L.end <= row && L.last < row);
+    const pairs = [];
+    chord.forEach(n => free.forEach(L => pairs.push([Math.abs(L.m - n.m), n, L])));
+    pairs.sort((a, b) => a[0] - b[0]);
+    const got = new Map(), used = new Set();
+    for (const [, n, L] of pairs) if (!got.has(n) && !used.has(L)) { got.set(n, L); used.add(L); }
+    for (const n of chord) {
+      let L = got.get(n);
+      if (!L) { L = { cells: new Array(nRows).fill(null), end: 0, last: -1, m: n.m }; lanes.push(L); }
+      place.push([n, L]);
+      L.end = Math.max(n.row, n.end); L.last = n.row; L.m = n.m;
+    }
+  }
+  for (const [n, lane] of place) {
+    let pick = steps.reduce((a, s) => Math.abs(s.ms - n.ms) < Math.abs(a.ms - n.ms) ? s : a);
+    if (n.end > n.row && Math.abs((n.end - n.row) * rowMs - n.ms) < Math.abs(pick.ms - n.ms)) pick = { l: HELD };
+    lane.cells[n.row] = { i: inst, m: n.m, l: pick.l };
+    if (pick.l === HELD) { held++; if (n.end < nRows && !lane.cells[n.end]) lane.cells[n.end] = { off: 1 }; }
+    if (pick.l === 0) short++;
+  }
+  if (dropped) warn.push(`${dropped} notes past bar 256 dropped`);
+  const song = { bpm, bars, tail, tracks: lanes.map(L => ({ mute: false, vol: 100, cells: L.cells })) };
+  const msg = `${ns.length - dropped} notes -> ${lanes.length} tracks, ${bars} bars @ ${bpm} BPM` +
+    (trim ? ` (${trim} empty bars trimmed)` : '') + `; ${held} held, ${short} at 8 ms` + (warn.length ? '. ' + warn.join('; ') : '');
+  return { song, msg };
+}
+
+// Logic Pro naming: middle C (MIDI 60) is C3, so MIDI 0 is C-2.
+function noteName(m) { return NAMES[m % 12] + (Math.floor(m / 12) - 2); }
+function lenText(l) { return l === HELD ? 'H' : String(l); }
+function cellText(c) { return !c ? '  -  ' : c.off ? 'OFF  ' : (noteName(c.m) + '-' + lenText(c.l)).padEnd(5, ' '); }
+
+if (typeof module !== 'undefined' && module.exports) module.exports = { SR, INSTRUMENTS, HELD, ladder, stepSec, isNote, note, hitBuffer, voiceBuffer, renderSong, parseMidi, midiToSong, songSamples, wavBytes, addGaplessTag, makeZip, crc32, crc16arc, splitFrames, noteName, cellText, validLength };
+
+</script>
+<script>
+// ===== UI: ASCII tracker =====
+(function () {
+  const $ = id => document.getElementById(id);
+  const MIN_NOTE = 0, MAX_NOTE = 127; // full MIDI range, C-2..G8 in Logic naming
+  const SONG_ITEMS = ['name', 'bpm', 'bars', 'tail', 'follow', 'play', 'export', 'wav', 'save', 'load', 'addtrk', 'deltrk'];
+
+  function emptyTrack(rows) { return { mute: false, vol: 100, cells: new Array(rows).fill(null) }; }
+  function demoSong() {
+    const s = { name: 'untitled', bpm: 94, bars: 4, tail: 'wrap', tracks: [] };
+    for (let t = 0; t < 4; t++) s.tracks.push(emptyTrack(128));
+    // Iteration 5b rhythm on track 1 (percussive bass): 16ths, long hits 1,7,8,9
+    const pitch = [0, 0, 0, 0, 0, 0, 12, 12, 0, 0, 0, 0, 0, 0, -2, -2];
+    const long = new Set([1, 7, 8, 9]);
+    for (let b = 0; b < 4; b++) for (let k = 0; k < 16; k++)
+      s.tracks[0].cells[b * 32 + k * 2] = { i: 2, m: 24 + pitch[k], l: long.has(k + 1) ? 6 : 1 };
+    return s;
+  }
+
+  let song = load() || demoSong();
+  let cur = { row: 0, col: 0, field: 1 };   // row: -2 song bar, -1 track header, >=0 pattern
+  let songIdx = 1;
+  let editing = false;
+  let sel = null;   // multi-cell box {r0, r1, c0, c1}; live only while editing (see multi())
+  let drag = null;  // pattern press in progress: anchor r/c/f + current r1/c1, resolved on mouseup
+  let view = 0;     // pattern window center while dragging (cur.row otherwise)
+  let lastNote = { i: 2, m: 24, l: 4 };
+  let clip = null;
+  const undo = [], redo = [];
+  let follow = true;
+  let msg = 'Ready. Space selects, arrows edit, Enter plays.';
+
+  function rows() { return song.bars * 32; }
+  function snapshot() { undo.push(JSON.stringify(song)); if (undo.length > 300) undo.shift(); redo.length = 0; }
+  function changed() { save(); if (playing) scheduleRestart(); render(); }
+
+  // ---------- busy badge ----------
+  // Slow work (song render, file load, export) runs synchronously, so the badge is shown and
+  // allowed to paint first; it stays up until every pending job has finished.
+  let busyCount = 0;
+  function busyStart(label) { busyCount++; $('busy').textContent = label + '...'; document.body.classList.add('busy'); }
+  function busyEnd() { if (--busyCount <= 0) { busyCount = 0; document.body.classList.remove('busy'); } }
+  const painted = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+  async function busy(label, fn) {
+    busyStart(label);
+    try { await painted(); return await fn(); } finally { busyEnd(); }
+  }
+  // Edits during playback re-render the song once they pause, not once per keypress or wheel tick.
+  let restartTimer = null;
+  function scheduleRestart() {
+    if (restartTimer) clearTimeout(restartTimer); else busyStart('Updating playback');
+    restartTimer = setTimeout(async () => {
+      restartTimer = null;
+      try { if (playing) { await painted(); restartPlayback(); } } finally { busyEnd(); }
+    }, 150);
+  }
+  function save() { try { localStorage.setItem('sqtracker.song', JSON.stringify(song)); } catch (e) {} }
+  function load() {
+    try { const s = JSON.parse(localStorage.getItem('sqtracker.song')); return normalize(s); } catch (e) { return null; }
+  }
+  function normalize(s) {
+    if (!s || !Array.isArray(s.tracks)) return null;
+    s.name = cleanName(s.name);
+    s.bpm = Math.round(+s.bpm || 94); s.bars = Math.round(+s.bars || 4);
+    s.tail = s.tail === 'cut' ? 'cut' : 'wrap';
+    const n = s.bars * 32;
+    s.tracks = s.tracks.map(t => {
+      const cells = new Array(n).fill(null);
+      (t.cells || []).slice(0, n).forEach((c, r) => {
+        if (c && c.off) cells[r] = { off: 1 };
+        else if (c && c.i >= 1 && c.i <= 8 && c.l >= 0 && c.l <= HELD && c.m >= MIN_NOTE && c.m <= MAX_NOTE) cells[r] = { i: c.i | 0, m: c.m | 0, l: c.l | 0 };
+      });
+      return { mute: !!t.mute, vol: Math.max(0, Math.min(100, Math.round(t.vol ?? 100))), cells };
+    });
+    if (!s.tracks.length) s.tracks.push(emptyTrack(n));
+    return s;
+  }
+  function cleanName(n) { return String(n ?? '').replace(/[\x00-\x1f]/g, '').trim().slice(0, 40) || 'untitled'; }
+  function resizeBars(nb) {
+    nb = Math.max(1, Math.min(256, nb));
+    song.bars = nb; const n = rows();
+    song.tracks.forEach(t => { t.cells = t.cells.slice(0, n); while (t.cells.length < n) t.cells.push(null); });
+    cur.row = Math.min(cur.row, n - 1);
+  }
+
+  // ---------- audio ----------
+  let ctx = null, srcNode = null, playing = false, playStart = 0, playDur = 0;
+  function audio() {
+    if (!ctx) { try { ctx = new AudioContext({ sampleRate: SR }); } catch (e) { ctx = new AudioContext(); } }
+    if (ctx.state === 'suspended') ctx.resume();
+    return ctx;
+  }
+  function toBuffer(pcm) { const b = audio().createBuffer(1, pcm.length, SR); b.copyToChannel(pcm, 0); return b; }
+  function preview(c, t) {
+    if (!isNote(c)) return;
+    const a = audio(); const src = a.createBufferSource(); const g = a.createGain();
+    g.gain.value = (song.tracks[t] ? song.tracks[t].vol : 100) / 100;
+    src.buffer = toBuffer(c.l === HELD ? voiceBuffer(c.i, c.m, 0.4) : hitBuffer(c.i, c.m, c.l)); src.connect(g); g.connect(a.destination); src.start();
+  }
+  function startPlayback(offset) {
+    const r = renderSong(song);
+    const a = audio(); const buf = toBuffer(r.pcm);
+    srcNode = a.createBufferSource(); srcNode.buffer = buf; srcNode.loop = true; srcNode.connect(a.destination);
+    playDur = buf.duration; offset = ((offset % playDur) + playDur) % playDur;
+    srcNode.start(0, offset); playStart = a.currentTime - offset; playing = true;
+    if (r.leveled) msg = 'Playing (mix peaked over full scale; auto-leveled).';
+    requestAnimationFrame(tick);
+  }
+  function stopPlayback() { if (srcNode) { try { srcNode.stop(); } catch (e) {} srcNode.disconnect(); } srcNode = null; playing = false; render(); }
+  function restartPlayback() { const pos = (audio().currentTime - playStart); stopPlayback(); startPlayback(pos); }
+  function playRow() { if (!playing) return -1; const pos = (audio().currentTime - playStart) % playDur; return Math.floor(pos / (60 / song.bpm / 8)); }
+  function togglePlay() {
+    if (playing) { stopPlayback(); msg = 'Stopped.'; }
+    else {
+      const start = cur.row > 0 ? cur.row * 60 / song.bpm / 8 : 0;
+      return busy('Rendering', () => { if (playing) return; startPlayback(start); msg = 'Playing (loops). Enter stops.'; render(); });
+    }
+    render();
+  }
+  function tick() { if (!playing) return; if (follow && (!editing || multi())) { const pr = playRow(); if (pr >= 0) cur.row = pr; } render(); requestAnimationFrame(tick); }
+
+  // ---------- export ----------
+  let downloadsP = null;
+  if (window.claude && typeof window.claude.use === 'function') downloadsP = window.claude.use('downloads').catch(() => null);
+  function loadScript(src) { return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); }); }
+  async function ensureLame() {
+    if (window.lamejs) return;
+    const urls = ['https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js', 'https://unpkg.com/lamejs@1.2.1/lame.min.js'];
+    for (const u of urls) { try { await loadScript(u); if (window.lamejs) return; } catch (e) {} }
+    throw new Error('could not load the MP3 encoder (lamejs)');
+  }
+  // Project name made safe for a file name; audio exports also carry tempo and length.
+  function fileName() { return song.name.replace(/[\\/:*?"<>|]+/g, '-'); }
+  function baseName() { return `${fileName()}_${song.bpm}bpm_${song.bars}bars`; }
+  async function offerFile(name, bytes, mime) {
+    if (downloadsP) {
+      const dl = await downloadsP;
+      if (!dl) throw new Error('downloads are unavailable in this view');
+      await dl.save({ filename: name, data: new Blob([bytes]) });
+      return 'offered';
+    }
+    const url = URL.createObjectURL(new Blob([bytes], { type: mime }));
+    const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    return 'downloaded';
+  }
+  // Sample count of an exportable song, or null after reporting why it can't be exported.
+  function exportLength() {
+    if (!validLength(song)) { msg = 'EXPORT BLOCKED: length must be a whole number of bars (1-256) at a whole-number BPM.'; render(); return null; }
+    const N = songSamples(song.bpm, song.bars);
+    const exact = song.bars * 4 * 60 / song.bpm * SR;
+    if (Math.abs(N - exact) > 0.5) { msg = 'EXPORT BLOCKED: length is not an exact bar count.'; render(); return null; }
+    return N;
+  }
+  function pcm16(N) {
+    const r = renderSong(song), pcm = new Int16Array(N);
+    for (let i = 0; i < N; i++) pcm[i] = Math.max(-32768, Math.min(32767, Math.round(r.pcm[i] * 32767)));
+    return pcm;
+  }
+  // Saves the audio file, bundled with the project as a .zip where downloads go through the host.
+  async function offerAudio(ext, data, mime, desc) {
+    const name = baseName();
+    if (downloadsP) {
+      const zip = makeZip([{ name: name + '.' + ext, data }, { name: name + '.json', data: new TextEncoder().encode(JSON.stringify(song)) }]);
+      await offerFile(name + '.zip', zip, 'application/zip');
+      return `Exported ${song.bars} bars @ ${song.bpm} BPM, ${desc}. Saved as .zip (${ext.toUpperCase()} + project).`;
+    }
+    await offerFile(name + '.' + ext, data, mime);
+    return `Exported ${name}.${ext}: ${desc}.`;
+  }
+  async function exportWav() {
+    const N = exportLength(); if (N === null) return;
+    try {
+      msg = 'Exporting: rendering...'; render();
+      await new Promise(r => setTimeout(r, 20));
+      msg = await offerAudio('wav', wavBytes(pcm16(N)), 'audio/wav', `${N} samples (${(N / SR).toFixed(4)} s), 48 kHz 16-bit mono, lossless`);
+    } catch (e) {
+      msg = 'Export failed: ' + (e && (e.message || e.code) || e);
+    }
+    render();
+  }
+  async function exportMp3() {
+    const N = exportLength(); if (N === null) return;
+    try {
+      msg = 'Exporting: loading encoder...'; render();
+      await ensureLame();
+      msg = 'Exporting: rendering + encoding...'; render();
+      await new Promise(r => setTimeout(r, 20));
+      const pcm = pcm16(N);
+      const enc = new lamejs.Mp3Encoder(2, SR, MP3_KBPS); const chunks = [];
+      for (let i = 0; i < N; i += 1152) { const s = pcm.subarray(i, i + 1152); const d = enc.encodeBuffer(s, s); if (d.length) chunks.push(new Uint8Array(d)); }
+      const f = enc.flush(); if (f.length) chunks.push(new Uint8Array(f));
+      const raw = new Uint8Array(chunks.reduce((a, c) => a + c.length, 0)); let o = 0; for (const c of chunks) { raw.set(c, o); o += c.length; }
+      const tagged = addGaplessTag(raw, N, 576);
+      // verify with the browser's own decoder
+      let check = '';
+      try {
+        const dec = await audio().decodeAudioData(tagged.mp3.slice(0).buffer);
+        const got = Math.round(dec.length * SR / dec.sampleRate);
+        const tol = Math.ceil(SR / dec.sampleRate) + 1;
+        check = Math.abs(got - N) <= tol ? ' Browser decode: exact length.' : ` Browser decode: ${got} samples vs ${N} expected (this player may ignore gapless info).`;
+      } catch (e) { check = ''; }
+      msg = await offerAudio('mp3', tagged.mp3, 'audio/mpeg', `${N} samples (${(N / SR).toFixed(4)} s), 48 kHz ${MP3_KBPS} kbps, gapless`) + check;
+    } catch (e) {
+      msg = 'Export failed: ' + (e && (e.message || e.code) || e);
+    }
+    render();
+  }
+  let saveHandle = null; // last file saved to; the next save's picker opens in its folder
+  async function saveProject() {
+    const name = fileName() + '.json', data = new TextEncoder().encode(JSON.stringify(song));
+    try {
+      // Ask where to save when the browser can (Chrome/Edge); otherwise fall back to a download.
+      if (!downloadsP && window.showSaveFilePicker) {
+        const opts = { suggestedName: name, types: [{ description: 'Tracker project', accept: { 'application/json': ['.json'] } }] };
+        if (saveHandle) opts.startIn = saveHandle;
+        const h = await window.showSaveFilePicker(opts);
+        const w = await h.createWritable(); await w.write(data); await w.close();
+        saveHandle = h; msg = `Project saved as ${h.name}.`;
+      } else { await offerFile(name, data, 'application/json'); msg = `Project saved as ${name} (downloaded; this browser can't pick a folder).`; }
+    }
+    catch (e) { msg = e && e.name === 'AbortError' ? 'Save cancelled.' : 'Save failed: ' + (e.message || e.code || e); }
+    render();
+  }
+  $('file').addEventListener('change', async ev => {
+    const f = ev.target.files[0]; if (!f) return;
+    msg = `Loading ${f.name}...`; render();
+    await busy('Loading ' + f.name, async () => {
+      try {
+        const bytes = new Uint8Array(await f.arrayBuffer());
+        let s, note = 'Loaded ' + f.name;
+        if (String.fromCharCode(...bytes.subarray(0, 4)) === 'MThd') {
+          // imported tracks start on the instrument last used
+          const r = midiToSong(parseMidi(bytes), lastNote.i, song.tail);
+          s = normalize(r.song); note = `Imported ${f.name}: ${r.msg}.`;
+        } else s = normalize(JSON.parse(new TextDecoder().decode(bytes)));
+        if (!s) throw new Error('not a tracker project');
+        if (s.name === 'untitled') s.name = cleanName(f.name.replace(/\.[^.]+$/, ''));
+        snapshot(); song = s; cur.row = 0; cur.col = 0; sel = null; editing = false; msg = note; changed();
+      }
+      catch (e) { msg = 'Load failed: ' + e.message; render(); }
+    });
+    ev.target.value = '';
+  });
+
+  // ---------- editing ----------
+  function cell() { return song.tracks[cur.col].cells[cur.row]; }
+  function setCell(c) { song.tracks[cur.col].cells[cur.row] = c; }
+  function multi() { return editing && sel && cur.row >= 0; }
+  function box(d) { return { r0: Math.min(d.r, d.r1), r1: Math.max(d.r, d.r1), c0: Math.min(d.c, d.c1), c1: Math.max(d.c, d.c1) }; }
+  // [col, row] pairs in the selection box, clamped in case undo/resize shrank the song.
+  function selCells() {
+    const out = [];
+    for (let c = sel.c0; c <= Math.min(sel.c1, song.tracks.length - 1); c++)
+      for (let r = sel.r0; r <= Math.min(sel.r1, rows() - 1); r++) out.push([c, r]);
+    return out;
+  }
+  function selNotes() { return selCells().filter(([c, r]) => isNote(song.tracks[c].cells[r])); }
+  function inBox(b, r, c) { return b && r >= b.r0 && r <= b.r1 && c >= b.c0 && c <= b.c1; }
+  function shift(b, o) { return { r0: b.r0 + o.dr, r1: b.r1 + o.dr, c0: b.c0 + o.dc, c1: b.c1 + o.dc }; }
+  // Drag offset of a grabbed selection, clamped so the box stays inside the song.
+  function moveOffset(d) {
+    return {
+      dr: Math.max(-sel.r0, Math.min(rows() - 1 - sel.r1, d.r1 - d.r)),
+      dc: Math.max(-sel.c0, Math.min(song.tracks.length - 1 - sel.c1, d.c1 - d.c)),
+    };
+  }
+  // Blocks are [col][row] copies of a box, empty cells included (moves and pastes overwrite like a spreadsheet).
+  function grab(b) {
+    const out = [];
+    for (let c = b.c0; c <= b.c1; c++) {
+      const col = [];
+      for (let r = b.r0; r <= b.r1; r++) { const x = song.tracks[c] && song.tracks[c].cells[r]; col.push(x ? { ...x } : null); }
+      out.push(col);
+    }
+    return out;
+  }
+  // Writes a block with its top-left at (r0, c0), truncated at the song's edges; returns the box written.
+  function stamp(block, r0, c0) {
+    block.forEach((col, dc) => col.forEach((x, dr) => {
+      const t = song.tracks[c0 + dc];
+      if (t && r0 + dr < rows()) t.cells[r0 + dr] = x ? { ...x } : null;
+    }));
+    return { r0, c0, r1: Math.min(rows() - 1, r0 + block[0].length - 1), c1: Math.min(song.tracks.length - 1, c0 + block.length - 1) };
+  }
+  function bump(c, dir, big) {
+    const n = { ...c };
+    if (cur.field === 0) n.i = ((n.i - 1 + dir + 8) % 8) + 1;
+    else if (cur.field === 1) n.m = Math.max(MIN_NOTE, Math.min(MAX_NOTE, n.m + dir * (big ? 12 : 1)));
+    else n.l = Math.max(0, Math.min(HELD, n.l + dir));
+    return n;
+  }
+  function activateSong(item) {
+    if (item === 'play') return togglePlay();
+    if (item === 'name') {
+      const n = window.prompt('Project name:', song.name);
+      if (n !== null && cleanName(n) !== song.name) { snapshot(); song.name = cleanName(n); msg = `Renamed to ${song.name}.`; changed(); }
+      return;
+    }
+    if (item === 'export') return busy('Exporting MP3', exportMp3);
+    if (item === 'wav') return busy('Exporting WAV', exportWav);
+    if (item === 'save') return saveProject();
+    if (item === 'load') return $('file').click();
+    if (item === 'addtrk') { snapshot(); song.tracks.push(emptyTrack(rows())); msg = 'Track added.'; changed(); return; }
+    if (item === 'deltrk') { if (song.tracks.length > 1) { snapshot(); song.tracks.splice(cur.col, 1); cur.col = Math.min(cur.col, song.tracks.length - 1); msg = 'Track removed (Ctrl+Z to undo).'; changed(); } return; }
+    if (item === 'tail') { snapshot(); song.tail = song.tail === 'wrap' ? 'cut' : 'wrap'; changed(); return; }
+    if (item === 'follow') { follow = !follow; render(); return; }
+    editing = !editing; render(); // bpm, bars
+  }
+  // Track header at the cursor: T#/ON toggles mute, the volume field toggles editing.
+  function clickHeader() {
+    if (cur.field === 0) { snapshot(); song.tracks[cur.col].mute = !song.tracks[cur.col].mute; editing = false; changed(); }
+    else { editing = !editing; render(); }
+  }
+  function adjust(dir, big) {
+    if (cur.row === -2) {
+      const it = SONG_ITEMS[songIdx];
+      if (it === 'bpm') { snapshot(); song.bpm = Math.max(20, Math.min(400, song.bpm + dir * (big ? 10 : 1))); changed(); }
+      else if (it === 'bars') { snapshot(); resizeBars(song.bars + dir * (big ? 4 : 1)); changed(); }
+      return;
+    }
+    if (cur.row === -1) {
+      const t = song.tracks[cur.col]; snapshot();
+      if (cur.field === 0) t.mute = !t.mute; else t.vol = Math.max(0, Math.min(100, t.vol + dir * (big ? 1 : 5)));
+      changed(); return;
+    }
+    const hits = multi() ? selNotes() : isNote(cell()) ? [[cur.col, cur.row]] : [];
+    if (!hits.length) return;
+    snapshot();
+    if (cur.field === 0) {
+      // Instrument steps from the first selected note and is applied to all of them alike.
+      const [fc, fr] = hits[0], i = bump(song.tracks[fc].cells[fr], dir, big).i;
+      hits.forEach(([c, r]) => { song.tracks[c].cells[r] = { ...song.tracks[c].cells[r], i }; });
+    } else hits.forEach(([c, r]) => { song.tracks[c].cells[r] = bump(song.tracks[c].cells[r], dir, big); });
+    const [c0, r0] = hits[0], first = song.tracks[c0].cells[r0];
+    lastNote = { ...first }; preview(first, c0); changed();
+  }
+  function clearSelected() {
+    snapshot();
+    if (multi()) selCells().forEach(([c, r]) => { song.tracks[c].cells[r] = null; });
+    else setCell(null);
+    editing = false; sel = null; changed();
+  }
+  function select() {
+    sel = null;
+    if (cur.row === -2) { const it = SONG_ITEMS[songIdx]; if (it === 'bpm' || it === 'bars') { editing = !editing; render(); } else activateSong(it); return; }
+    if (editing) { editing = false; render(); return; }
+    if (cur.row === -1) { editing = true; cur.field = 1; render(); return; }
+    if (!cell()) { snapshot(); setCell({ ...lastNote }); changed(); }
+    editing = true; cur.field = cur.field ?? 1; preview(cell(), cur.col); render();
+  }
+  // Next bar's first row, or back to this bar's first row (previous bar's if already there).
+  function jumpBar(dir) {
+    const r = Math.max(0, cur.row);
+    const start = Math.floor(r / 32) * 32;
+    let to = dir > 0 ? start + 32 : (r > start || cur.row < 0 ? start : start - 32);
+    if (to >= rows()) to = start; // already in the last bar: stay on its first row
+    cur.row = Math.max(0, to);
+    render();
+  }
+  function move(dr, dc) {
+    if (dc) {
+      if (cur.row === -2) songIdx = Math.max(0, Math.min(SONG_ITEMS.length - 1, songIdx + dc));
+      else cur.col = Math.max(0, Math.min(song.tracks.length - 1, cur.col + dc));
+    }
+    if (dr) cur.row = Math.max(-2, Math.min(rows() - 1, cur.row + dr));
+    if (cur.row === -1 && cur.field > 1) cur.field = 1;
+    render();
+  }
+
+  // A lone SHIFT tap deselects; SHIFT held as a modifier (octave, x10) cancels the tap.
+  let shiftTap = false;
+  document.addEventListener('keyup', ev => {
+    if (ev.key !== 'Shift' || !shiftTap) return;
+    shiftTap = false;
+    if (editing) { editing = false; sel = null; render(); }
+  });
+  document.addEventListener('keydown', ev => {
+    if (ev.target && ev.target.tagName === 'INPUT') return;
+    if (ev.key === 'Shift') { if (!ev.repeat) shiftTap = true; return; }
+    shiftTap = false;
+    const k = ev.key, ctrl = ev.ctrlKey || ev.metaKey;
+    let handled = true;
+    if (ctrl && (k === 'z' || k === 'Z') && !ev.shiftKey) { if (undo.length) { redo.push(JSON.stringify(song)); song = normalize(JSON.parse(undo.pop())); msg = 'Undo.'; changed(); } }
+    else if (ctrl && (k === 'y' || ((k === 'z' || k === 'Z') && ev.shiftKey))) { if (redo.length) { undo.push(JSON.stringify(song)); song = normalize(JSON.parse(redo.pop())); msg = 'Redo.'; changed(); } }
+    else if (ctrl && k === 'c') {
+      if (multi()) { clip = grab(sel); msg = `Copied ${clip.length} track(s) x ${clip[0].length} rows.`; render(); }
+      else if (cur.row >= 0) { clip = grab({ r0: cur.row, r1: cur.row, c0: cur.col, c1: cur.col }); msg = 'Copied.'; render(); }
+    }
+    else if (ctrl && k === 'v') {
+      // Pastes at the selection's top-left (or the cursor); a multi-cell paste becomes the new selection.
+      if (clip && cur.row >= 0) {
+        snapshot();
+        const at = multi() ? sel : { r0: cur.row, c0: cur.col };
+        const b = stamp(clip, at.r0, at.c0);
+        if (clip.length * clip[0].length > 1) { if (!multi()) cur.field = 0; sel = b; editing = true; }
+        msg = 'Pasted.'; changed();
+      }
+    }
+    // Enter on the song bar or a track header acts as a click there; in the pattern it plays/stops.
+    else if (k === 'Enter') {
+      if (cur.row === -2) { sel = null; editing = false; activateSong(SONG_ITEMS[songIdx]); render(); }
+      else if (cur.row === -1) { sel = null; clickHeader(); }
+      else togglePlay();
+    }
+    else if (k === ' ') select();
+    else if (k === 'Escape') { editing = false; sel = null; render(); }
+    else if (k === 'Tab') { editing = false; sel = null; jumpBar(ev.shiftKey ? -1 : 1); }
+    else if ((k === 'o' || k === 'O') && !ctrl && cur.row >= 0 && !multi()) {
+      // Note-off toggle: ends a held (or ringing) note on this track at this row.
+      snapshot(); setCell(cell() && cell().off ? null : { off: 1 }); editing = false; changed();
+    }
+    else if (editing) {
+      if (k === 'ArrowLeft') { cur.field = Math.max(0, cur.field - 1); if (cur.row === -1) cur.field = Math.max(0, cur.field); render(); }
+      else if (k === 'ArrowRight') { cur.field = Math.min(cur.row === -1 ? 1 : 2, cur.field + 1); render(); }
+      else if (k === 'ArrowUp') adjust(+1, ev.shiftKey);
+      else if (k === 'ArrowDown') adjust(-1, ev.shiftKey);
+      else if ((k === 'Delete' || k === 'Backspace') && cur.row >= 0) clearSelected();
+      else handled = false;
+    } else {
+      if (k === 'ArrowUp') move(-1, 0);
+      else if (k === 'ArrowDown') move(1, 0);
+      else if (k === 'ArrowLeft') move(0, -1);
+      else if (k === 'ArrowRight') move(0, 1);
+      else if (k === 'PageUp') move(-32, 0);
+      else if (k === 'PageDown') move(32, 0);
+      else if (k === 'Home') { cur.row = 0; render(); }
+      else if (k === 'End') { cur.row = rows() - 1; render(); }
+      else if ((k === 'Delete' || k === 'Backspace') && cur.row >= 0) { if (cell()) { snapshot(); setCell(null); changed(); } }
+      else if ((k === 'm' || k === 'M') && cur.row >= -1) { snapshot(); song.tracks[cur.col].mute = !song.tracks[cur.col].mute; changed(); }
+      else handled = false;
+    }
+    if (handled) ev.preventDefault();
+  });
+
+  const screen = $('screen');
+  // Wheel never scrolls the page. With a note selected it changes the selected field
+  // (note by default: up = higher); otherwise it moves through rows.
+  let wheelAcc = 0;
+  window.addEventListener('wheel', ev => {
+    ev.preventDefault();
+    shiftTap = false;
+    wheelAcc += ev.deltaMode === 1 ? ev.deltaY * 33 : ev.deltaY;
+    if (Math.abs(wheelAcc) < 40) return;
+    const dir = wheelAcc > 0 ? 1 : -1; wheelAcc = 0;
+    if (editing) adjust(-dir, ev.shiftKey);
+    else move(dir, 0);
+  }, { passive: false });
+  screen.addEventListener('mousedown', ev => {
+    const el = ev.target.closest('[data-k]'); if (!el) return;
+    ev.preventDefault(); audio();
+    const kind = el.dataset.k;
+    // Pressing inside a box selection grabs it to move; anything else starts fresh.
+    const grabbed = kind === 'p' && multi() && inBox(sel, +el.dataset.r, +el.dataset.c);
+    if (!grabbed) sel = null;
+    if (kind === 's') { songIdx = +el.dataset.i; cur.row = -2; editing = false; activateSong(SONG_ITEMS[songIdx]); render(); return; }
+    if (kind === 'h') { cur.row = -1; cur.col = +el.dataset.c; cur.field = +el.dataset.f; editing = false; clickHeader(); return; }
+    if (kind === 'p') {
+      // Resolved on mouseup: a press-release on one cell is a click, anything wider is a box select.
+      const r = +el.dataset.r, c = +el.dataset.c;
+      drag = { r, c, f: el.dataset.f, r1: r, c1: c, block: grabbed ? grab(sel) : null };
+      view = Math.max(0, cur.row); dragY = ev.clientY;
+      clearInterval(dragTimer); dragTimer = setInterval(dragScroll, 50);
+      render();
+    }
+  });
+  // Holding the pointer above/below the pattern rows scrolls the window and extends the box
+  // to its edge row; the further out, the faster.
+  let dragY = 0, dragTimer = null;
+  window.addEventListener('mousemove', ev => { if (drag) dragY = ev.clientY; });
+  function dragScroll() {
+    if (!drag) return;
+    const cells = screen.querySelectorAll('[data-k="p"]'); if (!cells.length) return;
+    const top = cells[0].getBoundingClientRect().top, bot = cells[cells.length - 1].getBoundingClientRect().bottom;
+    const over = dragY < top ? dragY - top : dragY > bot ? dragY - bot : 0;
+    if (!over) return;
+    const dir = Math.sign(over), half = (viewRows() - 1) >> 1;
+    view = Math.max(0, Math.min(rows() - 1, view + dir * (1 + Math.floor(Math.abs(over) / 30))));
+    drag.r1 = Math.max(0, Math.min(rows() - 1, view + dir * half));
+    render();
+  }
+  screen.addEventListener('mouseover', ev => {
+    if (!drag) return;
+    const el = ev.target.closest('[data-k="p"]'); if (!el) return;
+    const r = +el.dataset.r, c = +el.dataset.c;
+    if (r !== drag.r1 || c !== drag.c1) { drag.r1 = r; drag.c1 = c; render(); }
+  });
+  window.addEventListener('mouseup', () => {
+    if (!drag) return;
+    const d = drag; drag = null; clearInterval(dragTimer);
+    if (d.r === d.r1 && d.c === d.c1) {
+      sel = null; cur.row = d.r; cur.col = d.c;
+      if (d.f !== undefined) cur.field = +d.f;
+      if (!cell()) { snapshot(); setCell({ ...lastNote }); changed(); }
+      editing = true; preview(cell(), cur.col); render();
+      return;
+    }
+    if (d.block) {
+      const to = shift(sel, moveOffset(d));
+      snapshot();
+      selCells().forEach(([c, r]) => { song.tracks[c].cells[r] = null; });
+      sel = stamp(d.block, to.r0, to.c0);
+      cur.row = view; cur.col = sel.c0;
+      msg = `Moved ${selNotes().length} notes.`; changed();
+      return;
+    }
+    // Cursor takes the window's current center so the view doesn't jump on release.
+    cur.row = view; cur.col = d.c1;
+    sel = box(d); cur.field = 0; editing = true;
+    msg = `${selNotes().length} notes selected. LEFT/RIGHT field, UP/DOWN changes all.`;
+    render();
+  });
+
+  // ---------- drawing ----------
+  const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  function span(text, cls, attrs = '', style = '') { return `<span class="${cls}"${attrs}${style ? ` style="${style}"` : ''}>${esc(text)}</span>`; }
+  function viewRows() { return Math.max(9, Math.floor((window.innerHeight - 400) / 19) | 1); }
+
+  function render() {
+    const out = [];
+    // song bar
+    const labels = {
+      name: `NAME ${song.name}`, bpm: `BPM ${String(song.bpm).padStart(3, '0')}`, bars: `BARS ${String(song.bars).padStart(2, '0')}`,
+      tail: `TAIL ${song.tail.toUpperCase()}`, follow: `FOLLOW ${follow ? 'ON ' : 'OFF'}`,
+      play: playing ? '[STOP]' : '[PLAY]', export: '[EXPORT MP3]', wav: '[EXPORT WAV]', save: '[SAVE]', load: '[LOAD]', addtrk: '[+TRK]', deltrk: '[-TRK]'
+    };
+    out.push(SONG_ITEMS.map((it, i) => {
+      let cls = 'ctl';
+      if (cur.row === -2 && songIdx === i) cls += editing ? ' edit' : ' cur';
+      return span(labels[it], cls, ` data-k="s" data-i="${i}"`);
+    }).join('  '));
+    const secs = song.bars * 4 * 60 / song.bpm;
+    out.push(span(`length ${song.bars} bars = ${secs.toFixed(4)} s = ${songSamples(song.bpm, song.bars)} samples @ 48 kHz   rows: 32nd notes`, 'dim'));
+    out.push('');
+    // header
+    let h = span('ROW ', 'dim');
+    song.tracks.forEach((t, c) => {
+      h += span('|', 'sep');
+      const sel = cur.row === -1 && cur.col === c;
+      const mcls = 'hd' + (t.mute ? ' muted' : '') + (sel && cur.field === 0 ? (editing ? ' edit' : ' cur') : '');
+      const vcls = 'hd' + (sel && cur.field === 1 ? (editing ? ' edit' : ' cur') : '');
+      h += span(`T${String(c + 1).padEnd(2)} ${t.mute ? 'MUT' : 'ON '}`, mcls, ` data-k="h" data-c="${c}" data-f="0"`);
+      h += span(`${String(t.vol).padStart(3)}`, vcls, ` data-k="h" data-c="${c}" data-f="1"`);
+    });
+    out.push(h + span('|', 'sep'));
+    out.push(span('----' + song.tracks.map(() => '+----------').join('') + '+', 'sep'));
+    // pattern window, cursor row centered
+    const V = viewRows(), half = (V - 1) >> 1;
+    // FOLLOW tracks the play row even while notes are selected; only a drag holds the window still.
+    const pr = playRow();
+    const center = drag ? view : follow && pr >= 0 ? pr : Math.max(0, cur.row);
+    const R = drag ? (drag.block ? shift(sel, moveOffset(drag)) : box(drag)) : multi() ? sel : null;
+    // While a grabbed selection is dragged, show it at its drop spot and its source as cleared.
+    const src = drag && drag.block ? sel : null;
+    const cellAt = (c, r) => !src ? song.tracks[c].cells[r]
+      : inBox(R, r, c) ? drag.block[c - R.c0][r - R.r0]
+      : inBox(src, r, c) ? null : song.tracks[c].cells[r];
+    for (let r = center - half; r <= center + half; r++) {
+      if (r < 0 || r >= rows()) { out.push(span(' '.repeat(4 + song.tracks.length * 10 + 1), 'blank')); continue; }
+      let cls = 'row' + (r % 32 === 0 ? ' bar' : r % 8 === 0 ? ' beat' : '') + (r === pr ? ' play' : '') + (r === cur.row && !R ? ' currow' : '');
+      let line = span(String(r).padStart(3, '0') + ' ', r % 8 === 0 ? 'rn strong' : 'rn');
+      song.tracks.forEach((t, c) => {
+        const cl = cellAt(c, r);
+        line += span('|', 'sep');
+        const inR = inBox(R, r, c);
+        const mark = inR ? ' msel' : '';
+        const here = !R && cur.row === r && cur.col === c;
+        const col = isNote(cl) ? INSTRUMENTS[cl.i - 1].color : '';
+        const dimmed = t.mute ? ' mutedcell' : '';
+        if (!cl) {
+          line += span(`   ${'-'}      `, 'cell empty' + dimmed + mark + (here ? ' cur' : ''), ` data-k="p" data-r="${r}" data-c="${c}"`);
+        } else if (cl.off) {
+          line += span('  OFF     ', 'cell off' + dimmed + mark + (here ? ' cur' : ''), ` data-k="p" data-r="${r}" data-c="${c}"`);
+        } else {
+          const nn = noteName(cl.m), ln = lenText(cl.l);
+          const pad = ' '.repeat(10 - 2 - nn.length - 1 - ln.length);
+          const st = `color:${col}`;
+          if ((here && editing) || (inR && multi())) {
+            const allInst = cur.field === 0;
+            const hs = allInst ? `background:${col};color:#000` : st;
+            line += span('  ', 'cell' + mark, ` data-k="p" data-r="${r}" data-c="${c}" data-f="0"`);
+            line += span(nn, 'cell' + (cur.field === 1 ? ' fsel' : ''), ` data-k="p" data-r="${r}" data-c="${c}" data-f="1"`, cur.field === 1 ? '' : hs);
+            line += span('-', 'cell', ` data-k="p" data-r="${r}" data-c="${c}" data-f="0"`, hs);
+            line += span(ln, 'cell' + (cur.field === 2 ? ' fsel' : ''), ` data-k="p" data-r="${r}" data-c="${c}" data-f="2"`, cur.field === 2 ? '' : hs);
+            line += span(pad, 'cell' + mark, ` data-k="p" data-r="${r}" data-c="${c}" data-f="0"`);
+          } else {
+            line += span(`  ${nn}-${ln}${pad}`, 'cell' + dimmed + mark + (here ? ' cur' : ''), ` data-k="p" data-r="${r}" data-c="${c}"`, here ? '' : st);
+          }
+        }
+      });
+      out.push(`<span class="${cls}">${line}${span('|', 'sep')}</span>`);
+    }
+    out.push('');
+    // status
+    let st = '';
+    if (multi()) {
+      st = `selection T${sel.c0 + 1}-T${sel.c1 + 1}  rows ${String(sel.r0).padStart(3, '0')}-${String(sel.r1).padStart(3, '0')}  |  ${selNotes().length} notes  |  EDIT: ${['instrument', 'note', 'length'][cur.field]}`;
+    } else if (cur.row >= 0) {
+      const c = cell(); const bar = Math.floor(cur.row / 32) + 1, beat = Math.floor((cur.row % 32) / 8) + 1, sub = cur.row % 8 + 1;
+      st = `T${cur.col + 1}  row ${String(cur.row).padStart(3, '0')}  bar ${bar} . beat ${beat} . 32nd ${sub}/8`;
+      if (isNote(c)) {
+        const I = INSTRUMENTS[c.i - 1];
+        const len = c.l === HELD ? 'H = held until next note/OFF' : `${c.l} = ${(stepSec(I.kind, c.l) * 1000).toFixed(0)} ms`;
+        st += `  |  inst ${c.i} ${I.name}  |  ${noteName(c.m)}  |  len ${len}`;
+      } else st += c ? '  |  note OFF' : '  |  empty';
+      st += editing ? `  |  EDIT: ${['instrument', 'note', 'length'][cur.field]}` : '';
+    } else if (cur.row === -1) st = `T${cur.col + 1} header  |  ${['mute', 'volume'][cur.field]}${editing ? '  |  EDIT' : ''}`;
+    else st = `song: ${SONG_ITEMS[songIdx]}${editing ? '  |  EDIT' : ''}`;
+    out.push(span(st, 'status'));
+    out.push(span(msg, msg.startsWith('EXPORT BLOCKED') || msg.startsWith('Export failed') ? 'err' : 'msg'));
+    screen.innerHTML = out.join('\n');
+    // legend
+    $('legend').innerHTML = INSTRUMENTS.map((I, i) =>
+      `<span style="color:${I.color}">${i + 1} ${esc(I.name)}</span> ${span('(0-8: ' + [0, 1, 2, 3, 4, 5, 6, 7, 8].map(l => Math.round(stepSec(I.kind, l) * 1000)).join(' ') + ' ms, H held)', 'dim')}`).join('\n');
+  }
+  window.addEventListener('resize', render);
+  render();
+})();
+
+</script>
+</body>
+</html>

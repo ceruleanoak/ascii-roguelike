@@ -9,6 +9,7 @@ import { isInputCaptured } from '../game/inputCapture.js';
 import { aimFacingAtNearestEnemy, keenStrikeReach, updateKeenStrike } from './KeenAim.js';
 import { stashEquipment, loadEquipment } from './characterLoadout.js';
 import { tryPoleVault } from './PoleVault.js';
+import { PlayerDodgeRollSystem } from './PlayerDodgeRollSystem.js';
 
 export class CharacterSystem {
   constructor(game) {
@@ -391,8 +392,10 @@ export class CharacterSystem {
             game.dodgeBlockedFeedbackTimer = 0.5;
           }
         } else if (player.dodgeRoll.active) {
-          // Update direction during active roll (allows curving)
-          player.dodgeRoll.direction = dodgeDirection;
+          // A one-step turn chains a fresh roll (Roll Combo, silent: the
+          // roll sound plays once, at the first roll); any other direction
+          // change curves the roll in flight.
+          if (!PlayerDodgeRollSystem.chain(player, dodgeDirection)) player.dodgeRoll.direction = dodgeDirection;
         }
       }
     }
@@ -600,7 +603,6 @@ export class CharacterSystem {
     // Store character type and apply character-specific properties
     body.characterType = type;
     body.actionCooldownMax = charData.actionCooldownMax || 0;
-    body.greenIdleDamageBonus = charData.idleDamageBonus || 0;
     body.greenCombatDamagePenalty = charData.combatDamagePenalty || 0;
     body.backstabMultiplier = charData.backstabMultiplier || 1.0;
     // Reset green ranger state when switching characters

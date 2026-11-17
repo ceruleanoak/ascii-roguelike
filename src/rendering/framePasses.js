@@ -60,6 +60,7 @@ import { drawDizzyOrbitals } from './effects/DizzyOrbitals.js';
 import { drawWandProximityFailures, drawAoeEffects } from './effects/WandEffectsDraw.js';
 import { drawRollingRocks } from './effects/RollingRockDraw.js';
 import { drawPunches } from './effects/MeleeAttackDraw.js';
+import { drawShockwaveFloor } from './effects/ShockwaveFloorDraw.js';
 
 export const FRAME_OWNERS = ['surface', 'floor', 'maze', 'rest', 'neutral'];
 export const FRAME_LAYERS = ['ground', 'combat', 'player', 'indicators'];
@@ -116,6 +117,8 @@ const er = (rc) => rc.exploreRenderer;
 export const FRAME_PASSES = {
   // Lying on the floor: under enemies, attacks and the player.
   ground: [
+    // The floor lit dark gray under a passing shockwave ring — first, under everything.
+    { id: 'shockwaveFloor', on: everywhere, draw: (rc, game) => drawShockwaveFloor(rc.renderer, game) },
     // The Grasp's North Barrier, Climb Scenery and speed streaks (Mist Battle).
     { id: 'graspScenery', on: surfaceOnly(TRINE_ONLY), draw: (rc, game) => drawGraspScenery(rc.renderer, game) },
     { id: 'metalPlatform', on: surfaceOnly(ISLAND_ONLY), draw: (rc, game) => drawMetalPlatform(rc.renderer, game) },

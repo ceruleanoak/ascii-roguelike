@@ -9,7 +9,7 @@ const ROLL_DAMAGE = 2;
 // test measures from the body and reaches this far past it to count that
 // stop as contact.
 const ROLL_CONTACT_REACH = 2;
-// The roll strikes objects as the Flail does — a blunt blow that breaks Rock
+// The roll strikes objects as a blunt blow that also breaks Rock
 // and Glittering Rock (breaksRock) and is refused by everything else that
 // answers to a particular tool (InteractionSystem.resolveSmashRefusal).
 const ROLL_STRIKE = Object.freeze({ damage: ROLL_DAMAGE, isBlunt: true, breaksRock: true });
@@ -96,7 +96,7 @@ export function updateRollDamage(combatSystem, player, enemies, backgroundObject
 }
 
 // The roll's damage to one object, or 0 when the object refuses it — the
-// same answers a Flail swing gets from InteractionSystem.
+// same answers a melee swing gets from InteractionSystem.
 function rollDamageTo(interactionSystem, obj) {
   if (!interactionSystem) return ROLL_DAMAGE;
   if (obj.data?.glitteringRock) return interactionSystem.resolveGlitteringRockDamage(ROLL_STRIKE, obj);

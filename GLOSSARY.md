@@ -107,7 +107,7 @@ identity, not standard programming terms.
   ever spawning a Ghost grants Spectacles at the maze center. A deep Maze (zone Depth ≥ 6) adds
   traps: the Wellspring and its Torch, Flood Panels and the flood they raise, and Rat Nests
   that release Maze Rats. The camera holds a tight frame on the player the whole way through; a
-  worn Compass opens it to the whole Maze.
+  worn Compass's needle points to the maze center, where the Spectacles appear.
 - **In code:** `MazeSystem` (`generateMazeInterior`, `MazeObject`, `MazeGhost`); interior state
   on `game.mazeInterior` (a deliberate exception to the `activeFloor` convention — see Floor).
   It holds real `backgroundObjects` and `enemies` lists, which
@@ -466,9 +466,9 @@ identity, not standard programming terms.
   it reaches one the Enemy does declare. Movement archetypes (`chaser`/`keeper`/`kiter`/`jumper`/
   `ambusher`) are not Enemy States — they are an authoring preset that expands into a default
   `states` block naming a movement verb (`close`/`hold`/`orbit`/`back`/`still`/`wander`) per
-  State, so the archetype survives only as shorthand, not as a behavior of its own. `flee` is an
-  eighth verb in that same vocabulary, but State-only — no movement archetype defaults to it, so
-  it only appears where an Enemy's own `states` block names it.
+  State, so the archetype survives only as shorthand, not as a behavior of its own. `flee` and
+  `dance` are verbs in that same vocabulary, but State-only — no movement archetype defaults to
+  them, so they only appear where an Enemy's own `states` block names them.
 - **In code:** `EnemyStateMachine` (`src/entities/EnemyStateMachine.js`) is the runner; `STATES`
   maps ids to the files in `src/entities/enemyStates/`; `FALLBACK` is the skip-forward chain.
   An Enemy's declared block is `data.states`, defaulted from `movementStyle`/`movementConfig`
@@ -495,7 +495,8 @@ identity, not standard programming terms.
   position if the target is within aggro range but undetected; wanders otherwise. Exits toward
   Approach on sight inside aggro range, or toward Search two ways: on sight from the band
   between aggro range and vision length (noticed, not engaged), and on proximity-only detection
-  by an Enemy that has never seen the target.
+  by an Enemy that has never seen the target. An Alert authored `listen: false` never holds: it
+  wanders even with the target in range (the Phalanx, so a member that rolled wander wanders).
 - **In code:** `src/entities/enemyStates/alert.js`; must be declared by every Enemy — it is the
   only State Approach can hand back to when the target leaves aggro range.
 - **Not:** the legacy `'idle'` state id, which this and Approach's holding behavior jointly
@@ -505,6 +506,11 @@ identity, not standard programming terms.
 - **Definition:** Closing on, holding a preferred band from, or orbiting the target — whichever
   movement verb (`close`/`hold`/`orbit`) the Enemy's data names. The State every movement
   archetype used to be a property of; now the archetype is only which verb Approach defaults to.
+  `dance` is the one Approach verb no archetype defaults to: closes like `close` until within
+  attack range, then steps side to side across the target's line, flipping every
+  `movementConfig.danceStep` seconds, until the attack comes off cooldown (the Duelist).
+  Losing sight with a mark, Approach goes to Search; `searchChance` below 1 makes that a roll,
+  and a failed roll drops the mark and goes back to Alert (wander) instead.
 - **In code:** `src/entities/enemyStates/approach.js`; verb comes from
   `data.states.approach.movement`, defaulted per archetype by `stateDefaults.js#APPROACH_VERB`.
   Commits to Anticipate (or straight to Strike, if Anticipate is undeclared) once in range and
@@ -1465,6 +1471,28 @@ identity, not standard programming terms.
 - **Not:** an Enemy State; the phases run inside the mechanic and suspend the rest of the AI.
   Not a Frost Lunge: there is no projectile, and it always turns back after contact.
 
+### Dash Interrupt
+- **Definition:** What ends every dash an Enemy commits to (a Charge's windup or rush, a Leap's
+  windup, a Frost Lunge, a Dart): full sleep, stun, zap, freeze, knockback, and a Tortoise ducking
+  into its shell. The dash stops and its cooldown is paid, so it never resumes once the Enemy
+  recovers. A Leap already in the air is committed and lands.
+- **In code:** `interruptDashes(enemy)` (`src/entities/enemyMechanics/dashInterrupt.js`), which
+  calls each dash mechanic's `interrupt()`. Called from `Enemy.update` (before the leap updates,
+  while the AI is halted), `PhysicsSystem` knockback and `ShellFormMechanic.onDamaged`. A new dash
+  mechanic is added to that one function.
+- **Not:** a melee interrupt (`ChargeMechanic.onMeleeInterrupted`, a Strike windup cut short).
+
+### Merge
+- **Definition:** Two Slimes whose glyphs touch become one Slime holding both their HP and max HP,
+  the way a Giant Slime's split children re-merge with it. The one absorbed is gone, not killed,
+  and drops nothing. A split child still tied to its living Giant Slime merges only with it, and
+  a Slime in iframes (just struck) waits.
+- **In code:** `src/entities/enemyMechanics/MergeMechanic.js`, opted in by `data.mergeOnContact`
+  (the Slime `'o'`); contact is `glyphsTouch`. The absorbed Slime takes `absorbedByParent = true`
+  and `hp = 0`, the same no-drop path `ReformMechanic` uses.
+- **Not:** Reform (`ReformMechanic`, a split child returning to its Giant Slime); not a Giant Slime
+  (a merged Slime stays a Slime, only tougher).
+
 ### Breach
 - **Definition:** The Frosted Maw crashing up through the ice at the player's feet — its whole
   bulk erupting through the floor the player is standing on. Crushes everything within
@@ -1574,7 +1602,7 @@ identity, not standard programming terms.
 ### Bottle
 - **Definition:** Any consumable that is a bottle: the Empty Bottle, the liquid bottles
   (Water, Hot Water, Electrified Water, Magma, Mud, Fairy/Ember/Frost/Blight Water), the starter
-  and finished potions, Poison Flask, Steam Vial, Tonic, Venom Vial, Fairy in a Bottle,
+  and finished potions, Steam Vial, Tonic, Venom Vial, Fairy in a Bottle,
   Fairy King in a Bottle and Fish in a Bottle. What the Alchemy Lab brews with and fills.
 - **In code:** `bottle: true` on the ITEMS entry (`src/data/items.js`);
   `InventorySystem.isBottle(item)`. `npm run check:data` fails any `leavesBottle`,
@@ -1819,7 +1847,27 @@ identity, not standard programming terms.
   Crows fly, so they never press. A companion sent somewhere carries a `commandTarget`
   point (the Branch panel puzzle sends one to the free panel); it holds there until the
   room is left or the puzzle solves (`clearCommandTargets()`), enemies still first.
+  The Fire Elemental golem is the one ranged golem (see Fire Elemental (golem)).
 - **Not:** an Enemy; not an NPC (Companions don't initiate dialogue).
+
+### Fire Elemental (golem)
+- **Definition:** The ranged golem, summoned from Fire Essence (F) + Mana (𝑚) at the Combine
+  Station (or by the Wizard). It keeps its distance, backing off when an enemy closes, and throws
+  Fire Bolts. Each bolt that lands may shake a Mana loose at the enemy it struck (15%).
+- **In code:** `GOLEM_TYPES.fire` (`src/data/golems.js`, the `ranged` block); recipe result `♝`.
+  Its ranged branch lives in `GolemCompanion` (`_chaseAndAttack` back-off, `_continueWindup`
+  launch); the bolts themselves are in `src/entities/golemFireBolt.js`.
+- **Not:** the hostile Fire Elemental enemy (`ENEMIES.F`, trueName FLAMMA), which shares its
+  name, affinity and flame range but is an Enemy.
+
+### Fire Bolt
+- **Definition:** The Fire Elemental golem's thrown attack: a straight-flying '·' that dies on a
+  wall or at the end of its range and lands on the first hostile enemy it touches. 1 damage,
+  burn, and the Mana roll.
+- **In code:** `golem.fireBolts`; `launchFireBolt` / `advanceFireBolts` (`golemFireBolt.js`),
+  drawn by `CompanionRenderers.drawGolems`.
+- **Not:** a player or enemy projectile (`CombatSystem` attacks). It never passes through
+  `createAttack`, so it gets no crit, lifesteal or Green penalty.
 
 ### Steering
 - **Definition:** How a Companion, an NPC or a Spell-driven player (FIGHT, CHOP/MINE/HARVEST) moves toward a point. It
@@ -2032,19 +2080,21 @@ identity, not standard programming terms.
 
 ### Punch
 - **Definition:** The attack SPACE makes in EXPLORE with no weapon held, or with a spent one
-  in hand (a trap with no charges left, a gun or bow out of ammo that never reloads): 1 damage at 50%
-  accuracy (a miss shows MISS), thrown with the Slime's windup, cooldown and one-cell blinking
-  Telegraph, in yellow. It holds a weapon's priority on SPACE: a Background Object in reach is
+  in hand (a trap with no charges left, a gun or bow out of ammo that never reloads): 1 damage that
+  never misses, in yellow: a short jab with no windup, landing on the press as a
+  sub-cell box just ahead (it reaches what is pressed against the player, not an area), with a
+  small forward step of the thrower into it, and ready again 0.3 seconds later. It holds a weapon's priority on SPACE: a Background Object in reach is
   touched by the same press but never takes the Punch's place (only a Maze cover object still
   recovering from a hit swallows the press). Its hit skips Background Objects and a Maze's cover
   objects, except a Brick Wall, which it always brings down. An empty slot may be selected while another slot can fight, but the first SPACE there
   Punches once and returns the hand to that slot, a weapon first. So the Punch stays the attack
   only when no slot can fight. Not thrown at REST or in NEUTRAL rooms. Armor can harden it:
   the Dragon Gauntlets (𐤕, Scale + Scale at the Dragon Forge) raise its damage and give it knockback.
-- **In code:** `src/systems/PunchSystem.js` — `handleEmptyHandedPress()` (the SPACE entry), `tryPunch()` (spent check: `Item.isSpent()`), `update(dt)` (the windup on the
-  enemy-melee clock, read straight off `ENEMIES.o`), `reset()` (Reset Registry, room scope).
-  The landed blow is a player melee hitbox via `CombatSystem.createAttack` with `accuracy`
-  (rolled per swing as `attack.missed`), `telegraphDrawn` and `isPunch` (MazeSystem's cover-object
+- **In code:** `src/systems/PunchSystem.js` — `handleEmptyHandedPress()` (the SPACE entry), `tryPunch()` (spent check: `Item.isSpent()`), `update(dt)` (the cooldown and
+  the jab's flash on the enemy-melee clock: `PUNCH_COOLDOWN`, `PUNCH_SHAPE`; the step is the attack's
+  `lunge`, `PUNCH_LUNGE_SPEED`), `reset()` (Reset Registry, room scope).
+  The landed blow is a player melee hitbox via `CombatSystem.createAttack` with no `accuracy`
+  (so no miss roll), `telegraphDrawn` and `isPunch` (MazeSystem's cover-object
   hit pass skips it). Damage/knockback come from the equipped armor's `punchDamage`/`punchKnockback`
   when authored (`ITEMS` armor fields), else 1 / 0, read off the thrower's armor when the Punch
   starts. Each body has its own Punch and cooldown (`tryPunch(body)`, `isPunching(body)`,
@@ -2187,7 +2237,7 @@ identity, not standard programming terms.
   `CompanionSystem` (rat bread-seek, crow targeting, crow loot exclusion),
   `Crow._closestPickable` exclusion, and `CampNPC.acceptsHeal`.
 - **Not:** "bread" as a category (Bread is one Feed item); "bait" or "lure" (Lure is the
-  Charm Lure trap, and LureMechanic is an enemy behavior).
+  Charm Lure trap).
 
 ### Lembas
 - **Definition:** The green bread (⏣) a burning fireplace or campfire bakes from Slurry. It is
@@ -2212,17 +2262,31 @@ identity, not standard programming terms.
   poisoned water (fire steams those but leaves their state alone).
 
 ### Poisoned Water
-- **Definition:** Water that poison has struck. A poison hit (melee or projectile) leaves a water
-  tile poisoned for 4 seconds. While it lasts, the tile poisons what stands in it and fills a
-  Bottle of Poisoned Water (🜋). Poison turns the Alchemy Lab's trough all four cells at once and
-  for good, until fire heats it again: the last hit decides what water the trough holds. Any
-  ingredient brewed in a Bottle of Poisoned Water at the Cauldron makes an Unstable Potion.
+- **Definition:** Water a Poison Jar has landed on, the only thing that poisons water: weapon
+  hits, oils and enemy poison don't. Every water tile in the jar's radius is poisoned for 4
+  seconds. While it lasts, the tile poisons what stands in it and fills a Bottle of Poisoned
+  Water (🜋). A jar that reaches the Alchemy Lab's trough poisons all four cells at once and for
+  good, until fire heats it again: the last thing to reach it decides what water the trough
+  holds. Any ingredient brewed in a Bottle of Poisoned Water at the Cauldron makes an Unstable
+  Potion.
 - **In code:** `waterState === 'poisoned'` on a water tile (`POISONED_WATER_DURATION`,
-  `WATER_COLORS.poisoned` in GameConfig); `troughState === 'poisoned'` on the trough cells, set by
-  `WaterLavaHitMechanic.poisonTrough`. `ITEMS['🜋']`, `POISONED_WATER_CHAR` (`src/data/alchemy.js`).
+  `WATER_COLORS.poisoned` in GameConfig); `troughState === 'poisoned'` on the trough cells. Both
+  set by `WaterLavaHitMechanic.poisonWaterInRadius`, called when a Poison Jar lands
+  (`ConsumableWindupEffects`, effect `'poison'`). `ITEMS['🜋']`, `POISONED_WATER_CHAR` (`src/data/alchemy.js`).
   Bottled by AlchemySystem (`LIQUID_TILE_TO_BOTTLE.poisoned`, `fillTroughBottle`) and GETWATER.
   Brewed in `AlchemySystem._commitStarter`.
-- **Not:** the Poison Flask (thrown at enemies, no water) or the Venom Vial (a weapon Oil).
+- **Not:** the Venom Vial (a weapon Oil: it poisons what it hits, never water).
+
+### Poison Jar
+- **Definition:** A reusable thrown consumable (⊍), Unstable Potion + Slurry. SPACE only. Like
+  the Jolt Jar it flies to the nearest live enemy, or along the player's facing when there is
+  none. Where it lands it poisons every enemy in its radius and makes the water there Poisoned
+  Water. It is the only thing that poisons water.
+- **In code:** `ITEMS['⊍']`, `effect: 'poison'`, `radius`, `cooldown`. Aimed by
+  `jarThrowTarget` in `ConsumableTriggerSystem`; lands in `ConsumableWindupEffects`, which calls
+  `WaterLavaHitMechanic.poisonWaterInRadius`.
+- **Not:** the Venom Vial (an Oil that poisons what a weapon hits); a Bottle of Poisoned Water
+  (a Liquid Splash that lays new poisoned tiles rather than poisoning water already there).
 
 ### Liquid Splash
 - **Definition:** A thrown liquid Bottle (Water, Hot Water, Poisoned Water, Electrified Water,
@@ -2496,6 +2560,57 @@ identity, not standard programming terms.
 - **In code:** weapon data fields: `windup`, `recovery`, `reload`, `charge` in `src/data/items.js`.
   Weapon ticks at `PHYSICS.WEAPON_TIMER_RATE` (= 2). Compare to playtesting simulator by ÷2.
 - **Not:** just damage or accuracy. Timing defines weapon feel and combat rhythm.
+
+### Parry
+- **Definition:** A cooldown-gated window in which a melee hit is turned aside: windup, then the
+  window open (a `]` over the holder), then cooldown. A hit from within the holder's arc while it
+  is open does no damage to the holder. A catch spends the window: it closes on the hit it turned
+  aside and the cooldown starts, so a second swing straight after lands. A stun or knockback on
+  the holder cancels a window winding up or open the same way. Holders: the Duelist
+  (`data.parryMechanic`, counter-attacks) and the player in a Buckler (`◍`, reflects half the
+  blow). The player's catch also stuns the attacker one pip and knocks it back (the riposte).
+  A **Held Parry** (`parryMechanic.held`, the Phalanx) has no cycle and no spending: its owner
+  raises it (after `parryWindup`) and lowers it, it faces the holder's `guardAngle` instead of the
+  attacker, and it is down whenever the holder is stunned, zapped, asleep, frozen or knocked back.
+  Every catch, held or not and the Parry Lesson's too, plays the `parry` SFX.
+- **In code:** `src/entities/enemyMechanics/ParryMechanic.js` — `tickParry` (the cycle),
+  `holdParry` / `isHeldParryUp` (the Held Parry), `playParrySound`,
+  `parryCatches`, `expendParry` (a catch), `cancelParry` (called from the status core
+  `applyStatusEffect` on stun/knockback and from `PhysicsSystem._applyKnockbackForce`),
+  `PlayerParry.riposte` (called from `PlayerDamageSystem.resolveGuard`).
+- **Not:** the staff block (held SPACE, stops arrows, no window); Weapon Timing's Recovery.
+
+### Phalanx
+- **Definition:** Red zone Enemy `4` (VIER) that spawns as a squad of two to four, each carrying a Spear
+  behind a Held Parry. Only a melee blow from behind lands; projectiles, traps, magic and the Red
+  Warrior's roll land from any side. The squad forms up into a Formation on sight.
+- **In code:** `src/data/enemies.js` `'4'` (`data.phalanx`), `src/entities/enemyMechanics/PhalanxMechanic.js`;
+  spawned by `roomFeatures.js#spawnPhalanx`, which links the members with `createSquad`.
+- **Not:** a Leader/Follower group (no leader; the squad thinks through its first member able to act).
+
+### Formation
+- **Definition:** How a Phalanx squad stands once it has seen the player, rolled at each form-up:
+  `line` (side by side across the heading, every guard toward the player) or `ring` (back to back
+  around a centre, guards outward; the shape follows the number left — two back to back, three a
+  triangle, four a square). The squad re-decides every `thinkInterval`, its heading and each
+  guard turn at a capped rate, and one member's thrust holds the others' for `strikeStagger`.
+  It never forms while a member is stunned or asleep and breaks the moment one is, or when no
+  member is engaged any more.
+- **In code:** `PhalanxMechanic` — `squad.formation`, `_formUp`, `_assignSlots`, `_slotFor`.
+- **Not:** a bat flock's swirl (FlockMechanic), which never guards or holds slots.
+
+### Parry Lesson
+- **Definition:** What the Weapons Master offers for one coin, once per run, when there is
+  nothing left to train: the held weapon is melee and already trained (never with a bow, gun,
+  wand or empty hands). He raises his own Parry on a steady cycle; a swing that meets it does no
+  damage and knocks the player back, stunned (without the stun's disarm). A swing that lands
+  while it is down counts, and two end the lesson. After it he offers a Buckler, once per run,
+  asking for a gem if the player carries one, else 3 coins, else an Artifact.
+- **In code:** `src/systems/ParryLesson.js`, owned by `WeaponsMasterSystem` (`parryLesson`;
+  `resetRunState` is in the Reset Registry). His closing line comes from `offerLine()`;
+  `NeutralCharacter.talkSuspended` keeps SPACE a swing while the lesson runs.
+- **Not:** weapon training (the permanent +1 damage or technique per category); PERSUADE does
+  not give either away.
 
 ### Impact Size
 - **Definition:** How much ground a shockwave hammer's blow covers: the side, in cells, of the
@@ -2915,7 +3030,9 @@ identity, not standard programming terms.
   same axis and turns at a Deflector. The red zone's rockfall drops them. The Onyx Hammer knocks
   an unbreakable rock loose into one, and any hammer hitting one that is already rolling sends
   it back the way the strike points; both hammer cases give a hammer-rolled rock, with the same
-  damage and twice the speed. It works the same way on the surface and on dungeon floors.
+  damage and twice the speed. The red Warrior's roll turns one away too, at its own speed, and
+  the roller takes no damage or knockback from it. It works the same way on the surface and on
+  dungeon floors.
 - **In code:** a rock record in `BoulderSystem` (`src/systems/BoulderSystem.js`). Each one
   carries its `space` (the room or a dungeon floor) and only moves while the player is in that
   space. `empowered` = hammer-rolled (×2 speed, not ×2 damage). Rocks are started by
@@ -3171,6 +3288,35 @@ identity, not standard programming terms.
 - **In code:** `canon.disabledEnemies[glyph]`; `disableEnemies()` in
   `src/systems/CanonOverlay.js`; `wouldEmptyBand()` in `src/systems/cliEnemyTables.js`.
 - **Not:** a Disabled Weapon (which gets stand-ins); a deleted authored enemy.
+
+### Roll Combo
+- **Definition:** Chaining dodge rolls. While a roll is in flight, pressing a direction one
+  step (45°) around from the roll's current one starts a fresh roll that way, and it can chain
+  up to 3 times beyond the first roll (4 rolls in all). A combo turns one way only: the first
+  chain sets clockwise or counterclockwise, and a step back the other way doesn't chain. Each
+  chained roll is 30% shorter than the one before it, and only the first roll plays the roll
+  sound. A bigger turn only curves the roll in flight, as before.
+  The arrow keys alone can combo, since two held together make a diagonal. The QEZC diagonal
+  keys are off by default and come on through the CLI cheat DIAGONAL ROLLS.
+- **In code:** `PlayerDodgeRollSystem.chain(player, direction)`, called from
+  `CharacterSystem.updateDodge`'s active-roll branch (`ROLL_COMBO_MAX_CHAINS`,
+  `ROLL_COMBO_INPUT_DELAY`, `isAdjacentDirection`). State: `player.dodgeRoll.comboChains` /
+  `comboInput` / `comboTurn` (the combo's turn sign) / `comboRollTime` (the current roll's
+  shortened length, `ROLL_COMBO_SHORTEN`). The blink roll never chains. QEZC: `DiagonalInputSystem.enabled`, set by
+  `seedCanonCheats` from `canon.cheats.diagonalRolls`.
+- **Not:** "roll chain", "daisy chain", "multi-roll".
+
+### Deep Lava
+- **Definition:** The heart of a lava body: a lava tile that lava holds on all four sides. It
+  burns the same as any lava, and everything wading it moves at 0.3× speed, a roll included.
+  The shore stays ordinary lava. It is drawn a darker red. Every lava body that generation lays
+  gets it: red-zone lava, the Lava Moat Barricade and dungeon templates.
+- **In code:** `BackgroundObject.deepLava`, set by `markDeepLava(backgroundObjects)`
+  (`src/systems/DeepLava.js`, `DEEP_LAVA_SPEED`, `DEEP_LAVA_COLOR`), which runs after
+  `resolveLavaHazards` in `RoomGenerator.generateRoom`, in `BarricadeSystem._raise` for a hazard
+  plug, and in `placeTemplateFixtures`. PhysicsSystem's `inDeepLava` applies the slow, and
+  floating or the Metal Platform clears it.
+- **Not:** "magma", "lava lake"; not deep water (deep lava neither drowns nor fills wet pips).
 
 ## Conventions
 

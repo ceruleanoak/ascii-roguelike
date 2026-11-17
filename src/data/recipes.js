@@ -31,6 +31,7 @@ export const RECIPES = [
   { left: '0', right: '𝑚', result: '♜', name: 'Rock Golem' },   // Rock + Mana
   { left: 'M', right: '𝑚', result: '♚', name: 'Metal Golem' },  // Metal + Mana
   { left: '◆', right: '𝑚', result: '♗', name: 'Magma Golem' }, // Bottle of Magma + Mana
+  { left: 'F', right: '𝑚', result: '♝', name: 'Fire Elemental' }, // Fire Essence + Mana
 
   // === ROCK RECIPES ===
   { left: '0', right: '0', result: '⊿', name: 'Axe head' },       // Rock + Rock = Axe head
@@ -63,7 +64,7 @@ export const RECIPES = [
   { left: 'g', right: '|', result: '‖', name: 'Rubber Bat' },    // Goo + Stick = Rubber Bat (0 dmg, launch only)
   { left: '¡', right: 'M', result: '⸘', name: 'Metal Bat' },     // Bat + Metal = Metal Bat (double damage)
   { left: 'M', right: '|', result: '↾', name: 'Dagger' },      // Metal + Stick = Dagger
-  { left: '↾', right: '/', result: '⍋', name: 'Flail' },      // Dagger + Staff = Flail (high-damage staff)
+  { left: '↾', right: '/', result: '⍋', name: 'Flail' },      // Dagger + Staff = Flail (a hammer)
   { left: '↾', right: 'e', result: '↿', name: 'Keen Dagger' }, // Dagger + Eye = Keen Dagger (stabs toward the nearest enemy)
 
   // === MAGIC STAVES (Storm Staff + gemstone) ===
@@ -325,6 +326,7 @@ export const RECIPES = [
 
   // Jolt Jar: charged potion + coin
   { left: '!', right: 'c', result: 'J', name: 'Jolt Jar' },          // Charged Potion + Coin
+  { left: '🜆', right: '⚗', result: '⊍', name: 'Poison Jar' },        // Unstable Potion + Slurry
 
   // Spectacles (⊙) are not craftable. Obtained by clearing a Maze (M room) —
   // breaking every cover object and collecting every dropped ingredient —

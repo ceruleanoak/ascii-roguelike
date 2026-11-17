@@ -106,7 +106,7 @@
 | `explode` (Bomb) | Nearest enemy ≤60px | Yes | `spentConsumableSlots[i]` + windup guard |
 | `curse` (Cursed Skull) | ≥3 enemies within 80px | Yes | `spentConsumableSlots[i]` + windup guard |
 | `slow` | Nearest enemy ≤50px | No | cooldown + windup guard |
-| `poison` (Poison Flask) | Nearest enemy ≤55px | No | cooldown + windup guard |
+| `poison` (Poison Jar) | Manual only; thrown at nearest enemy or along facing | No | cooldown + windup guard |
 | `venomcloud` (Venom Vial) | ≥2 enemies within 60px | No | cooldown + windup guard |
 | `jolt` (Jolt Jar) | ≥2 enemies in room | No | cooldown + windup guard |
 | `throwSteam` (Steam Vial) | **Always fires** — no condition check | No | cooldown + windup guard |

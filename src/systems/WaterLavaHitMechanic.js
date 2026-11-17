@@ -9,7 +9,8 @@ import { isInteriorActive } from './PlaneSystem.js';
 // BoomerangMechanic — `combat` is the CombatSystem instance (game/
 // electricitySystem/newSteamClouds access).
 export const WaterLavaHitMechanic = {
-  // Water state transitions from projectiles. Environmental terrain
+  // Water state transitions from projectiles. Poison is not one: only the
+  // Poison Jar poisons water (poisonWaterInRadius). Environmental terrain
   // (BackgroundObject.isEnvironmental()) never spawns a damage number — each
   // branch already has its own feedback: the tile's own color/char changes
   // with waterState (ice melting included), or a steam cloud puffs. Also
@@ -18,8 +19,6 @@ export const WaterLavaHitMechanic = {
     if (obj.isWater && obj.isWater()) {
       if (proj.onHit === 'freeze') {
         obj.setWaterState('frozen', Infinity); // Stays frozen until thawed by fire
-      } else if (proj.onHit === 'poison') {
-        obj.setWaterState('poisoned', POISONED_WATER_DURATION);
       } else if (proj.onHit === 'stun' && proj.electric) {
         combat.game?.electricitySystem?.seedFromWeapon(obj, backgroundObjects, proj,
           { tileDuration: 4.0, hutPlane: isInteriorActive(combat.game) });
@@ -28,8 +27,6 @@ export const WaterLavaHitMechanic = {
       }
     } else if (obj.isTrough && proj.onHit === 'burn') {
       this.burnWater(obj, backgroundObjects, combat);
-    } else if (obj.isTrough && proj.onHit === 'poison') {
-      this.poisonTrough(backgroundObjects);
     }
 
     // Fire projectile hits Barricade ice → melt it, the same one-hit thaw a
@@ -83,10 +80,27 @@ export const WaterLavaHitMechanic = {
     if (state === 'normal') obj.setWaterState('heated', HEATED_WATER_DURATION);
   },
 
-  // Poison hits the Alchemy Lab trough: all of its cells at once, for good,
-  // and over any heat. The last hit decides what water it holds.
-  poisonTrough(backgroundObjects) {
-    this._setTroughState(backgroundObjects, 'poisoned');
+  // A Poison Jar lands: every water tile whose center is within `radius` of
+  // (x, y) is Poisoned Water for POISONED_WATER_DURATION, frozen water
+  // included (the jar breaks on the ice, which stays). A trough cell in
+  // range poisons the whole Alchemy Lab trough, all of its cells at once, for
+  // good and over any heat: the last thing to reach it decides what water it
+  // holds.
+  poisonWaterInRadius(backgroundObjects, x, y, radius) {
+    const half = GRID.CELL_SIZE / 2;
+    const r2 = radius * radius;
+    let troughHit = false;
+    for (const obj of backgroundObjects) {
+      if (obj.destroyed) continue;
+      const dx = obj.position.x + half - x;
+      const dy = obj.position.y + half - y;
+      if (dx * dx + dy * dy > r2) continue;
+      if (obj.isTrough) troughHit = true;
+      else if (obj.isWater && obj.isWater() && obj.getWaterState() !== 'frozen') {
+        obj.setWaterState('poisoned', POISONED_WATER_DURATION);
+      }
+    }
+    if (troughHit) this._setTroughState(backgroundObjects, 'poisoned');
   },
 
   _setTroughState(backgroundObjects, state) {

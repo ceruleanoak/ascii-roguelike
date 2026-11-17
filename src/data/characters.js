@@ -21,8 +21,9 @@ export const CHARACTER_TYPES = {
     rollInvulnerable: false,
     rollIframes: 0,
     actionCooldownMax: 2.5,   // Shared cooldown for attacks and dodge roll
-    idleDamageBonus: 2,        // +2 flat damage when all enemies are idle (or no enemies)
-    combatDamagePenalty: 1,    // -1 flat damage when any enemy is not idle
+    // A hit on an enemy that hasn't detected the player is a guaranteed crit
+    // (CritRoll.rollCrit); one on an enemy that has takes this penalty.
+    combatDamagePenalty: 1,    // -1 flat damage
     weaponAffinities: {
       'bow': { cooldownReduction: 0.25 } // 25% faster bow fire rate
     },

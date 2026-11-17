@@ -182,7 +182,7 @@ BOW    // Arrow-based weapons with charge mechanic
 | `'luck'` | `duration` | Better drop rates | Lucky Coin: `duration: 60`, `oneShot: true` |
 | `'slow'` | `duration` | Slime Ball - freeze nearest enemy | Slime Ball: `duration: 10`, `cooldown: 12` |
 | `'block'` | - | Temporary defense boost | Metal Block: `cooldown: 15` |
-| `'poison'` | - | Poison cloud throw | Poison Flask: `cooldown: 10` |
+| `'poison'` | - | Thrown jar: poisons enemies and water in its radius | Poison Jar `⊍`: `radius: 64, cooldown: 10` |
 | `'cleanse'` | - | Remove all status effects | Tonic: `cooldown: 8` |
 | `'invuln'` | `duration` | Temporary invulnerability | Smoke Bomb: `duration: 3.5`, `cooldown: 25` |
 | `'venomcloud'` | - | Poison cloud area | Venom Vial: `cooldown: 12` |

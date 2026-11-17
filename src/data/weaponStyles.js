@@ -38,12 +38,13 @@ export const WEAPON_STYLES = {
     { name: 'KEEN', reference: '↿', from: [['↿', [...SWING, 'keenAim', 'keenAimCells']]] },
     // THIRSTY and CURSED outlived their shipped sources (Vampire Dagger, Venom
     // Blade — cut in the mental-load pass), so their stats are set here; the
-    // traits stay authorable and their keys stay in STYLE_FIELDS.
+    // traits stay authorable and their keys stay in STYLE_FIELDS. CURSED is
+    // plain poison: its pips stack one per hit, with no burst.
     { name: 'THIRSTY', reference: '↾', from: [],
       set: { windup: 0.4, recovery: 0.6, patternSpeed: 0.05, range: 20, lifesteal: 1.0 } },
     { name: 'WILD', reference: 'ᛠ', from: [['ᛠ', [...SWING, 'randomOnHit']]] },
     { name: 'CURSED', reference: '🜕', from: [],
-      set: { windup: 0.75, recovery: 0.15, patternSpeed: 0.05, range: 24, onHit: 'poison', poisonStacks: true } },
+      set: { windup: 0.75, recovery: 0.15, patternSpeed: 0.05, range: 24, onHit: 'poison' } },
   ],
 };
 

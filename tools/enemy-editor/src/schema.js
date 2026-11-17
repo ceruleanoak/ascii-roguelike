@@ -725,16 +725,6 @@ export const MECHANICS = [
     ]
   },
   {
-    id: 'lureMechanic', title: 'Lure', gate: 'lureMechanic.enabled',
-    fields: [
-      { key: 'lureMechanic.lureRadius', label: 'Lure radius', type: 'px', default: GRID_CELL * 5 },
-      { key: 'lureMechanic.lurePullForce', label: 'Pull force', type: 'number', default: 100 },
-      { key: 'lureMechanic.lureChannelTime', label: 'Channel (dbl-sec)', type: 'number', step: 0.1, default: 1.5 },
-      { key: 'lureMechanic.lureCooldown', label: 'Cooldown (dbl-sec)', type: 'number', step: 0.1, default: 3 },
-      { key: 'lureMechanic.lureIndicatorChar', label: 'Indicator char', type: 'char', default: '~' },
-    ]
-  },
-  {
     id: 'steamCloud', title: 'Steam cloud', gate: 'steamCloud.enabled',
     fields: [
       { key: 'steamCloud.cloudRadius', label: 'Cloud radius', type: 'px', default: GRID_CELL * 2 },

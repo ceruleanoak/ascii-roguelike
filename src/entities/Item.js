@@ -910,20 +910,23 @@ export class Item {
       if (this.data.isBlunt) props.isBlunt = this.data.isBlunt;
       if (this.data.canSmash) props.canSmash = this.data.canSmash;
       if (this.data.isPickaxe) props.isPickaxe = this.data.isPickaxe;
-      // Flail: the one non-hammer that breaks Rock (resolveSmashRefusal).
+      // breaksRock: a non-hammer blow that breaks Rock (resolveSmashRefusal).
+      // No weapon declares it today; the Red Warrior's roll strikes with it
+      // (RollDamageMechanic).
       if (this.data.breaksRock) props.breaksRock = true;
       // Onyx Hammer: knocks an unbreakable rock loose (BoulderSystem.rollFromRest).
       if (this.data.rollsRock) props.rollsRock = true;
       if (this.data.weaponLevel) props.weaponLevel = this.data.weaponLevel;
       if (this.data.cyclesExitLetter) props.cyclesExitLetter = this.data.cyclesExitLetter;
       if (this.data.cyclesExitColor) props.cyclesExitColor = this.data.cyclesExitColor;
-      if (this.data.poisonStacks) props.poisonStacks = true;
       if (this.data.randomOnHit) props.randomOnHit = this.data.randomOnHit;
       // WeaponEffectsSystem.onMeleeHit flags (Ice Hammer, Vine Whip, Rootstaff)
       if (this.data.shattersFrozen) props.shattersFrozen = true;
       if (this.data.healOnKill) props.healOnKill = this.data.healOnKill;
       if (this.data.pullsDisarmedGear) props.pullsDisarmedGear = true;
       if (this.data.rootDuration) props.rootDuration = this.data.rootDuration;
+      // WeaponEffectsSystem.onObjectHit flag (Cinder Hammer)
+      if (this.data.fellsToDust) props.fellsToDust = this.data.fellsToDust;
       // A data-set lungeSpeed carries the wielder along the swing's facing
       // (Pearl Dagger, onto its keen-aimed target). CombatSystem applies any
       // attack.lunge to the owner; the hammer ring builds its own, so it's
@@ -1153,7 +1156,9 @@ export class Item {
     // GLOSSARY.md) — everything inside it is struck once, at the instant of
     // impact. The expanding ring this hit starts (triggerShockwave →
     // WeaponEffectsSystem.startShockwave) deals no damage: it only shakes the
-    // background and knocks enemies back as it sweeps past them.
+    // background and knocks enemies back as it sweeps past them. The blow
+    // lands with the hammer's ✷ burst, drawn at the box's center (the
+    // carrier's cell), as a hammerRing's lands on the cell it strikes.
     const cs = GRID.CELL_SIZE;
     const impactSize = this.data.impactSize ?? DEFAULT_IMPACT_SIZE;
     const side = impactSize * cs;
@@ -1168,6 +1173,10 @@ export class Item {
       type: 'melee',
       char: this.data.char,
       drawAboveOwner: true,
+      strikeChar: HAMMER_STRIKE_CHAR,
+      strikeScale: HAMMER_STRIKE_SCALE,
+      strikeFlashDuration: HAMMER_STRIKE_FLASH_DURATION,
+      strikeFlashTimer: HAMMER_STRIKE_FLASH_DURATION,
       position: { x: player.position.x + relX, y: player.position.y + relY },
       relX, relY,
       width: side,

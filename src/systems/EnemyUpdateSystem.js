@@ -468,11 +468,6 @@ export class EnemyUpdateSystem {
       this._applyShamanBuff(updateResult.buffData, game._activeEnemies());
     }
 
-    if (updateResult.shouldLure) {
-      player.velocity.vx += updateResult.lureData.forceX;
-      player.velocity.vy += updateResult.lureData.forceY;
-    }
-
     if (updateResult.shouldLayTrap && game.trapSystem) {
       const trd = updateResult.trapData;
       game.trapSystem.placeTrapAtPosition(trd.x, trd.y, trd.type, enemy.plane ?? 0, enemy);
@@ -597,9 +592,9 @@ export class EnemyUpdateSystem {
       owner: enemy
     });
     // Large fire-flavored burst (flame blast + rising embers, layered with a
-    // wide radial scatter) plus a screen shake — the shockwave ring itself is
-    // invisible by design (WorldEffectsSystem), so the detonation needs its
-    // own visual payoff to read as "large and devastating."
+    // wide radial scatter) plus a screen shake — the shockwave ring itself
+    // shows only as a faint floor glow (ShockwaveFloorDraw), so the detonation
+    // needs its own visual payoff to read as "large and devastating."
     for (const p of createEmberBurst(ed.x, ed.y)) game.particles.push(tagInteriorPlane(game, p));
     for (const p of createExplosion(ed.x, ed.y, 24, '#ff6600')) game.particles.push(tagInteriorPlane(game, p));
     createExplosionAftermath(game, ed.x, ed.y, { shake: 10, shakeDuration: 0.5, smoke: 16, spread: GRID.CELL_SIZE * 2 });

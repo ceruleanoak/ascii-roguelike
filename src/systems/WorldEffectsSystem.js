@@ -478,8 +478,9 @@ export class WorldEffectsSystem {
       if (p.expired) game.puddles.splice(i, 1);
     }
 
-    // Update enemy shockwaves — invisible expanding rings (Cyan-boss pattern).
-    // Visual feedback is bg objects shaking as the ring sweeps; damage/knockback applied once per entity.
+    // Update enemy shockwaves — expanding rings (Cyan-boss pattern). Visual
+    // feedback is bg objects shaking as the ring sweeps and the floor lighting
+    // under it (ShockwaveFloorDraw); damage/knockback applied once per entity.
     if (game.enemyShockwaves.length && game.currentRoom) {
       const C = GRID.CELL_SIZE;
       for (let i = game.enemyShockwaves.length - 1; i >= 0; i--) {

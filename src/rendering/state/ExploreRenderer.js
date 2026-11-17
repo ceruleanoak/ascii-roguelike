@@ -19,7 +19,7 @@
  * - Debug visualization (vectors, vision) when enabled
  */
 
-import { GRID, COLORS, ROOM_TYPES, PHYSICS } from '../../game/GameConfig.js';
+import { GRID, COLORS, ROOM_TYPES } from '../../game/GameConfig.js';
 import { drawExitLetters } from '../ui/ExitLetters.js';
 import { drawOffscreenEnemyIndicators } from '../ui/OffscreenEnemyIndicators.js';
 import { drawRestExitLabel, southExitShowsOpen, southDoorColor, REST_WORD, CRAFT_WORD } from '../ui/RestExitLabel.js';
@@ -51,6 +51,7 @@ import { drawWhirlpool } from '../effects/WhirlpoolEffects.js';
 import { stepConcealmentAlpha } from '../../systems/WorldEffectsSystem.js';
 import { drawFracturedRock } from '../sprites/fracturedRockSprite.js';
 import { renderMawShadow, chargedColor, renderChargedObjects } from '../AscentRenderHelpers.js';
+import { drawChargeTelegraph, drawLeapTelegraph } from '../effects/LungeTelegraphDraw.js';
 import { ReflectShieldMechanic } from '../../entities/enemyMechanics/ReflectShieldMechanic.js';
 import { fieldGuideEquipped, drawFieldGuideHpLabel } from '../ui/FieldGuideHpLabel.js';
 import { drawCursedRecipeReveal } from '../ui/CursedRecipeReveal.js';
@@ -1061,17 +1062,6 @@ export class ExploreRenderer {
       );
     }
 
-    // Siren singing indicator: pulse lure char near siren
-    if (enemy.lureSinging) {
-      const lureColor = `rgba(100, 200, 220, ${0.4 + 0.3 * Math.sin(Date.now() / 300)})`;
-      this.renderer.drawEntity(
-        enemy.position.x + GRID.CELL_SIZE / 2,
-        enemy.position.y + GRID.CELL_SIZE / 2 - GRID.CELL_SIZE,
-        '~',
-        '#66ccdd'
-      );
-    }
-
     // Shaman buff windup indicator
     if (enemy.buffWindupActive) {
       this.renderer.drawEntity(
@@ -1082,32 +1072,10 @@ export class ExploreRenderer {
       );
     }
 
-    // Boar charge telegraph: line from boar to target during windup, locked
-    // direction during the dash. Pulses brighter as windup completes.
-    if (enemy.data?.chargeMechanic?.enabled && enemy.target) {
-      const ex = enemy.position.x + GRID.CELL_SIZE / 2;
-      const ey = enemy.position.y + GRID.CELL_SIZE / 2;
-      const cfg = enemy.data.chargeMechanic;
-      // The line is the ground the dash crosses. chargeDuration is
-      // double-seconds (enemy timer clock), and PhysicsSystem's friction damps
-      // the held chargeSpeed once per frame, so it moves at speed × FRICTION.
-      const length = cfg.chargeSpeed * PHYSICS.FRICTION * cfg.chargeDuration / PHYSICS.ENEMY_TIMER_RATE;
-      if (enemy.chargeState === 'windup') {
-        const t = 1 - (enemy.chargeWindupTimer / cfg.chargeWindup);
-        const tx = ex + (enemy.target.position.x - enemy.position.x) /
-                   Math.hypot(enemy.target.position.x - enemy.position.x,
-                              enemy.target.position.y - enemy.position.y || 1) * length;
-        const ty = ey + (enemy.target.position.y - enemy.position.y) /
-                   Math.hypot(enemy.target.position.x - enemy.position.x,
-                              enemy.target.position.y - enemy.position.y || 1) * length;
-        const alpha = Math.floor(60 + 180 * t).toString(16).padStart(2, '0');
-        this.renderer.drawLine(ex, ey, tx, ty, '#ff5533' + alpha);
-      } else if (enemy.chargeState === 'charging') {
-        const tx = ex + enemy.chargeDir.x * length;
-        const ty = ey + enemy.chargeDir.y * length;
-        this.renderer.drawLine(ex, ey, tx, ty, '#ff773344');
-      }
-    }
+    // Charge and leap windups draw the ground they're about to cross; the
+    // line is gone once the dash or leap begins (LungeTelegraphDraw).
+    drawChargeTelegraph(this.renderer, enemy);
+    drawLeapTelegraph(this.renderer, enemy);
 
     // Draw windup telegraph
     const windupIndicator = enemy.getWindupIndicator();

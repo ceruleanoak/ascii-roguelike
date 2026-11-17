@@ -67,19 +67,19 @@ export const WEAPON_TYPES = {
 export const ARMOR_FLAVORS = {
   fur: {
     word: 'SPEED+', color: '#e0a060',
-    masterRemark: 'FUR ON YOUR BACK. QUICK FEET — BUT IT WILL NOT TURN A BLADE.'
+    masterRemark: 'FUR. YOU MOVE AND ROLL FASTER, BUT IT STOPS LITTLE DAMAGE.'
   },
   metal: {
     word: 'HEAVY', color: '#a8c0d8',
-    masterRemark: 'METAL. YOU WILL STAND YOUR GROUND, AND YOU WILL NOT OUTRUN ANYTHING.'
+    masterRemark: 'METAL. IT STOPS A LOT OF DAMAGE, BUT YOU MOVE AND ROLL SLOWER.'
   },
   block: {
     word: 'BLOCK+', color: '#70d8c8',
-    masterRemark: 'BUILT TO CATCH THE BLOW, NOT TO DODGE IT. KEEP YOUR GUARD UP.'
+    masterRemark: 'IT CAN BLOCK A HIT OUTRIGHT. IT WON\'T HELP YOU DODGE.'
   },
   bone: {
     word: 'STURDY', color: '#f0e6c0',
-    masterRemark: 'BONE HOLDS FIRM UNTIL IT DOES NOT. LISTEN FOR THE CRACK.'
+    masterRemark: 'BONE IS STURDY, BUT A HIT CAN BREAK IT.'
   },
 };
 
@@ -892,7 +892,7 @@ export const ITEMS = {
     weaponType: WEAPON_TYPES.MELEE,
     weaponSubtype: 'hammer',
     damage: 3,
-    windup: 0.8,
+    windup: 0.7,
     recovery: 1.0,
     range: 20,
     attackPattern: 'hammerRing',
@@ -981,6 +981,28 @@ export const ITEMS = {
     explodeRadius: 45,
     weaponLevel: 2,
     color: '#ff6600'
+  },
+
+  // Flail (Dagger + Staff): a hammer, not a staff, though a staff is half its
+  // recipe. Swings the hammer's ring (raised windup, ✷ burst), holds no block
+  // stance, and breaks what any level-2 hammer breaks: Rock, Crystal, Metal
+  // Box and the gem rocks. The heaviest windup of the hammer line.
+  '⍋': {
+    rarity: 'rare',
+    char: '⍋',
+    tier: 2,
+    name: 'Flail',
+    type: ITEM_TYPES.WEAPON,
+    weaponType: WEAPON_TYPES.MELEE,
+    weaponSubtype: 'hammer',
+    damage: 3,
+    windup: 0.8,
+    recovery: 0.95,
+    range: 20,
+    attackPattern: 'hammerRing',
+    locksMovement: true,
+    weaponLevel: 2,
+    color: '#bbccdd'
   },
 
   // Bone Crusher has no recipe — it is found, never crafted (an Errand reward).
@@ -1116,30 +1138,6 @@ export const ITEMS = {
     range: 28,
     blockReleaseDamage: 1,
     color: '#aa8855'
-  },
-  // Flail (Dagger + Staff): a blade lashed to the staff's head. Still a
-  // staff — same block stance and bare-staff missile — with the heaviest
-  // swing of the line and a touch more reach. The one staff that breaks Rock
-  // (breaksRock — InteractionSystem.resolveSmashRefusal).
-  '⍋': {
-    rarity: 'rare',
-    char: '⍋',
-    tier: 2,
-    name: 'Flail',
-    type: ITEM_TYPES.WEAPON,
-    weaponType: WEAPON_TYPES.MELEE,
-    weaponSubtype: 'staff',
-    breaksRock: true,
-    // Raised overhead through its windup, like a hammer
-    // (WeaponPreviewDraw.drawRaisedWindupPose).
-    raisedWindup: true,
-    damage: 3,
-    windup: 0.35,
-    recovery: 0.75,
-    patternSpeed: 0.05,
-    meleeChar: '|',
-    range: 30,
-    color: '#bbccdd'
   },
   'ߒ': {
     rarity: 'uncommon',
@@ -1560,7 +1558,9 @@ export const ITEMS = {
     dustBurst: { status: 'sleep', duration: 3.0, color: '#ffe566' },
     color: '#ddcc44'
   },
-  // Cinder Hammer (Onyx Hammer + Ash): the ring throws up a blinding ash cloud.
+  // Cinder Hammer (Onyx Hammer + Ash): a burning hammer. Its hits are fire
+  // (grass, Tinder and torches catch), it lights a fireplace like the Torch,
+  // and a tree or bush it hits falls to dust with Bone Dust's blind.
   '⫪': {
     rarity: 'rare',
     char: '⫪', tier: 3, name: 'Cinder Hammer',
@@ -1568,7 +1568,9 @@ export const ITEMS = {
     damage: 3, windup: 0.35, recovery: 0.8, range: 20,
     attackPattern: 'hammerRing', locksMovement: true, critChance: 0.35, weaponLevel: 3,
     rollsRock: true,
-    dustBurst: { status: 'blind', duration: 3.0, color: '#888888', burnTicks: 1 },
+    onHit: 'burn',
+    lightsFireplaces: true,
+    fellsToDust: 'ᐧ',
     color: '#555555'
   },
   // Slag Maul (Maul + Slag): the impact leaves a lava patch.
@@ -2662,12 +2664,17 @@ export const ITEMS = {
     },
     color: '#cccccc'
   },
-  'P': {
+  // Poison Jar: thrown like the Jolt Jar (Unstable Potion + Slurry). Where it
+  // lands it poisons every enemy in its radius and turns any water there —
+  // the Alchemy Lab trough too — into Poisoned Water. The only thing that
+  // poisons water: weapons, oils and enemy poison don't.
+  '⊍': {
     rarity: 'uncommon',
-    char: 'P',
-    name: 'Poison Flask',
-    type: ITEM_TYPES.CONSUMABLE, bottle: true,
+    char: '⊍',
+    name: 'Poison Jar',
+    type: ITEM_TYPES.CONSUMABLE,
     effect: 'poison',
+    radius: 64,
     cooldown: 10, // Reusable with 10s cooldown
     manualOnly: true,
     color: '#44ff44'
@@ -3015,17 +3022,22 @@ export const ITEMS = {
     potionModifier: 'primal'
   },
 
-  // Bread: consumable slot item, no SPACE effect — SHIFT (TossSystem) throws
-  // it to the ground like any other armed consumable, which is the entire
-  // feeding mechanic. Idle crows in the room — fed or not — seek the nearest
+  // Bread: SPACE eats it for +1 HP; SHIFT (TossSystem) throws it to the
+  // ground like any other armed consumable, which is the entire feeding
+  // mechanic. Idle crows in the room — fed or not — seek the nearest
   // dropped bread; eating it flips them to 'fed' (won't flee player proximity)
-  // or, if already fed, to 'companion'. Found commonly in huts and
-  // occasionally in chests (see HutSystem, AFFINITY_POOLS).
+  // or, if already fed, to 'companion'. manualOnly: a loaf held for feeding
+  // (or the Hoardmaw's Help decoy) is never eaten behind the player's back
+  // at low HP. Found commonly in huts and occasionally in chests (see
+  // HutSystem, AFFINITY_POOLS).
   '⌬': {
     rarity: 'common',
     char: '⌬',
     name: 'Bread',
     type: ITEM_TYPES.CONSUMABLE,
+    effect: 'heal',
+    amount: 1,
+    manualOnly: true,
     oneShot: true,
     stackable: true, // shares one quick slot by count — see InventorySystem.mergeStackableConsumable
     feed: true,      // crows and rats seek it on the ground — see systems/feed.js
@@ -3380,7 +3392,8 @@ export const ITEMS = {
   '♞': { rarity: 'rare', char: '♞', name: 'Mud Golem', type: ITEM_TYPES.GOLEM, color: '#664422' },
   '♜': { rarity: 'rare', char: '♜', name: 'Rock Golem', type: ITEM_TYPES.GOLEM, color: '#888888' },
   '♚': { rarity: 'rare', char: '♚', name: 'Metal Golem', type: ITEM_TYPES.GOLEM, color: '#aaaaaa' },
-  '♗': { rarity: 'rare', char: '♗', name: 'Magma Golem', type: ITEM_TYPES.GOLEM, color: '#ff5522' }
+  '♗': { rarity: 'rare', char: '♗', name: 'Magma Golem', type: ITEM_TYPES.GOLEM, color: '#ff5522' },
+  '♝': { rarity: 'rare', char: '♝', name: 'Fire Elemental', type: ITEM_TYPES.GOLEM, color: '#ffaa22' }
 };
 
 // Tier pools for the fountain upgrade and duplicate-upgrade crafting, derived

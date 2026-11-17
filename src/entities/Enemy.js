@@ -6,8 +6,8 @@ import { attachTelegraph, meleeAimOffset } from '../game/Telegraph.js';
 import { inSamePlane, planeOf, objectOnPlane } from '../systems/PlaneSystem.js';
 import { effectiveTargetDistance } from '../systems/enemyTargeting.js';
 import { hasLineOfSight, getVisionObstructionPoint, hasVision, spineCanSee, initSenses } from './enemyVision.js';
-import { LureMechanic } from './enemyMechanics/LureMechanic.js';
 import { ParryMechanic } from './enemyMechanics/ParryMechanic.js';
+import { PhalanxMechanic } from './enemyMechanics/PhalanxMechanic.js';
 import { ReflectShieldMechanic } from './enemyMechanics/ReflectShieldMechanic.js';
 import { BuffMechanic } from './enemyMechanics/BuffMechanic.js';
 import { TrailMechanic } from './enemyMechanics/TrailMechanic.js';
@@ -16,8 +16,10 @@ import { ChargeMechanic } from './enemyMechanics/ChargeMechanic.js';
 import { FrostLungeMechanic } from './enemyMechanics/FrostLungeMechanic.js';
 import { DartMechanic } from './enemyMechanics/DartMechanic.js';
 import { LeapAttackMechanic } from './enemyMechanics/LeapAttackMechanic.js';
+import { interruptDashes } from './enemyMechanics/dashInterrupt.js';
 import { GooSpewMechanic } from './enemyMechanics/GooSpewMechanic.js';
 import { ReformMechanic } from './enemyMechanics/ReformMechanic.js';
+import { MergeMechanic } from './enemyMechanics/MergeMechanic.js';
 import { MimicMechanic } from './enemyMechanics/MimicMechanic.js';
 import { LeaderFollowerMechanic } from './enemyMechanics/LeaderFollowerMechanic.js';
 import { JumpMechanic } from './enemyMechanics/JumpMechanic.js';
@@ -245,12 +247,6 @@ export class Enemy {
     // a stale entry into what's actually shown.
     this.effectApplicationOrder = [];
 
-    // Venom Blade stack counter — resets when poison wears off. Deliberately
-    // separate from statusEffects.poison.stacks above: this is a
-    // weapon-specific 3-hit burst-damage bonus (see CombatSystem.js), not the
-    // generic tick-rate/blink stacking every effect now has.
-    this.poisonStackCount = 0;
-
     // Trident pin duration (seconds); non-zero = pinned to a wall/object
     this.pinnedDuration = 0;
 
@@ -427,8 +423,8 @@ export class Enemy {
     // as a magic attack.
 
     if (ArmorMechanic.isEnabled(this)) ArmorMechanic.init(this);
-    if (LureMechanic.isEnabled(this)) LureMechanic.init(this);
     if (ParryMechanic.isEnabled(this)) ParryMechanic.init(this);
+    if (PhalanxMechanic.isEnabled(this)) PhalanxMechanic.init(this);
     if (ReflectShieldMechanic.isEnabled(this)) ReflectShieldMechanic.init(this);
     if (TrapLayerMechanic.isEnabled(this)) TrapLayerMechanic.init(this);
     if (PotionMechanic.isEnabled(this)) PotionMechanic.init(this);
@@ -690,6 +686,13 @@ export class Enemy {
     const dotDamageEvents = this.updateStatusEffects(deltaTime);
     SplitOnDamageMechanic.onStatusTicks(this, dotDamageEvents);
 
+    // Full sleep (tier 3), stun, zap, freeze and knockback override all AI
+    // below. Every dash the Enemy is committing to ends here, before the leap
+    // windup runs: a squat left alone would hold still through the sleep and
+    // launch the moment it woke (the sleeping Frost Wolf).
+    const aiHalted = this.isFullyAsleep() || this.isStunned() || this.isZapped() || this.isFrozen() || this.isKnockedBack();
+    if (aiHalted) interruptDashes(this);
+
     const leapActive = LeapAttackMechanic.updateActive(this, { deltaTime, dotDamageEvents, onScreen });
     if (leapActive?.suspend) return leapActive.result;
 
@@ -725,6 +728,15 @@ export class Enemy {
 
     // Blend velocity toward targetVelocity (smooth accel/decel, skipped during knockback)
     if (!this.isKnockedBack()) {
+      // A shelled enemy hides where it stands: no steering moves it (a blow
+      // still knocks it back, above). It leaves the shell to move again —
+      // re-emerging, waking, or the Tortoise's shell launch.
+      if (this.inShellForm) {
+        this.targetVelocity.vx = 0;
+        this.targetVelocity.vy = 0;
+        this.velocity.vx = 0;
+        this.velocity.vy = 0;
+      }
       this._blendVelocity(deltaTime);
     }
 
@@ -751,7 +763,7 @@ export class Enemy {
     // Cyan well blessing shrinks the aggro radius (boss parts use Infinity aggro — unaffected)
     const effectiveAggroRange = this.target?.stealthBlessed ? this.aggroRange * 0.65 : this.aggroRange;
 
-    const leapTrigger = LeapAttackMechanic.tryTrigger(this, { effectiveDistance, dotDamageEvents, onScreen, deltaTime });
+    const leapTrigger = aiHalted ? null : LeapAttackMechanic.tryTrigger(this, { effectiveDistance, dotDamageEvents, onScreen, deltaTime });
     if (leapTrigger?.suspend) return leapTrigger.result;
 
     const ripenDetonateTrigger = RipenMechanic.tryDetonateTrigger(this, { effectiveDistance, dotDamageEvents });
@@ -774,14 +786,8 @@ export class Enemy {
 
     // Full sleep (tier 3) overrides all AI (like stun, but breaks on damage —
     // see takeDamage). Tiers 1-2 fall through to normal AI and are handled as
-    // a plain speed slow instead (getSpeedMultiplier).
-    // Every AI override below skips ChargeMechanic.update, which would leave a
-    // charge windup paused and resuming afterwards — interrupt it instead.
-    if (this.isFullyAsleep() || this.isStunned() || this.isZapped() || this.isFrozen() || this.isKnockedBack()) {
-      ChargeMechanic.interrupt(this);
-      FrostLungeMechanic.interrupt(this);
-      DartMechanic.interrupt(this);
-    }
+    // a plain speed slow instead (getSpeedMultiplier). Dashes were already
+    // interrupted above (aiHalted).
     if (this.isFullyAsleep()) {
       this.targetVelocity.vx = 0;
       this.targetVelocity.vy = 0;
@@ -1032,6 +1038,7 @@ export class Enemy {
 
     const reformResult = ReformMechanic.update(this, { deltaTime, dotDamageEvents });
     if (reformResult?.suspend) return reformResult.result;
+    MergeMechanic.update(this);
 
     MimicMechanic.updateReveal(this, { deltaTime, distance });
     MimicMechanic.updateRedisguise(this, { deltaTime, distance });
@@ -1043,10 +1050,8 @@ export class Enemy {
     const buffResult = BuffMechanic.update(this, { deltaTime, dotDamageEvents });
     if (buffResult?.suspend) return buffResult.result;
 
-    const lureResult = LureMechanic.update(this, { deltaTime, distance, dotDamageEvents });
-    if (lureResult?.suspend) return lureResult.result;
-
     ParryMechanic.update(this, { deltaTime, distance });
+    PhalanxMechanic.update(this, { deltaTime });
     ReflectShieldMechanic.update(this, { deltaTime });
 
     const trapResult = TrapLayerMechanic.update(this, { deltaTime, dotDamageEvents });
@@ -2198,7 +2203,7 @@ export class Enemy {
 
   // Round-robins the glyph blink color across every currently-active
   // blink-capable effect (burn/poison/zap/stun/sleep/charm/freeze/wet/dizzy/goo)
-  // instead of a fixed priority chain — so e.g. Acid Blade poison and Drowse
+  // instead of a fixed priority chain — so e.g. Venom Vial poison and Drowse
   // Oil sleep landing on the same swing both get visible time, not just
   // whichever came first. See StatusEffectVisuals.js for the implementation.
   getDOTBlinkColor() {

@@ -139,7 +139,7 @@ export function computeSpeedMultiplier(enemy) {
 // parts ride on its hooks: a permanently frozen slime never thaws, zap holds
 // for as long as the enemy is wet but out of the water (standing in water
 // grounds it — see Zap in GLOSSARY.md), a thawing enemy shudders for its last
-// 0.6s, and poison running fully out resets the Venom Blade counter. DoT ticks bypass invulnerability (minimum 1) and are
+// 0.6s. DoT ticks bypass invulnerability (minimum 1) and are
 // returned for the caller to spawn damage numbers from.
 export function updateStatusEffects(enemy, deltaTime) {
   const permanentFreeze = !!enemy.data?.freezePermanent;
@@ -152,9 +152,6 @@ export function updateStatusEffects(enemy, deltaTime) {
       if (effect === 'freeze') {
         slot.shuddering = slot.stacks >= MAX_PIPS && !permanentFreeze && slot.duration < 0.6;
       }
-    },
-    onExpire: (effect) => {
-      if (effect === 'poison') enemy.poisonStackCount = 0;
     }
   });
 

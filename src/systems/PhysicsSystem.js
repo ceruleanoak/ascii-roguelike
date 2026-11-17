@@ -14,6 +14,9 @@ import { wetPipCount, wetPipSpeed } from './StatusEffectSystem.js';
 import { destroyWetOils } from './ConsumableSlotBreaks.js';
 import { isDousedByDeepWater, douseCarriedTorches } from './TorchDousing.js';
 import { ChargeMechanic } from '../entities/enemyMechanics/ChargeMechanic.js';
+import { interruptDashes } from '../entities/enemyMechanics/dashInterrupt.js';
+import { cancelParry } from '../entities/enemyMechanics/ParryMechanic.js';
+import { DEEP_LAVA_SPEED } from './DeepLava.js';
 
 // Re-exported so existing imports (e.g. Enemy.js) keep working.
 // New code should import directly from PlaneSystem.
@@ -305,12 +308,16 @@ export class PhysicsSystem {
     const scaledForce = force * (1 - resistance);
     entity.velocity.vx = nx * scaledForce;
     entity.velocity.vy = ny * scaledForce;
+    // Knocked back breaks a parry winding up or open (ParryMechanic). The
+    // status core covers the enemy knockback status; this covers the player,
+    // whose knockback is velocity alone.
+    cancelParry(entity);
     // Only enemies carry the knockback status (it idles their AI); the
     // player's knockback is the velocity alone (bug #416).
     if (entity.statusEffects?.knockback) entity.applyStatusEffect('knockback', duration);
 
-    // Knocked away interrupts in-flight telegraphs (attack windup, charge
-    // windup/dash) so they don't resume mid-air or fire on landing. The AI
+    // Knocked away interrupts in-flight telegraphs (attack windup, every
+    // dash — interruptDashes) so they don't resume mid-air or fire on landing. The AI
     // loop already idles the main state machine while knockback is active.
     // An interrupted attack hands the turn to the enemy's other attack kind
     // (ChargeMechanic: charge ↔ melee) rather than re-arming the same one.
@@ -319,7 +326,7 @@ export class PhysicsSystem {
       entity.windupTimer = 0;
       ChargeMechanic.onMeleeInterrupted(entity);
     }
-    ChargeMechanic.interrupt(entity);
+    interruptDashes(entity);
   }
 
   update(deltaTime, backgroundObjects = [], room = null, combatSystem = null) {
@@ -428,6 +435,7 @@ export class PhysicsSystem {
     let slowingMultiplier = 1.0; // For numeric slowing values (trees, stumps)
     let hitTrunk = false; // moving into a slamsAtSpeed object this frame
     let damagingLiquid = null; // Track lava damage
+    let inDeepLava = false; // Deep Lava (BackgroundObject.deepLava) — see velocityMultiplier below
     let healingLiquid = null; // Track hot spring heal
     let onSlopeDirection = null; // Ascent room slope push direction
     let onCurrentDirection = null; // Yellow zone river current push direction
@@ -513,6 +521,7 @@ export class PhysicsSystem {
             if (isLavaObj) {
               const dmg = obj._variantData ? obj._variantData.damage : obj.damage;
               damagingLiquid = { damage: dmg, name: obj.name || 'Lava' };
+              if (obj.deepLava) inDeepLava = true;
               // Lava does NOT set inLiquid — no wet status
             } else if (isHotWaterObj) {
               healingLiquid = {
@@ -653,6 +662,7 @@ export class PhysicsSystem {
     // metal, not the lava under it — no burn, and no float charge spent.
     if (damagingLiquid && room?.metalPlatform && isOnMetalPlatform(room.metalPlatform, entity)) {
       damagingLiquid = null;
+      inDeepLava = false;
     }
     const overLiquid = inLiquid || inMud || !!damagingLiquid;
     if (entity.floatCharge !== undefined) entity.overLiquid = overLiquid;
@@ -661,6 +671,7 @@ export class PhysicsSystem {
       inLiquid = false;
       inDeepWaterTile = false;
       damagingLiquid = null;
+      inDeepLava = false;
       inGrass = false;
       inMud = false;
       slowingMultiplier = 1.0; // airborne — bushes/trees/stumps pass underneath
@@ -704,6 +715,9 @@ export class PhysicsSystem {
     } else if (slowingMultiplier < 1.0 && !isDodgeRolling) {
       velocityMultiplier = slowingMultiplier; // Trees/stumps use numeric value (dodge roll ignores)
     }
+
+    // Deep Lava holds everything that wades it, a roll included — DeepLava.js.
+    if (inDeepLava) velocityMultiplier = Math.min(velocityMultiplier, DEEP_LAVA_SPEED);
 
     if (entity.isStaffBlocking && !isDodgeRolling) {
       velocityMultiplier *= 0.5; // Staff block: half-speed while bracing
@@ -1973,7 +1987,7 @@ export class PhysicsSystem {
           // 1.5s (was 4s): poison wears off soon after stepping out.
           // Affinity immunity gates here, as shockEntity does for zap —
           // applyStatusEffect itself doesn't consult it, so a venom-affinity
-          // Sea Snake was poisoned by an Acid Blade pond.
+          // Sea Snake was poisoned by a poisoned pond.
           if (entity.applyStatusEffect
               && (!entity.shouldApplyStatusEffect || entity.shouldApplyStatusEffect('poison'))) {
             entity.applyStatusEffect('poison', 1.5, 1);

@@ -32,8 +32,9 @@ One commit per family, on `main`:
 known-bugs #425.
 
 **Still open:**
-- **Venom for daggers.** With Acid Blade gone, daggers have no poison of their own. Venom
-  Vial is an oil and does reach them. Tracked in `planning-inbox.md`.
+- ~~**Venom for daggers.**~~ Settled 2026-11-14: the Venom Vial oil is the dagger's poison and
+  adds no verb of its own (pips stack one per hit; the 3-hit BURST is removed). Oils no longer
+  poison water; only the thrown Poison Jar does.
 - **The pawn price / wares offering audit.** Every item's price and shop slot should match
   its rarity and power after the cuts.
 
@@ -199,7 +200,7 @@ and cuts the other poison blades.
 | ⚒ Bone Crusher | 3 | ⊤+b | **3→6** | shockwave | R3 | **Retune** — re-root to `⊥+b` (inside the family), dmg → 3–4 (**Open** on the exact number). |
 | ⟙ Glacier Hammer | 3 | ᛜ+i | **4→5** | shatters frozen enemies | R1 R3 | **Fold** into Ice Hammer (Ice Hammer gains `shattersFrozen`). |
 | ⁂ Spore Mace | 3 | ✺+ł | 4→4 | sleep dust burst | — | **Keep**. |
-| ⫪ Cinder Hammer | 3 | ⬢+a | **3→4** | blind dust + 1 burn tick | R3 | **Retune** dmg → 3. |
+| ⫪ Cinder Hammer | 3 | ⬢+a | **3→4** | burn on hit; a felled tree/bush throws Bone Dust's blind | R3 | **Retune** dmg → 3. |
 | ⟂ Slag Maul | 3 | ⟘+4 | **4→5** | places lava | R3, R1? | **Retune** dmg → 4 (= parent). **Open**: does lava count as the fire flavor (§9)? |
 
 ### spear (4)

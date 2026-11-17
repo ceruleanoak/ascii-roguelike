@@ -2,6 +2,7 @@ import { GRID, COLORS } from '../../game/GameConfig.js';
 import { ConsumableTriggerSystem } from '../../systems/ConsumableTriggerSystem.js';
 import { SPELL_AREAS } from '../../systems/MagicSystem.js';
 import { blendColors } from '../../systems/ZoneSystem.js';
+import { resolveWeaponDefaults } from '../../data/items.js';
 
 /**
  * WeaponPreviewDraw — held-weapon and thrown-consumable render passes that
@@ -189,17 +190,20 @@ export function drawHeldWindupCharge(renderer, body) {
   ctx.restore();
 }
 
-/** Hammer — or any weapon that sets `raisedWindup` (the Flail) — held raised
- * overhead during its windup. For the hammer this is the same anchor
+/** A hammer blow (a 'hammerRing' or 'shockwave' attack pattern, the latter
+ * often only by subtype default, as on the maces) held raised overhead
+ * during its windup. This is the same anchor
  * MeleeAttackDraw uses for drawAboveOwner, so the glyph doesn't jump when the
- * windup completes and createMeleeHammerRing's attack object takes over
+ * windup completes and the hammer's attack object takes over
  * drawing it for the strike itself. Static (no shake): the raised pose alone
  * reads as "about to swing" without competing with the impact-frame burst at
  * the strike. */
 export function drawRaisedWindupPose(renderer, body) {
   const held = body.heldItem;
   if (!held?.windupActive) return;
-  if (held.data?.attackPattern !== 'hammerRing' && !held.data?.raisedWindup) return;
+  if (!held.data) return;
+  const pattern = resolveWeaponDefaults(held.data).attackPattern;
+  if (pattern !== 'hammerRing' && pattern !== 'shockwave') return;
   const C = GRID.CELL_SIZE;
   renderer.drawEntity(
     body.position.x + C / 2,

@@ -24,6 +24,7 @@ import { isInteriorActive } from './PlaneSystem.js';
 import { detonateBomb } from './ExplosionEffects.js';
 import { clearStatusEffect } from './StatusEffects.js';
 import { splashLiquid } from './LiquidSplash.js';
+import { WaterLavaHitMechanic } from './WaterLavaHitMechanic.js';
 import { enemyInRadius, enemyVisualAnchor } from './enemyHitTest.js';
 
 export class ConsumableWindupEffects {
@@ -99,14 +100,18 @@ export class ConsumableWindupEffects {
         break;
       }
       case 'poison': {
-        // Poison Flask - apply poison
+        // Poison Jar — poisons every enemy in its radius at the throw target,
+        // and any water there (WaterLavaHitMechanic.poisonWaterInRadius).
+        const radius = cd.radius || 64;
         for (const enemy of enemies) {
-          if (enemyInRadius(enemy, px, py, 55, 20)) {
+          if (enemyInRadius(enemy, px, py, radius, 20)) {
             if (enemy.shouldApplyStatusEffect('poison')) enemy.applyStatusEffect('poison', 8);
             const at = enemyVisualAnchor(enemy);
             combatSystem.createDamageNumber('☠', at.x, at.y, '#44ff44');
           }
         }
+        const backgroundObjects = inv.game.activeRoom?.backgroundObjects;
+        if (backgroundObjects) WaterLavaHitMechanic.poisonWaterInRadius(backgroundObjects, px, py, radius);
         createBurstParticles(inv.game, particles, px, py, 18, '#44ff44');
         break;
       }

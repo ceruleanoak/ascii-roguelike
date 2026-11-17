@@ -13,9 +13,9 @@ import { enemyDistance, enemyInRadius, enemyNearestPoint } from './enemyHitTest.
 // tuned windup/flight times.
 const THROW_DURATION = 0.45;
 
-// How far a manual Jolt Jar flies along the player's facing when there is no
-// enemy to aim at (px).
-const JOLT_FACING_THROW_DISTANCE = 100;
+// How far a manual Jolt Jar or Poison Jar flies along the player's facing
+// when there is no enemy to aim at (px).
+const JAR_FACING_THROW_DISTANCE = 100;
 
 // How far a thrown liquid Bottle (a Liquid Splash) flies along the player's
 // facing (px) — far enough that the plus it lands as clears the player's cell.
@@ -33,6 +33,22 @@ function facingThrowTarget(player, distance) {
     targetX: c.x + (fx / len) * distance,
     targetY: c.y + (fy / len) * distance,
   };
+}
+
+// Where a thrown jar (Jolt Jar, Poison Jar) lands: the nearest point of the
+// nearest live enemy (enemyHitTest — an ordinary enemy's historic +20, a
+// Great Hand's art rather than its frame), or a fixed distance along the
+// player's facing when there is none to aim at.
+function jarThrowTarget(player, liveEnemies) {
+  const px = player.position.x + 20;
+  const py = player.position.y + 20;
+  let nearest = null;
+  for (const enemy of liveEnemies) {
+    const p = enemyNearestPoint(enemy, px, py, 20);
+    if (p.dist < (nearest?.dist ?? Infinity)) nearest = p;
+  }
+  if (nearest) return { targetX: nearest.x, targetY: nearest.y };
+  return facingThrowTarget(player, JAR_FACING_THROW_DISTANCE);
 }
 
 // Effect types with no AoE landing zone — the windup renderer skips the
@@ -306,17 +322,11 @@ export class ConsumableTriggerSystem {
         return false;
       }
       case 'poison': {
-        // Poison Flask: nearest enemy within 55px — START WINDUP
-        const px = player.position.x + 20;
-        const py = player.position.y + 20;
-        let nearestDist = Infinity;
-        for (const enemy of enemies) {
-          nearestDist = Math.min(nearestDist, enemyDistance(enemy, px, py, 20));
-        }
-        if (manual || nearestDist <= 55) {
-          return { windup: 1.0, effectType: 'poison' };
-        }
-        return false;
+        // Poison Jar: SPACE only (manualOnly). Thrown like the Jolt Jar — at
+        // the nearest live enemy, or along the player's facing.
+        if (!manual) return false;
+        const live = enemies.filter(e => !e.isDying && e.hp > 0);
+        return { windup: 0.7, effectType: 'poison', ...jarThrowTarget(player, live) };
       }
       case 'cleanse': {
         // Tonic: player has burn or wet; manual force-cleanses regardless
@@ -337,25 +347,9 @@ export class ConsumableTriggerSystem {
         // throw always fires, like every other thrown consumable: it lands on
         // the nearest live enemy, or a fixed distance along the player's
         // facing when there is none to aim at.
-        const px = player.position.x + 20;
-        const py = player.position.y + 20;
         const live = enemies.filter(e => !e.isDying && e.hp > 0);
         if (!manual && live.length < 2) return false;
-        // The nearest point of the nearest enemy (enemyHitTest): an ordinary
-        // enemy's historic +20, a Great Hand's art rather than its frame.
-        let nearest = null;
-        for (const enemy of live) {
-          const p = enemyNearestPoint(enemy, px, py, 20);
-          if (p.dist < (nearest?.dist ?? Infinity)) nearest = p;
-        }
-        let targetX, targetY;
-        if (nearest) {
-          targetX = nearest.x;
-          targetY = nearest.y;
-        } else {
-          ({ targetX, targetY } = facingThrowTarget(player, JOLT_FACING_THROW_DISTANCE));
-        }
-        return { windup: 0.7, effectType: 'jolt', targetX, targetY };
+        return { windup: 0.7, effectType: 'jolt', ...jarThrowTarget(player, live) };
       }
       case 'throwSteam': {
         // Steam Vial: creates a steam cloud — START WINDUP
@@ -543,7 +537,7 @@ export class ConsumableTriggerSystem {
       case 'waterBalloon': return cd.radius * 2; // same burst as the Bomb
       case 'curse':       return cd.radius;     // Cursed Skull
       case 'slow':        return 50;            // Slime Ball
-      case 'poison':      return 55;            // Poison Flask
+      case 'poison':      return cd.radius || 64; // Poison Jar, drawn at target position
       case 'jolt':        return cd.radius || 80; // Drawn at target position
       case 'throwSteam':  return cd.radius;     // Steam Vial
       case 'panic_blind': return cd.radius ?? 96; // Bone Dust

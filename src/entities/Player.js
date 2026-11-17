@@ -292,7 +292,14 @@ export class Player {
       daggerAutoFire: false,
       // Spear Pole Vault in flight: { fromX, fromY, toX, toY }, else null
       // (PoleVault.js). Set at roll start, cleared on landing.
-      vault: null
+      vault: null,
+      // Roll Combo (PlayerDodgeRollSystem.chain): chains made since this roll
+      // started, the roll direction held last frame, the combo's turn
+      // (+1/-1, 0 before its first chain), and the current roll's length.
+      comboChains: 0,
+      comboInput: null,
+      comboTurn: 0,
+      comboRollTime: 0
     };
 
     // Post-dodge crit window — set when dodge ends if equipped weapon has critAfterDodge.
@@ -330,7 +337,6 @@ export class Player {
     // (PoleVault.js) — the one time the player ignores solid objects.
     this.ignoreBackgroundCollision = false;
     this.pendingBlink = null; // Yellow mage: deferred teleport resolved in main.js
-    this.greenIdleDamageBonus = 0;
     this.greenCombatDamagePenalty = 0;
     this.backstabMultiplier = 1.0; // Cyan Rogue: multiplier applied when hitting undetected enemies
 
@@ -803,7 +809,6 @@ export class Player {
     this.rollCharge = 0;
     this.continuousRollActive = false;
     this.pendingBlink = null;
-    this.greenIdleDamageBonus = 0;
     this.greenCombatDamagePenalty = 0;
     this.backstabMultiplier = 1.0;
     this._lastDamageCause = null;

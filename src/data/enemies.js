@@ -481,6 +481,7 @@ export const ENEMIES = {
     elementalAffinity: { immunity: ['poison'], weakness: { freeze: 2.0 } },
     freezePermanent: true,
     wetDot: true,  // wet pips are damage over time (EnemyStatusEffects)
+    mergeOnContact: true,  // two Slimes that touch become one (MergeMechanic)
     affinities: ['goo'],
     sfx: { hit: 'goo_hit', death: ['goo_death_1', 'goo_death_2'] },
     tier: 'weak'
@@ -1090,6 +1091,20 @@ export const ENEMIES = {
     },
     lavaShy: true,         // paths around lava, never steps on it, walks out if thrown in
     lavaImmune: true,      // ...and takes no lava damage while it's there
+    // Near melee range it hops onto where the player stood: the hop lands
+    // softly, and the bump on arrival is the hit. Timings are enemy-timer
+    // data (÷2 real): ~0.7s visible squat, a 2s cooldown.
+    leapAttack: {
+      enabled: true,
+      hop: true,
+      counterLeap: false,
+      triggerRangeMin: GRID.CELL_SIZE * 1.5,
+      triggerRangeMax: GRID.CELL_SIZE * 3,
+      cooldown: 4.0,
+      windupTime: 1.4,
+      airTime: 0.6,
+      arcLift: GRID.CELL_SIZE * 0.75
+    },
     // Most weapons barely move it; a hammer sends it flying.
     knockbackTaken: { default: 0.25, bySubtype: { hammer: 2.0 } },
     affinities: ['fire'],
@@ -1230,14 +1245,14 @@ export const ENEMIES = {
     hp: 8,
     speed: 55,
     acceleration: 120,
-    damage: 3,
+    damage: 1,
     attackRange: GRID.CELL_SIZE * 3,
     aggroRange: GRID.CELL_SIZE * 5,
     attackCooldown: 2.0,
     attackWindup: 1.0,  // Fixed: was 0.8, below minimum 1.0
     attackType: 'melee',
     strikesOnlyInLava: true,  // the melee slot is only its lava fire breath — on land, damage comes from the charging body alone
-    decisionInterval: 0.6,
+    decisionInterval: 1.2,
     color: '#886633',
     grassStealth: true,
     shellCamouflage: true,
@@ -1255,9 +1270,9 @@ export const ENEMIES = {
     // the shell-comes-at-you lesson a full zone early.
     chargeMechanic: {
       enabled: true,
-      chargeSpeed: 260,          // Rolling rush — fast, but it only hurts on body contact
+      chargeSpeed: 130,          // Rolling rush — halved from 260: was near-undodgeable at close range
       chargeDuration: 0.9,
-      chargeWindup: 0.35,        // Barely a beat — the coil inside the shell is the real tell
+      chargeWindup: 1.4,         // ~0.7s real behind the red line telegraph — was 0.35, too short to read
       cooldown: 5.0,
       wallStunDuration: 2.5,     // Tips out of the shell on impact — generous punish window, mirrors Rockwarden's
       chargeRange: GRID.CELL_SIZE * 6,
@@ -1437,6 +1452,82 @@ export const ENEMIES = {
     elementalAffinity: {
       resistance: { 'physical': 0.6, 'stun': 0.8 },
       weakness: { 'magic': 1.5 }
+    },
+    affinities: ['humanoid'],
+    tier: 'normal'
+  },
+
+  // Red zone squad. Two to four spawn together (RoomGenerator → spawnPhalanx) and
+  // form up on sight: PhalanxMechanic owns the Formation, the held parry is
+  // ParryMechanic's `held` variant.
+  '4': {
+    char: '4',
+    name: 'Phalanx',
+    description: 'Spears behind shields, two to four abreast. Seen, they close ranks; only a back takes a blow.',
+    spellDescription: 'FORMS A WALL. STRIKE FROM BEHIND.',
+    trueName: 'VIER',
+    mass: 1.6,
+    hp: 6,
+    speed: 30,              // ×1.3 once the spear converts it (weaponConversion.js)
+    acceleration: 160,
+    damage: 2,
+    attackRange: GRID.CELL_SIZE * 1.5,   // replaced by the spear's reach on equip
+    aggroRange: GRID.CELL_SIZE * 7,
+    attackCooldown: 2.2,
+    attackWindup: 0,
+    attackType: 'melee',
+    decisionInterval: 0.6,
+    color: '#c8964a',
+    // Authored whole (stateDefaults.js): the Alert that never holds and the
+    // Approach roll are why.
+    states: {
+      // Wanders even with the player near — a member that rolled "wander"
+      // instead of Search (approach.searchChance) really does wander.
+      alert: { movement: 'wander', listen: false },
+      // Losing sight, each member rolls: Search the mark, or let it go.
+      approach: { movement: 'close', searchChance: 0.5 },
+      // The beat before the thrust, guard still up: the read.
+      anticipate: { duration: 0.8, breakIf: { outOfBand: true } },
+      strike: {},
+      // Plants after the thrust, guard down — the opening.
+      recover: { duration: 1.0, variant: 'stationary' },
+      search: {},
+    },
+    // The front. Held, not cycled: up whenever the Phalanx isn't thrusting or
+    // recovering, and only melee from inside the arc is turned aside.
+    parryMechanic: {
+      enabled: true,
+      held: true,
+      parryArcDegrees: 180,
+      parryWindup: 0.5,        // raising it again after a thrust or a stun
+      parryCooldown: 1.0,      // after a stun or knockback breaks it
+      parryColor: '#e0c890'
+    },
+    phalanx: {
+      enabled: true,
+      squadSize: { min: 2, max: 4 },   // rolled per squad
+      formations: ['line', 'ring'],
+      spacing: GRID.CELL_SIZE * 1.25,
+      thinkInterval: 0.8,      // how often the squad re-decides (enemy-timer seconds)
+      headingTurnRate: 0.7,    // radians per enemy-timer second the Formation turns
+      guardTurnRate: 1.6,      // radians per enemy-timer second one guard turns
+      strikeStagger: 1.2,      // the others' spears wait this long after a thrust
+      advanceSpeedMult: 0.6    // the Formation closes slower than a member walks
+    },
+    // Every Phalanx carries a Spear. It never picks anything up.
+    itemUsage: {
+      enabled: true,
+      canPickup: false,
+      preferredItems: [],
+      useRange: GRID.CELL_SIZE * 2,
+      useCooldown: 1.5,
+      maxItems: 1,
+      dropOnDeath: true,
+      useConsumablesAt: 0
+    },
+    spawnEquipment: { chance: 1.0, weapons: ['↑'] },
+    elementalAffinity: {
+      resistance: { 'burn': 0.7 }
     },
     affinities: ['humanoid'],
     tier: 'normal'
@@ -1987,50 +2078,6 @@ export const ENEMIES = {
   },
 
 
-  // --- Aquatic ---
-
-  'v': {
-    char: 'v',
-    name: 'Siren',
-    description: 'Its song pulls you toward the water. Reach it and it will tear you apart.',
-    spellDescription: 'SONG PULLS YOU IN.',
-    trueName: 'VOCIS',
-    mass: 0.5,
-    hp: 5,
-    speed: 0,
-    acceleration: 0,
-    damage: 3,              // Punishing melee if pulled into range
-    attackRange: GRID.CELL_SIZE * 1.5,
-    aggroRange: GRID.CELL_SIZE * 10,
-    attackCooldown: 1.5,
-    attackWindup: 1.0,
-    windupMovement: 'stop',
-    attackType: 'melee',
-    decisionInterval: 0.5,
-    color: '#66ccdd',
-    small: true,           // Hides under deep snow — visible as cyan bump
-    movementStyle: 'keeper',
-    movementConfig: {
-      preferredRange: GRID.CELL_SIZE * 999,
-      rangeTolerance: GRID.CELL_SIZE * 999
-    },
-    idleBehavior: 'stationary',
-    lureMechanic: {
-      enabled: true,
-      lureRadius: GRID.CELL_SIZE * 9,     // Slightly larger — harder to stay outside
-      lurePullForce: 90,
-      lureChannelTime: 1.5,               // Shorter channel — snappier, more legible beats
-      lureCooldown: 2.5,                  // 2.5s silent window — enough to close and hit once
-      lureIndicatorChar: '~'
-    },
-    elementalAffinity: {
-      weakness: { 'burn': 2.0, 'stun': 2.0 }  // stun: interrupt the song mid-channel
-    },
-    affinities: ['aquatic'],
-    tier: 'normal'
-  },
-
-
   // ============================================================
   // YELLOW ZONE — lightning / storm
   // ============================================================
@@ -2058,7 +2105,8 @@ export const ENEMIES = {
       jumpSpeed: 260,
       jumpDuration: 0.45,
       arcHeight: GRID.CELL_SIZE * 1.6,  // Parabolic visual lift — peaks mid-flight
-      zigzagStrength: 0.85   // Strong deterministic zigzag — chaotic but learnable
+      zigzagStrength: 0.85,  // Strong deterministic zigzag — chaotic but learnable
+      waterGlide: true       // Over water it stops hopping and glides (JumpMechanic)
     },
     acceleration: 700,
     decisionInterval: 0.2,
@@ -2786,16 +2834,16 @@ export const ZONE_SPAWN_TABLES = {
   'red': {
     // Fire/scorched theme - NO green/ice enemies
     0: ['l', '%'],                                 // L1-2: Magma Slugs (intro trail mechanic), Bumpers (intro lava spacing)
-    3: ['f', 't', 'l', '6'],                       // L3-5: Add Fire Bats, Tortoises, Bombs
-    6: ['f', '0', 'F', 't', 'k', 'l', '6'],        // L6-8: Add Living Rocks, Fire Elementals, Miners
-    9: ['f', '0', 'F', 'S', 't', 'k', '6', 'R']    // L9-10: Add Skeletons (charred bones), Rockwardens
+    3: ['f', 't', 'l', '6', '4'],                  // L3-5: Add Fire Bats, Tortoises, Bombs, Phalanx squads
+    6: ['f', '0', 'F', 't', 'k', 'l', '6', '4'],   // L6-8: Add Living Rocks, Fire Elementals, Miners
+    9: ['f', '0', 'F', 'S', 't', 'k', '6', 'R', '4'] // L9-10: Add Skeletons (charred bones), Rockwardens
   },
 
   'cyan': {
     // Ice/frozen theme - NO fire enemies
     0: ['w', 'c'],                          // L1-2: Frost Wolves, Breeze Wisps (intro push)
-    3: ['w', 'X', 'c', 'v'],               // L3-5: Add Ice Wraiths, Sirens
-    6: ['X', 'w', 'U', 'u', 'v'],          // L6-8: Add Frozen Constructs, Glacier Crabs, Sirens
+    3: ['w', 'X', 'c'],                    // L3-5: Add Ice Wraiths
+    6: ['X', 'w', 'U', 'u'],               // L6-8: Add Frozen Constructs, Glacier Crabs
     9: ['w', 'U', 'C', 'I', 'u', 'x', 'D', 'y'] // L9-10: Add Cryomancers, Ice Golems, Steam Specters, Frozen Duelists, Yetis
   },
 
@@ -2851,7 +2899,10 @@ export function getRandomEnemy(depth) {
 }
 
 // Get random enemy for specific zone (zone-aware spawning)
-export function getZoneRandomEnemy(depth, zoneType) {
+// `excluded` lists Enemy chars a room keeps out of its random spawns (a letter
+// template's `excludedEnemies`). Returns null when the exclusion empties the
+// band, so callers skip the spawn.
+export function getZoneRandomEnemy(depth, zoneType, excluded = null) {
   const zoneTables = ZONE_SPAWN_TABLES[zoneType];
   if (!zoneTables) {
     // Fallback to legacy depth-based spawning for unknown zones
@@ -2871,6 +2922,8 @@ export function getZoneRandomEnemy(depth, zoneType) {
     }
   }
 
+  if (excluded?.length) table = table.filter(c => !excluded.includes(c));
+  if (table.length === 0) return null;
   return table[Math.floor(Math.random() * table.length)];
 }
 

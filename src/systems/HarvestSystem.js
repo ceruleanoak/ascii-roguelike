@@ -57,8 +57,8 @@ const FORAGE_CHARS = new Set(['ŋ', '&', 'e', 'n', '8', '*', 'i']);
 // What each Spell farms, and the tool it takes (`tool(item, obj)`; `obj` is
 // left out when the question is whether the player carries a tool for the
 // material at all). Trees fall only to an axe; rocks to the pickaxe, a
-// hammer or the Flail (InteractionSystem.resolveSmashRefusal). A Glittering
-// Rock is a rock too, but takes only the pickaxe, the Flail or a hammer of its
+// hammer (InteractionSystem.resolveSmashRefusal). A Glittering Rock is a
+// rock too, but takes only the pickaxe or a hammer of its
 // minHammerLevel (InteractionSystem.resolveGlitteringRockDamage).
 // HARVEST works them in `stage` order: containers first, then trees, rocks and
 // Brush, Boulders and the forage together, then grass (any blade, richest
@@ -88,9 +88,9 @@ const MATERIALS = {
     is: obj => obj.data?.dropEffect === 'destroyObject:rockHarvest'
       || !!(obj.data?.glitteringRock && obj.data.showsGlitter),
     // Mirrors the strike rules: a pickaxe mines anything; a Glittering Rock
-    // takes the Flail (breaksRock) or a hammer of its minHammerLevel
+    // takes a breaksRock weapon or a hammer of its minHammerLevel
     // (InteractionSystem.resolveGlitteringRockDamage); plain Rock takes any
-    // hammer or the Flail.
+    // hammer or a breaksRock weapon.
     tool: (item, obj) => {
       const data = item?.data;
       if (data?.isPickaxe) return true;

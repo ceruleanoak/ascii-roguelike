@@ -1,4 +1,4 @@
-import { GRID, PHYSICS, COLORS, POISONED_WATER_DURATION } from '../game/GameConfig.js';
+import { GRID, PHYSICS, COLORS } from '../game/GameConfig.js';
 import { planeOf, inSamePlane, objectOnPlane, tagInteriorPlane, isInteriorActive, updateProjectileTunnelPlane } from './PlaneSystem.js';
 import { applyExitMutatingSwordHit } from './ExitSystem.js';
 import { BoomerangMechanic } from './BoomerangMechanic.js';
@@ -30,6 +30,7 @@ import { strikeWatcherEye } from './WatcherEye.js';
 import { knockbackTakenScale } from '../entities/knockbackTaken.js';
 import { enemyOverlapsBox, enemyNearestPoint, enemyVisualAnchor, enemyEffectSource } from './enemyHitTest.js';
 import { countsAsBoss } from '../entities/bossTest.js';
+import { hasDetectedPlayer } from '../entities/enemyVision.js';
 
 // Default maximum travel distance (in pixels) for gun bullets. Roughly 2/3 of a
 // room — keeps cross-room sniping in check while still feeling powerful.
@@ -638,11 +639,12 @@ export class CombatSystem {
           let adjustedDamage = Math.ceil(proj.damage * elementalMod * speedMultiplier);
           // A 0-damage projectile (fizzled spark, Freeze Ray) stays harmless
           // through the flat modifier below.
-          // Green Ranger flat modifier (not scaled by speed falloff); excludes boomerangs.
-          if (proj.owner && proj.owner.characterType === 'green' && !proj.boomerang && adjustedDamage > 0) {
-            const enemyUndetected = enemy.detectionIndicatorTimer <= 0;
-            const greenBonus = enemyUndetected ? proj.owner.greenIdleDamageBonus : -proj.owner.greenCombatDamagePenalty;
-            adjustedDamage = Math.max(1, adjustedDamage + greenBonus);
+          // Green Ranger penalty on an enemy that has detected the player (not
+          // scaled by speed falloff); excludes boomerangs. An unseen enemy
+          // takes a guaranteed crit instead (rollCrit).
+          if (proj.owner && proj.owner.characterType === 'green' && !proj.boomerang && adjustedDamage > 0
+              && hasDetectedPlayer(enemy)) {
+            adjustedDamage = Math.max(1, adjustedDamage - proj.owner.greenCombatDamagePenalty);
           }
 
           // Handle immunity
@@ -658,7 +660,7 @@ export class CombatSystem {
             continue;
           }
 
-          const critRoll = rollCrit(adjustedDamage, proj.owner, enemy);
+          const critRoll = rollCrit(adjustedDamage, proj.owner, enemy, { stealthCrit: !proj.boomerang });
           const finalDamage = critRoll.damage;
           // Told to takeDamage so its sleep-wake-on-damage rule doesn't clear
           // stacks this same hit is about to (re)apply — see Enemy.js.
@@ -873,6 +875,9 @@ export class CombatSystem {
               continue;
             }
 
+            // Cinder Hammer: a tree or bush is felled to dust (WeaponEffectsSystem).
+            if (this.game.weaponEffectsSystem?.onObjectHit(attack, obj)) continue;
+
             // Onyx Hammer: an unbreakable rock leaves its cell rolling.
             if (this.game.boulderSystem?.rollFromRest(attack, obj)) {
               attack.hasHitObject = true;
@@ -897,8 +902,8 @@ export class CombatSystem {
 
             // Blunt weapons can't damage objects, but still rustle grass; Brush
             // yields to anything, and allWeaponsDamage-flagged instances yield to anything too.
-            // Rocks (0) are the standing exception (bug #10): the Flail is
-            // blunt and breaks rock, and resolveSmashRefusal already let the
+            // Rocks (0) are the standing exception (bug #10): a breaksRock
+            // blow is blunt and breaks rock, and resolveSmashRefusal already let the
             // swing through — without this the payload below would eat it.
             if (!attack.isBlunt || obj.data.kind === 'brush' || obj.char === '0' || obj.allWeaponsDamage) {
               const smashDamage = this.game.interactionSystem.resolveSmashDamage(attack, obj);
@@ -937,15 +942,14 @@ export class CombatSystem {
                 this.conductElectricity(obj, attack.damage, enemies, player);
               }
 
-              // Water state transitions from melee. Environmental terrain
+              // Water state transitions from melee. Poison is not one: only
+              // the Poison Jar poisons water. Environmental terrain
               // (BackgroundObject.isEnvironmental()) never spawns a damage
               // number — each branch already has its own feedback: the flood
               // fill / tile's own color-state change, a steam cloud puff.
               if (obj.isWater && obj.isWater()) {
                 if (attack.onHit === 'freeze') {
                   obj.setWaterState('frozen', Infinity); // Stays frozen until thawed by fire
-                } else if (attack.onHit === 'poison') {
-                  obj.setWaterState('poisoned', POISONED_WATER_DURATION);
                 } else if (attack.onHit === 'stun' && attack.electric) {
                   this.game?.electricitySystem?.seedFromWeapon(obj, backgroundObjects, attack,
                     { tileDuration: 4.0, hutPlane: isInteriorActive(this.game) });
@@ -954,8 +958,6 @@ export class CombatSystem {
                 }
               } else if (obj.isTrough && attack.onHit === 'burn') {
                 WaterLavaHitMechanic.burnWater(obj, backgroundObjects, this); // the Alchemy Lab trough heats for good
-              } else if (obj.isTrough && attack.onHit === 'poison') {
-                WaterLavaHitMechanic.poisonTrough(backgroundObjects); // and poisons for good
               }
 
               // Water attack hits lava → solidify to rock
@@ -1040,28 +1042,29 @@ export class CombatSystem {
             if (attack.electric) elementalMod *= enemy.getElementalModifier('shock');
             if (attack.isBlade) elementalMod *= enemy.getElementalModifier('blade');
 
-            // Green Ranger stealth modifier: bonus when enemy hasn't detected the player
             let totalDamage = attack.damage;
 
             // Spear distance crit: 3rd hitbox at full thrust range — guaranteed crit
             if (attack.distanceCrit) {
               totalDamage = Math.ceil(totalDamage * 1.5);
             }
-            // A 0-damage swing (Flag) stays harmless — the Green flat bonus
-            // only adjusts a hit that already does damage.
-            if (attack.owner && attack.owner.characterType === 'green' && totalDamage > 0) {
-              const enemyUndetected = enemy.detectionIndicatorTimer <= 0;
-              const greenBonus = enemyUndetected ? attack.owner.greenIdleDamageBonus : -attack.owner.greenCombatDamagePenalty;
-              totalDamage = Math.max(1, totalDamage + greenBonus);
+            // Green Ranger penalty on an enemy that has detected the player. An
+            // unseen enemy takes a guaranteed crit instead (rollCrit). A
+            // 0-damage swing (Flag) stays harmless.
+            if (attack.owner && attack.owner.characterType === 'green' && totalDamage > 0
+                && hasDetectedPlayer(enemy)) {
+              totalDamage = Math.max(1, totalDamage - attack.owner.greenCombatDamagePenalty);
             }
 
             // Backstab (assassin strike): multiplier when hitting an enemy that hasn't detected the player.
             // Cyan Rogue speciality — highest multiplier — but any character with backstabMultiplier > 1
-            // benefits. Enemy is "unaware" when idle (not enraged, no memory chase, no active detection).
+            // benefits, on an enemy that hasn't detected the player (hasDetectedPlayer).
+            // The hit says so with SNEAK ATTACK over its damage number.
+            let sneakAttack = false;
             if (attack.owner && (attack.owner.backstabMultiplier || 1.0) > 1.0) {
-              const enemyUnaware = !enemy.enraged && !enemy.aggroMemoryActive && enemy.detectionIndicatorTimer <= 0;
-              if (enemyUnaware) {
+              if (!hasDetectedPlayer(enemy)) {
                 totalDamage = Math.ceil(totalDamage * attack.owner.backstabMultiplier);
+                sneakAttack = totalDamage > 0;
               }
             }
 
@@ -1122,6 +1125,9 @@ export class CombatSystem {
                 const critLabel = critRoll.isLucky ? 'LUCKY CRIT' : 'CRIT';
                 this.createDamageNumber(critLabel, at.x, at.y - 14, '#ffff66');
               }
+              if (sneakAttack) {
+                this.createDamageNumber('SNEAK ATTACK', at.x, at.y - 26, '#44ffff');
+              }
 
               // Show weakness indicator
               if (elementalMod > 1.0) {
@@ -1170,17 +1176,6 @@ export class CombatSystem {
               // Show distance crit indicator (spear full-extension bonus)
               if (attack.distanceCrit) {
                 this.createDamageNumber('PIERCE', at.x, at.y - 14, '#ffff66');
-              }
-
-              // Venom Blade poison stacking: 3 hits triggers a burst
-              if (attack.poisonStacks && attack.onHit === 'poison') {
-                enemy.poisonStackCount = (enemy.poisonStackCount || 0) + 1;
-                if (enemy.poisonStackCount >= 3) {
-                  enemy.hp = Math.max(0, enemy.hp - 2);
-                  enemy.poisonStackCount = 0;
-                  this.createDamageNumber('BURST', at.x, at.y - 16, '#00ff88');
-                  this.createDamageNumber(2, at.x, at.y, '#00ff88');
-                }
               }
 
               // Apply knockback — a thrust uses exact facing direction, others use positional
@@ -1710,7 +1705,7 @@ export class CombatSystem {
           ...attackData,
           hasHit: false,
           // Per-swing accuracy roll, as for bullets: a missed swing lands no
-          // damage on whatever it reaches and shows MISS instead (the Punch).
+          // damage on whatever it reaches and shows MISS instead.
           missed: attackData.accuracy !== undefined && Math.random() > attackData.accuracy
         });
       }

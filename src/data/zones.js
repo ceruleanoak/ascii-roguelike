@@ -191,7 +191,9 @@ export const ZONES = {
       'IF I CALL, WILL I HEAR AN ANSWER?',
       'WHAT LIES ACROSS THE RIDGE?',
       'THE MAZE HIDES RARE TREASURES.',
-      'LOST MY SPECTACLES...'
+      'LOST MY SPECTACLES...',
+      'WATER WASHES OIL FROM METAL.',
+      'THE ALCHEMIST KNOWS OF POISON.'
     ],
     rareSayings: [
       'A STUNNED FOE WILL NOT LEAP.',
