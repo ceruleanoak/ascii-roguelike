@@ -23,8 +23,9 @@ import { Item } from '../entities/Item.js';
  * `burning` lives on the BackgroundObject instance, so it resets for free
  * every time HutSystem regenerates the hut.
  *
- * A Torch in any quick slot lights an unlit fireplace on approach, no
- * SPACE/stick needed — checked passively every frame via update().
+ * A Torch (or a weapon flagged `lightsFireplaces`, the burning Cinder Hammer)
+ * in any quick slot lights an unlit fireplace on approach, no SPACE/stick
+ * needed — checked passively every frame via update().
  */
 
 const UNLIT_COLOR = '#886655';
@@ -102,8 +103,9 @@ export class FireplaceSystem {
     const fireplace = this._findFireplace();
     if (!fireplace || fireplace.burning) return;
     const game = this.game;
-    const hasTorch = game.player.quickSlots.some(slot => slot?.data?.weaponSubtype === 'torch');
-    if (!hasTorch) return;
+    const hasFlame = game.player.quickSlots.some(slot =>
+      slot?.data?.weaponSubtype === 'torch' || slot?.data?.lightsFireplaces);
+    if (!hasFlame) return;
 
     fireplace.burning = true;
     fireplace.color = LIT_COLOR;

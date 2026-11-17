@@ -11,12 +11,10 @@
  *                    Read live from that weapon's bolt fields (boltDamage,
  *                    bulletChar/Speed/Range, manaCost), so the two stay in
  *                    parity — a dry meter throws the same fizzled spark.
- *   dustBurst      — { status, duration, color, burnTicks }: a sight-blocking
- *                    cloud that applies `status` to every enemy in it (Spore
- *                    Mace sleep, Cinder Hammer blind). `burnTicks` also sets
- *                    them burning for that many burn ticks (Cinder Hammer: 1).
- *                    Lands at the weapon tip, or around the player for
- *                    hammerRing weapons (the ring hits there).
+ *   dustBurst      — { status, duration, color }: a sight-blocking cloud
+ *                    that applies `status` to every enemy in it (Spore Mace
+ *                    sleep). Lands at the weapon tip, or around the player
+ *                    for hammerRing weapons (the ring hits there).
  *
  * Melee-hit flags (onMeleeHit, injected onto attacks by Item.createMeleeAttack):
  *   shattersFrozen    — hitting a Frozen enemy sprays one freeze pip onto
@@ -27,6 +25,14 @@
  *   rootDuration      — seconds the hit roots the enemy in place, reusing the
  *                       Trident's pinnedDuration (Rootstaff)
  *
+ * Object-hit flags (onObjectHit, injected onto attacks by Item.createMeleeAttack):
+ *   fellsToDust — char of the consumable whose dust the felling throws up
+ *                 (Cinder Hammer → Bone Dust 'ᐧ'). A hit on a burnable tree
+ *                 or bush destroys it outright, and the first one each swing
+ *                 bursts a cloud there with that consumable's blind, read
+ *                 live from its radius/duration/color so the two stay the
+ *                 same. A swing that fells nothing throws no dust.
+ *
  * Projectile-hit flags (onProjectileHit):
  *   plagueBurst — the bullet bursts into a poison cloud where it stops (Plague Gun)
  *   ensnares    — the bolo snares the enemy it hits (Snare Trap semantics:
@@ -36,15 +42,18 @@
 
 import { GRID } from '../game/GameConfig.js';
 import { ITEMS } from '../data/items.js';
-import { tagInteriorPlane, tagLootLayer, planeOf } from './PlaneSystem.js';
+import { tagInteriorPlane, tagLootLayer } from './PlaneSystem.js';
 import { fizzleToSpark } from './MagicSystem.js';
-import { applyDotTicks } from './StatusEffects.js';
-import { enemyInRadius, enemyVisualAnchor, enemyEffectSource } from './enemyHitTest.js';
+import { enemyVisualAnchor, enemyEffectSource } from './enemyHitTest.js';
 import { countsAsBoss } from '../entities/bossTest.js';
 
 const C = GRID.CELL_SIZE;
 const DUST_BURST_RADIUS = C * 2.5;
 const DUST_CLOUD_SECONDS = 3.0;
+// The trees and bushes a fellsToDust weapon destroys: Tree, Bush, Shrub,
+// Ember Bush. A Tree is its 'Y' char everywhere (resolveSmashRefusal); a
+// Petrified Tree shares it and stays standing, because it does not burn.
+const FELLABLE_CHARS = new Set(['Y', '&', '%', 'e']);
 const SHATTER_RADIUS = C * 2.5;
 const SHATTER_FREEZE_SECONDS = 5.0;
 const PLAGUE_BURST_RADIUS = C * 1.5;
@@ -91,6 +100,22 @@ export class WeaponEffectsSystem {
     if (data.callsLightning) characterSystem.callLightningStrike(player, data);
     if (data.swingBolt) this._throwBolt(player, ITEMS[data.swingBolt]);
     if (data.dustBurst) this._dustBurst(player, data);
+  }
+
+  // Called for each background object a melee attack touches, before the
+  // smash gates (CombatSystem). True when the hit was handled here and the
+  // ordinary object-hit path should skip it.
+  onObjectHit(attack, obj) {
+    if (!attack.fellsToDust || !FELLABLE_CHARS.has(obj.char) || !obj.isFlammable()) return false;
+    const result = obj.takeDamage(obj.hp, false);
+    if (!result.destroyed) return false;
+    if (result.effect) this.game.combatSystem.objectDestroyEvents.push({ obj, effect: result.effect, attack });
+    attack.hasHitObject = true;
+    if (!attack._feltDust) {
+      attack._feltDust = true;
+      this._fellingDust(attack, obj);
+    }
+    return true;
   }
 
   // Called for every landed melee hit (after damage, knockback and onHit).
@@ -170,7 +195,7 @@ export class WeaponEffectsSystem {
   }
 
   _dustBurst(player, data) {
-    const { status, duration = 3.0, color, burnTicks } = data.dustBurst;
+    const { status, duration = 3.0, color } = data.dustBurst;
     const px = player.position.x + C / 2;
     const py = player.position.y + C / 2;
     let x = px;
@@ -186,16 +211,20 @@ export class WeaponEffectsSystem {
     const enemies = this.game._activeEnemies();
     const plane = player.plane ?? 0;
     this.game.combatSystem.applyAOEStatus({ x, y }, DUST_BURST_RADIUS, status, duration, enemies, plane);
-    if (burnTicks) this._burnInCloud(x, y, burnTicks, enemies, plane);
     this._pushCloud(x, y, DUST_BURST_RADIUS, DUST_CLOUD_SECONDS, color);
   }
 
-  // Same reach as applyAOEStatus (plane + radius), but burns for a tick count.
-  _burnInCloud(x, y, ticks, enemies, plane) {
-    for (const enemy of enemies) {
-      if (planeOf(enemy) !== plane) continue;
-      if (enemyInRadius(enemy, x, y, DUST_BURST_RADIUS)) applyDotTicks(enemy, 'burn', ticks);
-    }
+  // The felled object's cell bursts into the consumable's dust: its blind,
+  // over its radius, for its duration (Bone Dust's panic_blind landing).
+  _fellingDust(attack, obj) {
+    const dust = ITEMS[attack.fellsToDust];
+    const x = obj.position.x + C / 2;
+    const y = obj.position.y + C / 2;
+    const radius = dust.radius ?? 96;
+    const duration = dust.duration ?? 4.0;
+    const plane = attack.shooterPlane ?? 0;
+    this.game.combatSystem.applyAOEStatus({ x, y }, radius, 'blind', duration, this.game._activeEnemies(), plane);
+    this._pushCloud(x, y, radius, duration, dust.color);
   }
 
   _shatter(attack, enemy) {

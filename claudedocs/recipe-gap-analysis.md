@@ -118,7 +118,7 @@ Checked free in both slot orders, 2026-09-27.
 | Ice Hammer `ᛜ` + Ice `i` | Glacier Hammer: shatters frozen enemies | Cyan · Anticipate |
 | Exploding Mace `✺` + Pollen `ł` | Spore Mace: sleep-dust burst | Yellow |
 | Lava Sword `ᚠ` + Slag `4` | Slag Blade: cooled-slag patches | Red · React |
-| Onyx Hammer `⬢` + Ash `a` | Cinder Hammer: blinding ash cloud | Red |
+| Onyx Hammer `⬢` + Ash `a` | Cinder Hammer: burning hammer (fire hits, lights fireplaces); fells a tree or bush into Bone Dust's blind | Red |
 | Thick Staff `Ⲯ` + Root `r` | Rootstaff: roots enemies in place (staff t3) | Green |
 | Keen Slingshot `⋔` + Pearl Shard `p` | Pearl Slingshot: ricochets, re-aiming at the nearest enemy after each bounce | Cyan |
 
