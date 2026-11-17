@@ -19,11 +19,12 @@ import { findSafeSpawnPosition } from './safeSpawn.js';
 const STAGE_CONFIG = [
   {
     // Stage 0: rare ingredient for a solid tier-2 weapon or armor
-    // Metal, Teeth, Fire Essence, Ice, Slurry, Arrowhead, Axe head, Cloth, Moss.
+    // Metal, Teeth, Fire Essence, Arrowhead, Axe head, Cloth, Moss.
     // Not Scale (epic), nor Eye or Silk: enemies drop Eye on under 1% of kills
     // and Silk almost never (Maze loot, rare neutral-room offers), so asking for
-    // either stalled the first trade for most of a run.
-    requestPool: ['M', 't', 'F', 'i', '⚗', '△', '⊿', '▤', '❦'],
+    // either stalled the first trade for most of a run. Not Ice or Slurry
+    // either: they don't open the errand (user, 2026-11-16).
+    requestPool: ['M', 't', 'F', '△', '⊿', '▤', '❦'],
     rewardPool:  ['‡', 'ᛉ', '⇒', '⊤', 'X', '⛓', '𐤄', '𐤂'],
     isIngredient: true
   },
