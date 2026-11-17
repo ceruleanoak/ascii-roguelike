@@ -232,6 +232,22 @@ export function createGooBurst(game, x, y, { count = 8, reach = GRID.CELL_SIZE *
   while (game.gooBlobs.length > MAX_GOO_BLOBS) game.gooBlobs.shift();
 }
 
+// Cell key for a world-space point, shared by liquidWaterCells and its readers.
+function cellKey(x, y) {
+  return `${Math.floor(x / GRID.CELL_SIZE)},${Math.floor(y / GRID.CELL_SIZE)}`;
+}
+
+// Cells of the active layer holding liquid water — shallow or deep, frozen
+// excluded (ice isn't water to an ember).
+function liquidWaterCells(game) {
+  const cells = new Set();
+  for (const obj of game._activeBackgroundObjects()) {
+    if (!obj.isWater?.() || obj.getWaterState?.() === 'frozen') continue;
+    cells.add(cellKey(obj.position.x + GRID.CELL_SIZE / 2, obj.position.y + GRID.CELL_SIZE / 2));
+  }
+  return cells;
+}
+
 export function createSparkBurst(game, particles, x, y) {
   for (let i = 0; i < 12; i++) {
     const angle = Math.random() * Math.PI * 2;
@@ -390,6 +406,7 @@ export class WorldEffectsSystem {
 
     // Update particles (dodge trails, explosions, embers, etc.)
     const emberHitEntities = new Set(); // cap to one ember contact per entity per frame
+    let waterCells = null; // built on the first ember this frame — see emberOverWater
     for (let i = game.particles.length - 1; i >= 0; i--) {
       const particle = game.particles[i];
 
@@ -406,10 +423,17 @@ export class WorldEffectsSystem {
         particle.x += particle.vx * deltaTime;
         particle.y += particle.vy * deltaTime;
 
+        // An ember that drifts over water (shallow or deep, not frozen) goes
+        // out on the spot.
+        if (particle.isEmber) {
+          waterCells ??= liquidWaterCells(game);
+          if (waterCells.has(cellKey(particle.x, particle.y))) particle.life = 0;
+        }
+
         // Embers accumulate burn stacks — contact must be "successive" within a time window.
         // Grass/objects ignite instantly (handled via obj.ignite). Entities require 3 hits.
         // Immune enemies (fire-type etc.) are skipped entirely.
-        if (particle.isEmber && game.player) {
+        if (particle.isEmber && game.player && particle.life > 0) {
           const alpha = Math.max(0, particle.life / particle.maxLife);
 
           if (alpha > 0.5) {
