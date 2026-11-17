@@ -1497,13 +1497,14 @@ export function spawnBatFlock(gen, room, clusterAnchors, islandConfig, batChar =
 }
 
 /**
- * A Phalanx (any data.phalanx enemy) spawns as one squad of `squadSize`,
- * clustered around a single anchor and linked by PhalanxMechanic.createSquad
+ * A Phalanx (any data.phalanx enemy) spawns as one squad whose size is
+ * rolled from `squadSize` ({ min, max }, inclusive), clustered around a single anchor and linked by PhalanxMechanic.createSquad
  * so they form up together. Returns true when at least one member spawned
  * (the caller then skips further picks of that enemy for the room).
  */
 export function spawnPhalanx(gen, room, clusterAnchors, islandConfig, char) {
-  const squadSize = ENEMIES[char].phalanx?.squadSize ?? 4;
+  const size = ENEMIES[char].phalanx?.squadSize ?? { min: 4, max: 4 };
+  const squadSize = gen.randInt(size.min, size.max);
   const anchor = clusterAnchors.length > 0
     ? clusterAnchors[Math.floor(Math.random() * clusterAnchors.length)]
     : null;
