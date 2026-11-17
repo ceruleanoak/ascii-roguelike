@@ -4,6 +4,8 @@
 // Google Sheets (all environments) and to the Vite dev server (dev only, appends
 // to claudedocs/death-ledger.jsonl).
 
+import { CHARACTER_TYPES } from '../data/characters.js';
+
 const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbyInq93Ldkax78sERsdlu20DAvaDSMaNdIFbCkIVTkAnwZ2iNroKgYMXRglFGvD6KLT/exec';
 
 export const sessionDeaths = [];
@@ -32,6 +34,16 @@ export function deathCauseOf(killer) {
     description: killer.data?.description || killer.description || '',
     tier: killer.data?.tier ?? null
   };
+}
+
+// The REST tombstone's epitaph: what ended the run (deathCauseOf) and which
+// character it ended, named in that character's color. Null when the killer
+// can't be named, the same as deathCauseOf.
+export function epitaphOf(game) {
+  const cause = deathCauseOf(game.player._lastDamageCause);
+  if (!cause) return null;
+  const character = CHARACTER_TYPES[game.activeCharacterType];
+  return { ...cause, ended: character ? { name: character.name, color: character.color } : null };
 }
 
 // event: 'death' (true death) | 'revive' (death intercepted by a revive item).

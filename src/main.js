@@ -162,7 +162,7 @@ import { CHARACTER_TYPES } from './data/characters.js';
 import { EXIT_LETTERS } from './data/exitLetters.js';
 import { freshZoneDepths } from './data/zones.js';
 import { GAME_STATES, GRID, CRAFTING, INTERACTION_RANGE, ROOM_TYPES } from './game/GameConfig.js';
-import { captureDeath, deathCauseOf, newRunId } from './systems/DeathLedgerSystem.js';
+import { captureDeath, epitaphOf, newRunId } from './systems/DeathLedgerSystem.js';
 import{DiagonalInputSystem as DIS}from'./systems/DiagonalInputSystem.js';
 import * as ingredientPile from './systems/IngredientPile.js';
 import { breakOnDeathPassives } from './systems/ConsumableSlotBreaks.js';
@@ -2423,8 +2423,8 @@ class Game {
         // Capture death snapshot for design analysis before any state is cleared
         captureDeath(this);
 
-        // Record what killed the player (for REST tombstone)
-        this.lastDeathCause = deathCauseOf(this.player._lastDamageCause);
+        // Record what killed the player, and whom (for REST tombstone)
+        this.lastDeathCause = epitaphOf(this);
         this.tombstoneActive = true;
         this.tombstonePopup = null;
 

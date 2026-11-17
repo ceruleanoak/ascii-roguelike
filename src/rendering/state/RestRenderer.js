@@ -773,12 +773,21 @@ export class RestRenderer {
       const textMaxW = w - padX * 2;
       const spectaclesOn = isSpectaclesActive(game);
 
-      // Header: "ended by [Name]"
+      // Header: "[Character] ended by", the character in its own color,
+      // then the killer's name below.
       ctx.font = cipherFont(GRID.CELL_SIZE * 0.85, spectaclesOn);
-      ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
+      const endedBy = spectaclesTransformString(cause.ended ? ' ended by' : 'ended by', spectaclesOn);
+      const ended = cause.ended ? spectaclesTransformString(cause.ended.name, spectaclesOn) : '';
+      const headerLeft = cx - (ctx.measureText(ended).width + ctx.measureText(endedBy).width) / 2;
+      ctx.textAlign = 'left';
+      if (ended) {
+        ctx.fillStyle = cause.ended.color;
+        ctx.fillText(ended, headerLeft, y + padY);
+      }
       ctx.fillStyle = '#cccccc';
-      ctx.fillText(spectaclesTransformString('ended by', spectaclesOn), cx, y + padY);
+      ctx.fillText(endedBy, headerLeft + ctx.measureText(ended).width, y + padY);
+      ctx.textAlign = 'center';
 
       ctx.font = cipherFont(GRID.CELL_SIZE, spectaclesOn);
       ctx.fillStyle = cause.color || '#ffffff';
