@@ -6,6 +6,7 @@ import { GRID, GAME_STATES } from '../game/GameConfig.js';
 import { STARTER_POTION_CHARS, starterPotionIngredientsFor } from '../data/alchemy.js';
 import { INGREDIENT_STACK_CAP } from './ingredientPile.js';
 import { slideLootOffRestSlots } from './restSlotClearance.js';
+import { slideLootOffWalls } from './lootWallClearance.js';
 import { hasLuckBlessing, coinDropChance } from './luck.js';
 
 // Chance each Coin an enemy drops becomes a Frog Coin while the player is in frog form.
@@ -27,6 +28,8 @@ export class LootSystem {
     const game = this.game;
     // Loot parked on a REST slot hides under it and steals its SPACE.
     if (game.stateMachine.getCurrentState() === GAME_STATES.REST) slideLootOffRestSlots(game, deltaTime);
+    // Loot thrown into a wall (or past an Interior's edge) slides back out.
+    slideLootOffWalls(game, deltaTime);
     const ingredients = game.ingredients;
     const player = game.player;
     const sep = GRID.CELL_SIZE * 1.2;
