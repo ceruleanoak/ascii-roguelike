@@ -254,32 +254,34 @@ export class ThreeRoomSystem {
   /**
    * GIVE (ThreeVoiceSystem): an empty slot cracks with nothing in it. It
    * counts as filled for the door, curses the run and thickens the music,
-   * the same as a refused offering.
+   * the same as a refused offering. GIVE has spent its wish already, so it
+   * passes `spendWish: false` for the curse's own (CursedRunSystem.begin).
    * @returns {boolean} false when the slot was not open
    */
-  crackSlot(game, idx) {
+  crackSlot(game, idx, { spendWish = true } = {}) {
     const room = game.currentRoom;
     if (!this.isSlotOpen(room, idx)) return false;
     const slot = this._slots(room)[idx];
     slot.threeFilled = true;
     slot.threeOffering = null;
-    this._crack(game, room, slot);
+    this._crack(game, room, slot, { spendWish });
     this._advanceMusic(game, room);
     game.renderer.markBackgroundDirty();
     return true;
   }
 
   /** A slot cracks: the frame goes gray (ThreeRoomRenderer) and the run is Cursed. */
-  _crack(game, room, slot) {
+  _crack(game, room, slot, { spendWish = true } = {}) {
     slot.threeCracked = true;
-    game.cursedRunSystem.recordCrack(); // a Broken Slot; the first starts the Curse Clock
-    this._beginCurse(game, room);
+    game.cursedRunSystem.recordCrack(); // a Broken Slot
+    this._beginCurse(game, room, { spendWish });
   }
 
   /**
    * A slot cracked, so the run is Cursed from here on.
    *
-   * Two things happen and they are separate on purpose. The flag is the one
+   * Two things happen and they are separate on purpose. The flag (set by
+   * CursedRunSystem.begin, the one way into the curse) is the one
    * the rest of the game reads — the world stops offering this room, REST
    * starts decaying, EXPLORE starts going gray — and it is set exactly once,
    * because a second wrong offering does not curse an already-cursed run any
@@ -290,11 +292,11 @@ export class ThreeRoomSystem {
    * They rise around the cluster rather than around the one bad slot. What was
    * refused is the offering, but what is answering is the object.
    */
-  _beginCurse(game, room) {
-    if (!game.cursedRun) {
-      game.cursedRun = true;
-      console.log('☠️ The run is Cursed.');
-    }
+  _beginCurse(game, room, { spendWish = true } = {}) {
+    // The first crack begins the curse — wish, shake, flash, Curse Mark — the
+    // same way every trigger does (CursedRunSystem.begin); later cracks are
+    // no-ops there.
+    game.cursedRunSystem.begin(game, { spendWish });
 
     const { x, y } = this._clusterCenter(room);
     game.undeadSystem.rise(game, x, y, CURSE_RISE_COUNT, { radius: CURSE_RISE_RADIUS });

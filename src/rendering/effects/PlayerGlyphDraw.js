@@ -1,6 +1,7 @@
 import { GRID } from '../../game/GameConfig.js';
 import { drawFloatPlatform } from './FloatPlatformDraw.js';
 import { whirlwindSpinAngle } from './WeaponPreviewDraw.js';
+import { curseMarkColor } from './CurseMarkDraw.js';
 
 // The player's own glyph — one draw for every Frame Owner (Frame Pass
 // `playerGlyph`). Before this lived in five hand-kept copies (surface, floor
@@ -20,7 +21,8 @@ export function drawPlayerGlyph(renderer, game, owner, concealAlpha = 1) {
   // Moss Cloak active: the player renders as a bush `%` in moss-green.
   const mossActive = player.mossCloakActive === true;
   const char = mossActive ? '%' : player.char;
-  const color = mossActive ? '#228822' : (player.getDisplayColor?.() ?? player.color);
+  // The Curse Mark turns the player gray for a moment as the run is Cursed.
+  const color = curseMarkColor(game, mossActive ? '#228822' : (player.getDisplayColor?.() ?? player.color));
   const x = player.position.x + GRID.CELL_SIZE / 2;
   const y = player.position.y + GRID.CELL_SIZE / 2;
 

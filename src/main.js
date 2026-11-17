@@ -137,6 +137,7 @@ import { WizardSystem } from './systems/WizardSystem.js';
 import { PearlSystem } from './systems/PearlSystem.js';
 import { CompanionSystem } from './systems/CompanionSystem.js';
 import { CommandSystem } from './systems/CommandSystem.js';
+import { ConsumeSystem } from './systems/ConsumeSystem.js';
 import { WorldEffectsSystem } from './systems/WorldEffectsSystem.js';
 import { EnemyUpdateSystem } from './systems/EnemyUpdateSystem.js';
 import { PauseSystem } from './systems/PauseSystem.js';
@@ -323,6 +324,7 @@ class Game {
     this.dragonSpiritSystem = new DragonSpiritSystem(this);
     this.companionSystem = new CompanionSystem(this);
     this.commandSystem = new CommandSystem(this);
+    this.consumeSystem = new ConsumeSystem(this);
     this.worldEffectsSystem = new WorldEffectsSystem(this);
     this.enemyUpdateSystem = new EnemyUpdateSystem(this);
     this.dialogueSystem = new DialogueSystem(this);
@@ -1945,6 +1947,7 @@ class Game {
     // Dodge dispatch (green continuous roll / standard roll) lives in
     // CharacterSystem.
     this.cursedRunSystem.updateCurse(deltaTime, this); // misfires: before the dodge they may take
+    this.consumeSystem.update(deltaTime); // Consume Pulls land as healing
     this.characterSystem.updateDodge(deltaTime);
 
     // Update player movement (locked when menu is open, during dodge roll, or continuous rolling)

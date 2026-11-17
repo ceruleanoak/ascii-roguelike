@@ -46,6 +46,16 @@ export class SpellSystem {
   }
 
   /**
+   * Ask a further question: the next word is checked against `followUps`.
+   * Called from a follow-up's action, which runs after the awaiting state
+   * was cleared, so a follow-up can chain into another (CONSUME's true name
+   * into the wish question).
+   */
+  awaitFollowUps(followUps) {
+    this.awaitingSpell = { followUps };
+  }
+
+  /**
    * Scan keyBuffer from the end for a matching spell or follow-up.
    * Call before clearing the buffer.
    * @param {string[]} keyBuffer

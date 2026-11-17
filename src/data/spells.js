@@ -255,6 +255,30 @@ const COMMAND_SPELL = {
 };
 
 
+// CONSUME — the same true-name grammar, but the bearer is eaten: pulled into
+// the player, its HP healing them (ConsumeSystem). Any tier but boss. On an
+// uncursed run the true name asks the wish question, and YES spends the wish,
+// consumes and curses the run; once Cursed it is free and silent. It is a
+// Power Wish Spell by kind, so it joins GIVE's answers and the Cursed Spell
+// Signs; ThreeVoiceSystem answers it inside the Three Room.
+const CONSUME_WISH_ANSWERS = _wishAnswers({ action: (game) => game.consumeSystem.confirm() });
+const CONSUME_FOLLOWUPS = Object.fromEntries(
+  Object.values(ENEMIES)
+    .filter(d => d.trueName)
+    .map(d => [d.trueName, {
+      text: (game) => game.consumeSystem.cast(d.trueName) ?? _wishQuestion(game),
+      action: (game) => {
+        if (game.consumeSystem.pending) game.spellSystem.awaitFollowUps(CONSUME_WISH_ANSWERS);
+      },
+    }])
+);
+
+const CONSUME_SPELL = {
+  wish: 'power',
+  response: 'CONSUME WHOM?',
+  followUps: CONSUME_FOLLOWUPS,
+};
+
 // CLOSE, CLOSEGAME and EXITGAME are one spell under three names.
 const EXIT_GAME_SPELL = {
   response: 'ARE YOU SURE?',
@@ -414,7 +438,7 @@ export const SPELLS = {
   },
 
   // Command by true name — both words share one grammar and one warband
-  // (CommandSystem: permanent charm, max three, boss-tier refuses). COMMAND
+  // (CommandSystem: permanent charm, max three, weak tier only). COMMAND
   // also takes an NPC, for a wish (COMMAND_SPELL above).
   'CALL': {
     response: 'CALL WHOM?',
@@ -422,6 +446,8 @@ export const SPELLS = {
   },
 
   'COMMAND': COMMAND_SPELL,
+
+  'CONSUME': CONSUME_SPELL,
 
   'LOOKENEMY': { response: (game) => _lookEnemy(game) },
   'LOOKNORTH': { response: _lookDirection('north') },

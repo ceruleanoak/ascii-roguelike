@@ -56,6 +56,16 @@ const WANDER_REACH_CELLS = 8;
 const WANDER_KEY_LEAN = 0.38;
 const NO_DODGE = { x: 0, y: 0 };
 
+// The Curse Mark — the moment a run becomes Cursed, played over the player:
+// they are held still while power streams in (the first PULL share of the
+// mark), turning them gray; the gray holds, then fades over the last FADE
+// share, and the player moves again.
+const CURSE_MARK_DURATION = 1.6;
+const CURSE_MARK_PULL = 0.45;
+const CURSE_MARK_FADE = 0.3;
+// The same white flash GIVE uses, so every way into the curse looks alike.
+const CURSE_FLASH = { duration: 600, color: '#ffffff' };
+
 /** Lava, poisoned water or deep water: where a wandering player ends up. */
 function isCurseHazard(obj) {
   if (obj.char !== '~') return false;
@@ -126,6 +136,8 @@ export class CursedRunSystem {
     this._dodgeWasHeld = false;
     // True while a delayed attack is being replayed, so it isn't taken again.
     this._replayingAttack = false;
+    // Seconds into the Curse Mark, or null when none is playing.
+    this._markTime = null;
   }
 
   /** Full run-scoped reset — death/title. */
@@ -142,16 +154,77 @@ export class CursedRunSystem {
     this._wander = null;
     this._dodgeWasHeld = false;
     this._replayingAttack = false;
+    this._markTime = null;
+  }
+
+  // ── The curse begins ───────────────────────────────────────────────────────
+
+  /**
+   * The one way a run becomes Cursed: a Three Room slot cracking (a wrong
+   * offering or GIVE) or the first CONSUME. Spends a wish when one is left
+   * (callers that already spent theirs — GIVE, CONSUME — pass
+   * `spendWish: false`), starts the Curse Clock, shakes the screen, flashes
+   * white and plays the Curse Mark. An already-Cursed run is untouched.
+   * @returns {boolean} true when this call began the curse
+   */
+  begin(game, { spendWish = true } = {}) {
+    if (game.cursedRun) return false;
+    if (spendWish && game.wishSystem?.hasWish(game)) game.wishSystem.spend(game);
+    game.cursedRun = true;
+    if (this._curseStartedAt === null) this._curseStartedAt = performance.now();
+    game.renderController?.screenShake?.trigger();
+    game.screenFlash = { startTime: performance.now(), ...CURSE_FLASH };
+    this._startMark(game);
+    console.log('☠️ The run is Cursed.');
+    return true;
+  }
+
+  /**
+   * The Curse Mark holds the player through the AnimationSystem lock — the
+   * same hold the Beeline uses, so input, exits and damage all wait it out
+   * (PlayerDamageSystem skips damage while `_animLock` is set). Attack and
+   * dodge presses are taken by gateAttack / gateDodge. If another animation
+   * already owns the player (an exit walk), the mark only shows.
+   */
+  _startMark(game) {
+    this._markTime = 0;
+    this._misfire = null;
+    this._heldAction = null;
+    this._wander = null;
+    const player = game.player;
+    if (player && !game.animationSystem.isAnimating(player)) {
+      game.animationSystem.play(player, [{ type: 'wait', duration: CURSE_MARK_DURATION }]);
+    }
+  }
+
+  /** True while the Curse Mark plays. */
+  markActive() {
+    return this._markTime !== null;
+  }
+
+  /**
+   * How far the Curse Mark has run, as the two reads its draws need:
+   * `pull` 0→1 while power streams in (then null), and `gray` 0→1→0, how far
+   * the player's glyph has gone toward gray. Null when no mark is playing.
+   * @returns {{pull: number|null, gray: number}|null}
+   */
+  markProgress() {
+    if (this._markTime === null) return null;
+    const f = this._markTime / CURSE_MARK_DURATION;
+    const pull = f < CURSE_MARK_PULL ? f / CURSE_MARK_PULL : null;
+    let gray = 1;
+    if (f < CURSE_MARK_PULL) gray = f / CURSE_MARK_PULL;
+    else if (f > 1 - CURSE_MARK_FADE) gray = (1 - f) / CURSE_MARK_FADE;
+    return { pull, gray: Math.max(0, Math.min(1, gray)) };
   }
 
   // ── The Curse Clock, Broken Slots and Curse Depth ──────────────────────────
 
   /**
-   * A Three Room slot cracked (ThreeRoomSystem._crack). The first crack starts
-   * the Curse Clock — that is the moment the Cursed Run begins.
+   * A Three Room slot cracked (ThreeRoomSystem._crack) — a Broken Slot. The
+   * Curse Clock starts in begin(), whichever way the curse arrived.
    */
   recordCrack() {
-    if (this._curseStartedAt === null) this._curseStartedAt = performance.now();
     this._crackedThreeSlots++;
   }
 
@@ -188,6 +261,12 @@ export class CursedRunSystem {
    * for the next misfire. One misfire at a time.
    */
   updateCurse(dt, game) {
+    if (this._markTime !== null) {
+      // No misfire rolls while the mark holds the player.
+      this._markTime += dt;
+      if (this._markTime >= CURSE_MARK_DURATION) this._markTime = null;
+      return;
+    }
     if (!game.cursedRun) return;
     if (this._wander) {
       this._wander.timer -= dt;
@@ -221,6 +300,7 @@ export class CursedRunSystem {
    */
   gateDodge(game, direction) {
     if (!game.cursedRun) return direction;
+    if (this._markTime !== null) return NO_DODGE;
     const pressed = direction.x !== 0 || direction.y !== 0;
     const fresh = pressed && !this._dodgeWasHeld;
     this._dodgeWasHeld = pressed;
@@ -250,6 +330,7 @@ export class CursedRunSystem {
    */
   gateAttack(game) {
     if (!game.cursedRun || this._replayingAttack) return false;
+    if (this._markTime !== null) return true;
     if (this._heldAction?.action === 'attack') return true;
     if (!this._misfire) return false;
     this._heldAction = { action: 'attack', kind: this._misfire, timer: MISFIRE_DELAY, direction: null };

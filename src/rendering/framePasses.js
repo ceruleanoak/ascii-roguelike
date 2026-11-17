@@ -61,6 +61,7 @@ import { drawWandProximityFailures, drawAoeEffects } from './effects/WandEffects
 import { drawRollingRocks } from './effects/RollingRockDraw.js';
 import { drawPunches } from './effects/MeleeAttackDraw.js';
 import { drawShockwaveFloor } from './effects/ShockwaveFloorDraw.js';
+import { drawCurseMark, drawConsumePulls } from './effects/CurseMarkDraw.js';
 
 export const FRAME_OWNERS = ['surface', 'floor', 'maze', 'rest', 'neutral'];
 export const FRAME_LAYERS = ['ground', 'combat', 'player', 'indicators'];
@@ -139,6 +140,8 @@ export const FRAME_PASSES = {
     { id: 'enemyProjectiles', on: enemySide, draw: (rc, game, owner) => er(rc).drawEnemyProjectiles(game, isInterior(owner)) },
     { id: 'meleeAttacks', on: everywhere, draw: (rc, game, owner) => er(rc).drawMeleeAttacks(game, isInterior(owner)) },
     { id: 'punches', on: { ...everywhere, rest: NO_PUNCH, neutral: NO_PUNCH_NEUTRAL }, draw: (rc, game, owner) => drawPunches(rc.renderer, game, isInterior(owner)) },
+    // A consumed enemy's glyph flying into the player (ConsumeSystem).
+    { id: 'consumePulls', on: enemySide, draw: (rc, game, owner) => drawConsumePulls(rc.renderer, game, isInterior(owner)) },
     { id: 'enemyMeleeAttacks', on: enemySide, draw: (rc, game, owner) => er(rc).drawEnemyMeleeAttacks(game, isInterior(owner)) },
     // Enemy + mimic tongues read game._activeEnemies(), which already resolves to the active layer.
     { id: 'enemyTongues', on: enemySide, draw: (rc, game) => er(rc).drawEnemyTongues(game) },
@@ -185,6 +188,8 @@ export const FRAME_PASSES = {
           game.player.position.x + GRID.CELL_SIZE / 2, game.player.position.y + GRID.CELL_SIZE / 2);
       }
     },
+    // Power streaming into the player as the run is Cursed — under the glyph it goes into.
+    { id: 'curseMark', on: everywhere, draw: (rc, game, owner) => { if (!deathHeld(game, owner)) drawCurseMark(rc.renderer, game); } },
     {
       id: 'playerGlyph', on: everywhere,
       draw: (rc, game, owner) => {

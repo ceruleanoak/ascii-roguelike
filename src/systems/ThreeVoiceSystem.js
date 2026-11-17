@@ -123,7 +123,7 @@ export class ThreeVoiceSystem {
     if (!names.length || !game.wishSystem.spend(game)) return 'NO.';
 
     game.screenFlash = { startTime: performance.now(), ...GIVE_FLASH };
-    game.threeRoomSystem.crackSlot(game, entry.slot);
+    game.threeRoomSystem.crackSlot(game, entry.slot, { spendWish: false }); // the wish is spent above
     return `${names[Math.floor(Math.random() * names.length)]}.`;
   }
 }

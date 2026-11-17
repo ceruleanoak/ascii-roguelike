@@ -1957,7 +1957,8 @@ identity, not standard programming terms.
 
 ### Wish Kind
 - **Definition:** What a Wish Spell is for — **Power** (combat: PURGE, REVIVE, HEAL),
-  **Influence** (bending NPCs and enemies), **Gain** (completing a room, e.g. BRIDGE).
+  **Influence** (bending NPCs and enemies), **Gain** (completing a room, e.g. BRIDGE). CONSUME
+  is Power.
 - **In code:** the `wish` field's value: `'power'`, `'influence'` or `'gain'`.
 - **Not:** "category", "school", "type".
 
@@ -1989,7 +1990,8 @@ identity, not standard programming terms.
 ### Command
 - **Definition:** The word that makes something serve. Typed away from NPCs, COMMAND (or CALL)
   asks `COMMAND WHOM?` and the true name typed next permanently charms the nearest enemy that
-  bears it, for free. Typed beside an NPC, COMMAND is an Influence Wish Spell: the wish question,
+  bears it, for free — only a weak-tier name serves; any stronger one answers
+  `IT WILL NOT BEND.`. Typed beside an NPC, COMMAND is an Influence Wish Spell: the wish question,
   then YES and the NPC leaves its room or floor to follow as the Companion. With a Companion
   already following, the NPC answers `ONE FOLLOWS.` and no wish is spent. Charon can't be
   commanded.
@@ -1998,6 +2000,18 @@ identity, not standard programming terms.
   `InfluenceSystem.commandTarget` / `commandRefusal` / `command` → `CampNPCSystem.hireFollower`
   (an unarmed Camp NPC wearing the NPC's glyph and color, as `game.companion`).
 - **Not:** "recruit", "hire" (hiring is the Camp NPC's coin trade); not a charm status (CHARM).
+
+### Consume
+- **Definition:** The true-name word that eats instead of binding. CONSUME asks `CONSUME WHOM?`;
+  the true name typed next takes the nearest bearer of any tier but boss (`IT WILL NOT YIELD.`).
+  The enemy leaves the room at once — no loot, no corpse, not a kill — its glyph is pulled into
+  the player, and its remaining HP heals them on arrival. On an uncursed run the first CONSUME is
+  a Power Wish Spell: the wish question, and YES spends the wish, consumes the enemy and begins
+  the Cursed Run. Once the run is Cursed, CONSUME is free, silent and unlimited.
+- **In code:** `SPELLS.CONSUME` (`CONSUME_SPELL`, `src/data/spells.js`); `ConsumeSystem.cast` /
+  `confirm` (`src/systems/ConsumeSystem.js`), the curse through `CursedRunSystem.begin`.
+- **Not:** COMMAND (binds a weak enemy, keeps it); PURGE (clears the room, a wish every cast);
+  a kill (nothing drops, nothing is counted).
 
 ### Charm (spell)
 - **Definition:** The Influence Wish Spell that turns a room against itself. After the wish
@@ -2746,12 +2760,18 @@ identity, not standard programming terms.
   field, so the Three Room's wish comments never swallow it).
 
 ### Cursed Run
-- **Definition:** The state a run enters the moment a slot cracks. The Three Room can no
+- **Definition:** The state a run enters the moment a Three Room slot cracks or the first
+  CONSUME lands. Every way in looks the same: a Wish is spent if one is left (GIVE and CONSUME
+  have spent theirs already), the screen shakes and flashes white, and the player is held still
+  while power streams into them, turning them gray before the gray fades and they can move
+  again. The Three Room can no
   longer be found for the rest of the run, the Graveyard fills as rooms are explored, and REST
   eventually turns gray, stops healing, and starts admitting undead from the south. Charon
   meets it with a cursed line, then stops coming; once REST has given way he returns once to
   say farewell, and from then on EXPLORE's way back to REST is shut, its door gray.
-- **In code:** `game.cursedRun`, set in `ThreeRoomSystem._beginCurse`. Everything the flag
+- **In code:** `game.cursedRun`, set only by `CursedRunSystem.begin(game, { spendWish })` —
+  called from `ThreeRoomSystem._beginCurse` and `ConsumeSystem.confirm`; the hold is an
+  AnimationSystem lock and the draws are `CurseMarkDraw.js`. Everything the flag
   changes outside the Three Room is owned by `CursedRunSystem`, including when REST itself
   gives way (`isRestDecayed`), how Charon meets each REST visit (`charonVisit`), and whether
   his farewell has shut the way back (`isRestSealed`).
@@ -2763,7 +2783,7 @@ identity, not standard programming terms.
 - **Definition:** The second timer, drawn in gray beside the run timer in the Tab inventory
   overlay, that starts the moment a Cursed Run begins and counts how long the curse has been
   carried. Bare digits, no label, like the run timer.
-- **In code:** `CursedRunSystem._curseStartedAt` (set by `recordCrack` on the first crack),
+- **In code:** `CursedRunSystem._curseStartedAt` (set by `begin` when the curse lands),
   drawn from `CursedRunSystem.formatCurseClock(game)` by `InventoryOverlay`; shares
   `formatElapsed` with `RunTimerSystem`.
 - **Not:** "curse timer", "doom clock", "second run timer".

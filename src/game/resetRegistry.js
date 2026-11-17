@@ -275,7 +275,7 @@ export const RESET_REGISTRY = [
     path: 'cursedRunSystem.hardReset',
     scope: 'run',
     call: (game) => game.cursedRunSystem.hardReset(),
-    why: "Curse run-state: the Graveyard count, REST decay and Charon's sealing of REST start over, read cursed recipe scrolls are forgotten, a showing scroll reveal clears, and the Curse Clock, the cracked-slot count and any misfire in progress go with the curse.",
+    why: "Curse run-state: the Graveyard count, REST decay and Charon's sealing of REST start over, read cursed recipe scrolls are forgotten, a showing scroll reveal clears, and the Curse Clock, the cracked-slot count, any misfire in progress and a playing Curse Mark go with the curse.",
   },
   {
     path: 'threeSlotGlobeSystem.hardReset',
@@ -293,7 +293,7 @@ export const RESET_REGISTRY = [
     path: 'cursedRun',
     scope: 'run',
     value: false,
-    why: 'A new run is not yet owed anything. Set the moment a Three Room slot cracks, and true for the rest of the run; survives REST on purpose — the curse is a thing REST itself decays under, so enterRestState is deliberately not a reset home for it.',
+    why: 'A new run is not yet owed anything. Set by CursedRunSystem.begin (a Three Room slot cracking, or the first CONSUME), and true for the rest of the run; survives REST on purpose — the curse is a thing REST itself decays under, so enterRestState is deliberately not a reset home for it.',
   },
   {
     path: 'undeadSystem.clear',
@@ -553,6 +553,13 @@ export const RESET_REGISTRY = [
     scope: 'room',
     value: false,
     why: 'Wings give one guaranteed dodge per room; a new room gives it back.',
+  },
+  {
+    path: 'consumeSystem.reset',
+    scope: 'room',
+    call: (game) => game.consumeSystem.reset(),
+    covers: [],
+    why: 'A Consume Pull flies within one room, and an unanswered CONSUME wish question names an enemy of that room; neither outlives it.',
   },
   {
     path: 'beelineSystem.reset',
