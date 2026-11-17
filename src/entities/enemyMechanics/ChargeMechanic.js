@@ -46,6 +46,30 @@ function rammedTree(enemy) {
   return false;
 }
 
+// A charge never bends: once it launches it runs its line or it ends.
+// Velocity is held on the line every frame, but movement can still leave it
+// without the speed ever dropping, so EnemyUpdateSystem's speed-drop wall
+// check never fires: a charge glancing a boulder or a wall at an angle slid
+// along the obstacle at full speed, and LavaShyMechanic zeroing the axis that
+// would step into lava skidded the charger along the shore (#569). Anything
+// that moved the charger off its line since last frame is read as running
+// into something, and the charge ends in the wall stun. A Deflector's turn is
+// the one intended bend; it rewrites chargeDir itself, so the line it is
+// measured against turns with it.
+const MIN_LINE_STEP_PX = 0.5;         // shorter steps (hitstop, wading) carry no heading
+const MAX_OFF_LINE_SIN = Math.sin(10 * Math.PI / 180);
+function leftChargeLine(enemy) {
+  const from = enemy.chargeLinePos;
+  if (!from) return false;
+  const dx = enemy.position.x - from.x;
+  const dy = enemy.position.y - from.y;
+  const step = Math.hypot(dx, dy);
+  if (step < MIN_LINE_STEP_PX) return false;
+  const along = dx * enemy.chargeDir.x + dy * enemy.chargeDir.y;
+  const across = Math.abs(dx * enemy.chargeDir.y - dy * enemy.chargeDir.x);
+  return along <= 0 || across / step > MAX_OFF_LINE_SIN;
+}
+
 // The charge and the melee swing never run at once, so a charge windup or
 // dash cancels any Strike in progress. Zeroing windupTimer alone is not a
 // cancel: Strike reads an expired windup as "swing now", so the swing landed
@@ -78,6 +102,7 @@ export const ChargeMechanic = {
     enemy.chargeStunTimer = 0;
     enemy.chargeHasHit = false;
     enemy.chargeLastDeflector = null;
+    enemy.chargeLinePos = null; // position last frame while charging — see leftChargeLine
   },
 
   update(enemy, ctx) {
@@ -131,9 +156,17 @@ export const ChargeMechanic = {
         // accelerating.
         enemy.velocity.vx = enemy.chargeDir.x * cfg.chargeSpeed;
         enemy.velocity.vy = enemy.chargeDir.y * cfg.chargeSpeed;
+        enemy.chargeLinePos = { x: enemy.position.x, y: enemy.position.y };
       }
     } else if (enemy.chargeState === 'charging') {
       enemy.chargeDurationTimer -= deltaTime;
+      if (leftChargeLine(enemy)) {
+        this.stun(enemy);
+        enemy.targetVelocity.vx = 0;
+        enemy.targetVelocity.vy = 0;
+        return;
+      }
+      enemy.chargeLinePos = { x: enemy.position.x, y: enemy.position.y };
       // Reflector interaction (Tortoise): rolling through a BoulderSystem
       // deflector triangle bends the charge off its elbow, same as a rolling
       // boulder (BoulderSystem.js update(), the edge-triggered pattern this
