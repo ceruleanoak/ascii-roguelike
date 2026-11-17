@@ -4,7 +4,6 @@ import { entityCenter, updateEnemyMeleeAttack, activateWindupVisual } from '../g
 const CELL = GRID.CELL_SIZE;
 
 const PUNCH_DAMAGE = 1;
-const PUNCH_ACCURACY = 0.5;   // half the punches whiff (CombatSystem shows MISS)
 
 // The Punch is a short jab: no windup, thrown the instant SPACE lands, and
 // ready again 0.3 real seconds later. Its clock is the enemy-melee clock
@@ -27,14 +26,14 @@ const PUNCH_LUNGE_SPEED = 50;
 
 /**
  * PunchSystem — SPACE with no weapon held (or a spent one, Item.isSpent): a
- * 1-damage, 50%-accuracy jab in yellow. No windup: the blow lands on the press,
- * the thrower steps into it, and the next jab is ready 0.3 seconds later. The
- * hand then returns to any slot that can still fight.
+ * 1-damage jab in yellow that never misses. No windup: the blow lands on the
+ * press, the thrower steps into it, and the next jab is ready 0.3 seconds
+ * later. The hand then returns to any slot that can still fight.
  *
  * The blow itself is handed to CombatSystem as an ordinary player melee hitbox
- * (a sub-cell box just ahead), which is what lands the damage and rolls the
- * miss. The flash is a Telegraph-shaped record stepped by the Telegraph helpers
- * and drawn by the `punches` Frame Pass.
+ * (a sub-cell box just ahead), which is what lands the damage. The flash is a
+ * Telegraph-shaped record stepped by the Telegraph helpers and drawn by the
+ * `punches` Frame Pass.
  */
 export class PunchSystem {
   constructor(game) {
@@ -185,7 +184,6 @@ export class PunchSystem {
         vy: Math.sin(punch.facing) * PUNCH_LUNGE_SPEED,
       },
       damage: armor?.punchDamage ?? PUNCH_DAMAGE,
-      accuracy: PUNCH_ACCURACY,
       knockback: armor?.punchKnockback ?? 0,
       color: punch.color,
       duration: 0.15,          // real seconds: one test frame, then the flash finishes here
@@ -197,8 +195,8 @@ export class PunchSystem {
     }, this.game._activeEnemies());
   }
 
-  // A Brick Wall is the one object a Punch reaches. No accuracy roll: the Punch
-  // is what it asks for, so a thrown one always lands. Read from the active
+  // A Brick Wall is the one object a Punch reaches, and a thrown one always
+  // lands. Read from the active
   // layer so a Punch inside a hut can't reach a wall out on the surface.
   _strikeBrickWall(position) {
     for (const obj of this.game._activeBackgroundObjects()) {
