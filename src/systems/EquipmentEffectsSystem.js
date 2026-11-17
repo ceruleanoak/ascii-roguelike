@@ -13,6 +13,8 @@
  * method rather than reaching in here directly, so InventorySystem stays the
  * one documented place that "recompute my stats" is triggered from.
  */
+import { clearStatusEffect } from './StatusEffects.js';
+
 export class EquipmentEffectsSystem {
   /**
    * Reset every armor/consumable-derived stat field on `player`, then
@@ -83,6 +85,10 @@ export class EquipmentEffectsSystem {
       player.deepWaterImmune = a.deepWaterImmune || false;
       player.drownRateMult = a.drownRateMult || 1;
     }
+
+    // A Slime Suit sheds the goo already on the wearer the moment it goes on;
+    // immunity alone only stops new goo from landing.
+    if (player.slimeImmune) clearStatusEffect(player, 'goo');
 
     player.mass = 1 + player.massBonus; // base mass + massBonus, read by PhysicsSystem
 
