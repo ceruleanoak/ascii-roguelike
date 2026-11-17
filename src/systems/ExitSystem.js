@@ -1057,6 +1057,10 @@ export class ExitSystem {
    */
   isExitOpen(room, player, direction) {
     if (!room?.exits?.[direction] || (player.plane ?? 0) !== 0) return false;
+    // FIGHT and CHOP/MINE/HARVEST hold the keys while they run: a walk they
+    // drive never leaves the room (#459). The player's own keypress ends the
+    // Spell first, so walking out stays the player's choice.
+    if (this.game.fightSystem?.isActive() || this.game.harvestSystem?.isActive()) return false;
     if (direction === 'south') {
       if (this.game.cursedRunSystem.isRestSealed(this.game)) return false;
       return !room.exitsLocked || this.game.playerHasNoItems() || !!player.polymorphCursed;

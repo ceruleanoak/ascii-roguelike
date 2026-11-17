@@ -36,6 +36,9 @@ import { wetPipSpeed } from './StatusEffectSystem.js';
 // reach), deep water stays a HAZARD.
 
 const CELL = GRID.CELL_SIZE;
+// How many cells in from the room's edge an exit's lane runs (main.js warps
+// the player out there). Matches HarvestSystem's stand-spot rule.
+const EXIT_LANE_CELLS = 3;
 
 export const BLOCKED = Infinity;
 export const HAZARD = -1;
@@ -203,6 +206,27 @@ export function buildTerrainGrid(game, entity, collisionMap) {
       const i = gate.row * cols + gate.col;
       cost[i] = heavier(cost[i], HAZARD);
       otherHazard[i] = 1;
+    }
+  }
+
+  // Exit lanes: the middle column/row EXIT_LANE_CELLS deep at each edge,
+  // where updateExploreState (main.js) warps the player out of the room. A
+  // Spell's route along the top row once ran through the north lane and
+  // walked the player out mid-cast (#459), so to the player's grid a lane is
+  // a HAZARD, the way a layer gate is. ExitSystem.isExitOpen also holds the
+  // exits shut while a Spell drives; this keeps the drive from ending in one.
+  if (entity === game?.player && !isInteriorActive(game) && cols === GRID.COLS && rows === GRID.ROWS) {
+    const midCol = Math.floor(cols / 2), midRow = Math.floor(rows / 2);
+    const mark = (col, row) => {
+      const i = row * cols + col;
+      cost[i] = heavier(cost[i], HAZARD);
+      otherHazard[i] = 1;
+    };
+    for (let d = 0; d < EXIT_LANE_CELLS; d++) {
+      mark(midCol, d);
+      mark(midCol, rows - 1 - d);
+      mark(d, midRow);
+      mark(cols - 1 - d, midRow);
     }
   }
 
