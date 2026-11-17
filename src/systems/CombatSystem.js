@@ -1016,12 +1016,13 @@ export class CombatSystem {
                 const counter = enemy.createMeleeAttack();
                 if (counter) this.createEnemyAttack(counter);
               }
-              // chargeOnParry: enter charge windup immediately after a successful parry
+              // chargeOnParry: the catch drops the guard into a full charge
+              // windup, then the jab — the windup is the opening and the tell.
               if (enemy.data.parryMechanic?.chargeOnParry &&
                   enemy.data.chargeMechanic?.enabled &&
                   enemy.chargeState === 'idle') {
                 enemy.chargeState = 'windup';
-                enemy.chargeWindupTimer = enemy.data.chargeMechanic.chargeWindup * 0.6;
+                enemy.chargeWindupTimer = enemy.data.chargeMechanic.chargeWindup;
               }
               continue;
             }

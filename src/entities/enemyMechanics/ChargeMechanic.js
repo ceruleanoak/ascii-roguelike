@@ -224,6 +224,10 @@ export const ChargeMechanic = {
           && !enemy.isGooey()
           && !enemy.isPinned()
           && !enemy.inShellForm
+          // A parry winding up or open plays out first; the charge is what
+          // follows it (ParryMechanic: parry, windup, jab).
+          && !enemy.parryActive
+          && !enemy.parryWindupActive
           && onScreen
           && enemy.hasVision(enemy.position, enemy.target.position, effectiveVisionLength, { ignoreCone: true })) {
         enemy.chargeState = 'windup';

@@ -8,6 +8,11 @@
 // attacker, counterAttack swings back (enemy holders only — CombatSystem).
 //   Enemy  — opens when the player is within 1.5× its attackRange during
 //            chase. Faces its target, so the arc always covers the player.
+//            A parry and an attack never share the screen: the window only
+//            opens while the holder is not attacking, any attack starting
+//            (a Strike windup, a charge windup or dash) drops it, and a
+//            charge waits for it to close (ChargeMechanic). Parry, then
+//            windup with the guard down, then the jab.
 //   Player — opens when a chasing enemy is within 1.5× THAT enemy's
 //            attackRange (a player has no single reach of their own; the
 //            threat's reach is the same distance read from the other side).
@@ -154,6 +159,13 @@ export function parryCatches(holder, cfg, facing, attackerPos) {
   return cos >= Math.cos((arc / 2) * Math.PI / 180);
 }
 
+// An enemy mid-attack: a Strike winding up or swinging, or a charge winding
+// up or dashing. Its timed parry is down for all of it.
+function isAttacking(enemy) {
+  return enemy.state === 'windup' || enemy.state === 'attack'
+    || enemy.chargeState === 'windup' || enemy.chargeState === 'charging';
+}
+
 export const ParryMechanic = {
   isEnabled(enemy) {
     return enemy.data.parryMechanic?.enabled === true;
@@ -172,6 +184,11 @@ export const ParryMechanic = {
     // (holdParry), never by the timed cycle.
     if (cfg.held) return;
     const { deltaTime, distance } = ctx;
+    if (isAttacking(enemy)) {
+      expendParry(enemy, cfg);
+      if (enemy.parryCooldown > 0) enemy.parryCooldown -= deltaTime;
+      return;
+    }
     tickParry(enemy, cfg, deltaTime, () =>
       enemy.state === 'chase' && !enemy.isStunned()
         && distance < enemy.attackRange * PARRY_OPEN_RANGE_MULT);
