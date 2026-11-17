@@ -18,6 +18,10 @@
  *
  * Commands: HELP (the command table), LIST (editable files and
  * executables), FORGET (erase every Canon Edit).
+ *
+ * PUREROGUE, typed anywhere in the CLI but inside a text edit (where the
+ * keys are the player's own words), launches the game the way ☠ does —
+ * no ENTER needed, so it works with a table or the globe open too.
  */
 
 import { menuIntent } from './MenuInput.js';
@@ -30,6 +34,8 @@ import { applyReset } from '../game/resetRegistry.js';
 
 const AFFIRMATIVE = new Set(['YES', 'Y', 'SURE', 'OK', 'AYE']);
 const MAX_BUFFER = 24;
+// Typed anywhere outside a text edit, launches the game (see header).
+const LAUNCH_WORD = 'PUREROGUE';
 
 export class CliSystem {
   constructor(game) {
@@ -40,6 +46,7 @@ export class CliSystem {
     this.reply = '';            // one dim line under the prompt
     this.pendingConfirm = null; // confirm mode: action run on an affirmative
     this.stack = [];            // open frames, top last
+    this.typed = '';            // last letters typed outside a text edit, for LAUNCH_WORD
   }
 
   /** CLOSEGAME / EXITGAME confirmed: close the game into the CLI. */
@@ -66,6 +73,7 @@ export class CliSystem {
     this.reply = '';
     this.pendingConfirm = null;
     this.stack = [];
+    this.typed = '';
   }
 
   save() {
@@ -117,10 +125,21 @@ export class CliSystem {
     if (e.metaKey || e.ctrlKey || e.altKey) return; // leave browser shortcuts alone
     e.preventDefault();
     const frame = this.top();
+    if (frame?.kind !== 'text' && this._typedLaunchWord(e)) {
+      window.location.reload();
+      return;
+    }
     if (!frame) this._promptKey(e);
     else if (frame.kind === 'table') this._tableKey(e, frame);
     else if (frame.kind === 'text') this._textKey(e, frame);
     else this._glyphKey(e, frame);
+  }
+
+  /** Track the letters typed; true when they now end in LAUNCH_WORD. */
+  _typedLaunchWord(e) {
+    if (e.key.length !== 1) return false;
+    this.typed = (this.typed + e.key.toUpperCase()).slice(-LAUNCH_WORD.length);
+    return this.typed === LAUNCH_WORD;
   }
 
   _promptKey(e) {
