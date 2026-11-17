@@ -211,7 +211,8 @@ export const BACKGROUND_OBJECTS = {
     harvestDropChance: 0.25,
     berryChance: 0.1, // the shrub holds BERRIES_PER_SHRUB Forest Berries (InteractionSystem)
     finds: [
-      { char: 'l', chance: 0.05 }  // Leaf — uncommon shrub find, rolls independently
+      { char: 'l', chance: 0.05 }, // Leaf — uncommon shrub find, rolls independently
+      { char: '0', chance: 0.03 }  // Rock — rare, caught in the roots
     ],
     flammability: 'high',
     conductivity: 'none',
@@ -295,6 +296,9 @@ export const BACKGROUND_OBJECTS = {
     hp: 3,
     dropEffect: 'destroyObject:spawnIngredient:|',
     dropChance: 0.40,
+    // Rock — rare, caught in the roots. Rolls only inside the 40% dropChance
+    // (which gates the whole effect), so ~3% per cut, the Shrub's rate.
+    finds: [{ char: '0', chance: 0.075 }],
     bulletInteraction: 'pass-through',
     flammability: 'high',
     conductivity: 'none',
