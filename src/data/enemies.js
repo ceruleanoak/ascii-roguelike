@@ -279,7 +279,7 @@ export const ENEMIES = {
       cooldown: 6.0,
       windupTime: 1.0,
       airTime: 1.2,
-      arcLift: GRID.CELL_SIZE * 1.5,
+      arcLift: GRID.CELL_SIZE,  // A minor arc, the Frost Wolf's
       landRadius: GRID.CELL_SIZE * 1.5
     }
   },
