@@ -91,6 +91,10 @@ const TRUE_THREE = [
 
 const SLOT_COUNT = 3;
 
+// The THREE's line when the last slot completes a power trio. Split so each
+// line fits the 2× spell layer (≤18 chars).
+const POWER_TRIO_CALL = 'AT LAST.\nCOME RECEIVE\nYOUR REWARD.';
+
 // Filled slots hold the offered glyph. A refused one keeps it too — grayed,
 // inside a cracked frame — so the mistake stays legible instead of being
 // replaced by a generic crack mark. The frame is drawn by ThreeRoomRenderer.
@@ -235,6 +239,13 @@ export class ThreeRoomSystem {
 
     this._advanceMusic(game, room);
     game.renderer.markBackgroundDirty();
+
+    // A power trio — three right forms, not the true 3 — calls the player
+    // through the door. The true 3 answers elsewhere, and a cracked set is
+    // not answered at all.
+    if (this.readOffering(room) === 'power-trio') {
+      game.spellResponse = { text: POWER_TRIO_CALL, startTime: performance.now() };
+    }
   }
 
   /** True while slot `idx` holds nothing: no offering, no crack. */
