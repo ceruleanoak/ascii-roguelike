@@ -2755,6 +2755,8 @@ export const ENEMIES = {
       chance: 0.12,   // was 0.35 — Tridents came too easily (1/3 the rate)
       weapons: ['ⲯ']
     },
+    // Rarely, the Goggles it sees through the water with (SunkenGlintSystem).
+    drops: [{ char: '⚇', chance: 0.05 }],
     elementalAffinity: {
       resistance: { 'freeze': 0.6 },
       weakness: { 'burn': 1.5 }
