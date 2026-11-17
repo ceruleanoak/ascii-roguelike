@@ -271,6 +271,13 @@ export class LootSystem {
       drops = drops.map(d => (d === 'c' && Math.random() < FROG_COIN_SWAP_CHANCE) ? '⊚' : d);
     }
 
+    // Killed while burning (the burn status, or lava's burning pip): the
+    // fire already cooked it, so each Meat comes up a Meat Jerky — the
+    // Fireplace's Meat recipe (FireplaceSystem), done on the hoof.
+    if (enemy.statusEffects?.burn?.active || enemy.inDamagingLiquid) {
+      drops = drops.map(d => (d === 'm' ? 'ᒧ' : d));
+    }
+
     for (let i = 0; i < drops.length; i++) {
       const drop = drops[i];
       const angle = (i / Math.max(drops.length, 1)) * Math.PI * 2 + Math.random() * 0.8;
