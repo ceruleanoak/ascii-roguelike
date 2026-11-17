@@ -81,10 +81,6 @@ function nearestOpenCell(layer, cx, cy) {
 function slideOff(game, entity, deltaTime) {
   const pos = entity.position;
   if (!pos) return;
-  // An ingredient the magnet is pulling is already on its way to the player;
-  // sliding it toward a cell on the wall's far side would fight the pull.
-  const acc = entity.acceleration;
-  if (acc && (acc.ax || acc.ay)) return;
   const layer = layerOf(game, entity);
   if (!layer) return;
   const w = entity.width || C;
@@ -105,6 +101,37 @@ function slideOff(game, entity, deltaTime) {
   if (dist <= step) { pos.x = tx; pos.y = ty; return; }
   pos.x += (dx / dist) * step;
   pos.y += (dy / dist) * step;
+}
+
+/**
+ * True when the ingredient magnet may pull `entity` toward `target`: the
+ * entity's box, swept along the straight line to the target, never overlaps
+ * a wall of the entity's own layer. A pull through a wall would drag the
+ * loot into it, and slideOff would push it back out every frame (the jitter).
+ * Loot already inside a wall is never pulled; slideOff frees it first.
+ *
+ * The sweep ends on the target's own cell, not its position: the player's
+ * hitbox is far smaller than its box, so a player hugging a wall has a box
+ * partly inside it, while the cell under its center is always open.
+ */
+export function pullPathClear(game, entity, target) {
+  const layer = layerOf(game, entity);
+  if (!layer) return true;
+  const w = entity.width || C;
+  const h = entity.height || C;
+  const { x: x0, y: y0 } = entity.position;
+  const tw = target.width || C;
+  const th = target.height || C;
+  const endX = Math.floor((target.position.x + tw / 2) / C) * C + (C - w) / 2;
+  const endY = Math.floor((target.position.y + th / 2) / C) * C + (C - h) / 2;
+  const dx = endX - x0;
+  const dy = endY - y0;
+  const steps = Math.max(1, Math.ceil(Math.hypot(dx, dy) / (C / 4)));
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    if (overlapsWall(layer, x0 + dx * t, y0 + dy * t, w, h)) return false;
+  }
+  return true;
 }
 
 /** Every state: slide each ground item and ingredient out of its layer's walls. */

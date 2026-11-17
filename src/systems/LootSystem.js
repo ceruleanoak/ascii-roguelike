@@ -2,11 +2,11 @@ import { Ingredient } from '../entities/Ingredient.js';
 import { Item } from '../entities/Item.js';
 import { isIngredient, isItem, generateEnemyDrops, resolvePickupSfx } from '../data/items.js';
 import { planeOf, lootOnActiveLayer, tagLootLayer } from './PlaneSystem.js';
-import { GRID, GAME_STATES } from '../game/GameConfig.js';
+import { GRID, GAME_STATES, PHYSICS } from '../game/GameConfig.js';
 import { STARTER_POTION_CHARS, starterPotionIngredientsFor } from '../data/alchemy.js';
 import { INGREDIENT_STACK_CAP } from './ingredientPile.js';
 import { slideLootOffRestSlots } from './restSlotClearance.js';
-import { slideLootOffWalls } from './lootWallClearance.js';
+import { slideLootOffWalls, pullPathClear } from './lootWallClearance.js';
 import { hasLuckBlessing, coinDropChance } from './luck.js';
 
 // Chance each Coin an enemy drops becomes a Frog Coin while the player is in frog form.
@@ -65,7 +65,13 @@ export class LootSystem {
       // surface/tunnel .plane field) — an ingredient tagged for one layer must
       // not be reachable from another, same as the render-side filters enforce.
       const wrongLayer = !lootOnActiveLayer(game, ingredient);
-      if (capped || wrongLayer) {
+      // A wall between it and the player: no pull (it would drag the
+      // ingredient into the wall, and the wall slide would push it back out).
+      // Only swept inside magnet range — out of range there is no pull anyway.
+      const inRange = Math.hypot(player.position.x - ingredient.position.x,
+        player.position.y - ingredient.position.y) < PHYSICS.ATTRACTION_RADIUS;
+      const walledOff = inRange && !wrongLayer && !pullPathClear(game, ingredient, player);
+      if (capped || wrongLayer || walledOff) {
         ingredient.acceleration = { ax: 0, ay: 0 };
       } else if (game.physicsSystem.applyAttraction(ingredient, player)) {
         this.collectIngredient(ingredient);
