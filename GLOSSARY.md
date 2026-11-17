@@ -1449,15 +1449,18 @@ identity, not standard programming terms.
 ### Frost Lunge
 - **Definition:** How the Ice Wraith closes on a player it could never catch at float speed.
   From 2–6 cells away, with the player in its vision cone (or from any facing once it has been
-  hit), it holds still for a beat, looses a **Frost Line** straight at the player (the Wraith's
-  damage plus one freeze pip), then rushes them. Reaching attack range mid-rush latches it
-  through the ordinary sap.
+  hit), it holds still for a beat with a windup line drawn toward the player (the Charge's tell),
+  then locks its heading, looses a **Frost Line** along it (the Wraith's damage plus one freeze
+  pip) and rushes straight down it. Stepping off the line dodges it. Reaching attack range
+  mid-rush latches it through the ordinary sap.
 - **In code:** `src/entities/enemyMechanics/FrostLungeMechanic.js`, configured by
-  `ENEMIES['X'].frostLunge`. `frostLungePhase` is `'idle'`, `'windup'` or `'lunge'`. The Frost
+  `ENEMIES['X'].frostLunge`. `frostLungePhase` is `'idle'`, `'windup'` or `'lunge'`;
+  `frostLungeAngle` is the heading locked when the lunge begins, and `drawFrostLungeTelegraph`
+  (`LungeTelegraphDraw.js`) draws the windup line. The Frost
   Line is an `enemy_projectile` carrying `statusOnHit: 'freeze'`, which CombatSystem applies.
   Stun, freeze, zap, sleep and knockback call `FrostLungeMechanic.interrupt()`.
 - **Not:** an Enemy State; the phases run inside the mechanic and suspend the rest of the AI.
-  Not a Charge either: it homes on the player the whole way instead of committing to a line.
+  Not a Charge either: it ends in a latch, not a hit, and never stuns on a wall.
 
 ### Dart
 - **Definition:** A rapid attack and retreat. The enemy holds still for a short tell, darts at

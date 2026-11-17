@@ -51,7 +51,7 @@ import { drawWhirlpool } from '../effects/WhirlpoolEffects.js';
 import { stepConcealmentAlpha } from '../../systems/WorldEffectsSystem.js';
 import { drawFracturedRock } from '../sprites/fracturedRockSprite.js';
 import { renderMawShadow, chargedColor, renderChargedObjects } from '../AscentRenderHelpers.js';
-import { drawChargeTelegraph, drawLeapTelegraph } from '../effects/LungeTelegraphDraw.js';
+import { drawChargeTelegraph, drawLeapTelegraph, drawFrostLungeTelegraph } from '../effects/LungeTelegraphDraw.js';
 import { ReflectShieldMechanic } from '../../entities/enemyMechanics/ReflectShieldMechanic.js';
 import { fieldGuideEquipped, drawFieldGuideHpLabel } from '../ui/FieldGuideHpLabel.js';
 import { drawCursedRecipeReveal } from '../ui/CursedRecipeReveal.js';
@@ -1082,10 +1082,11 @@ export class ExploreRenderer {
       );
     }
 
-    // Charge and leap windups draw the ground they're about to cross; the
-    // line is gone once the dash or leap begins (LungeTelegraphDraw).
+    // Charge, leap and Frost Lunge windups draw the ground they're about to
+    // cross; the line is gone once the dash begins (LungeTelegraphDraw).
     drawChargeTelegraph(this.renderer, enemy);
     drawLeapTelegraph(this.renderer, enemy);
+    drawFrostLungeTelegraph(this.renderer, enemy);
 
     // Draw windup telegraph
     const windupIndicator = enemy.getWindupIndicator();

@@ -1,7 +1,8 @@
 import { GRID, PHYSICS } from '../../game/GameConfig.js';
 
 // The line an Enemy draws across the ground it is about to cross, during the
-// windup of a charge (ChargeMechanic) or a leap (LeapAttackMechanic). Standalone
+// windup of a charge (ChargeMechanic), a leap (LeapAttackMechanic) or a
+// Frost Lunge (FrostLungeMechanic). Standalone
 // functions taking `renderer`, called from ExploreRenderer.renderEnemy.
 //
 // The line is the tell only: it fades in across the windup and is gone the
@@ -40,8 +41,8 @@ export function drawChargeTelegraph(renderer, enemy) {
 }
 
 // Leap windup: a line to the cell the leap is aimed at (leapTargetX/Y, set
-// when the windup starts). A thief's leap re-aims at takeoff
-// (LeapAttackMechanic), so the line shows the aim it holds while squatting.
+// when the windup starts). The aim never moves after that, so the line is
+// exactly where the leap lands.
 export function drawLeapTelegraph(renderer, enemy) {
   if (!enemy.data?.leapAttack?.enabled || !enemy.leapWindupActive) return;
   const duration = enemy.leapWindupDuration || 1;
@@ -52,4 +53,20 @@ export function drawLeapTelegraph(renderer, enemy) {
     enemy.leapTargetY + GRID.CELL_SIZE / 2,
     t
   );
+}
+
+// Frost Lunge windup: like the charge, a line toward the target as long as
+// the lunge will run (lungeTime is double-seconds; friction damps the held
+// lungeSpeed once per frame). The heading locks when the lunge begins.
+export function drawFrostLungeTelegraph(renderer, enemy) {
+  const cfg = enemy.data?.frostLunge;
+  if (!cfg?.enabled || !enemy.target || enemy.frostLungePhase !== 'windup') return;
+  const dx = enemy.target.position.x - enemy.position.x;
+  const dy = enemy.target.position.y - enemy.position.y;
+  const dist = Math.hypot(dx, dy) || 1;
+  const length = cfg.lungeSpeed * PHYSICS.FRICTION * cfg.lungeTime / PHYSICS.ENEMY_TIMER_RATE;
+  const ex = enemy.position.x + GRID.CELL_SIZE / 2;
+  const ey = enemy.position.y + GRID.CELL_SIZE / 2;
+  const t = 1 - enemy.frostLungeTimer / cfg.windupTime;
+  drawWindupLine(renderer, enemy, ex + dx / dist * length, ey + dy / dist * length, t);
 }

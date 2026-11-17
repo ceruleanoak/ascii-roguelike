@@ -14,9 +14,9 @@ import { ThiefMechanic } from './ThiefMechanic.js';
 //     returns a suspend signal.
 //
 // `cfg.steal` makes the leap a Thief's grab (Monkey): the leap only fires
-// while ThiefMechanic.canLeapSteal holds, homes on its target from takeoff
-// (a dizzy thief keeps its misjudged aim), and lands a steal, not a shockwave
-// (EnemyUpdateSystem._handleLeapLand).
+// while ThiefMechanic.canLeapSteal holds and lands a steal, not a shockwave
+// (EnemyUpdateSystem._handleLeapLand). Its aim is locked at windup start like
+// every leap — the windup line is the promise, so the leap never homes.
 //
 // `cfg.holdTime` makes the Enemy keep its distance first (Frost Wolf): it must
 // hold leap range continuously for that many enemy timer seconds (data units,
@@ -87,7 +87,6 @@ export const LeapAttackMechanic = {
 
     if (enemy.leapAirborneActive) {
       enemy.leapAirTimer -= deltaTime;
-      if (cfg.steal && enemy.target && !enemy._dizzyAngleOffset()) aimLeap(enemy, enemy.target.position, 0);
       const dur = enemy.leapAirDuration || cfg.airTime || 0.5;
       const t = Math.min(1, 1 - enemy.leapAirTimer / dur);
       enemy.position.x = enemy.leapStartX + (enemy.leapTargetX - enemy.leapStartX) * t;
@@ -140,7 +139,6 @@ export const LeapAttackMechanic = {
         enemy.leapWindupActive = false;
         enemy.leapStartX = enemy.position.x;
         enemy.leapStartY = enemy.position.y;
-        if (cfg.steal) aimLeap(enemy, enemy.target.position, enemy._dizzyAngleOffset());
         enemy.leapAirDuration = cfg.airTime;
         enemy.leapAirTimer = enemy.leapAirDuration;
         enemy.leapAirborneActive = true;

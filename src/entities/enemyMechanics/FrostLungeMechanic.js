@@ -5,9 +5,11 @@ import { targetSlipsLatch } from './sapLatch.js';
 //
 // The Wraith's sap latch only fires from inside attackRange, and at its float
 // speed it never got there — a walking player simply outpaced it. The lunge is
-// how it closes: it holds still and telegraphs, looses a Frost Line straight
-// at the player (one freeze pip on a hit, so the target is slowed), then
-// rushes them far faster than it can drift. Reaching attackRange mid-lunge
+// how it closes: it holds still and telegraphs (a dash line toward the player,
+// LungeTelegraphDraw, the Boar charge's tell), then locks its heading, looses
+// a Frost Line along it (one freeze pip on a hit, so the target is slowed)
+// and rushes straight down it far faster than it can drift. Like every dash
+// it never homes: stepping off the line dodges it. Reaching attackRange mid-lunge
 // latches immediately through the ordinary sap path (Enemy.createSapAttack);
 // running out of lunge time just ends it.
 //
@@ -39,10 +41,7 @@ function lineCharForAngle(angle) {
   return '/';
 }
 
-function frostLine(enemy, cfg) {
-  const target = enemy.target.position;
-  const angle = Math.atan2(target.y - enemy.position.y, target.x - enemy.position.x)
-    + enemy._dizzyAngleOffset();
+function frostLine(enemy, cfg, angle) {
   return {
     type: 'enemy_projectile',
     char: lineCharForAngle(angle),
@@ -75,6 +74,7 @@ export const FrostLungeMechanic = {
     enemy.frostLungePhase = 'idle'; // 'idle' | 'windup' | 'lunge'
     enemy.frostLungeTimer = 0;
     enemy.frostLungeCooldown = cfg.initialDelay ?? cfg.cooldown;
+    enemy.frostLungeAngle = 0; // heading locked when the lunge begins
   },
 
   update(enemy, ctx) {
@@ -91,7 +91,11 @@ export const FrostLungeMechanic = {
       if (enemy.frostLungeTimer > 0) return hold;
       enemy.frostLungePhase = 'lunge';
       enemy.frostLungeTimer = cfg.lungeTime;
-      return { suspend: true, result: { dotDamage: dotDamageEvents, itemAttack: frostLine(enemy, cfg) } };
+      // The heading locks here, where the windup line pointed; a dizzy
+      // Wraith veers like every other dizzy attack.
+      enemy.frostLungeAngle = Math.atan2(enemy.target.position.y - enemy.position.y,
+        enemy.target.position.x - enemy.position.x) + enemy._dizzyAngleOffset();
+      return { suspend: true, result: { dotDamage: dotDamageEvents, itemAttack: frostLine(enemy, cfg, enemy.frostLungeAngle) } };
     }
 
     if (enemy.frostLungePhase === 'lunge') {
@@ -103,10 +107,7 @@ export const FrostLungeMechanic = {
         this.interrupt(enemy);
         return hold;
       }
-      // Homes on the player for the whole lunge; a dizzy Wraith veers like
-      // every other dizzy attack.
-      const angle = Math.atan2(enemy.target.position.y - enemy.position.y,
-        enemy.target.position.x - enemy.position.x) + enemy._dizzyAngleOffset();
+      const angle = enemy.frostLungeAngle;
       enemy.velocity.vx = enemy.targetVelocity.vx = Math.cos(angle) * cfg.lungeSpeed;
       enemy.velocity.vy = enemy.targetVelocity.vy = Math.sin(angle) * cfg.lungeSpeed;
       return hold;
