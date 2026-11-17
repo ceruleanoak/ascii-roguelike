@@ -1793,7 +1793,7 @@ export const POISONED_WATER_DURATION = 4.0;
 // Heated Water: how long a fire-struck water tile stays hot before cooling
 // back to normal (WaterLavaHitMechanic.burnWater). The Alchemy Lab trough,
 // once heated, never cools.
-export const HEATED_WATER_DURATION = 60.0;
+export const HEATED_WATER_DURATION = 10.0;
 
 export const WATER_STRUCTURES = {
   CHANNEL: {

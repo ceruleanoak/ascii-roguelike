@@ -2252,7 +2252,7 @@ identity, not standard programming terms.
 
 ### Heated Water
 - **Definition:** Water that fire has struck. A fire hit (melee or projectile) on a water tile
-  puffs one steam cloud and leaves the tile Heated Water for 60 seconds. While it stays hot it
+  puffs one steam cloud and leaves the tile Heated Water for 10 seconds. While it stays hot it
   fills a Bottle of Hot Water (🜊), but it does not heal and it does not steam again. After that
   it cools back to plain water. Fire heats the Alchemy Lab's trough the same way, all four of
   its cells at once, and the trough never cools. It drives out the trough's poison.
