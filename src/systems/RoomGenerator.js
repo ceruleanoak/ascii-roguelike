@@ -2770,6 +2770,7 @@ export class RoomGenerator {
     for (let i = 0; i < objectCount; i++) {
       const char = this.weightedRandomChoice(weights);
       if (char === '~' && islandLavaFeatures(room, this.currentLetterTemplate)) continue;
+      if (char === '~' && room.type === ROOM_TYPES.SETTLEMENT) continue; // Settlements stay dry in every zone (see placeRoomLiquid)
       if (char === '~' && (room.exitLetter === 'B' || room.type === ROOM_TYPES.CAMP) && features?.liquidType !== 'lava') continue; // dry B arena / Camp (see placeRoomLiquid)
       const pos =this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos);
       if (!pos || this.hasObjectAt(room, pos.x, pos.y, GRID.CELL_SIZE)) continue;

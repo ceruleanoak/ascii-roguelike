@@ -92,7 +92,11 @@ const RIVERLESS_ROOM_TYPES = new Set([
 export function placeRoomLiquid(gen, room, effectiveZone) {
   const zoneHasSpecialLiquid = ZONES[effectiveZone]?.environmentalFeatures?.liquidType;
 
-  if (room.type === ROOM_TYPES.CAMP && !zoneHasSpecialLiquid) {
+  if (room.type === ROOM_TYPES.SETTLEMENT) {
+    // Settlements stay dry in every zone, lava zones included: no pond, stream
+    // or lava lake runs through the huts. A progression toward red hands this
+    // room the red effective zone, which used to lay lava between the huts.
+  } else if (room.type === ROOM_TYPES.CAMP && !zoneHasSpecialLiquid) {
     // Camps stay dry, the Stormlands included: a campfire clearing is the
     // one room a pond or stream never splits. Lava zones keep their lava
     // below, as B rooms do — it's the zone's hazard, not scenery.
