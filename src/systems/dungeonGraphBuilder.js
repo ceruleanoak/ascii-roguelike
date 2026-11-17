@@ -173,8 +173,33 @@ export function buildDungeonGraph(recipe, rng = Math.random) {
     if (free.length) edges.push({ from: keyEdge.from, dir: pick(free), to: keyEdge.to, reveal: 'push', hidden: true });
   }
 
-  return { nodes, edges };
+  const graph = { nodes, edges };
+  assignBasements(graph);
+  return graph;
 }
+
+/**
+ * Number every floor's Basement: the Entrance is B-1, and every other floor
+ * is one deeper than the deepest floor with a descent into it — the longest
+ * descent path from the Entrance. Every descent leads forward (the graph has
+ * no cycles), so going down always reaches a higher Basement and the way back
+ * up always a lower one, even across a shortcut that skips a number.
+ */
+export function assignBasements(graph) {
+  const memo = {};
+  const basementOf = (id, seen = new Set()) => {
+    if (id === 'entrance') return 1;
+    if (id in memo) return memo[id];
+    if (seen.has(id)) return null; // a cycle would be an unsound graph; leave it unnumbered
+    seen.add(id);
+    const above = graph.edges.filter(e => e.to === id)
+      .map(e => basementOf(e.from, seen)).filter(n => n != null);
+    memo[id] = above.length ? Math.max(...above) + 1 : null;
+    return memo[id];
+  };
+  for (const id of Object.keys(graph.nodes)) graph.nodes[id].basement = basementOf(id);
+}
+
 /** The descents leaving `nodeId`, in graph order. */
 export function edgesFrom(graph, nodeId) {
   return graph.edges.filter(e => e.from === nodeId);

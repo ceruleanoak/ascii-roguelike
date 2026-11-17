@@ -3213,6 +3213,17 @@ identity, not standard programming terms.
   `DungeonFloorGenerator` method, and `holdsSkullKey`); `floor.kind` on every generated floor.
 - **Not:** a floor template (a wall layout a kind may stamp); a Zone.
 
+### Basement
+- **Definition:** How far below the surface a Dungeon floor sits, shown as `B-N` carved into the
+  middle of its north wall. The Entrance is B-1; every other floor is one deeper than the deepest
+  floor with a descent into it. A descent always leads to a higher Basement and the way up (`Ʌ`)
+  always to a lower one, though a shortcut can skip a number and the way up need not reach the
+  exit.
+- **In code:** `assignBasements(graph)` in `src/systems/dungeonGraphBuilder.js` sets
+  `node.basement` when the Dungeon Graph is rolled; `generateNode` copies it to
+  `floor.basement`; `HutInteriorOverlay` draws the label.
+- **Not:** Depth (the Zone's room count); a Floor Kind; the old `floorIndex` stack.
+
 ### Reveal
 - **Definition:** What opens a Dungeon descent. `open` needs nothing; `key` spends the Skull
   Key; `panels` is Green's floor-panel NPC puzzle on the Branch; `offering` is the Pyramid's

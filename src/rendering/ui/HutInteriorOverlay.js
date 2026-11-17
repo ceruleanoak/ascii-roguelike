@@ -35,6 +35,22 @@ const CAVERN_PANEL_COLOR = '#0a0806';
 const CAVERN_ROCK_CHAR = '}';
 const CAVERN_ROCK_COLOR = '#554433';
 
+// A Dungeon floor's Basement label ("B-3"), one glyph per north-wall cell,
+// centered: Map(col → glyph). Only solid cells take a glyph, so a gap in the
+// wall never floats a letter. Empty when the floor has no Basement.
+const BASEMENT_LABEL_COLOR = '#b08a60';
+function basementLabelCells(basement, collisionMap) {
+  const cells = new Map();
+  if (basement == null) return cells;
+  const label = `B-${basement}`;
+  const cols = collisionMap[0]?.length ?? 0;
+  const start = Math.floor((cols - label.length) / 2);
+  for (let i = 0; i < label.length; i++) {
+    if (collisionMap[0][start + i]) cells.set(start + i, label[i]);
+  }
+  return cells;
+}
+
 export class HutInteriorOverlay {
   constructor(renderer, renderController) {
     this.renderer = renderer;
@@ -92,6 +108,9 @@ export class HutInteriorOverlay {
         if (!obj.data?.coversWall || obj.destroyed) continue;
         coveredCells.add(`${Math.round(obj.position.y / CS)},${Math.round(obj.position.x / CS)}`);
       }
+      // The floor's Basement (B-1 at the Entrance, deeper going down) is
+      // carved into the middle of the north wall in place of its '≡'.
+      const basementCells = basementLabelCells(game.activeFloor.basement, cm);
       for (let r = 0; r < cm.length; r++) {
         for (let c = 0; c < (cm[r]?.length ?? 0); c++) {
           if (!cm[r][c]) continue;
@@ -129,8 +148,9 @@ export class HutInteriorOverlay {
           ctx.fillStyle = '#3a2a1c';
           ctx.fillRect(c * CS, r * CS, CS, CS);
           if (coveredCells.has(`${r},${c}`)) continue;
-          ctx.fillStyle = '#6a4830';
-          ctx.fillText('≡', c * CS + CS / 2, r * CS + CS / 2);
+          const carved = r === 0 ? basementCells.get(c) : undefined;
+          ctx.fillStyle = carved ? BASEMENT_LABEL_COLOR : '#6a4830';
+          ctx.fillText(carved ?? '≡', c * CS + CS / 2, r * CS + CS / 2);
         }
       }
     }

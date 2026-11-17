@@ -1014,10 +1014,11 @@ export const BACKGROUND_OBJECTS = {
       default: { animation: 'shake', message: null }
     }
   },
-  // Dungeon stairs — use '{' (up) to avoid collision with tunnel entrance chars '^'/'v'.
-  // DungeonSystem creates BackgroundObject('{', ...) for stairs up.
-  // Stairs down use char 'x' with manual color override in DungeonSystem (no config entry needed).
-  '{': {
+  // Dungeon stairs up — 'Ʌ', the descent's 'v' turned over, so up and down read
+  // as a pair (and '^' stays the tunnel entrance / Fire Trap). Every way up uses
+  // it: DungeonFloorGenerator._makeStairsUp and the Puzzle Room's exit.
+  // Descents are painted by paintDescentVisual (dungeonFloorTemplates.js).
+  'Ʌ': {
     name: 'Stairs Up',
     color: '#8b7355',
     bulletInteraction: 'pass-through',

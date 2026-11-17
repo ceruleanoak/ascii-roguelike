@@ -488,7 +488,7 @@ export class DungeonFloorGenerator {
   // graph floor's way up sits (node.upDir is always 'S', leaving N/W/E free
   // for descents); the Vault passes its own row (VAULT_STAIRS_UP_ROW).
   _makeStairsUp(locked, row = STAIRS_UP_ROW, col = STAIRS_COL) {
-    const obj = new BackgroundObject('{', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
+    const obj = new BackgroundObject('Ʌ', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
     paintStairsUpVisual(obj, locked);
     return obj;
   }
@@ -585,7 +585,8 @@ export class DungeonFloorGenerator {
     if (ctx.wantsTriggers && !floor.triggers?.length) {
       for (const d of floor.descents) if (d.reveal === 'triggers') d.reveal = 'clear';
     }
-    return Object.assign(floor, { kind: node.kind, nodeId });
+    // basement: the B-N number carved in the floor's north wall (GLOSSARY Basement).
+    return Object.assign(floor, { kind: node.kind, nodeId, basement: node.basement ?? null });
   }
 
   _generateEntrance(ctx) {
