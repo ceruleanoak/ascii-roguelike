@@ -34,8 +34,9 @@ import { isInteriorActive } from './PlaneSystem.js';
  *     parks — not ticked, not rendered, roster intact.
  *   - Any companion holds a Branch panel: an idle member with a
  *     `commandTarget` walks there and holds instead of taking the ring.
- *   - Cap: three commanded at once (MAX_COMMANDS). Boss-tier refuses command
- *     (its true name is knowable but does not bend). A commanded unit that
+ *   - Cap: three commanded at once (MAX_COMMANDS). Only weak-tier names
+ *     serve; any stronger tier refuses (its true name is knowable but does
+ *     not bend). A commanded unit that
  *     dies frees its slot on the next update pass.
  *
  * Response strings stay ≤18 chars — the spell layer renders at 2×
@@ -78,10 +79,11 @@ export class CommandSystem {
     // SpellSystem._describeEntity.
     if (!data) return 'THE NAME ECHOES.';
 
-    // Refusal for boss-tier names is checked before anything else so the
-    // hierarchy (which names may serve) reads the same whether or not one
-    // stands in the room.
-    if (data.tier === 'boss') return 'IT WILL NOT BEND.';
+    // Only the weak serve. The tier refusal is checked before anything else
+    // so the hierarchy (which names may serve) reads the same whether or not
+    // one stands in the room. A stronger name is still knowable — CONSUME
+    // takes it (ConsumeSystem); it just does not bend.
+    if (data.tier !== 'weak') return 'IT WILL NOT BEND.';
 
     // Presence before cap: an absent kind echoes even at full strength —
     // "nobody here bears that name" is the truer answer than "warband full".
