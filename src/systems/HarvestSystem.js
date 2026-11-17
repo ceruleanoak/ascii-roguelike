@@ -3,6 +3,7 @@ import { buildTerrainGrid, cellCost, planRoute, BLOCKED, HAZARD } from './steeri
 import { HeldKeySteering } from './heldKeySteering.js';
 import { entityCenter } from '../game/Telegraph.js';
 import { planeOf, objectOnPlane } from './PlaneSystem.js';
+import { bodyInExitLane } from './ExitSystem.js';
 
 const CELL = GRID.CELL_SIZE;
 
@@ -34,21 +35,12 @@ function objectCenter(obj) {
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
 }
 
-// How many cells in from the room's edge an exit's lane runs: the middle
-// column (north, south exits) or row (east, west) that far in is where
-// updateExploreState (main.js) warps the player out of the room. A target
-// beside an exit is struck from another side, or the player standing there
-// would walk out of the room and end the Spell.
-const EXIT_LANE_CELLS = 3;
-
-// Whether a player-sized body with this top-left reaches into an exit's lane.
+// Whether a player-sized body standing at this top-left reaches into an
+// exit's lane (ExitSystem.bodyInExitLane). A target beside an exit is struck
+// from another side, or the player standing there would walk out of the room
+// and end the Spell.
 function inExitLane(spot) {
-  const midCol = Math.floor(GRID.COLS / 2), midRow = Math.floor(GRID.ROWS / 2);
-  const inMidCol = spot.x < (midCol + 1) * CELL && spot.x + CELL > midCol * CELL;
-  const inMidRow = spot.y < (midRow + 1) * CELL && spot.y + CELL > midRow * CELL;
-  const nearTopOrBottom = spot.y < EXIT_LANE_CELLS * CELL || spot.y + CELL > (GRID.ROWS - EXIT_LANE_CELLS) * CELL;
-  const nearLeftOrRight = spot.x < EXIT_LANE_CELLS * CELL || spot.x + CELL > (GRID.COLS - EXIT_LANE_CELLS) * CELL;
-  return (inMidCol && nearTopOrBottom) || (inMidRow && nearLeftOrRight);
+  return bodyInExitLane(spot.x, spot.y, CELL, CELL);
 }
 
 // Stump, Bush, Ember Bush, Mushroom, Bones, Crystal, Ice.

@@ -177,6 +177,27 @@ export function isExitLetterTile(col, row) {
   return false;
 }
 
+// How many cells in from the room's edge an exit's lane runs: the middle
+// column (north, south exits) or row (east, west) that far in is where
+// updateExploreState (main.js) warps the player out of the room.
+export const EXIT_LANE_CELLS = 3;
+
+// Whether a body with this top-left and size reaches into an exit's lane on
+// the surface grid. `laneHalfWidth` widens the lane by that many cells on
+// each side of the middle column/row — REST's exits fire across the 3-cell
+// warp column (restExitCrossing), so a caller that must stay clear of every
+// state's lanes passes 1. Used by HARVEST's stand spot (#456) and the
+// Yellow Mage's blink landing (WarpSystem).
+export function bodyInExitLane(x, y, w, h, laneHalfWidth = 0) {
+  const C = GRID.CELL_SIZE;
+  const midCol = Math.floor(GRID.COLS / 2), midRow = Math.floor(GRID.ROWS / 2);
+  const inMidCol = x < (midCol + 1 + laneHalfWidth) * C && x + w > (midCol - laneHalfWidth) * C;
+  const inMidRow = y < (midRow + 1 + laneHalfWidth) * C && y + h > (midRow - laneHalfWidth) * C;
+  const nearTopOrBottom = y < EXIT_LANE_CELLS * C || y + h > (GRID.ROWS - EXIT_LANE_CELLS) * C;
+  const nearLeftOrRight = x < EXIT_LANE_CELLS * C || x + w > (GRID.COLS - EXIT_LANE_CELLS) * C;
+  return (inMidCol && nearTopOrBottom) || (inMidRow && nearLeftOrRight);
+}
+
 // How close (pixels, center-to-center) an entity must get to an open exit's
 // doorway before it counts as "at the exit" for despawn purposes — same
 // tolerance as the player's own lenient exit-crossing checks.

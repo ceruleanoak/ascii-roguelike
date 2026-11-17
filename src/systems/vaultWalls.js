@@ -64,13 +64,20 @@ export function vaultWallBlocksReach(room, attacker, target) {
  * there. The return from a neutral room lands on room centre, which is the
  * Vault's centre, and stranded the player inside. Opening the wall lifts the
  * seal (unsealVault).
+ *
+ * The seal is `blinkPassable`: the Yellow Mage's blink is a way in (yellow's
+ * Vault has no other), and from inside it carries back out over the wall, so
+ * WarpSystem lets a blink land there. Only placement is refused.
  */
 export function attachVault(generator, room) {
   if (generator.currentVaultInfo) {
     const vault = generator.currentVaultInfo;
     generator.currentVaultInfo = null; // Reset for next room
     room.vaultInfo = vault;
-    vault.sealedRegion = { kind: 'rect', minCol: vault.minCol, maxCol: vault.maxCol, minRow: vault.minRow, maxRow: vault.maxRow };
+    vault.sealedRegion = {
+      kind: 'rect', minCol: vault.minCol, maxCol: vault.maxCol, minRow: vault.minRow, maxRow: vault.maxRow,
+      blinkPassable: true,
+    };
     room.sealedRegions = [...(room.sealedRegions || []), vault.sealedRegion];
   }
 
