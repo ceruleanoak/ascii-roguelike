@@ -25,7 +25,7 @@ export function resolveHitSfx(data) {
 export const MOOSE = {
   char: 'M',
   name: 'Moose',
-  description: 'Grazes in the quiet. Bolts for the nearest way out once it notices you.',
+  description: 'A quiet giant. It is easily startled.',
   hp: 10,
   mass: 1.6,
   speed: 70,
@@ -45,7 +45,7 @@ export const MOOSE = {
 export const RABBIT = {
   char: 'r',
   name: 'Rabbit',
-  description: 'Burrows out of sight when it spots you. Emerges once you\'re still again — unless it\'s already been hurt.',
+  description: 'Burrows out of sight when it spots you.',
   hp: 3,
   mass: 0.5,
   speed: 90,
@@ -114,7 +114,8 @@ export const ENEMIES = {
     char: '@',
     name: 'Training Dummy',
     trueName: 'SCUTUM',
-    description: 'Doesn\'t hit back.',
+    description: 'Harmless.',
+    spellDescription: 'USELESS.',
     hp: 20,
     speed: 0,
     damage: 0,
@@ -137,8 +138,8 @@ export const ENEMIES = {
   'r': {
     char: 'r',
     name: 'Rat',
-    description: 'Bites on sight, but steals your coin if you\'re carrying any — succeed or get hurt, and it\'s gone for good.',
-    spellDescription: 'IT WILL SERVE.',
+    description: 'Surprisingly social. Loves coins. Loves food more.',
+    spellDescription: 'MILD LOYALTY.',
     trueName: 'RATTUS',
     mass: 0.5,
     hp: 2,
