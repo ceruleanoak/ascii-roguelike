@@ -1006,7 +1006,10 @@ export const ENEMIES = {
       resistance: { 'burn': 0.5, 'freeze': 0.5 }  // Adapts to temperature
     },
     affinities: ['generic'],
-    tier: 'elite'
+    tier: 'elite',
+    // A chest that bites still pays out: two Coins, always, on top of its
+    // affinity loot (LootSystem rolls authored `drops` in addition).
+    drops: [{ char: 'c', chance: 1.0 }, { char: 'c', chance: 1.0 }]
   },
 
 
