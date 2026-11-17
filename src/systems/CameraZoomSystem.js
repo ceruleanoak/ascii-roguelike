@@ -28,8 +28,8 @@ const SCRIPTED_FIT_IN_SECONDS = 1.2;
  * Ancient Shell's phase 2 holds it fully open (BossSystem.holdsFrameOpen).
  * Inside the Maze interior, zoom is forced on permanently at the tighter
  * ZOOM.MAZE_SCALE regardless of ghost proximity — the corridor is narrow enough
- * that it's always relevant. A worn Compass instead opens the Maze's frame all
- * the way out to 1.0, and that opening is its Passive Indicator's moment.
+ * that it's always relevant. A worn Compass doesn't open it: its needle points
+ * to the Maze's center instead (CompassSystem.getNeedleTarget).
  * On the surface with no weapon equipped, the same trigger instead targets
  * ZOOM.HALF_SCALE — still some tension from the nearby threat, but not the
  * full commit of an armed engagement; Interiors are exempt from this
@@ -80,7 +80,6 @@ export class CameraZoomSystem {
     this.originYPercent = 50;
     this._noEnemyElapsedMs = Infinity;
     this._lastState = null;
-    this._compassOpenedMaze = false;
     // A scripted frame (holdZoom): { scale, focus, at } where focus() returns
     // the canvas-pixel point to frame on, or null to keep the player as the
     // focus, and `at` is where the frame is actually centered — it eases
@@ -123,7 +122,6 @@ export class CameraZoomSystem {
     this.originXPercent = 50;
     this.originYPercent = 50;
     this._noEnemyElapsedMs = Infinity;
-    this._compassOpenedMaze = false;
   }
 
   /** True once the frame has finished easing to its current target. */
@@ -203,9 +201,8 @@ export class CameraZoomSystem {
       desiredScale = wantsZoom ? ZOOM.SCALE : 1;
 
       // Maze interiors stay permanently zoomed in, regardless of ghost
-      // proximity, unless a worn Compass opens the whole Maze to view.
-      if (player.inMaze) desiredScale = this._updateMazeCompass() ? 1 : ZOOM.MAZE_SCALE;
-      else this._compassOpenedMaze = false;
+      // proximity.
+      if (player.inMaze) desiredScale = ZOOM.MAZE_SCALE;
 
       // On the surface with no weapon equipped, an aggro'd enemy nearby still
       // reads as some tension, but not a full combat commit — half zoom
@@ -290,15 +287,6 @@ export class CameraZoomSystem {
   /** The tightest scale this layer's frame can reach. */
   _frameScale(player) {
     return player.inMaze ? ZOOM.MAZE_SCALE : ZOOM.SCALE;
-  }
-
-  /** Whether a worn Compass holds the Maze open; floats its word as it opens. */
-  _updateMazeCompass() {
-    const compass = this.game.compassSystem;
-    const worn = compass.isWorn();
-    if (worn && !this._compassOpenedMaze) compass.announceFind();
-    this._compassOpenedMaze = worn;
-    return worn;
   }
 
   /** Live threat list + local grid size for the player's current layer. */

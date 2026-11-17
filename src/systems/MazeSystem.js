@@ -69,6 +69,11 @@ const PHYS         = LOGICAL_SIZE * 2 + 1;           // 19×19 physical grid
 const CS           = GRID.CELL_SIZE;                 // 16 px per cell
 const MAZE_CENTER_CELL = Math.floor(LOGICAL_SIZE / 2) * 2 + 1; // logical-center room cell (phys coords)
 
+/** Maze-local pixel center of the cell where the Spectacles appear (the Compass needle's Maze target). */
+export function mazeCenterPosition() {
+  return { x: MAZE_CENTER_CELL * CS + CS / 2, y: MAZE_CENTER_CELL * CS + CS / 2 };
+}
+
 // Proximity radius for exterior door interaction (px from door center)
 const DOOR_INTERACT_RADIUS = CS * 2;
 
@@ -374,6 +379,7 @@ export class MazeSystem {
     game.player.mazeExitPosition = { x: game.player.position.x, y: game.player.position.y };
     game.mazeInterior = this.generateMazeInterior();
     game.currentRoom.maze.interiorGenerated = true;
+    game.compassSystem.onMazeEntered();
 
     game.player.setCollisionMap(game.mazeInterior.collisionMap);
     game.player.position.x = game.mazeInterior.spawnPoint.x;
@@ -487,6 +493,8 @@ export class MazeSystem {
     if (!game.player.inMaze || !game.mazeInterior) {
       return;
     }
+
+    game.compassSystem.updateMaze();
 
     const mi = game.mazeInterior;
 

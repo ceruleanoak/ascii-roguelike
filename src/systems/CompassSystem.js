@@ -1,6 +1,7 @@
 import { GRID } from '../game/GameConfig.js';
 import { getExitSlotPosition, mutateExitLetter } from './ExitSystem.js';
 import { ITEMS } from '../data/items.js';
+import { mazeCenterPosition } from './MazeSystem.js';
 
 const COMPASS_CHAR = '⌖';
 
@@ -24,8 +25,12 @@ const COMPASS_CHAR = '⌖';
 //    'D' letter weight might produce on its own. Any deviation from the
 //    marked exit resets the streak to 0.
 //
-// markedDirection is public/read-only from the outside — CompassIndicator
-// (the bottom-right HUD widget) reads it each frame to aim its needle.
+// 3. Maze needle — inside a Maze the needle points to the Maze's center,
+//    where the Spectacles appear. The Compass's word floats once, the moment
+//    it starts pointing (on entry if worn, or when put on inside).
+//
+// CompassIndicator (the bottom-right HUD widget) reads getNeedleTarget()
+// each frame to aim its needle.
 const SECRET_BEEP_EVENTS = new Set(['key_glitter', 'leshy_chase', 'chi_grass']);
 const STREAK_TO_FORCE_DUNGEON = 3;
 const MARKABLE_DIRECTIONS = ['north', 'east', 'west']; // south returns to REST — never a target
@@ -36,6 +41,7 @@ export class CompassSystem {
     this.markedDirection = null;
     this._streak = 0;
     this._pendingForceD = false;
+    this._pointingInMaze = false; // the Maze needle has floated its word this Maze visit
   }
 
   // The Compass is armor: it works only while worn.
@@ -116,6 +122,27 @@ export class CompassSystem {
     if (!SECRET_BEEP_EVENTS.has(room?.activeSecretEvent)) return;
     if (!this.isWorn()) return;
     this.announceFind();
+  }
+
+  // A new Maze visit: the needle hasn't pointed yet (MazeSystem._enterMaze).
+  onMazeEntered() {
+    this._pointingInMaze = false;
+  }
+
+  // Each Maze frame (MazeSystem.update): float the word when the needle
+  // starts pointing to the center.
+  updateMaze() {
+    const worn = this.isWorn();
+    if (worn && !this._pointingInMaze) this.announceFind();
+    this._pointingInMaze = worn;
+  }
+
+  // Where the HUD needle aims: the Maze's center inside a Maze, the marked
+  // exit's slot otherwise. Null when not worn or nothing is marked.
+  getNeedleTarget() {
+    if (!this.isWorn()) return null;
+    if (this.game.player?.inMaze && this.game.mazeInterior) return mazeCenterPosition();
+    return this.getMarkedTargetPosition();
   }
 
   // World-pixel position of the currently marked exit's slot, for the HUD

@@ -8,10 +8,10 @@
  * target vector, drawn on the zoom-exempt UI layer so it never drifts with
  * CameraZoomSystem's transform.
  *
- * Only relevant to the Explore-mode directional arrow (CompassSystem) —
- * dungeon interiors have their own beep-only Compass behavior
- * (DungeonPuzzleSystem), so this widget is gated off whenever an interior
- * PiP is active.
+ * Aims at CompassSystem.getNeedleTarget(): the marked exit on the surface,
+ * the Maze's center inside a Maze. Other interiors (Hut, Dungeon) have their
+ * own beep-only Compass behavior (DungeonPuzzleSystem), so the widget is
+ * gated off there.
  */
 
 import { GRID } from '../../game/GameConfig.js';
@@ -27,15 +27,12 @@ export class CompassIndicator {
   }
 
   render(game) {
-    if (isInteriorActive(game)) return;
-
     const compass = game.compassSystem;
     const player = game.player;
     if (!compass || !player) return;
+    if (isInteriorActive(game) && !player.inMaze) return;
 
-    if (!compass.isWorn()) return;
-
-    const target = compass.getMarkedTargetPosition();
+    const target = compass.getNeedleTarget();
     if (!target) return;
 
     const cx = GRID.WIDTH - DIAL_INSET;
