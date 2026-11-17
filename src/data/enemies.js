@@ -828,9 +828,9 @@ export const ENEMIES = {
       parryCooldown: 2.0,      // More frequent; safe windows are denser too
       parryWindup: 0.25,
       reflectDamage: true,
-      counterAttack: true,
+      counterAttack: false,    // The jab after the windup is its counter, not an instant swing
       parryColor: '#ffffff',
-      chargeOnParry: true,     // Immediately enters charge windup after a successful parry
+      chargeOnParry: true,     // A caught blow drops the guard into the charge windup, then the jab
     },
     chargeMechanic: {
       enabled: true,
