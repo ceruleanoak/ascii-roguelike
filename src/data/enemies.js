@@ -73,7 +73,7 @@ export const GRAY_KING = {
   description: 'Wears the crown.',
   // Before the gray zone's hardMode +50% (45 HP, 5 damage in the arena).
   // The three bring it down together in about 8s (median over 30 seeds).
-  hp: 30,
+  hp: 10,
   mass: 3.0,
   // Stands its ground: knocked about, it drifted past the bodies' leash
   // (autoBattle LEASH) where their melee goals stopped short of it.
