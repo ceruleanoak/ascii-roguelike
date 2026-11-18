@@ -15,6 +15,9 @@ import { GAME_STATES } from '../game/GameConfig.js';
  *   deathFallen     — the Death Fight ended before Fulfillment: the player fell
  *                     to its enemies, or Death caught them early.
  *
+ * game.endingCharacter is the character the Ending names under GAME OVER
+ * ('[name] taken'): the one who died, the last the mist took, the victor.
+ *
  * game.ending is set at the moment the run ends, never cleared on the way
  * into GAME_OVER: a wish-revive out of GAME_OVER leaves it stale, and the
  * next ending always writes its own.
@@ -38,6 +41,7 @@ export class EndingSystem {
    * once the queue is spent, Fallen before it. Call before the fight resets.
    */
   markDeath() {
+    this.game.endingCharacter = this.game.activeCharacterType;
     const fight = this.game.deathFightSystem?.fight;
     if (!fight) this.game.ending = ENDINGS.FALLEN;
     else if (fight.phase === 'fulfillment') this.game.ending = ENDINGS.DEATH_FULFILLED;
@@ -47,11 +51,13 @@ export class EndingSystem {
   /**
    * End the run where no death resolved it — the mist closed over the last
    * walker, or over the Mist Battle's victor. The mist is already shut, so the
-   * screen goes silent and straight to GAME OVER.
+   * screen goes silent and straight to GAME OVER. `characterType` is the one
+   * the Ending names (null when no one stands to be named).
    */
-  endInMist(ending) {
+  endInMist(ending, characterType) {
     const game = this.game;
     game.ending = ending;
+    game.endingCharacter = characterType ?? null;
     game.audioSystem?.stop();
     game.combatSystem?.clear();
     game.stateMachine.transition(GAME_STATES.GAME_OVER);

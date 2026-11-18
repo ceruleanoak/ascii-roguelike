@@ -610,8 +610,9 @@ export class MistBattleSystem {
     // It waits until the tick that closed the mist has run, and the battle
     // stands down first so no later tick re-enters this.
     if (this.ending?.closed) {
+      const victor = this.crown?.wearer?.characterType ?? null;
       this.reset();
-      this.game.endingSystem.endInMist(ENDINGS.CROWN);
+      this.game.endingSystem.endInMist(ENDINGS.CROWN, victor);
     }
   }
 

@@ -13,13 +13,16 @@ import { ENDINGS } from '../../systems/EndingSystem.js';
  *   glyph       — drawn above GAME OVER, in glyphColor.
  *   lostHeroes  — one '@' above GAME OVER for every character the mist took,
  *                 in that character's color, dim.
+ *   word        — the name line under GAME OVER: '[name] <word>', the name
+ *                 game.endingCharacter's. Fallen has none, so a name line is
+ *                 itself the sign of a unique Ending.
  */
 export const ENDING_SCREENS = Object.freeze({
   [ENDINGS.FALLEN]:          { color: '#ff0000' },
-  [ENDINGS.MIST]:            { color: '#b4b4ba', lostHeroes: true },
-  [ENDINGS.CROWN]:           { color: '#ffffff', glyph: '♛', glyphColor: '#ffffff' },
-  [ENDINGS.DEATH_FULFILLED]: { ground: '#000000', color: '#ffffff', glyph: '☠', glyphColor: '#ffffff' },
-  [ENDINGS.DEATH_FALLEN]:    { ground: '#000000', color: '#ff0000', glyph: '☠', glyphColor: '#444444' },
+  [ENDINGS.MIST]:            { color: '#b4b4ba', lostHeroes: true, word: 'taken' },
+  [ENDINGS.CROWN]:           { color: '#ffffff', glyph: '♛', glyphColor: '#ffffff', word: 'crowned' },
+  [ENDINGS.DEATH_FULFILLED]: { ground: '#000000', color: '#ffffff', glyph: '☠', glyphColor: '#ffffff', word: 'fulfilled' },
+  [ENDINGS.DEATH_FALLEN]:    { ground: '#000000', color: '#ff0000', glyph: '☠', glyphColor: '#444444', word: 'fallen' },
 });
 
 const LOST_HERO_ALPHA = 0.5;
@@ -27,6 +30,8 @@ const LOST_HERO_ALPHA = 0.5;
 const GLYPH_ROW_CELLS = 3;
 // Cells between one lost hero and the next.
 const LOST_HERO_SPACING_CELLS = 3;
+// Name line center, cells below GAME OVER's center.
+const NAME_LINE_CELLS = 2.5;
 
 /** The screen for the run's Ending; a run with none falls back to Fallen. */
 export function endingScreen(game) {
@@ -72,4 +77,22 @@ export function drawEndingGlyphs(ctx, game) {
   }
 
   ctx.restore();
+}
+
+/**
+ * The name line under GAME OVER ('Gold Hero taken'), in the Ending's color.
+ * True when drawn — the SPACE prompt then sits below it.
+ */
+export function drawEndingNameLine(ctx, game) {
+  const { word, color } = endingScreen(game);
+  const name = CHARACTER_TYPES[game.endingCharacter]?.name;
+  if (!word || !name) return false;
+  ctx.save();
+  ctx.font = `${GRID.CELL_SIZE}px 'VentureArcade', monospace`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = color;
+  ctx.fillText(`${name} ${word}`, GRID.WIDTH / 2, GRID.HEIGHT / 2 + GRID.CELL_SIZE * NAME_LINE_CELLS);
+  ctx.restore();
+  return true;
 }

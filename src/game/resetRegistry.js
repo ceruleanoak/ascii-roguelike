@@ -272,6 +272,12 @@ export const RESET_REGISTRY = [
     why: 'Which Ending the run closed on (EndingSystem) — read by the GAME OVER screen and by SPACE out of it; the next run has none.',
   },
   {
+    path: 'endingCharacter',
+    scope: 'run',
+    value: null,
+    why: 'The character the Ending names under GAME OVER (EndingSystem); dies with the Ending it belongs to.',
+  },
+  {
     path: 'deathSpokeConsume',
     scope: 'run',
     value: false,

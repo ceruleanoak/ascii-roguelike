@@ -292,7 +292,7 @@ export class GrayZoneSystem {
     } else {
       // The mist took the last walker with fewer than three lost: the Mist
       // Ending, a GAME OVER that counts them.
-      game.endingSystem.endInMist(ENDINGS.MIST);
+      game.endingSystem.endInMist(ENDINGS.MIST, game.activeCharacterType);
     }
   }
 
