@@ -1546,8 +1546,9 @@ export class CombatSystem {
       wet: '#4488ff'  // slimes only (data.wetDot)
     };
 
-    // Enemy attacks and DOT damage
-    for (const enemy of enemies) {
+    // Enemy attacks and DOT damage — the warband's too: it is ticked with the
+    // room's enemies, so its Strikes are emitted here with theirs.
+    for (const enemy of this.game?.commandSystem?.withRoster(enemies) ?? enemies) {
       // Bug #92: the canonical enemy tick lives in main.js (surface loop) or
       // HutSystem/DungeonSystem (interiors). Consume its cached result here —
       // calling enemy.update() again doubled every enemy timer and swallowed

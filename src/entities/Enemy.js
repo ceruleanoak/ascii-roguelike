@@ -3,6 +3,7 @@ import { ENEMIES, resolveHitSfx } from '../data/enemies.js';
 import { isImmuneToEffect, getElementalModifierFor } from './elementalAffinity.js';
 import { Item } from './Item.js';
 import { attachTelegraph, meleeAimOffset } from '../game/Telegraph.js';
+import { charmTargetOf } from '../systems/charmHits.js';
 import { inSamePlane, planeOf, objectOnPlane } from '../systems/PlaneSystem.js';
 import { effectiveTargetDistance } from '../systems/enemyTargeting.js';
 import { hasLineOfSight, getVisionObstructionPoint, hasVision, spineCanSee, initSenses } from './enemyVision.js';
@@ -1712,8 +1713,8 @@ export class Enemy {
       knockback: knockback ? (band?.knockback ?? 300 * (this.knockbackMultiplier ?? 1.0)) : 0,
       isImpact: this.data.isImpact === true,
       owner: this,
-      isCharmedAttack: this.isCharmed(),
-      charmedTarget: this.isCharmed() ? this.target : null,
+      isCharmedAttack: !!charmTargetOf(this, this.game?.player),
+      charmedTarget: charmTargetOf(this, this.game?.player),
       shooterPlane: this.plane,
       onHit: this.data.onHit,
       poisonDuration: this.data.poisonDuration
@@ -1785,8 +1786,8 @@ export class Enemy {
       knockback: band?.knockback ?? 300,
       isImpact: this.data.isImpact === true,
       owner: this,
-      isCharmedAttack: this.isCharmed(),
-      charmedTarget: this.isCharmed() ? this.target : null,
+      isCharmedAttack: !!charmTargetOf(this, this.game?.player),
+      charmedTarget: charmTargetOf(this, this.game?.player),
       // A windup visual IS the eventual live attack (Telegraph.activateWindupVisual
       // mutates this same object in place; createMeleeAttack is never called again
       // for it — see resolveEnemyAttack). Without these, any onHit-bearing enemy

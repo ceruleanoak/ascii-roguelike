@@ -34,16 +34,16 @@ import { isInteriorActive } from './PlaneSystem.js';
  *     parks — not ticked, not rendered, roster intact.
  *   - Any companion holds a Branch panel: an idle member with a
  *     `commandTarget` walks there and holds instead of taking the ring.
- *   - Cap: three commanded at once (MAX_COMMANDS). Only weak-tier names
- *     serve; any stronger tier refuses (its true name is knowable but does
- *     not bend). A commanded unit that
- *     dies frees its slot on the next update pass.
+ *   - One answers at a time: a new name releases the one already commanded
+ *     (_release) — it goes free, a hostile of the room it stands in again.
+ *     Only weak-tier names serve; any stronger tier refuses (its true name
+ *     is knowable but does not bend). A commanded unit that dies frees the
+ *     roster on the next update pass.
  *
  * Response strings stay ≤18 chars — the spell layer renders at 2×
  * VentureArcade (see spells.js header note).
  */
 
-const MAX_COMMANDS = 3;
 // Hold ring: followers steer toward the player until inside this distance,
 // then stand. Just over a weapon's reach band — close enough to look sworn,
 // far enough not to bodyblock doorways.
@@ -103,7 +103,8 @@ export class CommandSystem {
     if (!target) return 'THE NAME ECHOES.';
 
     this._pruneDead();
-    if (game.commandedEnemies.length >= MAX_COMMANDS) return 'ONLY THREE ANSWER.';
+    // One answers at a time: whoever answered before goes free.
+    for (const prior of [...game.commandedEnemies]) this._release(prior);
 
     this._charm(target);
     return `${data.trueName} ANSWERS.`;
@@ -148,6 +149,31 @@ export class CommandSystem {
     enemy.setTarget(null);
 
     game.commandedEnemies.push(enemy);
+  }
+
+  /**
+   * Undo `_charm`: the unit leaves the roster, its permanent charm lifts, and
+   * it rejoins the aggro accounting of the place it stands in (surface room or
+   * Dungeon floor) as a hostile, hunting the player again.
+   */
+  _release(enemy) {
+    const game = this.game;
+    const roster = game.commandedEnemies;
+    const at = roster.indexOf(enemy);
+    if (at !== -1) roster.splice(at, 1);
+
+    enemy.commanded = false;
+    enemy.commandTarget = null;
+    enemy.statusEffects.charm.active = false;
+    enemy.statusEffects.charm.duration = 0;
+    if (enemy.isDying || enemy.hp <= 0) return;
+
+    // It follows the player, so it is freed where the player stands now.
+    const place = game.activeRoom ?? game.currentRoom;
+    if (place?.enemies && !place.enemies.includes(enemy)) place.enemies.push(enemy);
+    const planeList = place?.[`enemiesPlane${enemy.plane ?? 0}`];
+    if (planeList && !planeList.includes(enemy)) planeList.push(enemy);
+    enemy.setTarget(game.player);
   }
 
   /**
@@ -204,6 +230,17 @@ export class CommandSystem {
    */
   followsHere() {
     return !isInteriorActive(this.game) || !!this.game.player?.inDungeon;
+  }
+
+  /**
+   * `enemies` plus the warband, when it is with the player. The roster lives
+   * outside room.enemies (aggro-list removal), so every per-enemy pass that
+   * must also run for it — the canonical tick, the attack emission — takes
+   * its list from here.
+   */
+  withRoster(enemies) {
+    const roster = this.followsHere() ? (this.game.commandedEnemies ?? []) : [];
+    return roster.length ? [...enemies, ...roster] : enemies;
   }
 
   /**

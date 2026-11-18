@@ -1,5 +1,6 @@
 // Charm hit resolution — lets a charmed enemy's attack land on the enemy it
-// is fighting instead of only ever testing the player (bugs #203/#222).
+// is fighting instead of only ever testing the player (bugs #203/#222), and a
+// hostile's attack land on the commanded unit it is fighting.
 //
 // enemyTargeting.js points a charmed enemy at the nearest other enemy; this
 // module is the other half: whatever the attack is (melee swing, projectile,
@@ -13,13 +14,15 @@ import { planeOf } from './PlaneSystem.js';
 import { enemyVisualAnchor } from './enemyHitTest.js';
 import { attackHitsBox } from '../game/Telegraph.js';
 
-// The enemy a charmed owner is fighting, or null when the owner isn't
-// charmed or its target is the player (no hostile found — the fallback in
-// applyTargetOverrides) or already down.
+// The enemy an attack's owner is fighting, or null when it is fighting the
+// player. Two ways an enemy fights another enemy: it is charmed (its target is
+// the nearest other enemy), or it is a hostile that picked a commanded unit as
+// its target (EnemyUpdateSystem._selectTarget) — a blow aimed at the warband
+// lands on the warband, not on the player. Null too when the target is down.
 export function charmTargetOf(owner, player) {
-  if (!owner?.isCharmed?.()) return null;
-  const target = owner.target;
+  const target = owner?.target;
   if (!target || target === player || target.isDying || target.hp <= 0) return null;
+  if (!owner.isCharmed?.() && !target.commanded) return null;
   return target;
 }
 

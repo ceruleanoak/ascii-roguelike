@@ -87,16 +87,17 @@ export function applyTargetOverrides(enemy, enemies, player, noiseSource = null)
  * If the player is on a different plane and this enemy isn't already in pursuit
  * (enraged or memory-active), treat the player as infinitely far away so that
  * no new aggro, memory marks, or movement toward the player can occur cross-plane.
- * Commanded units are unconditionally infinitely far from the player — that is
- * what "removed from the aggro list" means mechanically (CommandSystem): no
- * detection, windup, leap/charge-at-player, or memory mark can ever resolve.
- * A wish-charmed enemy is the same toward the player only — it still has
- * to close on the enemy it fights. (Every enemy-like target answers
- * isCharmed(); the player doesn't.)
+ * Commanded and wish-charmed units are infinitely far from the player — that
+ * is what "removed from the aggro list" means mechanically (CommandSystem): no
+ * detection, windup, leap/charge-at-player, or memory mark can ever resolve
+ * against them. Toward the enemy they fight the distance is real, so the full
+ * AI (aggro, approach, Strike, a frog's tongue) runs against that foe.
+ * (Every enemy-like target answers isCharmed(); the player doesn't.)
  */
 export function effectiveTargetDistance(enemy, distance) {
-  const wishSparesPlayer = enemy.wishCharmed && typeof enemy.target?.isCharmed !== 'function';
-  if (enemy.commanded || wishSparesPlayer) return Infinity;
+  const sparesPlayer = (enemy.commanded || enemy.wishCharmed)
+    && typeof enemy.target?.isCharmed !== 'function';
+  if (sparesPlayer) return Infinity;
   return (inSamePlane(enemy, enemy.target) || enemy.enraged || enemy.aggroMemoryActive)
     ? distance
     : Infinity;

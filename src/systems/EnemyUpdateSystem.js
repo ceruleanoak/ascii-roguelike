@@ -80,8 +80,7 @@ export class EnemyUpdateSystem {
     // room.enemies by design (aggro-list removal), so they ride along here.
     // They follow the player down into a Dungeon, but stay on the surface
     // while a hut or the Maze owns the frame (CommandSystem.followsHere).
-    const roster = game.commandSystem.followsHere() ? (game.commandedEnemies ?? []) : [];
-    const tickedList = roster.length ? [...enemies, ...roster] : enemies;
+    const tickedList = game.commandSystem.withRoster(enemies);
     const player = game.player;
 
     this._applySlimeContact(player, tickedList);

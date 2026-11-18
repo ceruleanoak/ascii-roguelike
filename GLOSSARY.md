@@ -2002,7 +2002,9 @@ identity, not standard programming terms.
 - **Definition:** The word that makes something serve. Typed away from NPCs, COMMAND (or CALL)
   asks `COMMAND WHOM?` and the true name typed next permanently charms the nearest enemy that
   bears it, for free — only a weak-tier name serves; any stronger one answers
-  `IT WILL NOT BEND.`. Typed beside an NPC, COMMAND is an Influence Wish Spell: the wish question,
+  `IT WILL NOT BEND.`. One enemy answers at a time: a new name frees the one already commanded,
+  hostile again where it stands. A commanded enemy runs its full AI (approach, Strike, a Frog's
+  tongue) against the enemies it fights, and their blows land on it. Typed beside an NPC, COMMAND is an Influence Wish Spell: the wish question,
   then YES and the NPC leaves its room or floor to follow as the Companion. With a Companion
   already following, the NPC answers `ONE FOLLOWS.` and no wish is spent. Charon can't be
   commanded.
