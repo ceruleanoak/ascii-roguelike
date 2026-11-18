@@ -79,6 +79,7 @@ export class CameraZoomSystem {
     this.originXPercent = 50;
     this.originYPercent = 50;
     this._noEnemyElapsedMs = Infinity;
+    this._lastThreats = []; // _rememberThreats: last frame's threats
     this._lastState = null;
     // A scripted frame (holdZoom): { scale, focus, at } where focus() returns
     // the canvas-pixel point to frame on, or null to keep the player as the
@@ -122,6 +123,7 @@ export class CameraZoomSystem {
     this.originXPercent = 50;
     this.originYPercent = 50;
     this._noEnemyElapsedMs = Infinity;
+    this._lastThreats = [];
   }
 
   /** True once the frame has finished easing to its current target. */
@@ -192,11 +194,18 @@ export class CameraZoomSystem {
       // Extra hold: once no enemy is detected, keep the zoomed frame for
       // ZOOM.ZOOM_OUT_DELAY_MS before actually releasing, so a momentary
       // gap in detection doesn't snap the camera out and back in.
+      // Not when the gap is a threat hiding itself: a Sniper that vanishes
+      // after its shot (or any enemy turning Invisible) would otherwise keep
+      // the frame zoomed on nothing for the hold, which gives the hiding away.
+      // An enemy that hid this frame releases the zoom at once.
       if (enemyDetected) {
         this._noEnemyElapsedMs = 0;
+      } else if (this._aThreatJustHid()) {
+        this._noEnemyElapsedMs = ZOOM.ZOOM_OUT_DELAY_MS;
       } else {
         this._noEnemyElapsedMs += deltaTime * 1000;
       }
+      this._rememberThreats(entities);
       const wantsZoom = enemyDetected || this._noEnemyElapsedMs < ZOOM.ZOOM_OUT_DELAY_MS;
       desiredScale = wantsZoom ? ZOOM.SCALE : 1;
 
@@ -240,6 +249,7 @@ export class CameraZoomSystem {
       desiredScale = this.targetZoom;
     } else {
       this._noEnemyElapsedMs = Infinity;
+      this._lastThreats = [];
       // Origin deliberately left untouched here — see class doc comment.
     }
 
@@ -362,6 +372,18 @@ export class CameraZoomSystem {
       const ey = e.position.y + (e.height ?? GRID.CELL_SIZE) / 2;
       return Math.hypot(ex - px, ey - py) <= range;
     });
+  }
+
+  // The entities that counted as threats this frame, kept to the next so a
+  // threat that turns concealed can be told from one that walked away.
+  _rememberThreats(entities) {
+    this._lastThreats = (entities ?? []).filter(isThreat);
+  }
+
+  // Whether a threat from last frame is now alive but concealed (Invisible,
+  // shelled, faded into grass): it hid rather than left.
+  _aThreatJustHid() {
+    return this._lastThreats.some((e) => (e.hp === undefined || e.hp > 0) && isConcealedEnemy(e));
   }
 
   // Whether any threat sits inside the frame the zoom is committed to.
