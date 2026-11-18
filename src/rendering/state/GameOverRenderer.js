@@ -11,7 +11,7 @@
 import { GRID, COLORS } from '../../game/GameConfig.js';
 import { objectOnPlane, planeOf, isDeathHeldOffSurface, PLANE_SURFACE } from '../../systems/PlaneSystem.js';
 import { drawVisionFogOverlay } from '../ui/torchLight.js';
-import { endingScreen, drawEndingGround, drawEndingGlyphs, drawEndingNameLine } from './endingScreens.js';
+import { endingScreen, drawEndingGround, drawEndingGlyphs, drawEndingLine } from './endingScreens.js';
 
 export class GameOverRenderer {
   constructor(renderer, renderController) {
@@ -164,9 +164,9 @@ export class GameOverRenderer {
     this.renderer.fgCtx.fillText(deathText, GRID.WIDTH / 2, GRID.HEIGHT / 2);
     this.renderer.fgCtx.restore();
 
-    // A unique Ending names its character under GAME OVER; the prompt drops below.
-    const named = !isCharacterDeath && drawEndingNameLine(this.renderer.fgCtx, game);
-    const promptCells = named ? 4.5 : 3;
+    // A unique Ending has its own line under GAME OVER; the prompt drops below.
+    const lined = !isCharacterDeath && drawEndingLine(this.renderer.fgCtx, game);
+    const promptCells = lined ? 4.5 : 3;
 
     // Draw "Press SPACE to continue" text (only after 2-second delay)
     if (timerExpired) {

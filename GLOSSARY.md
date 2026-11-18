@@ -1141,27 +1141,25 @@ identity, not standard programming terms.
 
 ### Ending
 - **Definition:** The way a run closed, shown as its GAME OVER. Every Ending says GAME OVER;
-  they differ by ground, color, the glyph above the words, and a name line under them,
-  `[name] <word>`, the convention of the `[name] lost` character death. Only the plain Fallen
-  has no name line, so the line itself marks a unique Ending:
+  they differ by ground, color, the glyph above the words, and a line of their own under them.
+  Only the plain Fallen has no line, so the line itself marks a unique Ending:
   - **Fallen** — the last living character died. Red, over the room it happened in.
   - **Mist** — the mist took the last living character at gray depth 10 with fewer than three
     lost, so no Mist Battle. Gray, over the closed mist, with one dim `@` per character lost,
-    each in its own color; `[last lost] taken`.
+    each in its own color; `One Hero Taken` / `Two Heroes Taken`.
   - **Crown** — the Mist Battle's crowned victor went into the gray. White, over the closed
-    mist, under the Gray Crown `♛`; `[victor] crowned`. SPACE leads to title.
+    mist, under the Gray Crown `♛`; `Inheritor Found`. SPACE leads to title.
   - **Death Fulfilled** — Death reached the player in the Death Fight's Fulfillment. White on
-    black, under a white `☠`; `[name] fulfilled`.
+    black, under a white `☠`; `The Crown Calls`.
   - **Death Fallen** — the Death Fight ended before Fulfillment (its enemies, or Death caught
-    the player early). Red on black, under a dim `☠`; `[name] fallen`.
+    the player early). Red on black, under a dim `☠`; `There is more to learn`.
   Every Ending but the Crown's leads to the next run at REST.
-- **In code:** `game.ending` and `game.endingCharacter` (run scope, Reset Registry), the first
-  one of `ENDINGS` in
+- **In code:** `game.ending` (run scope, Reset Registry), one of `ENDINGS` in
   `src/systems/EndingSystem.js`. `markDeath()` names a death's Ending (main.js's last-character
   death, `ThreeRoomSystem._resolveContactDeath`) from `deathFightSystem.fight.phase`;
   `endInMist()` ends the run with no death (`GrayZoneSystem._finalizeMistOut`, the Mist Battle's
   `runTick`); `leave()` is SPACE out of GAME OVER. Screens: `ENDING_SCREENS` in
-  `src/rendering/state/endingScreens.js` (`word` is the name line's), drawn by
+  `src/rendering/state/endingScreens.js` (`line` is the text under GAME OVER), drawn by
   `GameOverRenderer`.
 - **Not:** the cosmology's endings (false / true / pure, `claudedocs/zone-cosmology.md`), which
   are what a run reached, not how its GAME OVER looks; a character death with others still
