@@ -266,6 +266,12 @@ export const RESET_REGISTRY = [
     why: "Three Room run-state: the gray '3' call can happen again next run, and the N×3 streak starts clean.",
   },
   {
+    path: 'ending',
+    scope: 'run',
+    value: null,
+    why: 'Which Ending the run closed on (EndingSystem) — read by the GAME OVER screen and by SPACE out of it; the next run has none.',
+  },
+  {
     path: 'deathSpokeConsume',
     scope: 'run',
     value: false,

@@ -618,6 +618,8 @@ export class ThreeRoomSystem {
     // Hearts break here too, or a wish-revive out of this room would keep them.
     breakOnDeathPassives(game.inventorySystem, game.player);
     captureDeath(game);
+    // The Ending reads the fight's phase, so it is named before the reset.
+    game.endingSystem.markDeath();
     game.audioSystem.stop();
     game.audioSystem.playSFX('player_death');
     game.combatSystem.clear();

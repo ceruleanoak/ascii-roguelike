@@ -1098,7 +1098,7 @@ identity, not standard programming terms.
   with all three lost characters at once as the Trine, ending on the Gray King; when a body
   takes the Gray Crown the King drops, then after a brief delay Act 2 has the three fight each
   other over it with no player input; the last one standing, crowned, disappears into the gray.
-  There are no credits.
+  There are no credits; the run closes on the Crown Ending.
 - **In code:** `MistBattleSystem`, entered through `enterArena(snapshots)`: by the third gray
   mist-out (`GrayZoneSystem._finalizeMistOut` once `lostCharacters` reaches `MIST_BATTLE_LOST`,
   passing the last three `graySnapshots`), or from the CheatMenu BOSSES entries with random
@@ -1110,7 +1110,8 @@ identity, not standard programming terms.
   (`handleKeydown`), and ticks under a generator seeded from the snapshots (`runTick`). Each
   body's AI is in `src/systems/mistBattle/autoBattle.js`. Act 2 ends once no body stands or the
   one left wears the Gray Crown (`_isOver`): it holds a moment, then the gray mist closes over
-  it (`GrayZoneSystem.closeOver`) and the run resets to title. A stalemate cap
+  it (`GrayZoneSystem.closeOver`) and the run closes on the Crown Ending (`EndingSystem`),
+  whose SPACE leads to title. A stalemate cap
   (`STALEMATE_TIME`) ends Act 2 anyway, crowning the wearer, else the highest HP share.
 - **Not:** a Boss fight; the mist-out itself (the per-character loss at gray depth 10).
 
@@ -1137,6 +1138,30 @@ identity, not standard programming terms.
   `crownSpot()`), drawn as `♛` in `ZONE_COLORS.gray` by `TrineDraw` (which then skips the
   swap-flash weapon glyphs). The bodies make for it on the ground through autoBattle's `seek`.
 - **Not:** an item: it is never picked up into an inventory and has no ITEMS entry.
+
+### Ending
+- **Definition:** The way a run closed, shown as its GAME OVER. Every Ending says only GAME
+  OVER; they differ by ground, color and the glyph above the words:
+  - **Fallen** — the last living character died. Red, over the room it happened in.
+  - **Mist** — the mist took the last living character at gray depth 10 with fewer than three
+    lost, so no Mist Battle. Gray, over the closed mist, with one dim `@` per character lost,
+    each in its own color.
+  - **Crown** — the Mist Battle's crowned victor went into the gray. White, over the closed
+    mist, under the Gray Crown `♛`. SPACE leads to title.
+  - **Death Fulfilled** — Death reached the player in the Death Fight's Fulfillment. White on
+    black, under a white `☠`.
+  - **Death Fallen** — the Death Fight ended before Fulfillment (its enemies, or Death caught
+    the player early). Red on black, under a dim `☠`.
+  Every Ending but the Crown's leads to the next run at REST.
+- **In code:** `game.ending` (run scope, Reset Registry), one of `ENDINGS` in
+  `src/systems/EndingSystem.js`. `markDeath()` names a death's Ending (main.js's last-character
+  death, `ThreeRoomSystem._resolveContactDeath`) from `deathFightSystem.fight.phase`;
+  `endInMist()` ends the run with no death (`GrayZoneSystem._finalizeMistOut`, the Mist Battle's
+  `runTick`); `leave()` is SPACE out of GAME OVER. Screens: `ENDING_SCREENS` in
+  `src/rendering/state/endingScreens.js`, drawn by `GameOverRenderer`.
+- **Not:** the cosmology's endings (false / true / pure, `claudedocs/zone-cosmology.md`), which
+  are what a run reached, not how its GAME OVER looks; a character death with others still
+  living (`[name] lost`), which is not an Ending.
 
 ### Grasp
 - **Definition:** Mist Battle Act 1's foe after the warm-up waves: a mountain climb in three

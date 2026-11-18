@@ -4,13 +4,14 @@
  * Responsibilities:
  * - Display the room where player died
  * - Show debris and particle effects
- * - Display "GAME OVER" text
+ * - Display "GAME OVER" text, drawn as the run's Ending (endingScreens.js)
  * - Show "Press SPACE to continue" after delay
  */
 
 import { GRID, COLORS } from '../../game/GameConfig.js';
 import { objectOnPlane, planeOf, isDeathHeldOffSurface, PLANE_SURFACE } from '../../systems/PlaneSystem.js';
 import { drawVisionFogOverlay } from '../ui/torchLight.js';
+import { endingScreen, drawEndingGround, drawEndingGlyphs } from './endingScreens.js';
 
 export class GameOverRenderer {
   constructor(renderer, renderController) {
@@ -104,6 +105,9 @@ export class GameOverRenderer {
       this.renderController.interiorOverlay.render(game);
     } else if (holdPlane) {
       this._renderPlaneDeathHold(game);
+    } else if (!isCharacterDeath && drawEndingGround(this.renderer.fgCtx, game)) {
+      // The Ending's own ground hides the room; the death still plays on it.
+      this._drawDeathEffects(game);
     } else {
       // Draw water tiles (dynamic state changes each frame)
       for (const obj of game.backgroundObjects) {
@@ -146,9 +150,11 @@ export class GameOverRenderer {
     // the interior PIP / underground scene rendered above.
     if (holdOffSurface) return;
 
-    // Draw main death text
+    // Draw main death text. A true GAME OVER is the run's Ending: its color,
+    // and the glyph row above it.
     const deathText = isCharacterDeath ? `${game.characterDeathName} lost` : 'GAME OVER';
-    const deathColor = isCharacterDeath ? '#ffaa00' : '#ff0000';
+    const deathColor = isCharacterDeath ? '#ffaa00' : endingScreen(game).color;
+    if (!isCharacterDeath) drawEndingGlyphs(this.renderer.fgCtx, game);
 
     this.renderer.fgCtx.save();
     this.renderer.fgCtx.font = `${GRID.CELL_SIZE * 2}px 'VentureArcade', monospace`;

@@ -18,14 +18,15 @@
  *    game.lostCharacters, and play resumes at REST with the next living
  *    character. The third lost character opens the Mist Battle
  *    (MistBattleSystem.enterArena) instead; losing the last living character
- *    before that ends the run. Fully diegetic — no text, the closing fog is
- *    the ceremony.
+ *    before that ends the run on the Mist Ending (EndingSystem). The closing
+ *    fog is the ceremony; GAME OVER is the only text, after it.
  */
 
 import { GRID } from '../game/GameConfig.js';
 import { ZONES } from '../data/zones.js';
 import { isInteriorActive } from './PlaneSystem.js';
 import { MIST_BATTLE_LOST } from './MistBattleSystem.js';
+import { ENDINGS } from './EndingSystem.js';
 
 const GRACE_DURATION = 1.0;   // See the tenth room before the mist moves
 const SHRINK_DURATION = 5.0;  // Vision radius 10 → 0 cells
@@ -77,6 +78,11 @@ export class GrayZoneSystem {
 
   /** Dispatch from enterGameOverState — arms the death swallow in gray. */
   onGameOver() {
+    // The Mist and Crown Endings arrive with the mist already shut.
+    if (this.game.endingSystem.closedInMist()) {
+      this.deathSwallowPhase = 'closed';
+      return;
+    }
     if (this.game.currentRoom?.zone !== 'gray') return;
     this.deathSwallowPhase = 'hold';
     this.deathSwallowTimer = DEATH_HOLD_DURATION;
@@ -284,8 +290,9 @@ export class GrayZoneSystem {
       game.charonSystem.waiveNextVisit();
       game.characterSystem.switchToCharacterAtRest(living[0]);
     } else {
-      // The mist took the last walker — the run is over, snapshots and all.
-      game._resetRunToRest();
+      // The mist took the last walker with fewer than three lost: the Mist
+      // Ending, a GAME OVER that counts them.
+      game.endingSystem.endInMist(ENDINGS.MIST);
     }
   }
 

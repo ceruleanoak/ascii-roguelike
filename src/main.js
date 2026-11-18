@@ -139,6 +139,7 @@ import { CompanionSystem } from './systems/CompanionSystem.js';
 import { CommandSystem } from './systems/CommandSystem.js';
 import { ConsumeSystem } from './systems/ConsumeSystem.js';
 import { DeathFightSystem } from './systems/DeathFightSystem.js';
+import { EndingSystem } from './systems/EndingSystem.js';
 import { WorldEffectsSystem } from './systems/WorldEffectsSystem.js';
 import { EnemyUpdateSystem } from './systems/EnemyUpdateSystem.js';
 import { PauseSystem } from './systems/PauseSystem.js';
@@ -327,6 +328,7 @@ class Game {
     this.commandSystem = new CommandSystem(this);
     this.consumeSystem = new ConsumeSystem(this);
     this.deathFightSystem = new DeathFightSystem(this); // the Death Fight in the Three Room
+    this.endingSystem = new EndingSystem(this); // which Ending the run closed on
     this.worldEffectsSystem = new WorldEffectsSystem(this);
     this.enemyUpdateSystem = new EnemyUpdateSystem(this);
     this.dialogueSystem = new DialogueSystem(this);
@@ -2487,6 +2489,7 @@ class Game {
         } else {
           // All characters dead - game over
           console.log('💀 All characters have died - GAME OVER');
+          this.endingSystem.markDeath();
 
           // Clear combat system before transitioning
           this.combatSystem.clear();
@@ -3116,7 +3119,7 @@ class Game {
       if (this.characterDeathPending && this.characterDeathTimer <= 0) {
         this.characterSystem.respawnNextCharacter();
       } else if (this.gameOverWaitingForSpace && this.gameOverDeathTimer <= 0 && !this.characterDeathPending) {
-        this._resetRunToRest();
+        this.endingSystem.leave();
       }
       return;
     }

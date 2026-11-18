@@ -188,7 +188,10 @@ are the THREE room — see "Endings" and "Path to Canon" below.)*
   their snapshotted gear, standing where Act 1 left them), weapon-driven
   (nearest rival, slot by range, own roll, own consumables), seeded from the
   snapshots, over the Gray Crown. The crowned victor stands a moment, then the
-  gray mist closes over it and the run resets to title: no text, no credits.
+  gray mist closes over it and the run closes on the Crown Ending (GLOSSARY.md
+  "Ending", 2026-11-18): GAME OVER in white under the Gray Crown, no credits,
+  then the title. Losing the last living character with fewer than three lost
+  closes on the Mist Ending instead: GAME OVER in gray, an @ per hero lost.
   A 90s stalemate cap on Act 2 crowns the wearer, else the highest HP share.
 
 ### Endings (restated 2026-10-09 — supersedes the Win/Know/Yield list)

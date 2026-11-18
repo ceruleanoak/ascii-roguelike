@@ -56,6 +56,7 @@
 // and the CheatMenu BOSSES entries (random snapshots). Both build the arena
 // through enterArena.
 import { GAME_STATES, GRID, PHYSICS, ROOM_TYPES } from '../game/GameConfig.js';
+import { ENDINGS } from './EndingSystem.js';
 import { ZONES, ZONE_COLORS } from '../data/zones.js';
 import { GRAY_KING } from '../data/enemies.js';
 import { blendColors } from './ZoneSystem.js';
@@ -605,9 +606,13 @@ export class MistBattleSystem {
   runTick(tick) {
     if (!this.rng || this.act !== 2) return tick();
     this._withSeed(tick);
-    // The mist has closed over the victor (_updateEnding). TITLE drops
-    // game.player, so it waits until the tick that closed the mist has run.
-    if (this.ending?.closed) this.game.stateMachine.transition(GAME_STATES.TITLE);
+    // The mist has closed over the victor (_updateEnding): the Crown Ending.
+    // It waits until the tick that closed the mist has run, and the battle
+    // stands down first so no later tick re-enters this.
+    if (this.ending?.closed) {
+      this.reset();
+      this.game.endingSystem.endInMist(ENDINGS.CROWN);
+    }
   }
 
   // Run `fn` with the battle's seeded generator standing in for Math.random.
