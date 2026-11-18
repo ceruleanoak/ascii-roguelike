@@ -11,7 +11,7 @@
 import { GRID, COLORS } from '../../game/GameConfig.js';
 import { objectOnPlane, planeOf, isDeathHeldOffSurface, PLANE_SURFACE } from '../../systems/PlaneSystem.js';
 import { drawVisionFogOverlay } from '../ui/torchLight.js';
-import { endingScreen, drawEndingGround, drawEndingGlyphs, drawEndingLine } from './endingScreens.js';
+import { endingScreen, drawEndingGround, drawEndingLine } from './endingScreens.js';
 
 export class GameOverRenderer {
   constructor(renderer, renderController) {
@@ -150,11 +150,9 @@ export class GameOverRenderer {
     // the interior PIP / underground scene rendered above.
     if (holdOffSurface) return;
 
-    // Draw main death text. A true GAME OVER is the run's Ending: its color,
-    // and the glyph row above it.
+    // Draw main death text. A true GAME OVER takes the run's Ending's color.
     const deathText = isCharacterDeath ? `${game.characterDeathName} lost` : 'GAME OVER';
     const deathColor = isCharacterDeath ? '#ffaa00' : endingScreen(game).color;
-    if (!isCharacterDeath) drawEndingGlyphs(this.renderer.fgCtx, game);
 
     this.renderer.fgCtx.save();
     this.renderer.fgCtx.font = `${GRID.CELL_SIZE * 2}px 'VentureArcade', monospace`;

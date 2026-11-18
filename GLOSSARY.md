@@ -1141,18 +1141,17 @@ identity, not standard programming terms.
 
 ### Ending
 - **Definition:** The way a run closed, shown as its GAME OVER. Every Ending says GAME OVER;
-  they differ by ground, color, the glyph above the words, and a line of their own under them.
+  they differ by ground, color and a line of their own under them. Text only, no glyphs.
   Only the plain Fallen has no line, so the line itself marks a unique Ending:
   - **Fallen** — the last living character died. Red, over the room it happened in.
   - **Mist** — the mist took the last living character at gray depth 10 with fewer than three
-    lost, so no Mist Battle. Gray, over the closed mist, with one dim `@` per character lost,
-    each in its own color; `One Hero Taken` / `Two Heroes Taken`.
+    lost, so no Mist Battle. Gray, over the closed mist; `One Hero Taken` / `Two Heroes Taken`.
   - **Crown** — the Mist Battle's crowned victor went into the gray. White, over the closed
-    mist, under the Gray Crown `♛`; `Inheritor Found`. SPACE leads to title.
+    mist; `Inheritor Found`. SPACE leads to title.
   - **Death Fulfilled** — Death reached the player in the Death Fight's Fulfillment. White on
-    black, under a white `☠`; `The Crown Calls`.
+    black; `The Crown Calls`.
   - **Death Fallen** — the Death Fight ended before Fulfillment (its enemies, or Death caught
-    the player early). Red on black, under a dim `☠`; `There is more to learn`.
+    the player early). Red on black; `There is more to learn`.
   Every Ending but the Crown's leads to the next run at REST.
 - **In code:** `game.ending` (run scope, Reset Registry), one of `ENDINGS` in
   `src/systems/EndingSystem.js`. `markDeath()` names a death's Ending (main.js's last-character
