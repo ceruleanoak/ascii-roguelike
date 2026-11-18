@@ -34,6 +34,7 @@ export class EquipmentEffectsSystem {
     player.parryMechanic = null;
     player.fireImmune = false;
     player.freezeImmune = false;
+    player.freezeDamageCap = 0;
     player.poisonImmune = false;
     player.slimeImmune = false;
     player.reflectDamage = 0;
@@ -66,6 +67,7 @@ export class EquipmentEffectsSystem {
       player.parryMechanic = a.parryMechanic || null;
       player.fireImmune = a.fireImmune || false;
       player.freezeImmune = a.freezeImmune || false;
+      player.freezeDamageCap = a.freezeDamageCap || 0;
       player.poisonImmune = a.poisonImmune || false;
       player.slimeImmune = a.slimeImmune || false;
       player.reflectDamage = a.reflectDamage || 0;

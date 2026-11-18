@@ -79,7 +79,9 @@ export const PlayerDamageSystem = {
       if (player.fireImmune && damageSource.element === 'burn') {
         return { immune: true };
       }
-      if (player.freezeImmune && damageSource.element === 'freeze') {
+      // A freeze damage cap (Ice Plate) lets the hit land, capped below,
+      // rather than turning it aside; the freeze pip itself stays refused.
+      if (player.freezeImmune && damageSource.element === 'freeze' && !(player.freezeDamageCap > 0)) {
         return { immune: true };
       }
       if (player.poisonImmune && damageSource.element === 'poison') {
@@ -122,7 +124,10 @@ export const PlayerDamageSystem = {
 
     // Apply defense (reduce damage, minimum 1)
     const armorCut = armored ? player.defense + meleeAbsorb + burnAbsorb + elementAbsorb : 0;
-    const actualDamage = Math.max(1, amount - armorCut);
+    let actualDamage = Math.max(1, amount - armorCut);
+    if (damageSource.element === 'freeze' && player.freezeDamageCap > 0) {
+      actualDamage = Math.min(actualDamage, player.freezeDamageCap);
+    }
 
     player.hp -= actualDamage;
     if (player.hp < 0) player.hp = 0;

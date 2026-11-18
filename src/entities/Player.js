@@ -36,6 +36,7 @@ export class Player {
     this.dodgeChance = 0;
     this.fireImmune = false;
     this.freezeImmune = false;
+    this.freezeDamageCap = 0;   // >0: freeze hits land, capped at this (Ice Plate) instead of IMMUNE
     this.poisonImmune = false;
     this.slimeImmune = false;
     this.reflectDamage = 0;
@@ -733,6 +734,7 @@ export class Player {
     this.dodgeChance = 0;
     this.fireImmune = false;
     this.freezeImmune = false;
+    this.freezeDamageCap = 0;
     this.poisonImmune = false;
     this.slimeImmune = false;
     this.reflectDamage = 0;

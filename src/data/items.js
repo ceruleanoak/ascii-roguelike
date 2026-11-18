@@ -2026,13 +2026,18 @@ export const ITEMS = {
     rarity: 'rare',
     char: '𐤍', name: 'Ice Plate', type: ITEM_TYPES.ARMOR,
     defense: 4,
-    freezeImmune: true,
+    freezeImmune: true,     // the wearer is never Frozen by a freeze pip
+    freezeDamageCap: 1,     // freeze hits still land, for 1 damage at most
     slowEnemies: true,      // cold radiates outward, chilling nearby enemies
     meleeResist: 0.25,      // thick frozen plates absorb strikes
     massBonus: 2.5,
     rollCooldownMult: 1.75,  // frozen bulk — slow to recover between rolls
     spellDescription: 'ICY TO TOUCH.',
-    color: '#87ceeb'
+    color: '#87ceeb',
+    // Share of enemy drops rolled as this item that actually drop it; the rest
+    // become an ingredient instead (generateEnemyDrops). It is the only armor
+    // in the ice pool, so every armor roll from a pure-ice enemy landed on it.
+    dropKeep: 0.5
   },
   '𐤓': {
     rarity: 'epic',
