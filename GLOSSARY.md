@@ -119,11 +119,14 @@ identity, not standard programming terms.
 
 ### Ghost
 - **Definition:** An immune enemy spawned inside a Maze when a blinking cover object's warning
-  expires. Deals contact damage on touch; cannot be fought or destroyed. Once 2 Ghosts have
+  expires. Deals contact damage on touch; cannot be fought. Torch light destroys it: a Ghost
+  inside the player's own light (a carried Torch or a Fire Berry's glow) or a lit Maze Torch's
+  light is gone for good, though it still counted as spawned. Once 2 Ghosts have
   spawned in one Maze, every remaining cover object Blinks at once and all Ghosts (existing and
   future) pass through walls.
 - **In code:** `MazeGhost` class in `MazeSystem.js` — bespoke, not built on the shared `Enemy`/
-  `Mechanic` composition system.
+  `Mechanic` composition system. Torch light: `MazeSystem._banishLitGhosts` (inside a light =
+  `torchLightBand` 2).
 - **Not:** a regular Enemy (immune to damage, no drops); the "ghostly" flavor-text adjective
   used elsewhere in `src/data/enemies.js`.
 

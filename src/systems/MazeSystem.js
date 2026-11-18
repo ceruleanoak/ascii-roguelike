@@ -38,6 +38,10 @@ import { MazeTrapSystem } from './MazeTrapSystem.js';
  *   - Immune to all damage; no knockback on player contact.
  *   - 1 damage per 0.75 s touch.
  *   - Pac-man style pathing toward the player; always blocked by walls.
+ *   - Torch light destroys them: a Ghost that drifts inside the player's own
+ *     light (a carried Torch, or a Fire Berry's glow — hasTorchLight) or a lit
+ *     Maze Torch's light is gone for good. A ghost already spawned still counts
+ *     toward doom and still forfeits the Spectacles.
  *
  * Maze Torches (5 per maze, distributed at non-dead-end cells):
  *   - Lit by striking one with a fire attack (torchIgnition.js) — permanent once lit.
@@ -45,7 +49,8 @@ import { MazeTrapSystem } from './MazeTrapSystem.js';
  *     a ghost (never selected as blink candidate, immune even in doom mode).
  *   - Once all 5 are lit, every tomb's blink persists 3x as long (same
  *     flicker cadence, 3x the completed blinks per tick) before conversion.
- *   - Ghosts destroy any torch they touch — snuffed out for the rest of the
+ *   - Ghosts destroy any unlit torch they touch (a lit one's light destroys
+ *     them first) — snuffed out for the rest of the
  *     run, losing its shielding/all-lit contribution. So does the flood
  *     (deep water destroys torches).
  *
@@ -515,6 +520,10 @@ export class MazeSystem {
       if (fireStrikesTorch(game.combatSystem, torch)) torch.lit = true;
     }
 
+    // Torch light destroys Ghosts. Run before the torch-snuff check so a lit
+    // torch's light (wider than a ghost's touch) is what wins.
+    this._banishLitGhosts(mi);
+
     // Ghosts destroy any torch they touch — snuffs it out and removes its
     // shielding/slowdown contribution for good.
     for (const ghost of mi.ghosts) {
@@ -839,6 +848,26 @@ export class MazeSystem {
       if (mi.collisionMap[gr][gc]) return true;
     }
     return false;
+  }
+
+  // ─── Ghost Banishing ─────────────────────────────────────────────────────
+
+  /**
+   * A Ghost inside torch light — the player's own (carried Torch or Fire
+   * Berry) or a lit Maze Torch's — is destroyed. Same light test that draws
+   * the Flood Panels (torchLightBand, band 2 = inside a light); the rim band
+   * doesn't count. The ghost stays counted in mi.spawnCount, so doom and the
+   * Spectacles forfeit are unchanged.
+   */
+  _banishLitGhosts(mi) {
+    let banished = false;
+    for (let i = mi.ghosts.length - 1; i >= 0; i--) {
+      const { position } = mi.ghosts[i];
+      if (this.torchLightBand(mi, position.x, position.y) < 2) continue;
+      mi.ghosts.splice(i, 1);
+      banished = true;
+    }
+    if (banished) this.game.audioSystem?.playSFX('magic_death');
   }
 
   // ─── Ghost Contact Damage ────────────────────────────────────────────────
