@@ -1,6 +1,7 @@
 import { GRID } from '../../game/GameConfig.js';
 import { getItemData } from '../../data/items.js';
 import { spectaclesTransformString, isSpectaclesActive } from '../../data/cipher.js';
+import { drawModalPanel, modalFadeProgress, drawModalMenu } from './modalPanel.js';
 
 /**
  * ShopOverlay — centered popup for ShopSystem (Settlement Shopkeeper).
@@ -68,57 +69,11 @@ export class ShopOverlay {
   }
 
   _renderMenu(ctx, game, state) {
-    const cs = GRID.CELL_SIZE;
-    const labels = ['WARES', 'PAWN'];
-    const rowH = cs * 1.8;
-
-    const boxW = cs * MENU_BOX_WIDTH_CELLS;
-    const boxH = cs * 1.6 + labels.length * rowH;
-    const boxX = Math.floor((GRID.WIDTH - boxW) / 2);
-    const boxY = Math.floor((GRID.HEIGHT - boxH) / 2);
-
-    this._drawPanel(ctx, boxX, boxY, boxW, boxH);
-    ctx.globalAlpha = this._fadeProgress(state);
-
-    const midX = boxX + boxW / 2;
-    const startY = boxY + cs * 1.6;
-
-    ctx.textAlign = 'center';
-    for (let i = 0; i < labels.length; i++) {
-      const y = startY + i * rowH;
-      const selected = state.menuIndex === i;
-
-      if (selected) {
-        ctx.font = `${cs * 0.9}px 'Unifont', monospace`;
-        ctx.fillStyle = '#ffff00';
-        ctx.fillText('▼', midX, y - cs * 0.9);
-      }
-
-      ctx.font = `${cs}px 'Unifont', monospace`;
-      ctx.fillStyle = selected ? '#ffff00' : '#cccccc';
-      ctx.fillText(spectaclesTransformString(labels[i], isSpectaclesActive(game)), midX, y);
-    }
-
-    ctx.globalAlpha = 1;
-  }
-
-  _drawPanel(ctx, x, y, w, h) {
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
-    ctx.fillRect(0, 0, GRID.WIDTH, GRID.HEIGHT);
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.92)';
-    ctx.fillRect(x, y, w, h);
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
-  }
-
-  _fadeProgress(state) {
-    const now = performance.now();
-    const openedAt = state.openedAt ?? now;
-    const readyAt = state.inputReadyAt ?? now;
-    return readyAt > openedAt
-      ? Math.min(1, Math.max(0, (now - openedAt) / (readyAt - openedAt)))
-      : 1;
+    drawModalMenu(ctx, game, state, {
+      rows: [{ label: 'WARES' }, { label: 'PAWN' }],
+      index: state.menuIndex,
+      minWidthCells: MENU_BOX_WIDTH_CELLS
+    });
   }
 
   _renderList(ctx, game, state) {
@@ -139,8 +94,8 @@ export class ShopOverlay {
     const boxX = Math.floor((GRID.WIDTH - boxW) / 2);
     const boxY = Math.floor((GRID.HEIGHT - boxH) / 2);
 
-    this._drawPanel(ctx, boxX, boxY, boxW, boxH);
-    ctx.globalAlpha = this._fadeProgress(state);
+    drawModalPanel(ctx, boxX, boxY, boxW, boxH);
+    ctx.globalAlpha = modalFadeProgress(state);
 
     const colX = boxX + cs * 1.5;
     const nameX = boxX + cs * 3;
@@ -199,8 +154,8 @@ export class ShopOverlay {
     const boxX = Math.floor((GRID.WIDTH - boxW) / 2);
     const boxY = Math.floor((GRID.HEIGHT - boxH) / 2);
 
-    this._drawPanel(ctx, boxX, boxY, boxW, boxH);
-    ctx.globalAlpha = this._fadeProgress(state);
+    drawModalPanel(ctx, boxX, boxY, boxW, boxH);
+    ctx.globalAlpha = modalFadeProgress(state);
 
     // Header: glyph + NAME, or CONFIRM? once the cost is met.
     const headerY = boxY + cs * 1.6;
@@ -290,8 +245,8 @@ export class ShopOverlay {
     const boxX = Math.floor((GRID.WIDTH - boxW) / 2);
     const boxY = Math.floor((GRID.HEIGHT - boxH) / 2);
 
-    this._drawPanel(ctx, boxX, boxY, boxW, boxH);
-    ctx.globalAlpha = this._fadeProgress(state);
+    drawModalPanel(ctx, boxX, boxY, boxW, boxH);
+    ctx.globalAlpha = modalFadeProgress(state);
 
     const colX = boxX + cs * 1.5;
     const nameX = boxX + cs * 3;
@@ -361,8 +316,8 @@ export class ShopOverlay {
     const boxX = Math.floor((GRID.WIDTH - boxW) / 2);
     const boxY = Math.floor((GRID.HEIGHT - boxH) / 2);
 
-    this._drawPanel(ctx, boxX, boxY, boxW, boxH);
-    ctx.globalAlpha = this._fadeProgress(state);
+    drawModalPanel(ctx, boxX, boxY, boxW, boxH);
+    ctx.globalAlpha = modalFadeProgress(state);
 
     ctx.textAlign = 'center';
     ctx.font = `${cs}px 'Unifont', monospace`;

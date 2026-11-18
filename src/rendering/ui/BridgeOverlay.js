@@ -2,6 +2,7 @@ import { GRID } from '../../game/GameConfig.js';
 import { INGREDIENTS } from '../../data/items.js';
 import { BRIDGE_MATERIALS } from '../../systems/RidgeSystem.js';
 import { spectaclesTransformString, isSpectaclesActive } from '../../data/cipher.js';
+import { drawModalPanel, modalFadeProgress } from './modalPanel.js';
 
 /**
  * BridgeOverlay — the Ridge Bridge Worker's donation popup (RidgeSystem).
@@ -51,8 +52,8 @@ export class BridgeOverlay {
 
     ctx.save();
     ctx.textBaseline = 'middle';
-    this._drawPanel(ctx, boxX, boxY, boxW, boxH);
-    ctx.globalAlpha = this._fadeProgress(state);
+    drawModalPanel(ctx, boxX, boxY, boxW, boxH);
+    ctx.globalAlpha = modalFadeProgress(state);
 
     let canDonate = false;
     for (let i = 0; i < BRIDGE_MATERIALS.length; i++) {
@@ -95,25 +96,5 @@ export class BridgeOverlay {
     ctx.fillText(spectaclesTransformString('DONATE', isSpectaclesActive(game)), midX, labelY);
 
     ctx.restore();
-  }
-
-  _drawPanel(ctx, x, y, w, h) {
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
-    ctx.fillRect(0, 0, GRID.WIDTH, GRID.HEIGHT);
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.92)';
-    ctx.fillRect(x, y, w, h);
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
-  }
-
-  // Fades the contents in across the system's input lockout, as ShopOverlay.
-  _fadeProgress(state) {
-    const now = performance.now();
-    const openedAt = state.openedAt ?? now;
-    const readyAt = state.inputReadyAt ?? now;
-    return readyAt > openedAt
-      ? Math.min(1, Math.max(0, (now - openedAt) / (readyAt - openedAt)))
-      : 1;
   }
 }
