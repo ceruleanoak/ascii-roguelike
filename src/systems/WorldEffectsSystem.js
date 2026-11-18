@@ -5,6 +5,7 @@ import { createDebris } from '../entities/Debris.js';
 import { Particle, createFootstep, createWetDrop, createSteamPuff, createChaff, WET_DROP_COLOR } from '../entities/Particle.js';
 import { statusEffectColor } from './StatusEffectVisuals.js';
 import { inSamePlane, tagInteriorPlane } from './PlaneSystem.js';
+import { freezeExpiredTrailTile } from './IceTrail.js';
 import { enemyDistance, enemyInRadius, enemyVisualAnchor } from './enemyHitTest.js';
 
 const MAX_GOO_BLOBS = 20;
@@ -499,7 +500,10 @@ export class WorldEffectsSystem {
     for (let i = game.puddles.length - 1; i >= 0; i--) {
       const p = game.puddles[i];
       p.update?.(deltaTime);
-      if (p.expired) game.puddles.splice(i, 1);
+      if (p.expired) {
+        game.puddles.splice(i, 1);
+        freezeExpiredTrailTile(game, p);
+      }
     }
 
     // Update enemy shockwaves — expanding rings (Cyan-boss pattern). Visual

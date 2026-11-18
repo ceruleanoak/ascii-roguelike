@@ -3,6 +3,7 @@ import { Puddle } from '../entities/Puddle.js';
 import { createActivationBurst, createEmberBurst, createIceBurst, createShockBurst } from '../entities/Particle.js';
 import { GRID, BACKGROUND_OBJECT_VARIANTS } from '../game/GameConfig.js';
 import { applyLavaContact } from './LavaContact.js';
+import { freezeExpiredTrailTile } from './IceTrail.js';
 import { MAX_PIPS } from './StatusEffects.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { isInteriorActive, tagInteriorPlane, planeOf, objectOnPlane } from './PlaneSystem.js';
@@ -1539,6 +1540,7 @@ export class TrapSystem {
         if (puddle.lifetime <= 0) {
           puddle.expired = true;
           game.puddles.splice(i, 1);
+          freezeExpiredTrailTile(game, puddle);
           continue;
         }
       }
