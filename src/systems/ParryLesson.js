@@ -5,11 +5,13 @@ import { initParry, tickParry, expendParry, playParrySound } from '../entities/e
 // The Weapons Master's own parry while he teaches, in real seconds. 360°: he
 // turns to meet a swing from any side. The cycle repeats for the whole lesson,
 // so the ']' tell rises and drops at a steady beat the player can learn.
+// His guard is up 70% of each 2.0s cycle (1.4s); the opening a swing has to
+// land in is the 0.6s of cooldown + windup, when the guard is down.
 const LESSON_PARRY = {
   parryArcDegrees: 360,
   parryWindup: 0.3,
-  parryDuration: 0.6,
-  parryCooldown: 1.2,
+  parryDuration: 1.4,
+  parryCooldown: 0.3,
   parryColor: '#eeeeff'
 };
 
@@ -27,7 +29,7 @@ const PARRIED_KNOCKBACK = PHYSICS.DEFAULT_DAMAGE_KNOCKBACK;
 const SWING_RESOLVE_GAP = 0.4;
 
 const BUCKLER = '◍';
-const BUCKLER_COIN_PRICE = 3;
+const BUCKLER_COIN_PRICE = 2;
 const ARTIFACT = '⚜';
 const PEARL = '●';
 // Gems he takes for the Buckler: the treasures, less the Artifact and the Pearl.
@@ -42,7 +44,7 @@ const GEMS = [...TREASURE_CHARS].filter(c => c !== ARTIFACT && c !== PEARL);
  *      does nothing and knocks the player back, stunned. A swing that lands
  *      while it is down counts; two end the lesson.
  *   2. After the lesson, a Buckler, once per run. He asks for a gem if the
- *      player carries one, else 3 coins, else an Artifact.
+ *      player carries one, else 2 coins, else an Artifact.
  *
  * Owned by WeaponsMasterSystem, which dispatches SPACE and the frame tick here.
  */
@@ -82,7 +84,7 @@ export class ParryLesson {
     return this.taken && !this.bucklerSold;
   }
 
-  /** The Buckler's price right now: a gem, else 3 coins, else an Artifact. */
+  /** The Buckler's price right now: a gem, else 2 coins, else an Artifact. */
   bucklerPrice() {
     const inv = this.game.inventorySystem;
     const gem = GEMS.find(c => inv?.countIngredient(c) > 0);
