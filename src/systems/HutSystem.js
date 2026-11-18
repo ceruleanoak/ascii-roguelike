@@ -163,9 +163,10 @@ export class HutSystem {
       backgroundObjects.push(fireplace);
     }
 
-    // Alchemy Hut: Water Trough (2x2, top-left), Cauldron (center, white),
-    // Condenser (lower-left, purple), 2 pre-placed Empty Bottles. Stations
-    // are read by AlchemySystem via proximity to these chars.
+    // Alchemy Hut: Water Trough (2x2, top-left), Mud Pit (2x2, top-right),
+    // Cauldron (center, white), Condenser (lower-left, purple), 2 pre-placed
+    // Empty Bottles. Stations are read by AlchemySystem via proximity to
+    // these chars.
     if (hutKind === 'alchemy') {
       // Create 2x2 trough with still water appearance
       for (let ty = 0; ty < 2; ty++) {
@@ -177,6 +178,17 @@ export class HutSystem {
           trough.color = '#5588dd';
           trough.animationColor = '#5588dd';
           backgroundObjects.push(trough);
+        }
+      }
+
+      // Mud Pit (2x2, top-right): the trough's counterpart across the room.
+      // Plain wet mud tiles, so everything that knows mud already knows the
+      // pit: an armed Empty Bottle fills a Bottle of Mud from it
+      // (AlchemySystem._nearWorldLiquid), GETMUD reaches it, and it slows
+      // whoever wades in. The Bottle of Mud brews the Primal Potion here.
+      for (let my = 0; my < 2; my++) {
+        for (let mx = 0; mx < 2; mx++) {
+          backgroundObjects.push(BackgroundObject.createVariant('mud_wet', (cols - 4 + mx) * GRID.CELL_SIZE, (2 + my) * GRID.CELL_SIZE));
         }
       }
 

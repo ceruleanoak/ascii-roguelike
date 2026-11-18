@@ -276,7 +276,7 @@ and Dragon Forge have no building. The Well, Fountain and Vault aren't entered.
 
 | Space | I1 | I2 | I3 | Note |
 |-------|----|----|----|------|
-| Alchemy Lab | Fail | 4, Pass | Part | Trough, cauldron, condenser, Alchemist |
+| Alchemy Lab | Fail | 5, Pass | Part | Trough, mud pit, cauldron, condenser, Alchemist. The mud pit mirrors the trough across the north wall (2026-11-18) |
 | Press hut | Fail | 2, Pass | Fail | Press and Fireplace, both guaranteed |
 | Three Room | Fail | 2, Pass | Pass | Slots and door |
 | Shop | Fail | 1, or 2 with the Jeweler | Part | Conditional. The Counter is inert |
