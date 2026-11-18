@@ -10,7 +10,7 @@ const REFRESHED_COLOR = '#ff88ff';
  * Met first in a yellow J room, collapsed and begging for water: until the
  * run's `game.jewelerRefreshed` flag is set the Jeweler is dim, does not
  * pulse, and its only speech is the begging line. Giving a Bottle of Water or
- * a Health Potion (JewelerSystem.trySpacePress) sets the flag; from then on
+ * a Health Potion (the GIVE menu, JewelerSystem) sets the flag; from then on
  * SPACE opens the wares and the Jeweler has no speech — DialogueSystem skips
  * it the same way it skips the Shopkeeper.
  *

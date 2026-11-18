@@ -9,25 +9,35 @@ import { JewelerOverlay } from '../rendering/ui/JewelerOverlay.js';
 /**
  * JewelerSystem — the Jeweler's water hand-off and necklace wares.
  *
- * SPACE near the Jeweler (yellow J room, or behind a Settlement shop counter):
- *   - Parched, and the player carries a Bottle of Water or Health Potion
- *     (JEWELER_DRINKS): the Jeweler drinks it, `game.jewelerRefreshed` is set
- *     for the rest of the run, and they say one line of thanks. From then on
- *     the J letter is never offered (ExitSystem) and the Jeweler sits beside
- *     the Shopkeeper in every Settlement (roomFeatures / HutSystem).
- *   - Parched with nothing to drink: not consumed here — DialogueSystem tells
- *     the begging line (Jeweler.getDialogueLines).
- *   - Refreshed: opens the wares, a PauseSystem modal.
+ * SPACE near the Jeweler (yellow J room, or behind a Settlement shop counter)
+ * opens a PauseSystem modal laid out as the Shop's (ShopSystem):
+ *   - Parched, heard out ('WATER...', Jeweler.getDialogueLines), carrying a
+ *     Bottle of Water or Health Potion (JEWELER_DRINKS): 'give' mode, one
+ *     GIVE row per drink carried. Confirm hands it over: the Jeweler drinks,
+ *     `game.jewelerRefreshed` is set for the rest of the run, and they say one
+ *     line of thanks. Shift backs out keeping the drink. From then on the J
+ *     letter is never offered (ExitSystem) and the Jeweler sits beside the
+ *     Shopkeeper in every Settlement (roomFeatures / HutSystem).
+ *   - Parched otherwise: not consumed here — DialogueSystem tells the plea.
+ *   - Refreshed: the wares.
  *
- * Wares mode: Up/Down (W/S) moves rowIndex across JEWELER_WARES. Confirm buys
- * the highlighted row when its gems and coins are all on hand, or plays the
- * shop error cue. Shift closes. Rows never sell out.
+ * Modes:
+ *   'give'   — Up/Down moves giveIndex across the drinks. Confirm gives it and
+ *              closes. Shift closes.
+ *   'list'   — Up/Down moves rowIndex across JEWELER_WARES. Confirm opens
+ *              'barter' for that row. Shift closes. Rows never sell out.
+ *   'barter' — the row's cost. Confirm buys it when every gem and coin is on
+ *              hand (CONFIRM? shows), else plays the shop error cue. Either
+ *              way Shift — or a purchase — returns to 'list'.
  */
 export class JewelerSystem {
   constructor(game) {
     this.game = game;
     this.overlay = new JewelerOverlay();
     this.jeweler = null;
+    this.mode = 'list';
+    this.drinks = [];   // 'give' rows: JEWELER_DRINKS chars the player carries
+    this.giveIndex = 0;
     this.rowIndex = 0;
     this.openedAt = 0;
     this.inputReadyAt = 0;
@@ -52,33 +62,39 @@ export class JewelerSystem {
       return false;
     }
 
-    if (!game.jewelerRefreshed) return this._tryGiveDrink(jeweler);
-    this.open(jeweler);
+    if (game.jewelerRefreshed) {
+      this._open(jeweler, 'list');
+      return true;
+    }
+    // Parched: the plea is heard before anything can be given.
+    if (!jeweler.spokenOnce) return false;
+    const inv = game.inventorySystem;
+    const drinks = JEWELER_DRINKS.filter(char => inv.countItemChar(char, player) > 0);
+    if (drinks.length === 0) return false;
+    this.drinks = drinks;
+    this._open(jeweler, 'give');
     return true;
   }
 
-  _tryGiveDrink(jeweler) {
+  _giveDrink(jeweler, drink) {
     const game = this.game;
-    const inv = game.inventorySystem;
-    const drink = JEWELER_DRINKS.find(char => inv.countItemChar(char, game.player) > 0);
-    if (!drink) return false;
-
-    inv.removeItemChar(drink, game.player);
+    if (!game.inventorySystem.removeItemChar(drink, game.player)) return;
     game.jewelerRefreshed = true;
     jeweler.refreshed = true;
     game.audioSystem?.playSFX?.('jeweler_drink');
     game.updateUI();
     game.dialogueSystem.open(jeweler, ['AH... THANK YOU. NOW, WHAT FINE STONES YOU CARRY.']);
-    return true;
   }
 
-  open(jeweler) {
+  _open(jeweler, mode) {
     if (!this.game.pauseSystem.openModal(this)) return;
     this.jeweler = jeweler;
+    this.mode = mode;
+    this.giveIndex = 0;
     this.rowIndex = 0;
     this.openedAt = performance.now();
     // Brief input lockout, same reasoning + window as ShopSystem: the SPACE
-    // press that opened the wares can't also register as a purchase.
+    // press that opened the menu can't also register as a choice.
     this.inputReadyAt = this.openedAt + 1000;
   }
 
@@ -91,21 +107,29 @@ export class JewelerSystem {
 
   /** The wares open, and the one chosen is free. */
   persuade(jeweler) {
-    this.open(jeweler);
+    this._open(jeweler, 'list');
     if (this.jeweler) this.freePurchase = true;
   }
 
   /** True when the player holds every gem and coin `row` costs (or it's free). */
   canAfford(row) {
     if (this.freePurchase) return true;
+    return this.hasCoins(row) && this.heldGems(row).every(Boolean);
+  }
+
+  hasCoins(row) {
+    return this.game.inventorySystem.hasCoin(row.coins);
+  }
+
+  /** Per gem in `row.gems`: whether the player carries it (a repeated gem needs a copy each). */
+  heldGems(row) {
     const inv = this.game.inventorySystem;
-    if (!inv.hasCoin(row.coins)) return false;
-    const need = new Map();
-    for (const gem of row.gems) need.set(gem, (need.get(gem) || 0) + 1);
-    for (const [gem, count] of need) {
-      if (inv.countIngredient(gem) < count) return false;
-    }
-    return true;
+    const used = new Map();
+    return row.gems.map(gem => {
+      const n = (used.get(gem) || 0) + 1;
+      used.set(gem, n);
+      return inv.countIngredient(gem) >= n;
+    });
   }
 
   // ── PauseSystem modal contract ───────────────────────────────────────────
@@ -116,14 +140,43 @@ export class JewelerSystem {
     const intent = menuIntent(event);
     if (!intent) return;
 
+    if (this.mode === 'give') this._handleGiveInput(intent);
+    else if (this.mode === 'list') this._handleListInput(intent);
+    else this._handleBarterInput(intent);
+  }
+
+  _handleGiveInput(intent) {
+    if (intent === 'up') {
+      this.giveIndex = Math.max(0, this.giveIndex - 1);
+    } else if (intent === 'down') {
+      this.giveIndex = Math.min(this.drinks.length - 1, this.giveIndex + 1);
+    } else if (intent === 'confirm') {
+      const jeweler = this.jeweler;
+      const drink = this.drinks[this.giveIndex];
+      this.game.pauseSystem.closeModal();
+      this._giveDrink(jeweler, drink);
+    } else if (intent === 'shift') {
+      this.game.pauseSystem.closeModal();
+    }
+  }
+
+  _handleListInput(intent) {
     if (intent === 'up') {
       this.rowIndex = Math.max(0, this.rowIndex - 1);
     } else if (intent === 'down') {
       this.rowIndex = Math.min(JEWELER_WARES.length - 1, this.rowIndex + 1);
     } else if (intent === 'confirm') {
-      this._buy(JEWELER_WARES[this.rowIndex]);
+      this.mode = 'barter';
     } else if (intent === 'shift') {
       this.game.pauseSystem.closeModal();
+    }
+  }
+
+  _handleBarterInput(intent) {
+    if (intent === 'confirm') {
+      if (this._buy(JEWELER_WARES[this.rowIndex])) this.mode = 'list';
+    } else if (intent === 'shift') {
+      this.mode = 'list';
     }
   }
 
@@ -133,6 +186,9 @@ export class JewelerSystem {
 
   onClose() {
     this.jeweler = null;
+    this.mode = 'list';
+    this.drinks = [];
+    this.giveIndex = 0;
     this.rowIndex = 0;
     this.freePurchase = false;
   }
@@ -141,7 +197,7 @@ export class JewelerSystem {
     const game = this.game;
     if (!this.canAfford(row)) {
       game.audioSystem?.playSFX?.('shop_error');
-      return;
+      return false;
     }
     if (this.freePurchase) {
       this.freePurchase = false;
@@ -151,6 +207,7 @@ export class JewelerSystem {
       inv.removeCoin(row.coins);
     }
     deliverPurchase(game, row.char);
+    return true;
   }
 }
 
