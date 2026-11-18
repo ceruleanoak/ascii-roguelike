@@ -106,15 +106,19 @@ export class GooHead extends Enemy {
     // Stun: release any grab, freeze all AI
     if (this.bossStunTimer > 0) {
       this.bossStunTimer = Math.max(0, this.bossStunTimer - deltaTime);
-      if (this.isGrabbing) this.releaseGrab();
-      this._endLunge();
-      this.targetVelocity.vx = 0;
-      this.targetVelocity.vy = 0;
-      this._blendVelocity(deltaTime);
+      this._holdStunned(deltaTime);
       return { dotDamage: [] };
     }
     this.dotBlinkTimer += deltaTime;
     const dotDamageEvents = this.updateStatusEffects(deltaTime);
+
+    // A Stun status (a boomerang hit) holds the head the same way. This
+    // update never runs Enemy.update, so the status would otherwise tick
+    // down while the head kept lunging and grabbing.
+    if (this.isStunned()) {
+      this._holdStunned(deltaTime);
+      return { dotDamage: dotDamageEvents };
+    }
 
     if (!this.isKnockedBack()) {
       this._blendVelocity(deltaTime);
@@ -380,6 +384,14 @@ export class GooHead extends Enemy {
       width:       4,
       height:      4
     });
+  }
+
+  _holdStunned(deltaTime) {
+    if (this.isGrabbing) this.releaseGrab();
+    this._endLunge();
+    this.targetVelocity.vx = 0;
+    this.targetVelocity.vy = 0;
+    this._blendVelocity(deltaTime);
   }
 
   shouldApplyStatusEffect(effect) {
