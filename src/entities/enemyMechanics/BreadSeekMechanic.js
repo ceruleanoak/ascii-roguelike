@@ -16,6 +16,22 @@ const ARRIVE_DIST = GRID.CELL_SIZE * 3;
 
 export const BreadSeekMechanic = {
   /**
+   * Bread-seek fields, on every Enemy (any of them may be lured). Set by
+   * CompanionSystem when bread lands in the room (SPACE drop or SHIFT
+   * throw). The Enemy AI uses these to redirect movement toward the loaf;
+   * CompanionSystem replaces the wild rat with an NPCRat instance on contact.
+   * `breadSeekStartTime` gates the eat so a rat already adjacent to the
+   * bread can't be tamed in a single frame — the visible "walk to bread"
+   * beat is required for the eat to read.
+   * @param {Enemy} enemy
+   */
+  init(enemy) {
+    enemy.seekingBread = false;
+    enemy.breadTarget = null;
+    enemy.breadSeekStartTime = 0;
+  },
+
+  /**
    * @param {Enemy} enemy
    * @param {number} deltaTime
    * @returns {boolean} true when the seek owns this frame's AI — caller must

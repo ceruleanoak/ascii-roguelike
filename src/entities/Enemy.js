@@ -476,15 +476,7 @@ export class Enemy {
     // ── Knockback multiplier ──────────────────────────────────────────────────
     this.knockbackMultiplier = this.data.knockbackMultiplier ?? 1.0;
 
-    // Bread-seek (wild rat → dropped loaf). Set by main.js when bread lands
-    // in the room (SPACE drop or SHIFT throw). The Enemy AI uses these to
-    // redirect movement toward the loaf; main.js replaces the wild rat with
-    // an NPCRat instance on contact. `breadSeekStartTime` gates the eat so
-    // a rat already adjacent to the bread can't be tamed in a single frame
-    // — the visible "walk to bread" beat is required for the eat to read.
-    this.seekingBread = false;
-    this.breadTarget = null;
-    this.breadSeekStartTime = 0;
+    BreadSeekMechanic.init(this);
   }
 
   setCollisionMap(collisionMap) {
