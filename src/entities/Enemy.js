@@ -2156,8 +2156,12 @@ export class Enemy {
       this.detectionIndicatorTimer = this.detectionIndicatorDuration;
     }
 
-    // Start (or refresh) invulnerability frames and record the triggering burst
-    if (this.hp > 0) {
+    // Start (or refresh) invulnerability frames and record the triggering burst.
+    // A 0-damage hit (a fizzled spark, Freeze Ray) never starts them: it would
+    // swallow the real blow behind it — the Magic Sword's dry-meter spark
+    // landed first and its own swing then did nothing. The Training Dummy
+    // keeps them so its hit blink still plays.
+    if (this.hp > 0 && (amount > 0 || this.data?.isDummy)) {
       this.invulnerabilityTimer = this.invulnerabilityDuration;
       this.lastHitAttackId = opts.impact ?? attackId;
       LeapAttackMechanic.onDamaged(this);
