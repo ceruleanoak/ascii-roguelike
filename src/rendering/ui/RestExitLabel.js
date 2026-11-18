@@ -38,14 +38,11 @@ export function southDoorColor(game, wallColor) {
 // Call every frame the room has a south exit (open or not) so the dissolve
 // can animate in both directions — PixelatedDissolve handles the fade-out
 // when visible=false.
+// A sealed REST draws no word: its door is shut (southExitShowsOpen is false),
+// so the label dissolves out like any closed south exit's. The gray door panel
+// (southDoorColor) is all that marks the way back as gone.
 export function drawRestExitLabel(renderer, game, dissolve, word, visible) {
-  // A sealed REST leaves its word standing, gray, over the shut door.
-  let color = LABEL_COLOR;
-  if (game.cursedRunSystem.isRestSealed(game)) {
-    word = REST_WORD;
-    visible = true;
-    color = ZONE_COLORS.gray;
-  }
+  const color = LABEL_COLOR;
   const x = GRID.WIDTH / 2;
   const y = (GRID.ROWS - 3) * GRID.CELL_SIZE + GRID.CELL_SIZE / 2;
   const spectaclesOn = isSpectaclesActive(game);
