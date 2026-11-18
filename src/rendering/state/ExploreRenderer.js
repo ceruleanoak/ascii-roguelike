@@ -440,7 +440,7 @@ export class ExploreRenderer {
     // Everything below that is NOT a Frame Pass is the surface Room's own
     // scenery — gated on owning the frame so it never bleeds under a PiP.
     const ownsSurface = ownsFrame(game, 'surface',
-      'enemies, sniper tells, grass, boulders, sandstorm, mist, door prompts and the camp NPCs live in surface Room coordinates');
+      'enemies, sniper tells, grass, boulders, sandstorm, door prompts and the camp NPCs live in surface Room coordinates');
 
     if (ownsSurface) drawSniperBeams(this.renderer, game);
 
@@ -610,6 +610,13 @@ export class ExploreRenderer {
 
     // Shared indicator Frame Passes (bow charge, ranger, rogue) — above grass.
     drawFramePasses(this.renderController, game, 'surface', 'indicators');
+
+    // Gray zone mist: surface Room scenery, not a Frame Pass — the mist is
+    // weather in the open, never inside a hut, dungeon or maze. Ungated on
+    // purpose: it keeps drawing while an Interior owns the frame, and the PiP's dim veil and opaque panel are drawn over it below, so
+    // the mist stays visible outside the panel and never over its contents.
+    // renderMist gates itself to a gray room on Plane 0 (cave fog owns Plane 1).
+    game.grayZoneSystem?.renderMist(this.renderer.fgCtx, game);
 
     // Sandstorm sand motes — yellow zone wind. Drawn over entities so motes
     // pass in front, under interior overlays so they don't bleed into the PiP.

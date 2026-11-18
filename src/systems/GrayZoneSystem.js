@@ -368,11 +368,12 @@ export class GrayZoneSystem {
   }
 
   /**
-   * Mist glyph field. Drawn as the `grayMist` Frame Pass, last in the
-   * indicators layer (so the mist hangs in front of distant enemies and exit
-   * letters) — on the surface and inside a hut, dungeon or maze PiP alike.
-   * Gates internally: gray-zone room, surface plane only (the cave fog owns
-   * plane 1 — the two can never double-apply).
+   * Mist glyph field — surface Room scenery. ExploreRenderer draws it after
+   * the surface's indicator passes (so the mist hangs in front of distant
+   * enemies and exit letters) and before the Interior PiP: inside a hut,
+   * dungeon or maze the mist stays outside, under the PiP panel, and never
+   * over the interior. Gates internally: gray-zone room, surface plane only
+   * (the cave fog owns plane 1 — the two can never double-apply).
    *
    * Every mote drifts on its own sinusoid; alpha falls toward ALPHA_NEAR
    * inside the vision radius (never fully transparent) and sits at ALPHA_FAR
@@ -478,7 +479,21 @@ export class GrayZoneSystem {
     const scale = this.baseRadiusCells > 0 ? this.currentRadiusCells / this.baseRadiusCells : 0;
     const battle = game.mistBattleSystem?.mistClearings(radius, scale) ?? [];
     if (battle.length > 0) return battle;
-    return [{ x: game.player.position.x + GRID.CELL_SIZE / 2, y: game.player.position.y + GRID.CELL_SIZE / 2, r: radius }];
+    const at = this._surfacePosition(game);
+    if (!at) return [];
+    return [{ x: at.x + GRID.CELL_SIZE / 2, y: at.y + GRID.CELL_SIZE / 2, r: radius }];
+  }
+
+  // Where the player stands in the surface Room. Inside an Interior,
+  // player.position is in the floor's own coordinates, so the mist (drawn
+  // under the PiP, in Room coordinates) parts at the spot the player went in
+  // from — the door they will come back out of. An Interior that keeps no
+  // exit spot (the Aquifer, entered by the Whirlpool) parts nothing.
+  _surfacePosition(game) {
+    const p = game.player;
+    if (!isInteriorActive(game)) return p.position;
+    const exitSpot = { hut: p.hutExitPosition, dungeon: p.dungeonExitPosition, maze: p.mazeExitPosition };
+    return exitSpot[p._activeInteriorKind] ?? null;
   }
 
   // 0 at the heart of the nearest clearing, 1 at or beyond every clearing's edge.
