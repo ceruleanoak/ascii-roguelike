@@ -2,6 +2,8 @@ import { GRID } from '../game/GameConfig.js';
 import { WeaponsMaster, resolveWeaponCategory } from '../entities/WeaponsMaster.js';
 import { TRAINING_TECHNIQUES } from '../data/items.js';
 import { ParryLesson } from './ParryLesson.js';
+import { menuIntent } from './MenuInput.js';
+import { WeaponsMasterOverlay } from '../rendering/ui/WeaponsMasterOverlay.js';
 
 const COIN_ARC_DURATION = 0.55; // matches the well/camp-NPC/fisherman coin arcs
 
@@ -11,11 +13,27 @@ const TRAINING_TECHNIQUE_LABELS = {
   stun: 'STUN LASH'
 };
 
+// ASK ABOUT rows: topic → its bare label.
+const TOPICS = {
+  weapon:  'WEAPON',
+  armor:   'ARMOR',
+  lesson:  'LESSON',
+  buckler: 'BUCKLER'
+};
+
 /**
- * WeaponsMasterSystem — the hut Weapons Master's paid training.
+ * WeaponsMasterSystem — the hut Weapons Master's ASK ABOUT menu and paid
+ * training.
  *
- * SPACE near the hut WeaponsMaster (after advice has been heard once) spends
- * a wallet coin to permanently train the player's currently held weapon
+ * SPACE near him opens ASK ABOUT, a PauseSystem modal with the rows WEAPON,
+ * ARMOR and LESSON (BUCKLER once the lesson is taken; gone once the Buckler
+ * is sold). Picking a row closes the menu and he answers it in the dialogue
+ * box. An answer that ends in an offer (training, the lesson, the Buckler) is
+ * remembered as `pendingOffer`; picking that row again once he has been heard
+ * out (`spokenOnce`) pays for it. Hearing any other answer in between means
+ * the offer has to be heard again.
+ *
+ * Training spends a wallet coin to permanently train the held weapon's
  * category, for the active character only, once per category per character.
  *
  * Training grants +1 damage by default — see CharacterSystem.applyGreenDamageModifier
@@ -31,11 +49,24 @@ export class WeaponsMasterSystem {
     this.game = game;
     this.coinAnim = null; // { startX, startY, endX, endY, t, spinPhase, master, category | onArrive }
     this.parryLesson = new ParryLesson(game);
+    this.overlay = new WeaponsMasterOverlay();
+
+    // The offer his last answer ended on ('weapon:<category>', 'lesson',
+    // 'buckler'), or null. Bought by picking its row again once heard out.
+    this.pendingOffer = null;
+
+    // ASK ABOUT modal state.
+    this.master = null;
+    this.rows = [];       // [{ label, topic }]
+    this.menuIndex = 0;
+    this.openedAt = 0;
+    this.inputReadyAt = 0;
   }
 
   /** Run reset (Reset Registry): the Parry Lesson and Buckler are once per run. */
   resetRunState() {
     this.coinAnim = null;
+    this.pendingOffer = null;
     this.parryLesson.resetRunState();
   }
 
@@ -49,34 +80,134 @@ export class WeaponsMasterSystem {
     const player = game.player;
 
     // Hut Weapons Master (Settlement S room) or the rare outdoor Red Zone
-    // caldera Weapons Master — same training flow either way.
+    // caldera Weapons Master — same menu either way.
     const master = game.interiorManager.activeNpcs().find(n => n instanceof WeaponsMaster);
     if (!master) return false;
 
     if (!master.isInRange(player)) return false;
 
-    // Training in progress — swallow the press so SPACE can't reopen advice.
+    // Training in progress — swallow the press so SPACE can't reopen the menu.
     if (this.coinAnim) return true;
 
     // Mid-lesson SPACE is a swing at him (his speech is suspended meanwhile).
     if (this.parryLesson.isRunning()) return false;
 
-    // Advice must be heard before training unlocks (Fisherman pattern).
-    if (!master.spokenOnce) return false;
+    // An answer with lines still untold: SPACE tells the next one
+    // (DialogueSystem.tryOpenNearby), one line per press as for every speaker.
+    if (game.dialogueSystem.isMidSpeech(master)) return false;
 
-    const category = this._untrainedCategory();
-    if (!category) {
-      // Nothing to train: the Parry Lesson, or the Buckler after it.
-      const sold = this.parryLesson.trySpacePress(master);
-      if (sold?.lesson) this._flyCoin(master, { onArrive: () => this.parryLesson.begin(master) });
-      return !!sold;
-    }
-
-    if (!game.inventorySystem?.hasCoin()) return false;
-
-    game.inventorySystem.removeCoin();
-    this._flyCoin(master, { category });
+    this.open(master);
     return true;
+  }
+
+  // ── ASK ABOUT (PauseSystem modal) ───────────────────────────────────────────
+
+  open(master) {
+    if (!this.game.pauseSystem.openModal(this)) return;
+    this.master = master;
+    this.rows = this._menuRows();
+    this.menuIndex = 0;
+    this.openedAt = performance.now();
+    // Same lockout + fade as the Shop: the SPACE that opened the menu can't
+    // also pick a row.
+    this.inputReadyAt = this.openedAt + 1000;
+  }
+
+  /** WEAPON, ARMOR, then LESSON — BUCKLER after the lesson, nothing once it's sold. */
+  _menuRows() {
+    const topics = ['weapon', 'armor'];
+    if (!this.parryLesson.taken) topics.push('lesson');
+    else if (this.parryLesson.bucklerOffered()) topics.push('buckler');
+    return topics.map(topic => ({ label: TOPICS[topic], topic }));
+  }
+
+  handleKey(key, event) {
+    if (event?.repeat) return;
+    if (performance.now() < this.inputReadyAt) return;
+    const intent = menuIntent(event);
+    if (intent === 'up') {
+      this.menuIndex = Math.max(0, this.menuIndex - 1);
+    } else if (intent === 'down') {
+      this.menuIndex = Math.min(this.rows.length - 1, this.menuIndex + 1);
+    } else if (intent === 'confirm') {
+      const master = this.master;
+      const { topic } = this.rows[this.menuIndex];
+      this.game.pauseSystem.closeModal();
+      this._ask(master, topic);
+    } else if (intent === 'shift') {
+      this.game.pauseSystem.closeModal();
+    }
+  }
+
+  render(renderer, game) {
+    this.overlay.render(renderer, game, this);
+  }
+
+  onClose() {
+    this.master = null;
+    this.rows = [];
+    this.menuIndex = 0;
+  }
+
+  // ── Answers ────────────────────────────────────────────────────────────────
+
+  _ask(master, topic) {
+    if (topic === 'weapon') this._askWeapon(master);
+    else if (topic === 'armor') this._speak(master, master.armorLines(this.game));
+    else if (topic === 'lesson') this._askLesson(master);
+    else this._askBuckler(master);
+  }
+
+  _askWeapon(master) {
+    const inv = this.game.inventorySystem;
+    const category = this._untrainedCategory();
+    const offer = category ? `weapon:${category}` : null;
+    if (offer && this._heard(master, offer) && inv?.hasCoin()) {
+      inv.removeCoin();
+      this.pendingOffer = null;
+      this._flyCoin(master, { category });
+      return;
+    }
+    this._speak(master, master.weaponLines(this.game), offer);
+  }
+
+  _askLesson(master) {
+    const lesson = this.parryLesson;
+    if (!lesson.lessonOffered()) {
+      this._speak(master, ['THE LESSON IS FOR A MELEE WEAPON. YOU AREN\'T HOLDING ONE.']);
+      return;
+    }
+    if (this._untrainedCategory()) {
+      this._speak(master, ['I TRAIN YOU IN THAT WEAPON BEFORE I TEACH THE LESSON.']);
+      return;
+    }
+    if (this._heard(master, 'lesson') && lesson.buyLesson()) {
+      this.pendingOffer = null;
+      this._flyCoin(master, { onArrive: () => lesson.begin(master) });
+      return;
+    }
+    this._speak(master, [lesson.offerLine()], 'lesson');
+  }
+
+  _askBuckler(master) {
+    const lesson = this.parryLesson;
+    if (this._heard(master, 'buckler') && lesson.buyBuckler(master)) {
+      this.pendingOffer = null;
+      return;
+    }
+    this._speak(master, [lesson.offerLine()], 'buckler');
+  }
+
+  /** He answers `lines`; `offer` is what picking the same row again will buy. */
+  _speak(master, lines, offer = null) {
+    this.pendingOffer = offer;
+    master.spokenOnce = false;
+    this.game.dialogueSystem?.open(master, lines);
+  }
+
+  /** True once `offer` was his last answer and it has been told in full. */
+  _heard(master, offer) {
+    return this.pendingOffer === offer && master.spokenOnce;
   }
 
   _flyCoin(master, payload) {

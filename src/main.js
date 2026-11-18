@@ -3065,7 +3065,7 @@ class Game {
       // Shore fisherman sells a Fishing Pole for a coin (ShoreFishermanSystem)
       if (this.shoreFishermanSystem.trySpacePress()) return;
 
-      // Hut Weapons Master coin training (gated on advice heard — see WeaponsMasterSystem)
+      // Hut Weapons Master: ASK ABOUT menu; training/lesson/Buckler bought from it (WeaponsMasterSystem)
       if (this.weaponsMasterSystem.trySpacePress()) return;
 
       // Jeweler: water hand-off, then necklace wares (J room / Settlement counter)

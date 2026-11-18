@@ -2700,9 +2700,12 @@ identity, not standard programming terms.
   wand or empty hands). He raises his own Parry on a steady cycle; a swing that meets it does no
   damage and knocks the player back, stunned (without the stun's disarm). A swing that lands
   while it is down counts, and two end the lesson. After it he offers a Buckler, once per run,
-  asking for a gem if the player carries one, else 3 coins, else an Artifact.
+  asking for a gem if the player carries one, else 2 coins, else an Artifact. Both are asked
+  about and bought from his ASK ABOUT menu: the LESSON row, which becomes BUCKLER once the
+  lesson is taken.
 - **In code:** `src/systems/ParryLesson.js`, owned by `WeaponsMasterSystem` (`parryLesson`;
-  `resetRunState` is in the Reset Registry). His closing line comes from `offerLine()`;
+  `resetRunState` is in the Reset Registry). His offer line comes from `offerLine()`, the
+  purchases from `buyLesson()` / `buyBuckler()`;
   `NeutralCharacter.talkSuspended` keeps SPACE a swing while the lesson runs.
 - **Not:** weapon training (the permanent +1 damage or technique per category); PERSUADE does
   not give either away.

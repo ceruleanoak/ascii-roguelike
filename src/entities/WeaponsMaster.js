@@ -26,7 +26,7 @@ const WEAPON_MASTER_ADVICE = {
 const UNFAMILIAR_ARMOR_REMARK = 'I DON\'T KNOW THAT ARMOR.';
 const BARE_REMARK = 'YOU HAVE NO ARMOR ON.';
 
-/** His secondary topic: a remark on what the player is wearing. */
+/** His ARMOR answer: a remark on what the player is wearing. */
 function armorRemark(game) {
   const armor = game.inventorySystem?.equippedArmor;
   if (!armor) return BARE_REMARK;
@@ -43,8 +43,8 @@ export function resolveWeaponCategory(weapon) {
  * WeaponsMaster — hut interior NPC who advises on the player's currently
  * equipped weapon, remarks on the armor they wear, and, for a coin,
  * permanently trains that weapon's category for the current character (+1 damage, or that category's training technique
- * where one is defined). See WeaponsMasterSystem for the paid training flow;
- * this class only speaks (DialogueSystem).
+ * where one is defined). SPACE opens his ASK ABOUT menu (WeaponsMasterSystem),
+ * which picks the topic; this class only supplies the lines (DialogueSystem).
  */
 export class WeaponsMaster extends NeutralCharacter {
   constructor(x, y) {
@@ -54,23 +54,28 @@ export class WeaponsMaster extends NeutralCharacter {
     initParry(this);
   }
 
-  // Weapon first, then the armor remark as his secondary topic, then the
-  // training offer last so it is what the player walks away with.
-  getDialogueLines(game) {
-    const remark = armorRemark(game);
-    // With nothing to train: the Parry Lesson, or the Buckler after it (ParryLesson).
-    const offer = game.weaponsMasterSystem?.parryLesson?.offerLine() ?? null;
+  // ASK ABOUT → WEAPON (WeaponsMasterSystem): advice on the held weapon,
+  // closing on what training it can still get.
+  weaponLines(game) {
     const category = resolveWeaponCategory(game.player?.heldItem);
-    if (!category) {
-      return [remark, 'I TRAIN WEAPONS. YOU AREN\'T HOLDING ONE.', ...(offer ? [offer] : [])];
-    }
-
+    if (!category) return ['I TRAIN WEAPONS. YOU AREN\'T HOLDING ONE.'];
     const advice = WEAPON_MASTER_ADVICE[category] || 'I DON\'T KNOW THAT WEAPON.';
     const trained = game.inventorySystem?.characterInventories?.[game.activeCharacterType]?.trainedWeapons;
-    if (trained?.[category]) {
-      return [advice, remark, offer ?? 'YOU ARE ALREADY TRAINED IN THIS.'];
-    }
-    return [advice, remark, 'ONE COIN AND I WILL TRAIN YOU IN IT.'];
+    if (trained?.[category]) return [advice, 'YOU ARE ALREADY TRAINED IN THIS.'];
+    return [advice, 'ONE COIN AND I WILL TRAIN YOU IN IT.'];
+  }
+
+  // ASK ABOUT → ARMOR: a remark on what the player is wearing.
+  armorLines(game) {
+    return [armorRemark(game)];
+  }
+
+  // His whole say at once, for callers that talk to him outside the ASK ABOUT
+  // menu (Beeline, lookHere): weapon, armor, then the Parry Lesson or Buckler
+  // offer when one stands.
+  getDialogueLines(game) {
+    const offer = game.weaponsMasterSystem?.parryLesson?.offerLine() ?? null;
+    return [...this.weaponLines(game), ...this.armorLines(game), ...(offer ? [offer] : [])];
   }
 
   update(dt, game) {

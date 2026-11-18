@@ -46,7 +46,8 @@ const GEMS = [...TREASURE_CHARS].filter(c => c !== ARTIFACT && c !== PEARL);
  *   2. After the lesson, a Buckler, once per run. He asks for a gem if the
  *      player carries one, else 2 coins, else an Artifact.
  *
- * Owned by WeaponsMasterSystem, which dispatches SPACE and the frame tick here.
+ * Owned by WeaponsMasterSystem, whose ASK ABOUT menu sells both (its LESSON
+ * row turns BUCKLER once the lesson is taken) and which ticks the lesson here.
  */
 export class ParryLesson {
   constructor(game) {
@@ -105,26 +106,20 @@ export class ParryLesson {
     return `A BUCKLER PARRIES A HIT AND STUNS THE ONE WHO SWUNG. ${ask} FOR ONE.`;
   }
 
-  // ── SPACE ───────────────────────────────────────────────────────────────
+  // ── Buying (WeaponsMasterSystem's ASK ABOUT menu, once the offer is heard) ──
 
-  /**
-   * SPACE near a master who has nothing to train. Returns
-   * `{ lesson: true }` when a coin was taken for the lesson (the caller
-   * flies the coin and calls begin() when it lands), `{ buckler: true }` when
-   * the Buckler was bought, or null.
-   */
-  trySpacePress(master) {
-    const inv = this.game.inventorySystem;
-    if (this.lessonOffered()) {
-      if (!inv?.removeCoin(1)) return null;
-      this.taken = true;
-      return { lesson: true };
-    }
-    if (this.bucklerOffered() && this._payForBuckler()) {
-      this._handOverBuckler(master);
-      return { buckler: true };
-    }
-    return null;
+  /** Takes the lesson's coin. The caller flies it and calls begin() when it lands. */
+  buyLesson() {
+    if (!this.lessonOffered() || !this.game.inventorySystem?.removeCoin(1)) return false;
+    this.taken = true;
+    return true;
+  }
+
+  /** Takes the Buckler's price and hands it over; false when it can't be paid. */
+  buyBuckler(master) {
+    if (!this.bucklerOffered() || !this._payForBuckler()) return false;
+    this._handOverBuckler(master);
+    return true;
   }
 
   _payForBuckler() {
@@ -141,8 +136,6 @@ export class ParryLesson {
     const side = game.player.position.x >= master.position.x ? 1 : -1;
     game.lootSystem.spawnItemDrop(BUCKLER, master.position.x + side * GRID.CELL_SIZE, master.position.y, null, master);
     game.audioSystem?.playSFX?.('coin_plink');
-    // A new offer comes up later only after he is heard out again.
-    master.spokenOnce = false;
     game.dialogueSystem?.open(master, ['IT IS YOURS.']);
   }
 
@@ -189,8 +182,6 @@ export class ParryLesson {
       return;
     }
     this._end();
-    // The Buckler offer waits for him to be heard out.
-    master.spokenOnce = false;
     game.dialogueSystem?.open(master, ['GOOD. HIT AFTER THE PARRY DROPS AND IT LANDS.']);
   }
 
