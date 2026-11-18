@@ -303,7 +303,8 @@ export class ASCIIRenderer {
 
   // Draw text with word-wrap. Returns the total height used (lineHeight * numLines).
   // ctx must already have font/textAlign/textBaseline/fillStyle set before calling.
-  drawWrappedText(ctx, text, x, y, maxWidth, lineHeight) {
+  // Word-wraps `text` to `maxWidth` in ctx's current font; returns the lines.
+  wrapLines(ctx, text, maxWidth) {
     const words = text.split(' ');
     let line = '';
     const lines = [];
@@ -317,7 +318,11 @@ export class ASCIIRenderer {
       }
     }
     if (line) lines.push(line);
+    return lines;
+  }
 
+  drawWrappedText(ctx, text, x, y, maxWidth, lineHeight) {
+    const lines = this.wrapLines(ctx, text, maxWidth);
     const totalHeight = lines.length * lineHeight;
     const startY = y - (totalHeight - lineHeight) / 2;
     for (let i = 0; i < lines.length; i++) {

@@ -23,15 +23,25 @@ export class DialogueBox {
     const ctx = this.renderer.fgCtx;
     const cs = GRID.CELL_SIZE;
     const boxW = Math.floor(GRID.WIDTH * 0.72);
-    const boxH = Math.floor(cs * 4.5);
-    const boxX = Math.floor((GRID.WIDTH - boxW) / 2);
-    const boxY = GRID.HEIGHT - boxH - Math.floor(cs * 1.5);
+    const glyphCellW = cs * 2.5;
+    const textW = boxW - glyphCellW - cs * 2;
 
     const npc = state.npc;
     const line = state.lines[state.lineIndex] ?? '';
     const hasMore = state.lineIndex < state.lines.length - 1;
 
     ctx.save();
+
+    // Wrap first so the box can size to the speech: rows run top-down from
+    // TEXT_TOP, and a line longer than three rows grows the box upward
+    // instead of spilling over its top edge.
+    ctx.font = `${cs}px 'Unifont', monospace`;
+    const rows = this.renderer.wrapLines(ctx, line, textW);
+    const rowH = cs * 1.2;
+    const TEXT_TOP = cs * 1.4;
+    const boxH = Math.floor(Math.max(cs * 4.5, TEXT_TOP + (rows.length - 1) * rowH + cs * 1.3));
+    const boxX = Math.floor((GRID.WIDTH - boxW) / 2);
+    const boxY = GRID.HEIGHT - boxH - Math.floor(cs * 1.5);
 
     // Panel
     ctx.globalAlpha = 0.88;
@@ -43,7 +53,6 @@ export class DialogueBox {
     ctx.strokeRect(boxX + 0.5, boxY + 0.5, boxW - 1, boxH - 1);
 
     // Speaker glyph in the NPC's own color, boxed at the left edge
-    const glyphCellW = cs * 2.5;
     ctx.strokeRect(boxX + 0.5, boxY + 0.5, glyphCellW, boxH - 1);
     ctx.font = `${cs * 1.6}px 'Unifont', monospace`;
     ctx.textAlign = 'center';
@@ -56,8 +65,7 @@ export class DialogueBox {
     ctx.textAlign = 'left';
     ctx.fillStyle = '#dddddd';
     const textX = boxX + glyphCellW + cs;
-    const textW = boxW - glyphCellW - cs * 2;
-    this.renderer.drawWrappedText(ctx, line, textX, boxY + cs * 1.4, textW, cs * 1.2);
+    rows.forEach((row, i) => ctx.fillText(row, textX, boxY + TEXT_TOP + i * rowH));
 
     // Continue cue, bottom-right: '>' while more lines remain, '·' on the last
     ctx.textAlign = 'right';
