@@ -402,7 +402,9 @@ export class ShopSystem {
     for (const item of inv.allUnequippedConsumables()) entries.push({ item, source: 'consumable' });
 
     for (const entry of entries) entry.value = computePawnSellValue(entry.item.data);
-    return entries;
+    // Something the counter would pay nothing for isn't an offer: selling it
+    // would only lose the item.
+    return entries.filter(entry => entry.value > 0);
   }
 
   _clearPawn() {
