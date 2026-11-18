@@ -10,7 +10,7 @@ import { ITEMS } from '../../data/items.js';
  * curve reads without a single drawn outline.
  *
  * COMPLIANCE RULE (non-instructive UI): no key hints, no headers, no labels.
- * Glyphs and the dark are the whole of it. The Three Room is the most ominous
+ * Glyphs, the selection box and the dark are the whole of it. The Three Room is the most ominous
  * place in the game and the menu is not permitted to explain itself.
  *
  * Unifont throughout — offered glyphs are item chars and need full Unicode
@@ -28,6 +28,11 @@ const SCALE_RANGE = 0.58;
 // Glyphs near the limb also lose light, as if the globe is lit from the front.
 const ALPHA_FLOOR = 0.18;
 const ALPHA_RANGE = 0.82;
+
+// The box framing the front-center glyph — the selection — in cells. Wide
+// enough to clear a double-width Unifont glyph at full front scale.
+const SELECTION_BOX_CELLS = 1.75;
+const SELECTION_BOX_COLOR = '#ffffff';
 
 export class ThreeSlotGlobeOverlay {
   render(renderer, game, state) {
@@ -55,8 +60,8 @@ export class ThreeSlotGlobeOverlay {
 
     // Project every glyph, keep the near hemisphere, and paint back-to-front
     // so the nearer glyphs overlap the ones behind them correctly. The
-    // selection needs no cursor: it is the glyph the globe has turned to the
-    // front, which depth alone already draws largest and brightest.
+    // selection is the glyph the globe has turned to the front; a white box
+    // fixed at front-center frames it (drawn after the glyphs, below).
     const visible = [];
     for (let row = 0; row < state.bands; row++) {
       for (let col = 0; col < state.perBand; col++) {
@@ -92,7 +97,16 @@ export class ThreeSlotGlobeOverlay {
       ctx.fillText(g.char, cx + g.x, cy - g.y);
     }
 
+    // The selection box. It stays put while the globe turns the next glyph
+    // into it. Half-pixel offsets keep the 1px stroke crisp.
     ctx.globalAlpha = 1;
+    const box = Math.round(cs * SELECTION_BOX_CELLS);
+    const boxX = Math.round(cx - box / 2);
+    const boxY = Math.round(cy - box / 2);
+    ctx.strokeStyle = SELECTION_BOX_COLOR;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(boxX + 0.5, boxY + 0.5, box - 1, box - 1);
+
     ctx.restore();
   }
 }
