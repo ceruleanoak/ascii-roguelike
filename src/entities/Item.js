@@ -910,9 +910,9 @@ export class Item {
       if (this.data.isBlunt) props.isBlunt = this.data.isBlunt;
       if (this.data.canSmash) props.canSmash = this.data.canSmash;
       if (this.data.isPickaxe) props.isPickaxe = this.data.isPickaxe;
-      // breaksRock: a non-hammer blow that breaks Rock (resolveSmashRefusal).
-      // No weapon declares it today; the Red Warrior's roll strikes with it
-      // (RollDamageMechanic).
+      // breaksRock: a non-hammer blow that breaks Rock (resolveSmashRefusal):
+      // the Flail, on every cell of its thrust. The Red Warrior's roll strikes
+      // with it too (RollDamageMechanic).
       if (this.data.breaksRock) props.breaksRock = true;
       // Onyx Hammer: knocks an unbreakable rock loose (BoulderSystem.rollFromRest).
       if (this.data.rollsRock) props.rollsRock = true;

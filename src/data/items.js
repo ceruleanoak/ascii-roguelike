@@ -986,28 +986,6 @@ export const ITEMS = {
     color: '#ff6600'
   },
 
-  // Flail (Dagger + Staff): a hammer, not a staff, though a staff is half its
-  // recipe. Swings the hammer's ring (raised windup, ✷ burst), holds no block
-  // stance, and breaks what any level-2 hammer breaks: Rock, Crystal, Metal
-  // Box and the gem rocks. The heaviest windup of the hammer line.
-  '⍋': {
-    rarity: 'rare',
-    char: '⍋',
-    tier: 2,
-    name: 'Flail',
-    type: ITEM_TYPES.WEAPON,
-    weaponType: WEAPON_TYPES.MELEE,
-    weaponSubtype: 'hammer',
-    damage: 3,
-    windup: 0.8,
-    recovery: 0.95,
-    range: 20,
-    attackPattern: 'hammerRing',
-    locksMovement: true,
-    weaponLevel: 2,
-    color: '#bbccdd'
-  },
-
   // Bone Crusher has no recipe — it is found, never crafted (an Errand reward).
   '⚒': {
     rarity: 'epic',
@@ -1141,6 +1119,29 @@ export const ITEMS = {
     range: 28,
     blockReleaseDamage: 1,
     color: '#aa8855'
+  },
+  // Flail (Dagger + Staff): a blade lashed to the staff's head. Still a
+  // staff — same block stance and bare-staff missile — with the heaviest
+  // swing of the line and a touch more reach. The one staff that breaks Rock
+  // (breaksRock — InteractionSystem.resolveSmashRefusal). breaksRock rides
+  // every cell of the staff's thrust, so it breaks rock at its full length.
+  // It swings only the staff's thrust: no raised hammer windup pose.
+  '⍋': {
+    rarity: 'rare',
+    char: '⍋',
+    tier: 2,
+    name: 'Flail',
+    type: ITEM_TYPES.WEAPON,
+    weaponType: WEAPON_TYPES.MELEE,
+    weaponSubtype: 'staff',
+    breaksRock: true,
+    damage: 3,
+    windup: 0.35,
+    recovery: 0.75,
+    patternSpeed: 0.05,
+    meleeChar: '|',
+    range: 30,
+    color: '#bbccdd'
   },
   'ߒ': {
     rarity: 'uncommon',

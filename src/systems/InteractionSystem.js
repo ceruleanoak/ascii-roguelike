@@ -94,7 +94,7 @@ export class InteractionSystem {
   // at its stone bonus. A rock that declares `minHammerLevel` also gives to a
   // hammer of that weapon level or better, the same way a Boulder does: heft is
   // the level, not the damage, which is 3 on the base Hammer and most of its
-  // upgrades alike. A `breaksRock` blow (the Red Warrior's roll) breaks any
+  // upgrades alike. A `breaksRock` blow (the Flail, the Red Warrior's roll) breaks any
   // rock a hammer could, whatever its level. The Vein Rock
   // declares no minHammerLevel: its secret stays the pickaxe's.
   resolveGlitteringRockDamage(attack, obj) {
@@ -123,8 +123,8 @@ export class InteractionSystem {
   resolveSmashRefusal(attack, obj) {
     if (obj.obsidian) return SMASH_REFUSED;
 
-    // Rock yields to the pickaxe, a hammer (canSmash), and the one weapon that
-    // declares `breaksRock` (the Red Warrior's roll). Everything else clinks off — blades,
+    // Rock yields to the pickaxe, a hammer (canSmash), and a `breaksRock` blow
+    // (the Flail, the one staff that breaks rock; the Red Warrior's roll). Everything else clinks off — blades,
     // axes, and the other blunt weapons (plain staffs, bats, baton,
     // a bare fist) alike.
     if (obj.char === '0') {
