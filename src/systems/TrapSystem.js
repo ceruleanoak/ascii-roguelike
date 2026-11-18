@@ -36,11 +36,13 @@ const TRAP_MAX_DIST = GRID.CELL_SIZE * 4; // 64px — preserves prior trap behav
 // the room. Carries no damage — it's a rope end, not a projectile.
 const WIRE_MAX_DIST = GRID.CELL_SIZE * 8; // 128px
 
-// Fuse timing for enemy-placed traps (placeTrapAtPosition only — player-thrown
-// traps arm via _armTrap and are out of scope). Real seconds: TrapSystem.update
-// runs off the raw, undoubled deltaTime, unlike Enemy.update's ENEMY_TIMER_RATE
-// doubling. Idle and unarmed for FUSE_IDLE, then blinks as a warning until it
-// force-fires at FUSE_TOTAL — caps how many traps a Trap Goblin can stack.
+// Fuse timing for every one-shot trap: enemy-placed (placeTrapAtPosition) and
+// player-thrown (_armTrap), except the Remote Bomb, which waits for its owner.
+// Real seconds: TrapSystem.update runs off the raw, undoubled deltaTime,
+// unlike Enemy.update's ENEMY_TIMER_RATE doubling. A trap left untriggered
+// sits for FUSE_IDLE, then blinks as a warning until it force-fires at
+// FUSE_TOTAL — caps how many traps a Trap Goblin can stack, and keeps a
+// thrown trap from waiting in the room forever.
 // `_fireOneShotTrap` excludes `entry.owner` from every damage/status loop (see
 // below), same as the proximity-trigger path in updatePlacedTraps — an
 // enemy-placed trap never hurts the enemy that placed it, however it fires.
@@ -922,6 +924,9 @@ export class TrapSystem {
     if (t.trapData.remoteTrigger) {
       entry.blinkTimer = 0;
       entry.blinkVisible = true;
+    } else if (t.trapData.oneShot) {
+      // Same timed fuse as an enemy-placed trap (TRAP_FUSE_IDLE/TOTAL).
+      entry.fuseTimer = 0;
     }
     game.placedTraps.push(entry);
     for (const p of createActivationBurst(t.x, t.y, t.trapData.color || '#ffffff')) game.particles.push(tagInteriorPlane(game, p));
@@ -1012,8 +1017,8 @@ export class TrapSystem {
         continue; // Remote traps are only triggered by player, not by proximity
       }
 
-      // Timed fuse — only enemy-placed traps carry one (entry.owner set by
-      // placeTrapAtPosition; player-thrown traps never get a fuseTimer field).
+      // Timed fuse — every one-shot trap carries one except the Remote Bomb
+      // (placeTrapAtPosition, _armTrap). Persistent placeables never do.
       if (entry.fuseTimer != null) {
         entry.fuseTimer += deltaTime;
         if (entry.fuseTimer >= TRAP_FUSE_TOTAL) {
