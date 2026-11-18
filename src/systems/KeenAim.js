@@ -12,20 +12,26 @@
  * facing toward the nearest enemy within `keenAimCells` while the windup is
  * active, so the swing (which reads facing) lands on it. The dagger-roll
  * auto-stab, which skips windup, aims through aimFacingAtNearestEnemy directly.
+ *
+ * The eye only finds what can be seen: a concealed enemy (isConcealedEnemy —
+ * an Invisible one such as a hidden Sniper, one faded into tall grass, a
+ * disguised mimic or shelled turtle) is never the nearest, so a keen weapon
+ * can't spoil a disguise or point the player at something unseen.
  */
 
 import { GRID } from '../game/GameConfig.js';
 import { planeOf } from './PlaneSystem.js';
 import { enemyNearestPoint } from './enemyHitTest.js';
+import { isConcealedEnemy } from './enemyConcealment.js';
 
-// Nearest live enemy on `plane` within `maxDist` of (x, y), as the offset
+// Nearest live, unconcealed enemy on `plane` within `maxDist` of (x, y), as the offset
 // from (x, y) to its center (for a shaped enemy, the nearest point of its
 // art — enemyHitTest) — or null when none is in reach.
 function findNearestEnemy(x, y, plane, enemies, maxDist) {
   let target = null;
   let bestDist = maxDist;
   for (const enemy of enemies) {
-    if (!(enemy.hp > 0) || planeOf(enemy) !== plane) continue;
+    if (!(enemy.hp > 0) || planeOf(enemy) !== plane || isConcealedEnemy(enemy)) continue;
     const p = enemyNearestPoint(enemy, x, y, 'center', bestDist);
     if (p.dist <= bestDist) {
       bestDist = p.dist;
