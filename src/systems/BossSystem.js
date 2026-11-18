@@ -753,26 +753,39 @@ export class BossSystem {
 
   // ── Reflectable projectile hits ───────────────────────────────────────────
 
-  // Mark reflectable projectiles when struck by player melee
+  // Mark reflectable projectiles when struck by player melee or a thrown
+  // boomerang. A boomerang deflects like a swing does (one per throw) and
+  // flies on.
   _checkReflectableHits() {
     const meleeAttacks     = this.game.combatSystem.getMeleeAttacks();
     const enemyProjectiles = this.game.combatSystem.getEnemyProjectiles();
 
     for (const atk of meleeAttacks) {
-      for (const proj of enemyProjectiles) {
-        if (!proj.reflectable || proj.reflected) continue;
-        if (!this._atkOverlapsProj(atk, proj)) continue;
-
-        // Reflect: reverse velocity, flag, boost damage, recolor
-        proj.velocity.vx = -proj.velocity.vx;
-        proj.velocity.vy = -proj.velocity.vy;
-        proj.reflected    = true;
-        proj.color        = '#ffffff';
-        proj.char         = '●';
-        proj.owner        = this.game.player;
-        break; // one reflect per melee swing
-      }
+      const proj = this._firstReflectableUnder(atk, enemyProjectiles);
+      if (proj) this._reflect(proj); // one reflect per melee swing
     }
+    for (const boomerang of this.game.combatSystem.getProjectiles()) {
+      if (!boomerang.boomerang || boomerang._deflectedGoo) continue;
+      const proj = this._firstReflectableUnder(boomerang, enemyProjectiles);
+      if (!proj) continue;
+      this._reflect(proj);
+      boomerang._deflectedGoo = true;
+    }
+  }
+
+  _firstReflectableUnder(atk, enemyProjectiles) {
+    return enemyProjectiles.find(proj =>
+      proj.reflectable && !proj.reflected && this._atkOverlapsProj(atk, proj)) ?? null;
+  }
+
+  // Reflect: reverse velocity, flag, recolor, hand it to the player
+  _reflect(proj) {
+    proj.velocity.vx = -proj.velocity.vx;
+    proj.velocity.vy = -proj.velocity.vy;
+    proj.reflected    = true;
+    proj.color        = '#ffffff';
+    proj.char         = '●';
+    proj.owner        = this.game.player;
   }
 
   // Each frame: check if any in-flight reflected projectile has hit any boss part.
