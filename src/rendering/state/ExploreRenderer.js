@@ -856,14 +856,15 @@ export class ExploreRenderer {
     const groundEnemy = enemy.data?.float !== true;
     const applyGrass = !enemy.data?.isDummy && (enemy.data?.grassStealth || groundEnemy);
     const isHidingTelegraph = enemy.sniperState === 'hiding';
-    const applyConceal = applyGrass || enemy.sniperHidden || isHidingTelegraph;
+    const invisible = enemy.invisible && !enemy.isDying; // a death is always seen
+    const applyConceal = applyGrass || invisible || isHidingTelegraph;
     let concealAlpha = 1;
     if (applyConceal) {
       if (isHidingTelegraph) {
         concealAlpha = sniperHidingConcealAlpha(enemy);
       } else {
         const grassHidden = applyGrass && this._isOnTallGrass(game, enemy.position.x, enemy.position.y);
-        concealAlpha = stepConcealmentAlpha(enemy, !(grassHidden || enemy.sniperHidden));
+        concealAlpha = stepConcealmentAlpha(enemy, !(grassHidden || invisible));
       }
       if (concealAlpha < 0.005) return;
     }

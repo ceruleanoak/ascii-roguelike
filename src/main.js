@@ -1801,7 +1801,7 @@ class Game {
 
   // Enemies that count toward "room cleared". Hidden mimics are excluded
   // so they don't block exits — the player can't reasonably find them
-  // until they reveal themselves on approach. Sniper's `sniperHidden` is
+  // until they reveal themselves on approach. Sniper's `invisible` is
   // deliberately NOT here — it's still alive/threatening while repositioning.
   _isHiddenEnemy(e) {
     if (e.data?.mimicMechanic?.enabled && !e.mimicRevealed) return true;

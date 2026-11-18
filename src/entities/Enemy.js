@@ -36,6 +36,7 @@ import { SplitOnDamageMechanic } from './enemyMechanics/SplitOnDamageMechanic.js
 import { RiseAgainMechanic } from './enemyMechanics/RiseAgainMechanic.js';
 import { GameAnimalMechanic } from './enemyMechanics/GameAnimalMechanic.js';
 import { SniperMechanic } from './enemyMechanics/SniperMechanic.js';
+import { InvisibleApproachMechanic } from './enemyMechanics/InvisibleApproachMechanic.js';
 import { RipenMechanic } from './enemyMechanics/RipenMechanic.js';
 import { targetSlipsLatch } from './enemyMechanics/sapLatch.js';
 import { ThiefMechanic } from './enemyMechanics/ThiefMechanic.js';
@@ -443,6 +444,7 @@ export class Enemy {
 
     if (LeapAttackMechanic.isEnabled(this)) LeapAttackMechanic.init(this);
     if (SniperMechanic.isEnabled(this)) SniperMechanic.init(this);
+    if (InvisibleApproachMechanic.isEnabled(this)) InvisibleApproachMechanic.init(this);
     if (RipenMechanic.isEnabled(this)) RipenMechanic.init(this);
     if (ThiefMechanic.isEnabled(this)) ThiefMechanic.init(this);
     if (QuiverRechargeMechanic.isEnabled(this)) QuiverRechargeMechanic.init(this);

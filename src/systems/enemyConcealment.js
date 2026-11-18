@@ -10,5 +10,5 @@ export function isConcealedEnemy(enemy) {
   if (enemy._concealmentAlpha !== undefined && enemy._concealmentAlpha < 0.005) return true;
   if (enemy.data?.shellCamouflage && enemy.inShellForm) return true;
   if (enemy.data?.mimicMechanic?.enabled && !enemy.mimicRevealed) return true;
-  return !!enemy.sniperHidden;
+  return !!enemy.invisible;
 }

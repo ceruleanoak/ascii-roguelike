@@ -11,6 +11,7 @@ import { createExplosionAftermath } from './WorldEffectsSystem.js';
 import { BumpMechanic } from '../entities/enemyMechanics/BumpMechanic.js';
 import { DartMechanic } from '../entities/enemyMechanics/DartMechanic.js';
 import { TrapShyMechanic } from '../entities/enemyMechanics/TrapShyMechanic.js';
+import { InvisibleApproachMechanic } from '../entities/enemyMechanics/InvisibleApproachMechanic.js';
 import { ChargeMechanic } from '../entities/enemyMechanics/ChargeMechanic.js';
 import { RipenMechanic } from '../entities/enemyMechanics/RipenMechanic.js';
 import { glyphsTouch } from '../entities/enemyMechanics/glyphContact.js';
@@ -277,6 +278,9 @@ export class EnemyUpdateSystem {
       // Trap-Shy steers this tick's targetVelocity off placed traps; it needs
       // game.placedTraps, which the enemy's own tick doesn't carry.
       TrapShyMechanic.update(enemy);
+      // Invisible Approach reads the attack phase this tick left behind, so a
+      // tick that produced damage always leaves the enemy visible.
+      InvisibleApproachMechanic.update(enemy);
 
       this._handleChargeContact(enemy, player, prevChargeSpeed);
       BumpMechanic.resolveContact(enemy, player, game, deltaTime);

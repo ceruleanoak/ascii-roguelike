@@ -1508,6 +1508,33 @@ identity, not standard programming terms.
 - **Not:** an Enemy State; the phases run inside the mechanic and suspend the rest of the AI.
   Not a Charge either: it ends in a latch, not a hit, and never stuns on a wall.
 
+### Invisible
+- **Definition:** An Enemy that is not drawn at all. It is still there: still hittable, still
+  counted toward room clear. Anything that points the player at enemies passes it over —
+  offscreen arrows, LOOKHERE, the camera zoom, and a keen weapon's aim. Its death is always
+  drawn. The Sniper is Invisible while it relocates; the Ice Wraith while it closes in
+  (Invisible Approach).
+- **In code:** `enemy.invisible`, written only by the mechanic that owns the enemy's
+  concealment (`SniperMechanic`'s `hidden` sub-state, `InvisibleApproachMechanic`). Read by
+  `ExploreRenderer.renderEnemy` (fades through `stepConcealmentAlpha`) and `isConcealedEnemy`
+  (`src/systems/enemyConcealment.js`), which `KeenAim`, `OffscreenEnemyIndicators`,
+  `lookHere` and `CameraZoomSystem` consult. Replaces the Sniper-only `sniperHidden`.
+- **Not:** intangible (hits land); a disguise (a mimic or a shelled turtle is drawn, as
+  something else); tall-grass stealth (a fade from where the enemy stands, not a property of
+  the enemy) — though all of these are concealed, the wider `isConcealedEnemy` set.
+
+### Invisible Approach
+- **Definition:** The Ice Wraith is Invisible while it closes in and shows itself to attack. It
+  is visible while any attack is under way (a Frost Lunge, a sap latch, a Strike or its windup)
+  and while its target is within its reveal range, so its tell is always seen before its attack;
+  everywhere else it is Invisible. It deals no damage while Invisible.
+- **In code:** `src/entities/enemyMechanics/InvisibleApproachMechanic.js`, configured by
+  `data.invisibleApproach` (`enabled`, `revealRange` in px, default 6 cells). Updated once per
+  frame from `EnemyUpdateSystem._runEnemyLoop` right after the enemy's tick, before CombatSystem
+  consumes the tick's result, so a damaging tick always leaves the enemy visible.
+- **Not:** an Enemy State; the Sniper's `hidden` sub-state (which travels away from the player
+  rather than toward it).
+
 ### Dart
 - **Definition:** A rapid attack and retreat. The enemy holds still for a short tell, darts at
   the target much faster than it moves, and its body is the hitbox for as long as the dart

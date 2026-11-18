@@ -5,11 +5,11 @@ import { GRID } from '../../game/GameConfig.js';
 // matching the drawOffscreenEnemyIndicators pattern (rendering/ui/).
 
 // Concealment alpha during the 'hiding' telegraph (the countdown BEFORE
-// sniperHidden flips true and SniperMechanic._updateHidden starts moving it).
+// enemy.invisible flips true and SniperMechanic._updateHidden starts moving it).
 // Fades out gradually across the countdown instead of standing fully solid
 // then popping invisible on the frame it completes — that abrupt pop is what
 // read as the Sniper "disappearing too soon" with no warning. Called from
-// ExploreRenderer.renderEnemy, which handles the post-vanish (sniperHidden)
+// ExploreRenderer.renderEnemy, which handles the post-vanish (enemy.invisible)
 // and grass-concealment alpha itself via the shared stepConcealmentAlpha path.
 export function sniperHidingConcealAlpha(enemy) {
   const hideDelay = enemy.data?.sniperMechanic?.hideDelay ?? 0.5;

@@ -551,7 +551,7 @@ export class CombatSystem {
       let hit = false;
       for (const enemy of enemies) {
         if (!inSamePlane(proj, enemy)) continue;
-        // Sniper stays hittable while sniperHidden (invisible, not intangible) — a
+        // Sniper stays hittable while hidden (Invisible, not intangible) — a
         // player who tracks/guesses its position via the disturbed-object tell can
         // still land a hit; only the render layer conceals it (ExploreRenderer.renderEnemy).
         // Boomerang gating: normal return is inert; ricochet return stuns but deals no damage.
@@ -989,7 +989,7 @@ export class CombatSystem {
         for (const enemy of enemies) {
           if (planeOf(enemy) !== (attack.shooterPlane ?? 0)) continue;
           if (enemy.aloft) continue; // out of reach overhead (Storm Eye's Thundercloud)
-          // Sniper stays hittable while sniperHidden — see the projectile-loop comment above.
+          // Sniper stays hittable while hidden — see the projectile-loop comment above.
 
           if (this.checkMeleeCollision(attack, enemy)) {
             const at = enemyVisualAnchor(enemy); // see the projectile loop

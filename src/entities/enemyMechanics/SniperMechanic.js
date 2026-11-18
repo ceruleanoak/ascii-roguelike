@@ -19,7 +19,7 @@ import { tagInteriorPlane } from '../../systems/PlaneSystem.js';
 //   idle      — default; watches for near-range (→ hiding), else always → tracking
 //   hiding    — brief telegraph before vanishing (near-range response, and
 //               the response to any direct hit while uncommitted — onDamaged)
-//   hidden    — invisible + intangible (enemy.sniperHidden), travels to a new
+//   hidden    — Invisible (enemy.invisible: not drawn, still hittable), travels to a new
 //               far position, disturbing nearby background objects as a tell
 //   tracking  — accumulates visionLockTime1 toward aiming; obstructed line of
 //               sight (_visionSpeedFactor) builds it 3x slower, never resets it
@@ -93,7 +93,7 @@ export const SniperMechanic = {
     // destinations or the melee-cornered dagger range.
     enemy.ignoreBackgroundCollision = true;
     enemy.sniperState = 'idle';
-    enemy.sniperHidden = false;
+    enemy.invisible = false;
     enemy.sniperTimer = 0;
     enemy.sniperLockTimer = 0;
     enemy.sniperReticulePos = null;
@@ -197,7 +197,7 @@ export const SniperMechanic = {
     enemy.sniperTimer -= deltaTime;
     if (enemy.sniperTimer <= 0) {
       enemy.sniperHiddenTarget = this._pickHiddenDestination(enemy);
-      enemy.sniperHidden = true;
+      enemy.invisible = true;
       enemy.sniperState = 'hidden';
       enemy.sniperGooDropped = false;
       enemy.sniperHiddenTravelDist = enemy.sniperHiddenTarget
@@ -225,7 +225,7 @@ export const SniperMechanic = {
   _updateHidden(enemy, cfg, deltaTime, dotDamageEvents) {
     const dest = enemy.sniperHiddenTarget;
     if (!dest) {
-      enemy.sniperHidden = false;
+      enemy.invisible = false;
       enemy.sniperState = 'idle';
       this._stand(enemy);
       return { suspend: true, result: { dotDamage: dotDamageEvents } };
@@ -244,7 +244,7 @@ export const SniperMechanic = {
       enemy.position.x = dest.x;
       enemy.position.y = dest.y;
       this._stand(enemy);
-      enemy.sniperHidden = false;
+      enemy.invisible = false;
       enemy.sniperHiddenTarget = null;
       enemy.sniperState = 'idle';
       return { suspend: true, result: { dotDamage: dotDamageEvents, sniperGooDrop: gooDrop } };
