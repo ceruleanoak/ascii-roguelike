@@ -2934,9 +2934,11 @@ identity, not standard programming terms.
 ### Graveyard Divider
 - **Definition:** The unbroken wall across the Graveyard separating the top third the player
   stands in from the lower two thirds the undead mill in. It has no gap — the point is that the
-  crowd can be seen and not reached.
+  crowd can be seen and not reached. Once REST has given way it lies shattered: rubble along the
+  same row, broken on the first visit after the decay, still solid.
 - **In code:** the `graveyard_divider` Background Object variant (`GameConfig.js`), stamped a
-  cell at a time across `room.graveyardDividerRow` by the `graveyard` script.
+  cell at a time across `room.graveyardDividerRow` by the `graveyard` script; shattered by
+  `CursedRunSystem._shatterDivider` (from `populateGraveyard`) while `isRestDecayed`.
 - **Not:** "fence", "barrier", "gate", "partition".
 
 ### Barricade

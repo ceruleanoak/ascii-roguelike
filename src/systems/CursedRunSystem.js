@@ -5,6 +5,8 @@ import { ITEM_TYPES } from '../data/items.js';
 import { canReachLoot } from './PlaneSystem.js';
 import { formatElapsed } from './RunTimerSystem.js';
 import { createWildFairy } from '../entities/FairyKing.js';
+import { createDebris } from '../entities/Debris.js';
+import { createDustCloud } from './WorldEffectsSystem.js';
 
 // The Graveyard is never empty on a first look, and it thickens from there.
 const GRAVEYARD_BASE = 5;
@@ -32,6 +34,15 @@ const REST_STREAM_MAX = 12;
 
 // How far in from the door an arrival makes for before it starts milling.
 const REST_WALK_IN_CELLS = 6;
+
+// Once REST has given way, the Graveyard Divider lies shattered: each cell's
+// block becomes one of these, picked per column so every visit shows the same
+// wreck. Still a wall cell each — the row keeps its collision.
+const SHATTERED_DIVIDER_CHARS = ['▓', '▒', '░', '▚', '▞', '▄', '▓', '▒'];
+// The shatter itself, played on the first Graveyard visit after the decay:
+// debris and dust thrown off every few cells along the row.
+const SHATTER_BURST_EVERY = 3;
+const SHATTER_DEBRIS_PER_BURST = 4;
 
 // Cursed recipe scrolls: a Rare drop from undead enemies, only while cursed.
 const SCROLL_CHAR = '∫';
@@ -116,6 +127,10 @@ export class CursedRunSystem {
     // EXPLORE's south exit stays shut, gray, for the rest of the run.
     this._restSealed = false;
 
+    // Set once the Graveyard Divider's shatter has been played, so later
+    // visits find it already broken rather than breaking again.
+    this._dividerShattered = false;
+
     // The Curse Clock: performance.now() when the Cursed Run began, or null.
     // A real-time delta like RunTimerSystem's, drawn gray beside it.
     this._curseStartedAt = null;
@@ -147,6 +162,7 @@ export class CursedRunSystem {
     this._readScrolls = new Set();
     this.scrollReveal = null;
     this._restSealed = false;
+    this._dividerShattered = false;
     this._curseStartedAt = null;
     this._crackedThreeSlots = 0;
     this._misfire = null;
@@ -552,6 +568,44 @@ export class CursedRunSystem {
 
     game.undeadSystem.clear();
     game.undeadSystem.fill(game, bounds, this.graveyardPopulation(), { silent: true });
+
+    if (this.isRestDecayed(game)) this._shatterDivider(game, room);
+  }
+
+  /**
+   * REST has given way, and the Graveyard Divider with it: every divider cell
+   * is redrawn as rubble. The room is rebuilt on each entry, so this runs on
+   * each entry too. The first time, the break is seen happening — debris and
+   * dust along the row, a shake — and after that the wreck is just there.
+   *
+   * The cells keep their collision: the divider is broken, not opened.
+   */
+  _shatterDivider(game, room) {
+    const cs = GRID.CELL_SIZE;
+    const divider = room.backgroundObjects.filter(o => o.typeId === 'graveyard_divider');
+    for (const wall of divider) {
+      const col = Math.round(wall.position.x / cs);
+      // A fixed hash of the column: irregular, but the same wreck every visit.
+      let hash = Math.imul(col + 1, 0x85ebca6b);
+      hash ^= hash >>> 13;
+      hash = Math.imul(hash, 0xc2b2ae35);
+      hash ^= hash >>> 16;
+      wall.char = SHATTERED_DIVIDER_CHARS[(hash >>> 0) % SHATTERED_DIVIDER_CHARS.length];
+    }
+    game.renderer?.markBackgroundDirty();
+
+    if (this._dividerShattered) return;
+    this._dividerShattered = true;
+
+    const color = divider[0]?.data?.color || '#4a4a4a';
+    for (let i = 0; i < divider.length; i += SHATTER_BURST_EVERY) {
+      const cx = divider[i].position.x + cs / 2;
+      const cy = divider[i].position.y + cs / 2;
+      for (const piece of createDebris(cx, cy, SHATTER_DEBRIS_PER_BURST, color)) game.debris.push(piece);
+      createDustCloud(game, cx, cy, { count: 4, spread: cs });
+    }
+    game.renderController?.screenShake.trigger(5, 0.35);
+    game.audioSystem?.playSFX('divider_shatter');
   }
 
   /**

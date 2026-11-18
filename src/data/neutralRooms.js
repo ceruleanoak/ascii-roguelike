@@ -563,6 +563,8 @@ export const NEUTRAL_ROOMS = {
    * in the lower two, and there is no way down to them. The room is a window,
    * not a place to go — the only thing to do here is see how much of it is
    * filling up, which is the whole point of a curse you cannot walk back.
+   * Once REST has given way, CursedRunSystem redraws the divider as rubble on
+   * entry (still solid).
    *
    * Population is CursedRunSystem's, not the script's: it grows with the run
    * rather than with the room, so it has to outlive any single visit.
