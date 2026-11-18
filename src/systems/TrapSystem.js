@@ -1173,7 +1173,8 @@ export class TrapSystem {
     } else if (trapData.effect === 'freeze') {
       // Freeze Trap: damage + freeze enemies + freeze water/puddle tiles + scatter ice objects.
       // freezePermanent enemies (slimes) lock at Infinity duration and never thaw; other ice-weak
-      // enemies (freeze >1.0) also get Infinity. Everyone else uses effectDuration. The trap is
+      // enemies (freeze >1.0) also get Infinity, except bosses, which always thaw (the Giant
+      // Slime is ice-weak). Everyone else uses effectDuration. The trap is
       // an all-at-once hit: straight to freeze pip 3 (Frozen — full immobilization, not just
       // slow), matching the player-side trap below. Freeze-immune enemies are filtered by
       // _applyTrapHit via trapData.affinity='freeze'.
@@ -1182,7 +1183,7 @@ export class TrapSystem {
       for (const enemy of targets) {
         if (!enemyInRadius(enemy, cx, cy, r, GRID.CELL_SIZE / 2)) continue;
         if (!this._applyTrapHit(enemy, trapData, freezeDmg, '#aaffff')) continue;
-        const isIceWeak = enemy.getElementalModifier('freeze') > 1.0;
+        const isIceWeak = enemy.getElementalModifier('freeze') > 1.0 && enemy.data.tier !== 'boss';
         const duration = (enemy.data.freezePermanent || isIceWeak) ? Infinity : trapData.effectDuration;
         enemy.applyStatusEffect('freeze', duration, 3); // straight to Frozen
       }
