@@ -58,6 +58,7 @@
 import { GAME_STATES, GRID, PHYSICS, ROOM_TYPES } from '../game/GameConfig.js';
 import { ZONES, ZONE_COLORS } from '../data/zones.js';
 import { GRAY_KING } from '../data/enemies.js';
+import { blendColors } from './ZoneSystem.js';
 import { Player } from '../entities/Player.js';
 import { Enemy } from '../entities/Enemy.js';
 import { Item } from '../entities/Item.js';
@@ -115,6 +116,12 @@ export const MIST_BATTLE_LOST = 3;
 const KING_DISTANCE = 5;
 // Seconds the Trine stands still between a body taking the crown and Act 2.
 const CROWN_HOLD = 1.5;
+// The Gray King comes white and fades to its gray (GRAY_KING.color) over
+// KING_FADE_TIME seconds, in KING_FADE_STEPS flat bands: no smooth color
+// gradient, the same stepped look as the alpha quantization (ASCIIRenderer).
+const KING_FADE_FROM = '#ffffff';
+const KING_FADE_TIME = 1.2;
+const KING_FADE_STEPS = 4;
 // Seconds the victor stands before the mist starts to close.
 const VICTOR_HOLD = 1.5;
 // An Act 2 fight still going after this many seconds is ended by the mist
@@ -247,6 +254,8 @@ export class MistBattleSystem {
     this.king = null;
     this.crown = null;
     this.crownHold = 0;
+    // Seconds the King has stood since it came (its white-to-gray fade).
+    this.kingFadeTime = 0;
   }
 
   /**
@@ -406,6 +415,8 @@ export class MistBattleSystem {
     const spot = this._freeCellNear(room, Math.round(lead.x / CELL), Math.round(lead.y / CELL) - KING_DISTANCE)
       ?? { x: Math.round((GRID.COLS / 2) * CELL - CELL / 2), y: Math.round((GRID.ROWS / 2) * CELL - CELL / 2) };
     const king = new Enemy('@', spot.x, spot.y, room.depth ?? 0, GRAY_KING);
+    king.color = KING_FADE_FROM; // the instance's color; GRAY_KING itself is never touched
+    this.kingFadeTime = 0;
     king.setCollisionMap(room.collisionMap);
     king.setBackgroundObjects(room.backgroundObjects);
     king.setSteamClouds?.(game.steamClouds);
@@ -524,6 +535,15 @@ export class MistBattleSystem {
     if (wearer) return { x: wearer.position.x + CELL / 2, y: wearer.position.y + CELL / 2, worn: true };
     if (!this.crown) return null;
     return { x: this.crown.x, y: this.crown.y, worn: false };
+  }
+
+  // The King's color from white to gray, a band at a time; once there it is
+  // left alone, so a status tint the Enemy applies to itself isn't fought.
+  _fadeKing(deltaTime) {
+    if (this.kingFadeTime >= KING_FADE_TIME) return;
+    this.kingFadeTime = Math.min(KING_FADE_TIME, this.kingFadeTime + deltaTime);
+    const band = Math.floor((this.kingFadeTime / KING_FADE_TIME) * KING_FADE_STEPS) / KING_FADE_STEPS;
+    this.king.color = blendColors(KING_FADE_FROM, GRAY_KING.color, band);
   }
 
   // The King is down (or gone): the crown falls where it stood. On the
@@ -1340,6 +1360,7 @@ export class MistBattleSystem {
   // beat before Act 2: every body stands where it is (no formation
   // steering) until CROWN_HOLD runs out. True while the beat holds.
   _updateCrownHold(deltaTime) {
+    if (this.king) this._fadeKing(deltaTime);
     if (this.king || (this.crown && !this.crown.wearer)) this._updateCrown();
     if (this.crownHold <= 0) return false;
     for (const body of this.presentBodies()) {

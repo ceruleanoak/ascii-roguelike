@@ -1113,11 +1113,14 @@ identity, not standard programming terms.
 
 ### Gray King
 - **Definition:** The `@` in gray, wearing the Gray Crown, that comes at the Summit as Act 1's
-  last foe. The player fights it as the Trine; its fall drops the crown.
+  last foe. It comes white and fades into its gray. A coward: it runs from the Trine and
+  strikes only when cornered, so the three must hem it in. Its fall drops the crown.
 - **In code:** data `GRAY_KING` in `src/data/enemies.js` (outside the `ENEMIES` registry, where
   `'@'` is the Training Dummy; `noLoot`, `knockbackResistance: 1`), spawned by
   `MistBattleSystem._spawnKing()` from `startKing()` (`KING_DISTANCE` cells north of the Primary,
-  nearest free cell) and held as `mistBattleSystem.king`. Like any Act 1 enemy it targets and
+  nearest free cell) and held as `mistBattleSystem.king`. The fade is `_fadeKing` (`KING_FADE_TIME`,
+  `KING_FADE_STEPS` bands on the instance's `color`); the coward is its `states` (Flee with
+  `cornered`, Lookback, Strike, no Approach). Like any Act 1 enemy it targets and
   hurts the Primary only.
 - **Not:** a Boss in `BossSystem`; the Training Dummy; a character.
 
