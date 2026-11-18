@@ -225,12 +225,19 @@ export class CharacterSystem {
 
       const x = col * C;
       const y = row * C;
-      const occupied = objects.some(obj =>
+      const occupant = objects.find(obj =>
         !obj.destroyed &&
         Math.abs(obj.position.x - x) < C / 2 &&
         Math.abs(obj.position.y - y) < C / 2
       );
-      if (occupied) continue;
+      // A cell that already holds something (grass, a bush) can't take lava,
+      // so the molten head works like a Torch there instead: anything that
+      // burns is set alight. Without this a lava weapon swung in a grass
+      // room did nothing at all.
+      if (occupant) {
+        if (occupant.isFlammable?.() && !occupant.onFire) game.fireSystem?.igniteObject(occupant);
+        continue;
+      }
 
       objects.push(BackgroundObject.createVariant('lava', x, y));
     }
