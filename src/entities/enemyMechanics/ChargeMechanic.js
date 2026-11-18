@@ -224,6 +224,9 @@ export const ChargeMechanic = {
           && !enemy.isGooey()
           && !enemy.isPinned()
           && !enemy.inShellForm
+          // A chief holding back behind his pack (LeaderFollowerMechanic)
+          // doesn't Bash until it has thinned.
+          && !enemy.holdingBack
           // A parry winding up or open plays out first; the charge is what
           // follows it (ParryMechanic: parry, windup, jab).
           && !enemy.parryActive

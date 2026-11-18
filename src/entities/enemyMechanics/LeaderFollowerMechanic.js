@@ -35,23 +35,64 @@ function _steerToSlot(enemy, slotX, slotY) {
   }
 }
 
+// The chief commands from the back while his pack is strong. Until more than
+// HOLD_BACK_UNTIL_LOST of the pack has fallen he keeps HOLD_BACK_RANGE from
+// the player (backing off when crowded, standing his ground otherwise) and
+// never starts a Bash; he still swings at anyone who walks into his reach.
+// His speed runs from PACK_FULL_SPEED× with the whole pack up to
+// rallyCall.packLossSpeedMax× with none, so he is slowest exactly while he
+// should be hanging back, and fastest when he's the last one standing.
+const HOLD_BACK_UNTIL_LOST = 0.5;
+const HOLD_BACK_RANGE = GRID.CELL_SIZE * 7;
+const PACK_FULL_SPEED = 0.5;
+
+// Stamped after the regular AI, the way followers' formation slots are, and
+// only while Approach owns the movement — a windup, swing or Recover plays
+// out untouched.
+function _holdBack(enemy) {
+  if (enemy.stateMachine?.current !== 'approach' || !enemy.target) return;
+  const dx = enemy.target.position.x - enemy.position.x;
+  const dy = enemy.target.position.y - enemy.position.y;
+  const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+  if (dist < HOLD_BACK_RANGE) {
+    const speed = enemy.speed * (enemy.packLossSpeedMult ?? 1);
+    enemy.targetVelocity.vx = -(dx / dist) * speed;
+    enemy.targetVelocity.vy = -(dy / dist) * speed;
+  } else {
+    enemy.targetVelocity.vx = 0;
+    enemy.targetVelocity.vy = 0;
+  }
+}
+
 export const LeaderFollowerMechanic = {
   // No isEnabled() — runs unconditionally each tick because both rally and
   // follow are opt-in via data fields and bail internally.
 
+  // Called from the Enemy constructor for a chief (rallyCall.enabled), so
+  // these are constructor-time fields, only on the Enemies that use them.
   initRally(enemy) {
     enemy.rallyCallCooldown = 0;
     enemy.rallyIndicatorTimer = 0;
+    // The chief's own speed-up as its pack dies (rallyCall.packLossSpeedMax);
+    // _updatePackLossSpeed writes it, computeSpeedMultiplier reads it.
+    enemy.packLossSpeedMult = 1;
+    // The largest pack seen; followers are linked after construction.
+    enemy._packSizeSeen = 0;
+    // True while most of the chief's pack still stands: he keeps his distance
+    // and holds his Bash (ChargeMechanic reads it).
+    enemy.holdingBack = false;
   },
 
   isRallyEnabled(enemy) {
     return enemy.data.rallyCall?.enabled === true;
   },
 
-  // The chief moves faster the fewer followers it has left: 1× with the full
-  // pack, rising linearly to rc.packLossSpeedMax× once every follower is
-  // dead. The full pack is the largest count seen, since followers are
-  // linked after the chief is constructed.
+  // The chief moves faster the fewer followers it has left: PACK_FULL_SPEED×
+  // with the full pack, rising linearly to rc.packLossSpeedMax× once every
+  // follower is dead, and holds back while most of the pack stands (see
+  // HOLD_BACK_UNTIL_LOST). The full pack is the largest count seen, since
+  // followers are linked after the chief is constructed. A chief that never
+  // had a pack is neither slowed nor held back.
   _updatePackLossSpeed(enemy, rc) {
     let alive = 0;
     for (const e of enemy.game?.currentRoom?.enemies ?? []) {
@@ -60,7 +101,8 @@ export const LeaderFollowerMechanic = {
     if (alive > enemy._packSizeSeen) enemy._packSizeSeen = alive;
     if (enemy._packSizeSeen === 0) return;
     const lost = 1 - alive / enemy._packSizeSeen;
-    enemy.packLossSpeedMult = 1 + (rc.packLossSpeedMax - 1) * lost;
+    enemy.packLossSpeedMult = PACK_FULL_SPEED + (rc.packLossSpeedMax - PACK_FULL_SPEED) * lost;
+    enemy.holdingBack = lost < HOLD_BACK_UNTIL_LOST;
   },
 
   update(enemy, ctx) {
@@ -72,6 +114,7 @@ export const LeaderFollowerMechanic = {
 
     const rc = enemy.data.rallyCall;
     if (rc?.enabled && rc.packLossSpeedMax) LeaderFollowerMechanic._updatePackLossSpeed(enemy, rc);
+    if (enemy.holdingBack) _holdBack(enemy);
     if (rc?.enabled && enemy.target && enemy.rallyCallCooldown <= 0) {
       const dx = enemy.target.position.x - enemy.position.x;
       const dy = enemy.target.position.y - enemy.position.y;

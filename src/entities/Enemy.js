@@ -467,11 +467,7 @@ export class Enemy {
     this.leaderRef = null;
     this.followerRoleActive = false;
     this.rallyBoostTimer = 0;
-    // Chief's own speed-up as its pack dies (rallyCall.packLossSpeedMax);
-    // LeaderFollowerMechanic writes it, computeSpeedMultiplier reads it.
-    this.packLossSpeedMult = 1;
-    this._packSizeSeen = 0;
-
+    // A chief's own pack fields (packLossSpeedMult, holdingBack) are set by initRally.
     if (LeaderFollowerMechanic.isRallyEnabled(this)) LeaderFollowerMechanic.initRally(this);
 
     // (Goblin Chief bash uses the existing chargeMechanic state machine —
