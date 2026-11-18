@@ -4,6 +4,7 @@ Archive of fixed bugs from `known-bugs.md`. Migrated here on resolution so the a
 
 ---
 
+| 584 | **Camera zoom lingered on an enemy that turned invisible** — the zoom never counted concealed enemies, but its 500ms `ZOOM_OUT_DELAY_MS` hold kept the frame zoomed after the only threat hid (Sniper vanishing after a close shot: 30 frames zoomed on nothing) | user 2026-11-18 | ✅ fixed — 2026-11-18 — `CameraZoomSystem` skips the hold when last frame's threat is now concealed |
 | 583 | **THREE room selection hard to read** — the offering globe's front-center slot had no frame, so which glyph was selected wasn't clear | user bug-inbox 2026-11-18 | ✅ fixed — 2026-11-18 — `ThreeSlotGlobeOverlay` draws a 1px white box around the front-center spot |
 | 582 | **REST spelled over the shut south door in a Cursed Run** — after Charon seals REST, `drawRestExitLabel` forced the gray REST label above the closed south door | user bug-inbox 2026-11-18 | ✅ fixed — 2026-11-18 — the label follows `southExitShowsOpen` like any closed south exit (reverses the e418aa6 detail) |
 | 581 | **Gray mist drew over hut, dungeon and maze interiors** — 4a1c4de made the mist the `grayMist` Frame Pass declared for `floor`/`maze`, so every interior panel ran `renderMist` over its contents | user bug-inbox 2026-11-18 | ✅ fixed — 2026-11-18 — mist drawn as surface scenery before the interior panel; clears at the interior's exit spot |
