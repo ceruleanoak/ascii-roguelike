@@ -497,6 +497,9 @@ identity, not standard programming terms.
   between aggro range and vision length (noticed, not engaged), and on proximity-only detection
   by an Enemy that has never seen the target. An Alert authored `listen: false` never holds: it
   wanders even with the target in range (the Phalanx, so a member that rolled wander wanders).
+  A spawn may give one Enemy a longer first Alert (`enemy.alertDuration`, double-seconds), which
+  holds every exit shut until it runs out and is cleared when that Alert ends (Giant Slime split
+  children hold off the player for 3 seconds).
 - **In code:** `src/entities/enemyStates/alert.js`; must be declared by every Enemy — it is the
   only State Approach can hand back to when the target leaves aggro range.
 - **Not:** the legacy `'idle'` state id, which this and Approach's holding behavior jointly

@@ -170,6 +170,10 @@ export class Enemy {
     this._frameUpdateResult = null;
     this.state = 'idle'; // idle, chase, windup, attack
     this.enraged = false; // Once attacked, always aggro'd
+    // A longer first Alert for this one Enemy, in double-seconds (null = the
+    // State's own `duration`). Set by a spawn that wants its Enemy to hold off
+    // before engaging (Giant Slime split children); alert.js clears it on exit.
+    this.alertDuration = null;
     // Commanded via CALL/COMMAND true-name (CommandSystem): permanently
     // charmed warband member. Gates the player out of its detection entirely
     // (see update()'s effectiveDistance) and routes targeting through the

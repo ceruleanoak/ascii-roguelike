@@ -31,6 +31,8 @@ export default {
 
   exit(enemy, ctx, machine) {
     machine.sighting = null;
+    // A spawn-given duration covers only the first visit.
+    enemy.alertDuration = null;
   },
 
   update(enemy, ctx, machine) {
@@ -87,8 +89,10 @@ export default {
     if (!enemy.target) return null;
     // A declared duration makes Alert a real beat — the enemy notices, holds for
     // a moment, then commits. Without one it commits as soon as it can see, which
-    // is today's behavior.
-    if (cfg.duration && machine.timer < cfg.duration) return null;
+    // is today's behavior. A spawn may hand one Enemy a longer first Alert
+    // (`enemy.alertDuration` — Giant Slime split children hold off the player).
+    const duration = enemy.alertDuration ?? cfg.duration;
+    if (duration && machine.timer < duration) return null;
 
     // Everything below is perception — noticing, sensing, deciding to commit —
     // so all of it runs at this Enemy's thinking cadence rather than the frame

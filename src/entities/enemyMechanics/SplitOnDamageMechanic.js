@@ -4,6 +4,15 @@
 // ReformMechanic, which calls notifySplitChildGone(parent, child, true) on
 // contact; EnemySpawnSystem calls it with false on a child's death instead.
 
+// How a split child leaves the boss. Thrown well clear (LAUNCH_SPEED px/s,
+// held by LAUNCH_KNOCKBACK double-seconds of knockback so the AI can't steer
+// mid-flight), then it sits in Alert for HOLD_OFF double-seconds — 3 real
+// seconds — before it may engage the player. A data `splitOnDamage` may set
+// launchSpeed / launchDuration / holdOff to override these.
+const LAUNCH_SPEED = 700;
+const LAUNCH_KNOCKBACK = 0.8;
+const HOLD_OFF = 6.0;
+
 export const SplitOnDamageMechanic = {
   isEnabled(enemy) {
     return enemy.data.splitOnDamage?.enabled === true;
@@ -50,15 +59,22 @@ export const SplitOnDamageMechanic = {
 
   registerSplitChild(parent, child, cfg) {
     if (!parent.splitChildren) parent.splitChildren = new Set();
+    const split = parent.data.splitOnDamage;
     child.parentRef = parent;
     child.reformValue = cfg.childHp; // Absorbing returns exactly the HP the player failed to remove
     child.hp = cfg.childHp;
     // Launch the child away from the boss center in a random direction;
     // knockback status keeps AI from overriding the velocity mid-flight.
     const launchAngle = Math.random() * Math.PI * 2;
-    child.velocity.vx = Math.cos(launchAngle) * 300;
-    child.velocity.vy = Math.sin(launchAngle) * 300;
-    child.applyStatusEffect('knockback', 0.35);
+    const launchSpeed = split?.launchSpeed ?? LAUNCH_SPEED;
+    child.velocity.vx = Math.cos(launchAngle) * launchSpeed;
+    child.velocity.vy = Math.sin(launchAngle) * launchSpeed;
+    child.applyStatusEffect('knockback', split?.launchDuration ?? LAUNCH_KNOCKBACK);
+    // A thrown-off child doesn't come for the player at once: it lands and
+    // sits in Alert for `holdOff` (and isn't spawned enraged, which would
+    // skip Alert's range test). Hitting it still provokes it.
+    child.enraged = false;
+    child.alertDuration = split?.holdOff ?? HOLD_OFF;
     // Spawn iframes: the child appears at the boss center, inside whatever
     // attack just split it off — without these it dies instantly, and it
     // would re-merge the instant it spawned (ReformMechanic waits them out).
