@@ -7,7 +7,7 @@ import { Item } from '../entities/Item.js';
 import { Ingredient } from '../entities/Ingredient.js';
 import { ENEMIES, getZoneRandomEnemy, createBossEnemy, BOSS_ENCOUNTERS } from '../data/enemies.js';
 import { ZONES } from '../data/zones.js';
-import { seedSunkenGlints } from './SunkenGlintSystem.js';
+import { seedSunkenGlints, seedLakeGlint } from './SunkenGlintSystem.js';
 import { placeOceanPushRock } from './PushRockSystem.js';
 import { createPushRock } from './PushRock.js';
 import { ITEM_TYPES } from '../data/items.js';
@@ -2616,6 +2616,8 @@ export function generateLakeTerrain(gen, room) {
   room.lavaLake = !!lava;
   gen.stampWaterBlobs(room, config.nodes, config.edgeNoise, config.waterDensity,
     lava ? makeZoneLava(features) : null);
+  // Something glints in the lake's deep middle (a lava lake has none).
+  if (!lava) seedLakeGlint(room);
 }
 
 export function stampWaterBlobs(gen, room, nodes, edgeNoise, waterDensity, makeLiquid = null) {
@@ -2677,6 +2679,34 @@ export function stampWaterBlobs(gen, room, nodes, edgeNoise, waterDensity, makeL
         gen.applyZoneProperties(decObj, room.zone);
         room.backgroundObjects.push(decObj);
       }
+    }
+  }
+}
+
+// Moved out of RoomGenerator.js to stay within its architecture budget. A
+// yellow-zone dry bed: the river's footprint (centerline + cardinal
+// neighbors) stamped as dry mud instead of water. `gen` is the RoomGenerator
+// (for _validPathCell).
+export function stampDryBed(gen, room, path) {
+  const seen = new Set();
+  const stamp = (col, row) => {
+    const key = `${col},${row}`;
+    if (seen.has(key)) return;
+    if (!gen._validPathCell(col, row, room)) return;
+    seen.add(key);
+    const mud = new BackgroundObject('~', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
+    mud.color = '#aa8855';
+    mud.animationColor = '#aa8855';
+    mud.isDryMud = true;   // makes isWater() false, isMud() true — no conduction
+    mud.slowing = false;
+    mud.name = 'Dry Bed';
+    room.backgroundObjects.push(mud);
+  };
+  // Same footprint as river — centerline + cardinal neighbors.
+  for (const cell of path) {
+    stamp(cell.col, cell.row);
+    for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      stamp(cell.col + dc, cell.row + dr);
     }
   }
 }

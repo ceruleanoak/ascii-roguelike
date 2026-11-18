@@ -6,6 +6,7 @@ import { createWildFairy } from '../entities/FairyKing.js';
 import { Hatter } from '../entities/Hatter.js';
 import { ITEMS, ITEM_TYPES, INGREDIENTS, getItemData, isIngredient } from './items.js';
 import { ZONES } from './zones.js';
+import { seedLakeGlint } from '../systems/SunkenGlintSystem.js';
 
 /**
  * Neutral Room Scripts
@@ -388,6 +389,8 @@ export const NEUTRAL_ROOMS = {
         const start = roomGenerator._pickEdgePoint(entryEdge);
         roomGenerator._buildPath(room, 'river', start, { col: nodes[0].col, row: nodes[0].row });
       }
+      // Something glints in the oasis's deep middle, like a lake's.
+      seedLakeGlint(room);
 
       const centerX = Math.floor(GRID.COLS / 2) * GRID.CELL_SIZE;
       const centerY = Math.floor(GRID.ROWS / 2) * GRID.CELL_SIZE;

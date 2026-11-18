@@ -387,7 +387,7 @@ export class ExploreRenderer {
     // Glittering Rocks twinkle each frame (see drawGlitterSparkles).
     drawGlitterSparkles(this.renderer, game, (obj) => this.shouldRenderBackgroundObject(obj, game.player, game.currentRoom));
 
-    // Sunken Glints twinkle in green Ocean deep water (see SunkenGlintSystem).
+    // Sunken Glints twinkle in deep water and yellow rivers (see SunkenGlintSystem).
     drawSunkenGlints(this.renderer, game, (obj) => this.shouldRenderBackgroundObject(obj, game.player, game.currentRoom));
 
     // Quagmire Whirlpool spins on the surface once the rounds clear.

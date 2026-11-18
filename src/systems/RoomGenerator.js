@@ -14,6 +14,8 @@ import { Fairy } from '../entities/Fairy.js';
 import { spawnCellBlockedByBackground, findSafeSpawnPosition } from './safeSpawn.js';
 import { markDeepLava } from './DeepLava.js';
 import { maybeSpawnPeacefulFishingRoom, maybeSpawnRoamingAlchemist, buildVaultInteriorLoot, buildVaultCoinAbundance, buildVaultUnlockExtras, getIslandPosition, protectRegion, isCellProtected, cleanupStrayBackgroundObjects, resolveLavaHazards, seedCavern, rotatePattern, darkenColor, spawnBatFlock, spawnPhalanx, spawnBelfryBats, stampHutFootprint, placeWhirlpool, generateSettlementRoom as generateSettlementRoomImpl, generateJewelerRoom, cellularCaveGrid, isCaveEntranceLanding, generateCalderaRoom, seedAscentZone, seedSinkholes, injectSinkholeLake, spawnMinibossOrFallback, generateGrassSwaths, generateSnowFields, generateRedZoneDeflectors, spawnGuaranteedItems, offerL1Weapon, offerWeaponIfUnarmed, seedTunnelZone, generateOceanTerrain as generateOceanTerrainImpl, stampWaterBlobs as stampWaterBlobsImpl, generateLakeTerrain as generateLakeTerrainImpl, placeRoomLiquid } from './roomFeatures.js';
+import { seedRiverGlint } from './SunkenGlintSystem.js';
+import { stampDryBed } from './roomFeatures.js';
 import { pickUnspawnedItem, markItemSpawned } from './spawnedItems.js';
 import { placeVaultPushRock } from './PushRockSystem.js';
 import { attachVault } from './vaultWalls.js';
@@ -2300,7 +2302,7 @@ export class RoomGenerator {
     if (path.length === 0) return path;
     if (kind === 'stream') this._stampStream(room, path);
     else if (kind === 'river') this._stampRiver(room, path);
-    else if (kind === 'dry')   this._stampDryBed(room, path);
+    else if (kind === 'dry')   stampDryBed(this, room, path);
     return path;
   }
 
@@ -2349,6 +2351,7 @@ export class RoomGenerator {
     }
 
     // 3) Stamp the centerline as directional flow tiles.
+    const centerTiles = [];
     for (let i = 0; i < centers.length; i++) {
       const cell = centers[i];
       const center = new BackgroundObject('~', cell.col * GRID.CELL_SIZE, cell.row * GRID.CELL_SIZE);
@@ -2360,7 +2363,10 @@ export class RoomGenerator {
       center.flowIndex = i;
       center.flowDir = cell.dir;
       room.backgroundObjects.push(center);
+      centerTiles.push(center);
     }
+    // A yellow river sometimes carries a Sunken Glint down it.
+    seedRiverGlint(room, centerTiles);
 
     // 4) Thicken: every cardinal neighbor of a center cell becomes bank
     // water carrying the SAME current as its parent center. The whole 3-wide
@@ -2390,30 +2396,6 @@ export class RoomGenerator {
         side.flowIndex = i;
         side._directionChar = '~';
         room.backgroundObjects.push(side);
-      }
-    }
-  }
-
-  _stampDryBed(room, path) {
-    const seen = new Set();
-    const stamp = (col, row) => {
-      const key = `${col},${row}`;
-      if (seen.has(key)) return;
-      if (!this._validPathCell(col, row, room)) return;
-      seen.add(key);
-      const mud = new BackgroundObject('~', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
-      mud.color = '#aa8855';
-      mud.animationColor = '#aa8855';
-      mud.isDryMud = true;   // makes isWater() false, isMud() true — no conduction
-      mud.slowing = false;
-      mud.name = 'Dry Bed';
-      room.backgroundObjects.push(mud);
-    };
-    // Same footprint as river — centerline + cardinal neighbors.
-    for (const cell of path) {
-      stamp(cell.col, cell.row);
-      for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        stamp(cell.col + dc, cell.row + dr);
       }
     }
   }

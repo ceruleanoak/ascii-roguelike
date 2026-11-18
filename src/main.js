@@ -261,7 +261,7 @@ class Game {
     this.aquiferSystem = new AquiferSystem(this);         // Quagmire Whirlpool + plane-1 Aquifer Current
     this.metalPlatformSystem = new MetalPlatformSystem(this); // red Island's lava-lake ferry
     this.sinkholeSystem = new SinkholeSystem(this);       // concealed G-room shortcut → yellow-zone U room
-    this.sunkenGlintSystem = new SunkenGlintSystem(this); // green Ocean deep-water hidden coins (SPACE to discover)
+    this.sunkenGlintSystem = new SunkenGlintSystem(this); // hidden finds in deep water + yellow rivers (SPACE to discover)
     this.sunkenShipSystem = new SunkenShipSystem(this); // Pearl pedestal's neutral room: hold glints, Slow Glint south
     this.pushRockSystem = new PushRockSystem(this); // room Push Rocks: O room's Flippers, red Vault's wall
     this.reloadAudioSystem = new ReloadAudioSystem(this); // held gun's magazine ticks + energy charge hum
@@ -2261,6 +2261,7 @@ class Game {
     this.lightningStrikeSystem.update(deltaTime);
     this.sandstormSystem.bindToRoom(this.currentRoom);
     this.sandstormSystem.update(deltaTime);
+    this.sunkenGlintSystem.update(deltaTime);
     if (explore) this.grayZoneSystem.update(deltaTime);
     this.electricitySystem.update(deltaTime);
     this.fireSystem.update(deltaTime);

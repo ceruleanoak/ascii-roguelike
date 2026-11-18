@@ -15,6 +15,11 @@ import { GRID, INTERACTION_RANGE } from '../game/GameConfig.js';
  * The Sunken Ship's hold seeds its own (SunkenShipSystem), one of which is
  * the Slow Glint (`slowGlint`): it blinks five times less often, and finding
  * it opens the ship's secret south exit.
+ *
+ * Lakes and Oases hide one too, in a blob's deep middle (seedLakeGlint). In
+ * the yellow zone a river can carry one (seedRiverGlint): it washes down the
+ * centerline a cell at a time and is gone off the river's end unless the
+ * player catches it on the way (SunkenGlintSystem.update).
  */
 
 const GLINT_ZONE = 'green';
@@ -39,6 +44,33 @@ export function seedSunkenGlints(room, deepStartCol, waterEndCol) {
     obj.deepWater && !obj.destroyed && obj.position.x >= farCol * GRID.CELL_SIZE);
 
   flagSunkenGlints(candidates, 1 + Math.floor(Math.random() * 2));
+}
+
+/**
+ * Called after a Lake's or an Oasis's water blobs are stamped. Flags one
+ * deep-water tile, any zone (a lava lake has no deep water, so none there).
+ */
+export function seedLakeGlint(room) {
+  const candidates = room.backgroundObjects.filter(obj => obj.deepWater && !obj.destroyed);
+  flagSunkenGlints(candidates, 1);
+}
+
+// Chance a yellow river carries a glint down it, and how long the glint
+// rests on each centerline cell before the current moves it on (real seconds).
+const RIVER_GLINT_CHANCE = 0.35;
+const RIVER_DRIFT_STEP = 0.7;
+
+/**
+ * Called by RoomGenerator._stampRiver with the river's centerline tiles in
+ * flow order. Sometimes flags the first one as a glint the current carries
+ * down: `room.driftingGlints` holds where it is along the path.
+ */
+export function seedRiverGlint(room, centerline) {
+  if (room.zone !== 'yellow' || centerline.length < 2) return;
+  if (Math.random() >= RIVER_GLINT_CHANCE) return;
+  const [tile] = flagSunkenGlints([centerline[0]], 1);
+  room.driftingGlints ??= [];
+  room.driftingGlints.push({ path: centerline, index: 0, timer: RIVER_DRIFT_STEP, tile });
 }
 
 /**
@@ -82,6 +114,33 @@ function rollSeaFind() {
 export class SunkenGlintSystem {
   constructor(game) {
     this.game = game;
+  }
+
+  /**
+   * Washes each river glint in the player's room one centerline cell
+   * downstream every RIVER_DRIFT_STEP. Off the river's end it is gone. A
+   * glint discovered mid-river (the flag cleared) stops drifting.
+   * rest-parity: absent because REST has no rivers.
+   */
+  update(dt) {
+    const drifting = this.game.currentRoom?.driftingGlints;
+    if (!drifting?.length) return;
+    for (const glint of drifting) {
+      if (!glint.tile?.sunkenGlint) { glint.tile = null; continue; }
+      glint.timer -= dt;
+      if (glint.timer > 0) continue;
+      glint.timer = RIVER_DRIFT_STEP;
+      const from = glint.tile;
+      from.sunkenGlint = false;
+      glint.index++;
+      const next = glint.path[glint.index];
+      if (!next || next.destroyed) { glint.tile = null; continue; }
+      next.sunkenGlint = true;
+      next.sunkenContents = from.sunkenContents;
+      from.sunkenContents = null;
+      glint.tile = next;
+    }
+    this.game.currentRoom.driftingGlints = drifting.filter(glint => glint.tile);
   }
 
   /** The nearest undiscovered glint in SPACE range of the player, or null. */
