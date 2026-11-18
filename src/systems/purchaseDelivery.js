@@ -1,5 +1,6 @@
 import { Item } from '../entities/Item.js';
 import { tagLootLayer } from './PlaneSystem.js';
+import { INGREDIENTS } from '../data/items.js';
 
 /**
  * Hands a bought item to the player from inside a PauseSystem modal (the
@@ -20,6 +21,16 @@ import { tagLootLayer } from './PlaneSystem.js';
  */
 export function deliverPurchase(game, char) {
   const player = game.player;
+  // A bought Ingredient (the Shop's occasional Artifact) goes to the pile, not
+  // a slot, so it never needs a slot choice. A pile already at its stack cap
+  // drops it at the player's feet instead, where it waits like any other drop.
+  if (INGREDIENTS[char]) {
+    if (!game.addIngredient(char)) game.lootSystem.spawnIngredientDrop(char, player.position.x, player.position.y, null, player);
+    game.menuSystem.announceItem(char);
+    game.updateUI();
+    game.audioSystem?.playSFX?.('coin_plink');
+    return false;
+  }
   const scratch = [tagLootLayer(game, new Item(char, player.position.x, player.position.y))];
   const result = game.inventorySystem.tryPickupItem(
     scratch, game.placedTraps, player, game.physicsSystem,

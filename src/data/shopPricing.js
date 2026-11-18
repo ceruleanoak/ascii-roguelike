@@ -350,11 +350,55 @@ function pickAdvanced(pool, n) {
   return picks;
 }
 
+// ============================================================================
+// (d) ARTIFACT LISTING
+// ============================================================================
+
+// Now and then a counter has an Artifact on it in place of its last
+// consumable. Artifacts come from the Gray's grave rocks and buy a rare
+// saying from the Wise Fellow, so a bought one is knowledge bought with coin.
+// One roll in ten: rare enough that the counter is never an Artifact farm,
+// common enough that a player who checks shops will meet one. Every re-roll
+// of an unsold last row (Shopkeeper.refreshStock / offerStock) rolls again.
+const ARTIFACT_CHAR = '⚜';
+const ARTIFACT_STOCK_CHANCE = 0.10;
+
+/**
+ * An Artifact row priced the way every other row is, from data that already
+ * exists: the coin price is its Ingredient `value` through computeCoinPrice
+ * (value 2 → 4 coins, above the 3 coins the Errand traveler pays for one, so
+ * buying to sell back loses), and its padding lanes come from its own rarity.
+ * There is no recipe, so every ingredient lane is padding. No Treasure lane:
+ * the Artifact is itself a treasure, and a gem-for-Artifact swap would only
+ * be a currency exchange.
+ */
+function buildArtifactListing(paddingRarity) {
+  const data = INGREDIENTS[ARTIFACT_CHAR];
+  const { baseCoins, coinFloor } = computeCoinPrice(data);
+  return {
+    char: ARTIFACT_CHAR,
+    role: 'INGREDIENT',           // delivered to the ingredient pile, not a slot
+    name: data.name,
+    color: data.color,
+    tier: 0,
+    home: null,                   // not gated by Home Zone; ARTIFACT_STOCK_CHANCE is the gate
+    ingredientCost: pickPaddingIngredients(PADDING_BY_RARITY[getRarity(ARTIFACT_CHAR)], paddingRarity, [ARTIFACT_CHAR]),
+    baseCoins,
+    coinFloor,
+    treasureChar: null,
+    treasureCount: 0,
+    sold: false,
+    staleVisits: 0,
+  };
+}
+
 /**
  * Rolls one shop's stock: 1 armor / 2 weapons / 3 consumables, drawn from
  * whatever this run has unlocked and biased toward its frontier. Fixed return
  * order (armor, weapon, weapon, consumable×3) is the shop row order
- * ShopSystem/ShopOverlay index into.
+ * ShopSystem/ShopOverlay index into. On an ARTIFACT_STOCK_CHANCE roll the
+ * last consumable row is an Artifact instead (buildArtifactListing); the row
+ * count never changes, so Shopkeeper's by-index re-rolls still line up.
  *
  * @param {Object} zoneDepths - game.zoneDepths: deepest Depth reached per Zone
  *   this run. Resets on death with the rest of the run, so a fresh run walks
@@ -366,9 +410,11 @@ function pickAdvanced(pool, n) {
  */
 export function rollShopStock(zoneDepths = {}, zone = null) {
   const paddingRarity = paddingRarityFor(zoneDepths, zone);
-  return [
+  const stock = [
     ...pickAdvanced(unlockedPool(ITEM_TYPES.ARMOR, zoneDepths, zone), 1).map(d => buildListing(d, 'ARMOR', paddingRarity)),
     ...pickAdvanced(unlockedPool(ITEM_TYPES.WEAPON, zoneDepths, zone), 2).map(d => buildListing(d, 'WEAPON', paddingRarity)),
     ...pickAdvanced(unlockedPool(ITEM_TYPES.CONSUMABLE, zoneDepths, zone), 3).map(d => buildListing(d, 'CONSUMABLE', paddingRarity)),
   ];
+  if (Math.random() < ARTIFACT_STOCK_CHANCE) stock[stock.length - 1] = buildArtifactListing(paddingRarity);
+  return stock;
 }

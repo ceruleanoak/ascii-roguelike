@@ -3,6 +3,7 @@ import { menuIntent } from './MenuInput.js';
 import { ShopOverlay } from '../rendering/ui/ShopOverlay.js';
 import { computePawnSellValue } from '../data/shopPricing.js';
 import { deliverPurchase } from './purchaseDelivery.js';
+import { INGREDIENTS } from '../data/items.js';
 
 /**
  * ShopSystem — the Settlement Shopkeeper's paid barter flow.
@@ -304,7 +305,9 @@ export class ShopSystem {
     for (const row of shopkeeper.stock) {
       if (row.sold) continue;
       row.sold = true;
-      game.lootSystem.spawnItemDrop(row.char, x, y, null, game.player);
+      // An Artifact row is an Ingredient, the rest are Items.
+      if (INGREDIENTS[row.char]) game.lootSystem.spawnIngredientDrop(row.char, x, y, null, game.player);
+      else game.lootSystem.spawnItemDrop(row.char, x, y, null, game.player);
     }
     game.audioSystem?.playSFX?.('coin_plink');
   }

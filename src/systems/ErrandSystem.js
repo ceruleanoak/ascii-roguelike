@@ -4,7 +4,7 @@ import { Item } from '../entities/Item.js';
 import { tagLootLayer } from './PlaneSystem.js';
 import { Enemy } from '../entities/Enemy.js';
 import { applyZoneCombatModifiers } from '../data/zones.js';
-import { SHED_KEY_CHAR } from '../data/items.js';
+import { SHED_KEY_CHAR, INGREDIENTS } from '../data/items.js';
 import { findSafeSpawnPosition } from './safeSpawn.js';
 
 /**
@@ -45,6 +45,15 @@ const STAGE_CONFIG = [
 
 // Coins the Betrayed Traveler drops when killed (rollSlainDrops).
 const SLAIN_COIN_REWARD = 5;
+
+// Now and then a trade pays an Artifact instead of the stage's reward. Same
+// one-in-ten rate as the Shop's Artifact row (shopPricing.js), and rolled at
+// the trade, not when the request is picked, so nothing about the traveler
+// gives it away. The stage still advances: the Artifact is the reward, not a
+// consolation. It's the item the traveler buys for 3 coins in the side trade
+// (tryGiveArtifact), so the player can always turn it straight back to coin.
+const ARTIFACT_CHAR = '⚜';
+const ARTIFACT_REWARD_CHANCE = 0.10;
 
 // The first hit on the traveler is forgiven with this line; the next betrays it.
 const WARNING_LINE = 'HEY! ONE MORE LIKE THAT AND WE ARE DONE.';
@@ -318,11 +327,19 @@ export class ErrandSystem {
     return true;
   }
 
-  /** Spawns the reward Item from a checkGive() result — shared glue for handleConfirmMenuSpacePress(). */
+  /**
+   * Spawns the reward from a checkGive() result — shared glue for
+   * handleConfirmMenuSpacePress(). An Ingredient reward (the Artifact) drops
+   * as an Ingredient; everything else is an Item.
+   */
   _spawnReward(game, giveResult) {
-    const rewardItem = tagLootLayer(game, new Item(giveResult.rewardChar, giveResult.x, giveResult.y));
-    game.items.push(rewardItem);
-    game.physicsSystem.addEntity(rewardItem);
+    if (INGREDIENTS[giveResult.rewardChar]) {
+      game.lootSystem.spawnIngredientDrop(giveResult.rewardChar, giveResult.x, giveResult.y);
+    } else {
+      const rewardItem = tagLootLayer(game, new Item(giveResult.rewardChar, giveResult.x, giveResult.y));
+      game.items.push(rewardItem);
+      game.physicsSystem.addEntity(rewardItem);
+    }
     if (giveResult.shedKey) {
       const key = tagLootLayer(game, new Item(SHED_KEY_CHAR, giveResult.x + GRID.CELL_SIZE, giveResult.y));
       game.items.push(key);
@@ -365,7 +382,9 @@ export class ErrandSystem {
     const givenChar = this.activeErrand.requestedItem;
 
     // Collect reward before advancing stage
-    const rewardChar = stageConfig.rewardPool[this.activeErrand.rewardIndex];
+    const rewardChar = Math.random() < ARTIFACT_REWARD_CHANCE
+      ? ARTIFACT_CHAR
+      : stageConfig.rewardPool[this.activeErrand.rewardIndex];
     const result = {
       rewardChar,
       x: errandChar.position.x + (Math.random() - 0.5) * GRID.CELL_SIZE * 2,
