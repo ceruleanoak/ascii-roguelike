@@ -458,7 +458,7 @@ export class DungeonSystem {
     }
 
     game.player.inDungeon = false;
-    game.player.hookedByMimic = null;
+    game.player.hookedByTongue = null;
     game.player.hookedByWhip = null;
     // Leaving the dungeon entirely also clears Tomb Ghost sap (the other
     // half of its only-escape rule — see _activateFloor's per-room clear).

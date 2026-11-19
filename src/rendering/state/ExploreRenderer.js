@@ -29,6 +29,7 @@ import { drawSinkholes } from '../effects/SinkholeEffects.js';
 import { drawDragonForge } from '../effects/DragonForgeDraw.js';
 import { drawDonationArc, drawCoinArc, drawWellRitual } from '../effects/ArcTossEffects.js';
 import { renderBombEnemy } from '../effects/BombEffects.js';
+import { renderBodyCellsEnemy } from '../effects/BodyCellsDraw.js';
 import { dyingEnemyTell } from '../effects/DeathExplosionEffects.js';
 import { renderIceGolem, renderSmallEnemyUnderSnow, renderYetiFrenzyPip } from '../effects/CyanEnemyEffects.js';
 import { renderFishingPasses } from '../effects/FishingRenderEffects.js';
@@ -59,6 +60,7 @@ import { drawParryIndicator } from '../ui/ParryIndicator.js';
 import { drawDizzyOrbitals } from '../effects/DizzyOrbitals.js';
 import { drawFramePasses, ownsFrame } from '../framePasses.js';
 import { animatingSetChanged } from '../animatingObjectRepaint.js';
+import { GrappleTongueMechanic } from '../../entities/enemyMechanics/GrappleTongueMechanic.js';
 
 export class ExploreRenderer {
   constructor(renderer, renderController) {
@@ -1033,6 +1035,8 @@ export class ExploreRenderer {
         renderIceGolem(this.renderer, enemy, displayColor, shakeX, shakeY, drawMethod);
       } else if (enemy.char === '6' && enemy.data?.ripenMechanic?.enabled) {
         renderBombEnemy(this.renderer, enemy, displayColor, shakeX, shakeY);
+      } else if ((enemy.data?.bodyCells ?? 1) > 1) {
+        renderBodyCellsEnemy(this.renderer, enemy, displayColor, shakeX, shakeY, drawMethod);
       } else if (enemy.flipped) {
         // Hammer-flipped (HammerFlipMechanic): on its back — glyph upside down.
         const method = useDithering ? 'drawEntityRotatedDithered' : 'drawEntityRotated';
@@ -1924,14 +1928,14 @@ export class ExploreRenderer {
     }
   }
 
-  // Mimic tongues — extend toward the player, then track them once hooked.
-  drawMimicTongues(game) {
+  // Grapple Tongues — extend toward the player, then track them once hooked.
+  drawGrappleTongues(game) {
     const enemies = game._activeEnemies?.() ?? [];
     for (const enemy of enemies) {
-      if (!enemy.mimicTongue || !enemy.mimicRevealed) continue;
-      const tongue = enemy.mimicTongue;
-      const sx = enemy.position.x + GRID.CELL_SIZE / 2;
-      const sy = enemy.position.y + GRID.CELL_SIZE / 2;
+      if (!enemy.grappleTongue || !GrappleTongueMechanic.isActive(enemy)) continue;
+      const tongue = enemy.grappleTongue;
+      const sx = enemy.position.x + enemy.width / 2;
+      const sy = enemy.position.y + enemy.height / 2;
       let ex, ey;
       if (tongue.phase === 'hooked') {
         ex = game.player.position.x + game.player.width / 2;

@@ -6,6 +6,7 @@ import { Item } from '../entities/Item.js';
 import { tagLootLayer } from './PlaneSystem.js';
 import { RewardObject } from '../entities/RewardObject.js';
 import { Rusalka } from '../entities/Rusalka.js';
+import { spawnMireToad } from './MireLake.js';
 
 const STATES = {
   IDLE: 'IDLE',
@@ -239,6 +240,12 @@ export class FishingSystem {
   // ── Catch resolution ──────────────────────────────────────────────────────
 
   resolveCatch(game) {
+    // The Mire holds nothing but toads: every catch is another Mire Toad,
+    // and the room is uncleared until it dies (MireLake.js).
+    if (game.currentRoom?.mireLake) {
+      if (this.bobber) spawnMireToad(game, this.bobber.position.x, this.bobber.position.y);
+      return;
+    }
     const zone = this.fishingZone(game);
     const table = FISHING_TABLES[zone];
     if (!table) return;

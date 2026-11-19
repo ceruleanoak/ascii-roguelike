@@ -26,6 +26,8 @@ export const MOOSE = {
   char: 'M',
   name: 'Moose',
   description: 'A quiet giant. It is easily startled.',
+  spellDescription: 'MEAT.',
+  trueName: 'ALCES',
   hp: 10,
   mass: 1.6,
   speed: 70,
@@ -46,6 +48,8 @@ export const RABBIT = {
   char: 'r',
   name: 'Rabbit',
   description: 'Burrows out of sight when it spots you.',
+  spellDescription: 'MEAT.',
+  trueName: 'LAPINUS',
   hp: 3,
   mass: 0.5,
   speed: 90,
@@ -71,6 +75,8 @@ export const GRAY_KING = {
   char: '@',
   name: 'Gray King',
   description: 'Wears the crown.',
+  spellDescription: 'A FAMILIAR FACE.',
+  trueName: 'REGNUS',
   // Before the gray zone's hardMode +50% (45 HP, 5 damage in the arena).
   // The three bring it down together in about 8s (median over 30 seeds).
   hp: 10,
@@ -178,7 +184,7 @@ export const ENEMIES = {
     displayChar: 'r',
     name: 'Plague Rat',
     description: 'A rat whose bite festers.',
-    spellDescription: 'IT WILL ROT.',
+    spellDescription: 'UNTRUSTWORTHY.',
     trueName: 'PESTIS',
     mass: 0.5,
     hp: 4,
@@ -211,7 +217,7 @@ export const ENEMIES = {
     displayChar: 'r',
     name: 'Maze Rat',
     description: 'A rat of the deep Maze. It swims, and its bite festers.',
-    spellDescription: 'IT WILL SWIM.',
+    spellDescription: 'PESTERING.',
     trueName: 'NATATOR',
     mass: 0.5,
     hp: 3,
@@ -238,8 +244,8 @@ export const ENEMIES = {
   '3': {
     char: '3',
     name: 'Monkey',
-    description: 'Empties your hands, then bolts.',
-    spellDescription: 'IT WILL RANSACK.',
+    description: 'Greedy and nimble. ',
+    spellDescription: 'COWARDLY.',
     trueName: 'DREI',
     mass: 0.6,
     hp: 6,
@@ -370,6 +376,77 @@ export const ENEMIES = {
     motif: { name: 'frog', bars: 2 },
     recover: { variant: 'retreat', duration: 0.5 },  // Hops back after the snap; the slow-on-hit lives in CombatSystem's tongue collision, not here
     tier: 'weak'
+  },
+
+  // The gray Lake's Frog (MireLake.js): one lives in each Mire lake, and
+  // fishing the Mire pulls up another. Never in the spawn tables.
+  'p': {
+    char: 'p',
+    displayChar: 'g',
+    name: 'Mire Toad',
+    description: 'A giant toad that never leaves the mire. Its tongue drags you in; its bite is worse.',
+    spellDescription: 'HEAVY AND SLOW.',
+    trueName: 'PALUSTRIS',
+    bodyCells: 2,               // Body Cells: a 2×2 body, glyph drawn twice as large
+    mass: 6.0,
+    knockbackResistance: 1,     // Hits never throw it out of the Mire
+    hp: 24,
+    speed: 50,
+    acceleration: 400,
+    // The bite: a heavy snap over the Troll's trapezoid, from a long, still windup.
+    damage: 6,
+    attackRange: GRID.CELL_SIZE * 2.5,  // From its center: the trapezoid's reach
+    aggroRange: GRID.CELL_SIZE * 10,
+    attackCooldown: 2.6,
+    attackWindup: 2.4,          // 1.2s visible (longer than the Troll's 1.8), stopped
+    windupMovement: 'stop',
+    attackType: 'melee',
+    // The Troll's 'big' trapezoid, pushed out half a cell to start at the
+    // mouth of a 2×2 body (shapes are measured from the body's center) and
+    // widened near the mouth to match it.
+    telegraph: {
+      warnShape: { kind: 'trapezoid', length: 2.25, nearWidth: 1.5, farWidth: 3.25, offset: 0.7 },
+      hitShape: { kind: 'trapezoid', length: 2.0, nearWidth: 1.25, farWidth: 2.75, offset: 0.75 },
+      animation: 'blink',
+      attackShape: 'W',
+      attackShapeTurn: 90
+    },
+    decisionInterval: 0.4,
+    color: '#6b7a5a',
+    waterAffinity: true,
+    swimAffinity: true,
+    waterBound: true,           // Never leaves the Mire — see WaterBoundMechanic
+    // Its tongue (GrappleTongueMechanic) reels the player in through the Mire
+    // to the bite.
+    grappleTongue: {
+      minRange: 2.5, maxRange: 9,   // cells
+      extendSpeed: 260, pullSpeed: 26,
+      damage: 3,
+      cooldowns: { initial: 2.5, miss: 5.0, hit: 7.0 }
+    },
+    movementStyle: 'jumper',
+    movementConfig: {
+      // Slow, heavy hops. Mire isn't water to _isOnWater, so these are its only params.
+      jumpInterval: 1.8,
+      jumpSpeed: 70,
+      jumpDuration: 0.35,
+      zigzagStrength: 0.3
+    },
+    // The Sea Snake's preset minus `search` (bug #360): a shore mark it can
+    // never reach would stall it.
+    states: {
+      alert: { movement: 'wander' },
+      approach: { movement: 'close' },
+      strike: {},
+      recover: { duration: 0.6, variant: 'retreat', speed: 0.4 }
+    },
+    elementalAffinity: {
+      resistance: { 'physical': 0.25 },   // Heavily armored hide
+      weakness: { 'shock': 1.5 }
+    },
+    affinities: ['beast', 'aquatic'],
+    sfx: { hit: 'frog', death: 'frog' },
+    tier: 'elite'
   },
 
   'T': {
@@ -590,12 +667,12 @@ export const ENEMIES = {
     spellDescription: 'WANTS YOUR LOOT.',
     trueName: 'GRABEN',
     hp: 7,
-    speed: 70,
+    speed: 50,
     damage: 2,
     attackRange: GRID.CELL_SIZE * 6,  // 6 units (ranged)
     aggroRange: GRID.CELL_SIZE * 10,  // 10 units (ranged awareness)
     attackCooldown: 1.8,
-    attackWindup: 1.0,  // Minimum 1 second telegraph
+    attackWindup: 2.0,  // 1s real telegraph (double-seconds, ENEMY_TIMER_RATE)
     attackType: 'ranged',
     projectileType: 'arrow',
     movementStyle: 'keeper',  // Maintains bow range; swapped to chaser when a melee weapon is equipped
@@ -985,6 +1062,13 @@ export const ENEMIES = {
     attackType: 'melee',
     decisionInterval: 0.25,
     color: '#cc8800',
+    // Its sticky tongue (GrappleTongueMechanic) — only while revealed.
+    grappleTongue: {
+      minRange: 2.5, maxRange: 9,   // cells
+      extendSpeed: 320, pullSpeed: 22,
+      damage: 5,
+      cooldowns: { initial: 3.0, miss: 6.0, hit: 8.0 }
+    },
     mimicMechanic: {
       enabled: true,
       revealRadius: GRID.CELL_SIZE * 2.0,   // Tighter — rewards players who pause early

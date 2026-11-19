@@ -22,6 +22,8 @@ import { GooSpewMechanic } from './enemyMechanics/GooSpewMechanic.js';
 import { ReformMechanic } from './enemyMechanics/ReformMechanic.js';
 import { MergeMechanic } from './enemyMechanics/MergeMechanic.js';
 import { MimicMechanic } from './enemyMechanics/MimicMechanic.js';
+import { GrappleTongueMechanic } from './enemyMechanics/GrappleTongueMechanic.js';
+import { chooseItemPickup, weaponPower } from './enemyMechanics/itemPickupChoice.js';
 import { LeaderFollowerMechanic } from './enemyMechanics/LeaderFollowerMechanic.js';
 import { JumpMechanic } from './enemyMechanics/JumpMechanic.js';
 import { SlimeTrailDropMechanic } from './enemyMechanics/SlimeTrailDropMechanic.js';
@@ -148,8 +150,9 @@ export class Enemy {
     // Rendering
     this.color = this.data.color;
     this.baseColor = this.data.color; // Store original color
-    this.width = GRID.CELL_SIZE;
-    this.height = GRID.CELL_SIZE;
+    // Body Cells: a bigger body is `bodyCells` cells on a side (default 1).
+    this.width = GRID.CELL_SIZE * (this.data.bodyCells ?? 1);
+    this.height = GRID.CELL_SIZE * (this.data.bodyCells ?? 1);
 
     // Physics flags
     this.isEnemy = true; // lets PhysicsSystem distinguish enemies from player/projectiles without an import
@@ -421,6 +424,7 @@ export class Enemy {
     if (DartMechanic.isEnabled(this)) DartMechanic.init(this);
 
     if (MimicMechanic.isEnabled(this)) MimicMechanic.init(this);
+    if (GrappleTongueMechanic.isEnabled(this)) GrappleTongueMechanic.init(this);
 
     if (BuffMechanic.isEnabled(this)) BuffMechanic.init(this);
 
@@ -751,8 +755,10 @@ export class Enemy {
     }
     const effectiveVisionLength = inSteam ? STEAM_VISION_THRESHOLD : this.visionLength;
 
-    const dx = this.target.position.x - this.position.x;
-    const dy = this.target.position.y - this.position.y;
+    // Measured from the body's center cell, so a bigger body (Body Cells)
+    // reaches the same on every side. One cell = its position.
+    const dx = this.target.position.x - (this.position.x + (this.width - GRID.CELL_SIZE) / 2);
+    const dy = this.target.position.y - (this.position.y + (this.height - GRID.CELL_SIZE) / 2);
     const distance = Math.sqrt(dx * dx + dy * dy);
 
     const effectiveDistance = effectiveTargetDistance(this, distance);
@@ -1040,7 +1046,7 @@ export class Enemy {
 
     MimicMechanic.updateReveal(this, { deltaTime, distance });
     MimicMechanic.updateRedisguise(this, { deltaTime, distance });
-    MimicMechanic.updateTongue(this, { deltaTime, distance });
+    GrappleTongueMechanic.update(this, { deltaTime, distance });
 
     const trailResult = TrailMechanic.update(this, { deltaTime, dotDamageEvents });
     if (trailResult?.suspend) return trailResult.result;
@@ -1685,7 +1691,7 @@ export class Enemy {
   createMeleeAttack(knockback = true) {
     const aim = meleeAimOffset(this);
     if (!aim) return null;
-    const { dirX, dirY, attackDistance } = aim;
+    const { originX, originY, dirX, dirY, attackDistance } = aim;
     // Strike's picked band (strike.js `enter()`), if the enemy authors bands —
     // a band overrides damage/knockback/duration the same way it already
     // overrides windup, so distance can change what the swing IS, not just
@@ -1696,8 +1702,8 @@ export class Enemy {
       type: 'enemy_melee',
       char: '█',
       position: {
-        x: this.position.x + dirX * attackDistance,
-        y: this.position.y + dirY * attackDistance
+        x: originX + dirX * attackDistance,
+        y: originY + dirY * attackDistance
       },
       width: GRID.CELL_SIZE,
       height: GRID.CELL_SIZE,
@@ -1724,14 +1730,14 @@ export class Enemy {
   createStealAttack() {
     const aim = meleeAimOffset(this);
     if (!aim) return null;
-    const { dirX, dirY, attackDistance } = aim;
+    const { originX, originY, dirX, dirY, attackDistance } = aim;
 
     return {
       type: 'enemy_melee',
       char: '█',
       position: {
-        x: this.position.x + dirX * attackDistance,
-        y: this.position.y + dirY * attackDistance
+        x: originX + dirX * attackDistance,
+        y: originY + dirY * attackDistance
       },
       width: GRID.CELL_SIZE,
       height: GRID.CELL_SIZE,
@@ -1751,7 +1757,7 @@ export class Enemy {
 
     const aim = meleeAimOffset(this);
     if (!aim) return null;
-    const { dirX, dirY, attackDistance } = aim;
+    const { originX, originY, dirX, dirY, attackDistance } = aim;
     // strike.js `enter()` already resolved the picked band into windupDuration
     // before this can be called (isWindingUp() requires windupTimer > 0, which
     // only holds after that assignment), so it — not attackWindup — is the
@@ -1766,8 +1772,8 @@ export class Enemy {
       type: 'enemy_melee',
       char: '█',
       position: {
-        x: this.position.x + dirX * attackDistance,
-        y: this.position.y + dirY * attackDistance
+        x: originX + dirX * attackDistance,
+        y: originY + dirY * attackDistance
       },
       width: GRID.CELL_SIZE,
       height: GRID.CELL_SIZE,
@@ -2110,6 +2116,7 @@ export class Enemy {
     }
 
     MimicMechanic.onDamaged(this);
+    GrappleTongueMechanic.onDamaged(this);
 
     // Become enraged when attacked - never un-aggro
     this.enraged = true;
@@ -2349,48 +2356,11 @@ export class Enemy {
   }
 
   _weaponPower(item) {
-    if (!item || item.data?.type !== 'WEAPON') return -1;
-    return item.data.damage ?? 0;
+    return weaponPower(item);
   }
 
   evaluateItemPickup(items, pickupRange = this.itemUsage?.pickupRange) {
-    if (!this.itemUsage || !this.itemUsage.canPickup) return null;
-
-    const hasSpace = this.inventory.length < this.itemUsage.maxItems;
-    const equippedPower = this._weaponPower(this.equippedWeapon);
-
-    let bestItem = null;
-    let bestScore = 0;
-
-    for (const item of items) {
-      if (!inSamePlane(this, item)) continue;
-      const distance = Math.hypot(
-        item.position.x - this.position.x,
-        item.position.y - this.position.y
-      );
-      if (distance > pickupRange) continue;
-      if (!this.itemUsage.preferredItems.includes(item.char)) continue;
-
-      const isWeapon = item.data?.type === 'WEAPON';
-
-      if (!hasSpace) {
-        // Inventory full → only swap to a strictly stronger weapon
-        if (!isWeapon) continue;
-        if (this._weaponPower(item) <= equippedPower) continue;
-      }
-
-      // Weapon score scales with raw damage so goblins prefer the strongest
-      // blade nearby; non-weapons (e.g. health pots) keep a modest baseline.
-      let score = isWeapon ? (10 + (item.data.damage ?? 1) * 4) : 5;
-      score *= (1.0 - (distance / pickupRange));
-
-      if (score > bestScore) {
-        bestScore = score;
-        bestItem = item;
-      }
-    }
-
-    return bestItem;
+    return chooseItemPickup(this, items, pickupRange);
   }
 
   /**

@@ -199,6 +199,22 @@ identity, not standard programming terms.
 - **In code:** shaped by `roomFeatures.placeWhirlpool` (disc of `~` objects; the center is tagged
   `whirlpool` and stored as `room.whirlpool`).
 - **Not:** the Aquifer below it, nor a Lake (an open-water Room).
+### Mire
+- **Definition:** The gray zone's lake liquid: gray `~` that the Lake Room fills with in
+  place of water. Wading it climbs wet pips the way deep water does (1→3 in 6s); Deep
+  Mire climbs twice as fast. It is inert: it never freezes, conducts or takes poison, gives
+  no bottle of water, but still puts out burn and washes off goo. Floating Boots cross it.
+  Fishing it pulls up a Mire Toad.
+- **In code:** `BACKGROUND_OBJECT_VARIANTS.mire` (`typeId: 'mire'`); Deep Mire is the
+  `deepWater` flag on it. `MireLake.js` owns `isMireTile`, `makeMire` and
+  `spawnMireToad`; the Lake sets `room.mireLake` from its template's `mireInZones`.
+- **Not:** water (`isWater()` is false for it, which is what makes it inert), nor mud.
+### Submerged
+- **Definition:** The player's look while wading Mire: only the top half of the glyph is
+  drawn, as if sunk to the waist.
+- **In code:** `player.inMire` (per-frame, set by PhysicsSystem, cleared by float);
+  `PlayerGlyphDraw` clips the glyph while it is set.
+- **Not:** drowning or Deep Water; enemies are never drawn Submerged.
 ### Aquifer
 - **Definition:** The underwater Interior below a Quagmire, entered by stepping onto the
   **Whirlpool** (the Pond's center, active once the rounds clear; any form). The **Aquifer
@@ -852,7 +868,8 @@ identity, not standard programming terms.
   carry it ashore is stopped; one spawned on sand starts in the nearest water, and one
   knocked ashore swims straight back. The player chooses whether to come to the shoreline.
 - **In code:** `WaterBoundMechanic` gated by `data.waterBound`. "Water" is PhysicsSystem's
-  water: a `~` tile that isn't lava/mud/hot water and isn't frozen or crystallized.
+  water: a `~` tile that isn't lava/mud/hot water and isn't frozen or crystallized. Mire
+  counts. A bigger body (Body Cells) stops with its edge, not its center, at the shore.
 - **Not:** a swimmer that merely prefers water, and not a clamp on knockback — a hit can
   still throw it onto the beach.
 
@@ -868,6 +885,39 @@ identity, not standard programming terms.
   `~` tile whose typeId is `lava`, or an untyped damaging `~`.
 - **Not:** lava immunity. Taking no lava damage is the separate `lavaImmune` flag. It is
   also not a clamp on knockback, so a hit can still throw it into the lava.
+
+### Grapple Tongue
+- **Definition:** A Mechanic: a sticky tongue shot at a player in mid range. It hooks them
+  and reels them in to the mouth, where it bites. Any damage the Enemy takes lets go. The
+  Mimic's (only once revealed) and the Mire Toad's.
+- **In code:** `GrappleTongueMechanic` gated by `data.grappleTongue` (`minRange`, `maxRange`,
+  `extendSpeed`, `pullSpeed`, `damage`, `cooldowns`); the live tongue is `enemy.grappleTongue`,
+  the hooked player carries `player.hookedByTongue`; drawn by the `grappleTongues` Frame Pass.
+- **Not:** the Enemy's melee attack, which still runs on its own.
+
+### Body Cells
+- **Definition:** How many cells along each edge an Enemy's body is. One by default; the
+  glyph and the hitbox both grow with it.
+- **In code:** `data.bodyCells` sets `enemy.width`/`height`; `BodyCellsDraw` draws the larger
+  glyph. Aim, reach, sight and the shore check measure from the body's center cell.
+- **Not:** a sprite scale on a one-cell hitbox.
+
+### Mire Toad
+- **Definition:** A giant, slow, heavily armored Frog that lives in Mire and never leaves
+  it. One waits in each gray Lake, and every fish caught there is another. It reels the
+  player in with a Grapple Tongue and bites anyone at its edge: a long still windup, then
+  a wide trapezoid snap.
+- **In code:** `ENEMIES.p` (`displayChar: 'g'`, trueName PALUSTRIS): `bodyCells: 2`,
+  `waterBound`, `grappleTongue`, `resistance.physical`. Injected by the Lake's
+  `mireLakeInjection`; fishing spawns it through `MireLake.spawnMireToad`.
+- **Not:** the Frog (`g`) it is drawn as, and not in any zone spawn table.
+
+### Physical Resistance
+- **Definition:** An Enemy's armor against the blow itself: the multiplier on damage from a
+  weapon's melee hit or projectile.
+- **In code:** `elementalAffinity.resistance.physical`, read through
+  `enemy.getElementalModifier('physical')` at CombatSystem's melee and projectile sites.
+- **Not:** a resistance to spells or status ticks, which never read it.
 
 ### Bump
 - **Definition:** A Mechanic for contact without damage: touching the Enemy flings the

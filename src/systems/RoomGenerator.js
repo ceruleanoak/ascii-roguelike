@@ -699,8 +699,8 @@ export class RoomGenerator {
     }
 
     // Inject letter-specific enemies (e.g., sea snakes always present in O rooms)
-    const inj = room.lavaLake
-      ? this.currentLetterTemplate?.lavaLakeInjection
+    const inj = room.lavaLake ? this.currentLetterTemplate?.lavaLakeInjection
+      : room.mireLake ? this.currentLetterTemplate?.mireLakeInjection
       : this.currentLetterTemplate?.enemyInjection;
     if (inj) {
       const injCount = inj.minCount + Math.floor(Math.random() * (inj.maxCount - inj.minCount + 1));

@@ -95,7 +95,7 @@ export class Player {
     this.tombSapped = false;
     this._tombSapTimer = 0;
     this._tombSappingGhost = null; // TombGhost instance passed as `attacker` to sap-damage calls (reflect target)
-    this.hookedByMimic = null; // Enemy instance when mimic tongue has grabbed player
+    this.hookedByTongue = null; // Enemy instance whose Grapple Tongue has grabbed the player
     this.hookedByWhip = null; // {targetX, targetY} when a whip strike (hook post, Stump, or Tree) has grabbed player — see PhysicsSystem.updateEntity
     this.facing = { x: 0, y: 1 }; // Direction player is facing
 
@@ -171,6 +171,7 @@ export class Player {
     // EquipmentEffectsSystem like every other armor flag;
     // frog form's existing `polymorphed` flag grants the same immunity.
     this.inDeepWater = false;
+    this.inMire = false; // Wading Mire (PhysicsSystem): Submerged glyph, faster wet Pips
     this.wetPips = 0;
     this.drownDamageTimer = 0;
     this.deepWaterImmune = false;
@@ -622,16 +623,15 @@ export class Player {
   dropItem() {
     const item = this.quickSlots[this.activeSlotIndex];
     this.quickSlots[this.activeSlotIndex] = null;
-
-    // Auto-switch to next filled slot if available
-    const nextFilled = this.quickSlots.findIndex((slot, idx) =>
-      idx !== this.activeSlotIndex && slot !== null
-    );
-    if (nextFilled !== -1) {
-      this.activeSlotIndex = nextFilled;
-    }
-
+    this._selectNextFilledSlot(this.activeSlotIndex);
     return item;
+  }
+
+  // After slot `emptiedIdx` empties, move the selection to another filled
+  // slot if there is one (otherwise it stays on the empty slot).
+  _selectNextFilledSlot(emptiedIdx) {
+    const nextFilled = this.quickSlots.findIndex((slot, i) => i !== emptiedIdx && slot !== null);
+    if (nextFilled !== -1) this.activeSlotIndex = nextFilled;
   }
 
   // Destroys `item` if it still occupies a quick slot — unlike dropItem(),
@@ -643,44 +643,20 @@ export class Player {
     const idx = this.quickSlots.indexOf(item);
     if (idx === -1) return false;
     this.quickSlots[idx] = null;
-    if (idx === this.activeSlotIndex) {
-      const nextFilled = this.quickSlots.findIndex((slot, i) => i !== idx && slot !== null);
-      if (nextFilled !== -1) this.activeSlotIndex = nextFilled;
-    }
+    if (idx === this.activeSlotIndex) this._selectNextFilledSlot(idx);
     return true;
   }
 
   useHeldItem() {
     if (!this.heldItem || !this.heldItem.use) return null;
 
-    // Dizzy: scramble attack direction ±120° before all weapon types read player.facing
-    let savedFacing = null;
-    if (this.isDizzy()) {
-      const baseAngle = Math.atan2(this.facing.y, this.facing.x);
-      const newAngle = baseAngle + (Math.random() - 0.5) * (Math.PI * 4 / 3);
-      savedFacing = { x: this.facing.x, y: this.facing.y };
-      this.facing.x = Math.cos(newAngle);
-      this.facing.y = Math.sin(newAngle);
-    }
-
-    const result = this.heldItem.use(this);
-
-    if (savedFacing) {
-      this.facing.x = savedFacing.x;
-      this.facing.y = savedFacing.y;
-    }
+    // Dizzy scrambles the aim of every weapon type (StatusEffectSystem).
+    const result = StatusEffectSystem.withDizzyFacing(this, () => this.heldItem.use(this));
 
     // Handle consumable items - remove from slot if consumed
     if (result && result.consumed) {
       this.quickSlots[this.activeSlotIndex] = null;
-
-      // Auto-switch to next filled slot if available
-      const nextFilled = this.quickSlots.findIndex((slot, idx) =>
-        idx !== this.activeSlotIndex && slot !== null
-      );
-      if (nextFilled !== -1) {
-        this.activeSlotIndex = nextFilled;
-      }
+      this._selectNextFilledSlot(this.activeSlotIndex);
     }
 
     return result;
@@ -802,7 +778,7 @@ export class Player {
 
     // Reset sapping bats
     this.activeSappingBats = [];
-    this.hookedByMimic = null;
+    this.hookedByTongue = null;
     this.hookedByWhip = null;
 
     // Reset character-specific state
@@ -823,6 +799,7 @@ export class Player {
 
     // Reset deep-water drowning state
     this.inDeepWater = false;
+    this.inMire = false; // Wading Mire (PhysicsSystem): Submerged glyph, faster wet Pips
     this.wetPips = 0;
     this.drownDamageTimer = 0;
     this.deepWaterImmune = false;

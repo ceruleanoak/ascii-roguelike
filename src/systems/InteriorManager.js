@@ -218,7 +218,7 @@ export class InteriorManager {
       p.position.x = exitPosition.x;
       p.position.y = exitPosition.y;
     }
-    p.hookedByMimic = null;
+    p.hookedByTongue = null;
     p.hookedByWhip = null;
     if (g.currentRoom?.collisionMap) p.setCollisionMap(g.currentRoom.collisionMap);
 

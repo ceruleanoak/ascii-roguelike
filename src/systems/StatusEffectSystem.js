@@ -133,6 +133,25 @@ export const StatusEffectSystem = {
     return isZapLock(player);
   },
 
+  /**
+   * Runs `use()` with the player's facing scrambled ±120° while Dizzy, so
+   * every weapon type that reads player.facing swings or fires off-aim, then
+   * puts the true facing back. Returns use()'s result.
+   */
+  withDizzyFacing(player, use) {
+    if (!player.isDizzy()) return use();
+    const saved = { x: player.facing.x, y: player.facing.y };
+    const angle = Math.atan2(saved.y, saved.x) + (Math.random() - 0.5) * (Math.PI * 4 / 3);
+    player.facing.x = Math.cos(angle);
+    player.facing.y = Math.sin(angle);
+    try {
+      return use();
+    } finally {
+      player.facing.x = saved.x;
+      player.facing.y = saved.y;
+    }
+  },
+
   /** Frozen, zap pip 3, or stun: no moving, attacking or rolling. */
   isPlayerLocked(player) {
     return this.isPlayerFrozen(player) || isZapLock(player) || player.statusEffects.stun.active;

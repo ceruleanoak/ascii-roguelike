@@ -454,7 +454,7 @@ export class MazeSystem {
     }
 
     game.player.inMaze = false;
-    game.player.hookedByMimic = null;
+    game.player.hookedByTongue = null;
     game.player.hookedByWhip = null;
     thawSurfaceRoom(game);
 

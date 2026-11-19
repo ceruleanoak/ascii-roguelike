@@ -257,8 +257,10 @@ for (const [tierName, profile] of Object.entries(RARITY_PROFILES)) {
 // 'Y' stump vs Barrow Tyrant). Known mitigations exist (distinct colors), so
 // this warns rather than fails.
 const bgChars = new Set(Object.keys(BACKGROUND_OBJECTS));
+// The glyph that reads in play is the drawn one (`displayChar`), not the key.
 for (const key of Object.keys(ENEMIES)) {
-  if (bgChars.has(key)) warn(`enemy glyph '${key}' is also a BACKGROUND_OBJECTS char — ensure color/shape disambiguates in play (#102)`);
+  const glyph = ENEMIES[key].displayChar ?? key;
+  if (bgChars.has(glyph)) warn(`enemy glyph '${glyph}'${glyph !== key ? ` (enemy '${key}')` : ''} is also a BACKGROUND_OBJECTS char — ensure color/shape disambiguates in play (#102)`);
 }
 
 // ── Room-letter sequence data (SECRET_PATTERNS.sequence) ───────────────────

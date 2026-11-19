@@ -1356,6 +1356,21 @@ export const BACKGROUND_OBJECT_VARIANTS = {
     healInterval: 3.0,
     environmental: true,
   },
+  // The gray zone's Lake (MireLake.js). Wets like water, but every Mire tile
+  // climbs wet Pips (Deep Mire, `deepWater`, twice as fast). Inert to the
+  // elements: not 'water', so it never freezes, conducts or takes poison.
+  'mire': {
+    char: '~',
+    name: 'Mire',
+    color: '#777777',
+    makesWet:    true,
+    steamOnFire: false,
+    conductivity: 'none',
+    damaging:    false,
+    damage:      0,
+    slowing:     false,
+    environmental: true,
+  },
   'snow_deep': {
     char: '█',
     name: 'Deep Snow',

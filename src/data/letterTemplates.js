@@ -288,7 +288,11 @@ export const LETTER_TEMPLATES = {
       // In a zone whose liquid is lava (red), the lake is a lava lake:
       // RoomGenerator.generateLakeTerrain stamps lava, sets room.lavaLake,
       // and lavaLakeInjection replaces enemyInjection. Not fishable.
-      lavaInLavaZones: true
+      lavaInLavaZones: true,
+      // In these zones the lake is Mire (MireLake.js): generateLakeTerrain
+      // stamps Mire, sets room.mireLake, and mireLakeInjection replaces
+      // enemyInjection. Fishable, but every catch is another Mire Toad.
+      mireInZones: ['gray']
     },
 
     bgObjectRules: {
@@ -311,6 +315,14 @@ export const LETTER_TEMPLATES = {
       minCount: 2,
       maxCount: 3,
       preferLiquid: false
+    },
+
+    // A Mire lake holds one Mire Toad, in the Mire.
+    mireLakeInjection: {
+      char: 'p',
+      minCount: 1,
+      maxCount: 1,
+      preferLiquid: true
     },
 
     // Eligible for HuntingSystem's stillness-triggered moose/rabbit encounter.

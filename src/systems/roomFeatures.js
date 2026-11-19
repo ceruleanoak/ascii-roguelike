@@ -16,6 +16,7 @@ import { Jeweler } from '../entities/Jeweler.js';
 import { PLANE_TUNNEL } from './PlaneSystem.js';
 import { hazardStep } from './ZoneSystem.js';
 import { islandLavaFeatures, makeZoneLava } from './MetalPlatformSystem.js';
+import { makeMire } from './MireLake.js';
 import { createLightningSpire } from './LightningSpire.js';
 import { pickUnspawnedItem, markItemSpawned } from './spawnedItems.js';
 import { findSafeSpawnPosition } from './safeSpawn.js';
@@ -271,7 +272,8 @@ export function cellularCaveGrid(cols, rows, isOpen, seedChance = 0.45, generati
  * Returns true when the peaceful roll applied (caller skips exit locking).
  */
 export function maybeSpawnPeacefulFishingRoom(gen, room) {
-  const isFishingLetter = (room.exitLetter === 'L' && !room.lavaLake) || room.exitLetter === 'O';
+  // A Mire lake is never peaceful: its Mire Toad is the room (MireLake.js).
+  const isFishingLetter = (room.exitLetter === 'L' && !room.lavaLake && !room.mireLake) || room.exitLetter === 'O';
   if (!isFishingLetter || gen.currentDepth > 4 || Math.random() >= 0.35) return false;
 
   const fisherman = spawnShoreFisherman(gen, room);
@@ -2613,11 +2615,17 @@ export function generateLakeTerrain(gen, room) {
   const config = gen.currentLetterTemplate.lakeZone;
   const features = ZONES[room.zone]?.environmentalFeatures;
   const lava = config.lavaInLavaZones && features?.liquidType === 'lava';
+  // The gray zone's Lake is Mire (MireLake.js); room.mireLake picks its
+  // Mire Toad injection and turns its fishing into toads.
+  const mire = !lava && !!config.mireInZones?.includes(room.zone);
   room.lavaLake = !!lava;
-  gen.stampWaterBlobs(room, config.nodes, config.edgeNoise, config.waterDensity,
-    lava ? makeZoneLava(features) : null);
-  // Something glints in the lake's deep middle (a lava lake has none).
-  if (!lava) seedLakeGlint(room);
+  room.mireLake = mire;
+  const makeLiquid = lava ? makeZoneLava(features)
+    : mire ? makeMire((col, row) => isDeepWaterCell(col, row, config.nodes))
+    : null;
+  gen.stampWaterBlobs(room, config.nodes, config.edgeNoise, config.waterDensity, makeLiquid);
+  // Something glints in the lake's deep middle (a lava or mire lake has none).
+  if (!lava && !mire) seedLakeGlint(room);
 }
 
 export function stampWaterBlobs(gen, room, nodes, edgeNoise, waterDensity, makeLiquid = null) {

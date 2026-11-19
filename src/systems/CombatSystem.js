@@ -636,6 +636,8 @@ export class CombatSystem {
           let elementalMod = enemy.getElementalModifier(proj.onHit);
           if (proj.electric) elementalMod *= enemy.getElementalModifier('shock');
           if (proj.isBlade) elementalMod *= enemy.getElementalModifier('blade');
+          // Physical resistance (armored hides, stone bodies) softens every weapon hit.
+          elementalMod *= enemy.getElementalModifier('physical');
           let adjustedDamage = Math.ceil(proj.damage * elementalMod * speedMultiplier);
           // A 0-damage projectile (fizzled spark, Freeze Ray) stays harmless
           // through the flat modifier below.
@@ -1042,6 +1044,8 @@ export class CombatSystem {
             let elementalMod = enemy.getElementalModifier(attack.onHit);
             if (attack.electric) elementalMod *= enemy.getElementalModifier('shock');
             if (attack.isBlade) elementalMod *= enemy.getElementalModifier('blade');
+            // Physical resistance (armored hides, stone bodies) softens every weapon hit.
+            elementalMod *= enemy.getElementalModifier('physical');
 
             let totalDamage = attack.damage;
 

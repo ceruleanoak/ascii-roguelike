@@ -11,13 +11,15 @@
 //
 // "Water" is the same tile PhysicsSystem treats as water: a `~` background
 // object that isn't lava, mud, or hot water, in a state that isn't frozen
-// (walkable). A room with no water leaves the enemy
+// (walkable). Mire counts (MireLake.js): the Mire Toad keeps to it. A room with no water leaves the enemy
 // unconfined. No suspend signal — writes velocity only.
 
 import { GRID } from '../../game/GameConfig.js';
 
-// How far past its center the enemy looks along each axis of motion.
-const LEADING_EDGE = GRID.CELL_SIZE * 0.6;
+// How far past its center the enemy looks along each axis of motion: just
+// beyond its body's edge, so a bigger body (Body Cells) stops at the shore
+// rather than hanging half over the sand.
+const leadingEdge = (enemy) => enemy.width / 2 + GRID.CELL_SIZE * 0.1;
 
 function isWaterTile(obj) {
   if (obj.destroyed || obj.char !== '~') return false;
@@ -68,14 +70,21 @@ export const WaterBoundMechanic = {
     }
 
     const tv = enemy.targetVelocity;
-    if (tv.vx !== 0 && !this._isWaterAt(cells, cx + Math.sign(tv.vx) * LEADING_EDGE, cy)) {
+    const edge = leadingEdge(enemy);
+    if (tv.vx !== 0 && !this._isWaterAt(cells, cx + Math.sign(tv.vx) * edge, cy)) {
       if (Math.sign(enemy.velocity.vx) === Math.sign(tv.vx)) enemy.velocity.vx = 0;
       tv.vx = 0;
     }
-    if (tv.vy !== 0 && !this._isWaterAt(cells, cx, cy + Math.sign(tv.vy) * LEADING_EDGE)) {
+    if (tv.vy !== 0 && !this._isWaterAt(cells, cx, cy + Math.sign(tv.vy) * edge)) {
       if (Math.sign(enemy.velocity.vy) === Math.sign(tv.vy)) enemy.velocity.vy = 0;
       tv.vy = 0;
     }
+    // A hop (JumpMechanic — the Mire Toad) writes velocity directly with no
+    // targetVelocity behind it, so the clamp above never sees it: stop that
+    // burst at the shore too.
+    const v = enemy.velocity;
+    if (v.vx !== 0 && !this._isWaterAt(cells, cx + Math.sign(v.vx) * edge, cy)) v.vx = 0;
+    if (v.vy !== 0 && !this._isWaterAt(cells, cx, cy + Math.sign(v.vy) * edge)) v.vy = 0;
   },
 
   _waterCells(enemy) {

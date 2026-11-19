@@ -31,6 +31,16 @@ export function drawPlayerGlyph(renderer, game, owner, concealAlpha = 1) {
   drawFloatPlatform(renderer, player);
   if (needsAlpha) { ctx.save(); ctx.globalAlpha = concealAlpha; }
 
+  // Submerged: wading Mire swallows the lower half of the glyph (MireLake.js).
+  const submerged = player.inMire === true && !mossActive;
+  if (submerged) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(player.position.x - GRID.CELL_SIZE, player.position.y - GRID.CELL_SIZE,
+      GRID.CELL_SIZE * 3, GRID.CELL_SIZE * 1.5);
+    ctx.clip();
+  }
+
   const spinAngle = whirlwindSpinAngle(player);
   if (player.plane === 1) {
     // Tunnel/cave plane: dithered, like everything else down there.
@@ -42,5 +52,6 @@ export function drawPlayerGlyph(renderer, game, owner, concealAlpha = 1) {
     renderer.drawTextWithAlpha(x, y, char, color, alpha);
   }
 
+  if (submerged) ctx.restore();
   if (needsAlpha) ctx.restore();
 }

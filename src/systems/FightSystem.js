@@ -503,7 +503,7 @@ export class FightSystem {
     const game = this.game;
     const player = game.player;
     if (player.isLocked() || player.isGooey() || player.polymorphed || player.inDeepWater) return false;
-    if (player.hookedByMimic || player.hookedByWhip || player.batTransform) return false;
+    if (player.hookedByTongue || player.hookedByWhip || player.batTransform) return false;
     if (game.fishingSystem?.rusalka?.alive === true) return false;
     if (game.activeCharacterType === 'green') return player.actionCooldown <= 0 && player.rollCharge > 0 && !player.continuousRollActive;
     return !player.dodgeRoll.active && player.dodgeRoll.cooldownTimer <= 0;

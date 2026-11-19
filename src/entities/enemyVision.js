@@ -407,7 +407,8 @@ export function hasVision(enemy, start, end, maxLength, { ignoreCone = false } =
     // boss part entities (TurtleHead, GooHead, Hoardmaw) build their own stat
     // blocks and never run Enemy's constructor.
     const HALF_CONE_COS = enemy.visionHalfAngleCos ?? Math.cos(65 * Math.PI / 180); // ~0.423 at 65°
-    const PROXIMITY_OVERRIDE = GRID.CELL_SIZE * 1.5;    // Knife-edge: bypass cone
+    // Knife-edge: bypass cone. Past a bigger body's (Body Cells) own edge.
+    const PROXIMITY_OVERRIDE = GRID.CELL_SIZE * 1.5 + ((enemy.width ?? GRID.CELL_SIZE) - GRID.CELL_SIZE) / 2;
     if (distance > PROXIMITY_OVERRIDE) {
       const dot = (dx / distance) * Math.cos(enemy.facingAngle)
                 + (dy / distance) * Math.sin(enemy.facingAngle);
@@ -499,7 +500,11 @@ const IN_COMBAT_STATES = ['approach', 'anticipate', 'strike', 'recover'];
  */
 export function spineCanSee(enemy, currentState, targetPos, maxLength) {
   const ignoreCone = IN_COMBAT_STATES.includes(currentState);
-  return hasVision(enemy, enemy.position, targetPos, maxLength, { ignoreCone });
+  // Seen from the body's center cell, so a bigger body (Body Cells) notices
+  // the same on every side. One cell = its position.
+  const inset = ((enemy.width ?? GRID.CELL_SIZE) - GRID.CELL_SIZE) / 2;
+  const eye = inset ? { x: enemy.position.x + inset, y: enemy.position.y + inset } : enemy.position;
+  return hasVision(enemy, eye, targetPos, maxLength, { ignoreCone });
 }
 
 /**

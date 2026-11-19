@@ -265,7 +265,7 @@ export class CharacterSystem {
     const rusalkaActive = game.fishingSystem?.rusalka?.alive === true;
     // A Cursed Run's misfires may drop or delay a fresh press (CursedRunSystem.gateDodge).
     const dodgeDirection = game.cursedRunSystem.gateDodge(game,
-      (rusalkaActive || player.polymorphed || player.hookedByMimic || player.hookedByWhip) ? { x: 0, y: 0 } : game.getDodgeRollDirection());
+      (rusalkaActive || player.polymorphed || player.hookedByTongue || player.hookedByWhip) ? { x: 0, y: 0 } : game.getDodgeRollDirection());
 
     if (game.activeCharacterType === 'green') {
       // Green ranger: hold arrow keys for a continuous slide (no individual roll timers)

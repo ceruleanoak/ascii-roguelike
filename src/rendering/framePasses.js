@@ -145,7 +145,7 @@ export const FRAME_PASSES = {
     { id: 'enemyMeleeAttacks', on: enemySide, draw: (rc, game, owner) => er(rc).drawEnemyMeleeAttacks(game, isInterior(owner)) },
     // Enemy + mimic tongues read game._activeEnemies(), which already resolves to the active layer.
     { id: 'enemyTongues', on: enemySide, draw: (rc, game) => er(rc).drawEnemyTongues(game) },
-    { id: 'mimicTongues', on: enemySide, draw: (rc, game) => er(rc).drawMimicTongues(game) },
+    { id: 'grappleTongues', on: enemySide, draw: (rc, game) => er(rc).drawGrappleTongues(game) },
     { id: 'playerTongueAttacks', on: everywhere, draw: (rc, game, owner) => er(rc).drawPlayerTongueAttacks(game, isInterior(owner)) },
     // Triplines: committed segments + the live half-strung preview.
     { id: 'wires', on: everywhere, draw: (rc, game, owner) => drawWires(rc.renderer, game, isInterior(owner)) },

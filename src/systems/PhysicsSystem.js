@@ -17,6 +17,7 @@ import { ChargeMechanic } from '../entities/enemyMechanics/ChargeMechanic.js';
 import { interruptDashes } from '../entities/enemyMechanics/dashInterrupt.js';
 import { cancelParry } from '../entities/enemyMechanics/ParryMechanic.js';
 import { DEEP_LAVA_SPEED } from './DeepLava.js';
+import { isMireTile } from './MireLake.js';
 
 // Re-exported so existing imports (e.g. Enemy.js) keep working.
 // New code should import directly from PlaneSystem.
@@ -430,6 +431,7 @@ export class PhysicsSystem {
     let electricCurrent = null; // the electrified tile's weaker current, if any
     let imbuePoolWater = false; // standing in the Giant Slime's broken Imbue Pool ice
     let inDeepWaterTile = false; // Deep water (BackgroundObject.deepWater) — see velocityMultiplier below
+    let inMireTile = false; // Mire (MireLake.js) — every Mire tile climbs wet Pips
     let inGrass = false;
     let inMud = false; // Wet mud — heavier than water, dodge roll bypasses
     let slowingMultiplier = 1.0; // For numeric slowing values (trees, stumps)
@@ -551,6 +553,7 @@ export class PhysicsSystem {
                 if (wState === 'electrified') electricCurrent = obj.electricCurrent;
                 if (obj.imbuePoolIce) imbuePoolWater = true;
                 if (obj.deepWater) inDeepWaterTile = true;
+                if (isMireTile(obj)) inMireTile = true;
                 // Glacier Crab freezes water on contact
                 if (!isProjectile && entity.data?.char === 'u' && entity.isEnemy && obj.setWaterState) {
                   obj.setWaterState('frozen');
@@ -670,6 +673,7 @@ export class PhysicsSystem {
     if (hasFloat) {
       inLiquid = false;
       inDeepWaterTile = false;
+      inMireTile = false;
       damagingLiquid = null;
       inDeepLava = false;
       inGrass = false;
@@ -730,6 +734,8 @@ export class PhysicsSystem {
       // Read by Player.startDodgeRoll (blocks activation) and applyLiquidResults
       // (drowning-pip fill) below.
       entity.inDeepWater = inDeepWaterTile;
+      // Read by applyLiquidResults (wet Pip fill) and PlayerGlyphDraw (Submerged).
+      entity.inMire = inMireTile;
     }
 
     // Glacier Crab-specific: 2x speed in deep snow, freeze water on contact
@@ -1838,12 +1844,15 @@ export class PhysicsSystem {
       if (entity.wetPips !== undefined) {
         const drownImmune = entity.data?.waterAffinity || entity.data?.swimAffinity
           || entity.polymorphed || entity.deepWaterImmune;
-        if (inDeepWater && !drownImmune) {
-          // pip 1 → 3 over 6s, the same time-to-drown as the old 0→3 meter.
-          // drownRateMult (Slime Suit = 2) speeds both the fill and the
-          // drown damage cadence.
+        // Mire climbs Pips on every tile, Deep Mire twice as fast (MireLake.js).
+        const inMire = !!entity.inMire && !!inLiquid;
+        if ((inDeepWater || inMire) && !drownImmune) {
+          // pip 1 → 3 over 6s, the same time-to-drown as the old 0→3 meter
+          // (3s in Deep Mire). drownRateMult (Slime Suit = 2) speeds both the
+          // fill and the drown damage cadence.
           const drownRate = entity.drownRateMult || 1;
-          entity.wetPips = Math.min(3, Math.max(1, entity.wetPips) + deltaTime * drownRate / 3);
+          const fillRate = drownRate * (inMire && inDeepWater ? 2 : 1);
+          entity.wetPips = Math.min(3, Math.max(1, entity.wetPips) + deltaTime * fillRate / 3);
           if (entity.wetPips >= 3) {
             entity.drownDamageTimer -= deltaTime;
             if (entity.drownDamageTimer <= 0) {

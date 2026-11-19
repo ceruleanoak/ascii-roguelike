@@ -298,8 +298,12 @@ function circleEdgeHitsRect(cx, cy, radius, rect) {
 // the enemy — there is no direction to aim.
 export function meleeAimOffset(enemy) {
   const aimPos = enemy.markedTargetPosition || enemy.target.position;
-  const dx = aimPos.x - enemy.position.x;
-  const dy = aimPos.y - enemy.position.y;
+  // The swing leaves from the body's center cell: a bigger body (Body Cells)
+  // bites from its middle, not its top-left corner. One cell = its position.
+  const originX = enemy.position.x + (enemy.width - GRID.CELL_SIZE) / 2;
+  const originY = enemy.position.y + (enemy.height - GRID.CELL_SIZE) / 2;
+  const dx = aimPos.x - originX;
+  const dy = aimPos.y - originY;
   const distance = Math.sqrt(dx * dx + dy * dy);
   if (distance === 0) return null;
   // Dizzy (confusion) scrambles the swing the same ±120° every ranged attack
@@ -307,6 +311,8 @@ export function meleeAimOffset(enemy) {
   // and the telegraph shows where the confused blow will actually land.
   const angle = Math.atan2(dy, dx) + (enemy._dizzyAngleOffset?.() ?? 0);
   return {
+    originX,
+    originY,
     dirX: Math.cos(angle),
     dirY: Math.sin(angle),
     attackDistance: Math.min(distance, enemy.attackRange)

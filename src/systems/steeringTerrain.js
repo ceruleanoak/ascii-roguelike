@@ -97,7 +97,8 @@ function objectCost(obj, body, room) {
     }
     if (obj.typeId === 'hot_water') return 1;
     if (obj.getWaterState?.() === 'frozen') return 1;
-    if (obj.deepWater && !body.drownSafe) return DEEP;
+    // Every Mire tile climbs wet Pips (MireLake.js), so shallow Mire steers like deep water.
+    if ((obj.deepWater || obj.typeId === 'mire') && !body.drownSafe) return DEEP;
     return body.swimsFast ? 1 : 1 / wetPipSpeed(1);
   }
 
