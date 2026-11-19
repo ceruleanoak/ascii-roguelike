@@ -120,14 +120,21 @@ export function generateRidgeRoomImpl(gen, room) {
   // A Ridge bridge built earlier this run proves the worker's trust is
   // already earned — skip the errand entirely and hand the player an
   // already-crossed bridge instead of a second BridgeWorker.
-  if (gen.game?.ridgeBridgeBuilt) {
+  // On a Cursed Run the bridge already stands too, but the worker is still
+  // there beside it — until Forsaken (CursedRunSystem.forsake), when he has
+  // turned and is never met again.
+  const game = gen.game;
+  if (game?.ridgeBridgeBuilt || game?.cursedRun) {
     room.bridgeBuilt = true;
     placeFinishedBridge(room, CS);
-  } else {
+  }
+  if (!game?.ridgeBridgeBuilt && !game?.cursedRunSystem?.isForsaken(game, BridgeWorker)) {
     // Place worker south of the cliff lip, on the bridge-approach centerline.
     const workerCol = 15;
     const workerRow = 14;
     room.bridgeWorker = new BridgeWorker(workerCol * CS, workerRow * CS);
+    // Nothing to trade for on a bridge that already stands.
+    room.bridgeWorker.tradeComplete = room.bridgeBuilt;
   }
 
   // Spawn zones — keep the player south of the cliff regardless of which
@@ -284,8 +291,23 @@ export class RidgeSystem {
     this.game.updateUI();
   }
 
+  /**
+   * Cursed Run: once the worker's one line has been told and its box is
+   * closed, he rises as a Risen (CursedRunSystem.turnToRisen).
+   */
+  _riseForsakenWorker() {
+    const game = this.game;
+    const room = game.currentRoom;
+    const worker = room?.bridgeWorker;
+    if (!worker?.risesAfterLine || game.dialogueSystem.getState()?.npc === worker) return;
+    room.bridgeWorker = null;
+    game.cursedRunSystem.turnToRisen(game, worker);
+  }
+
   /** Called every frame by main.js during EXPLORE state. Drives build animation. */
   update(deltaTime) {
+    this._riseForsakenWorker();
+
     if (this._arcAnim) {
       this._arcAnim.t += deltaTime;
       this._arcAnim.spinPhase += deltaTime * 12;

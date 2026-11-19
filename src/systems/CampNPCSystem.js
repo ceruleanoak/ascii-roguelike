@@ -673,6 +673,10 @@ export class CampNPCSystem {
     const dx = pcx - ncx, dy = pcy - ncy;
     if (dx * dx + dy * dy > COIN_INTERACT_RADIUS * COIN_INTERACT_RADIUS) return false;
 
+    // Cursed Run: no coin asked — the first SPACE and it follows, and the
+    // Camp NPC is Forsaken (no fire is kept by one again this run).
+    if (game.cursedRun && npc !== game.companion) return this._joinCursed(npc);
+
     // Empty-handed SPACE: campfire talk instead of an offering (the Well's
     // shape — a coin buys the ritual, no coin gets a plain line). Only at the
     // fire: a hired companion walks at the player's elbow, and talk there
@@ -732,6 +736,18 @@ export class CampNPCSystem {
       game.dialogueSystem?.open(npc, [text]);
     }
     game.menuSystem?.updateUI?.();
+  }
+
+  /**
+   * A Cursed Run's Camp NPC joins on the first interaction, replacing any
+   * current companion (hireFollower's shape).
+   */
+  _joinCursed(npc) {
+    const game = this.game;
+    if (game.companion) game.physicsSystem.removeEntity(game.companion);
+    this._promoteToCompanion(npc);
+    game.cursedRunSystem.forsake(game, npc);
+    return game.dialogueSystem.open(npc, ['YOU LEAD. I WILL FOLLOW.']);
   }
 
   /**

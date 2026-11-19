@@ -21,8 +21,9 @@ export const SCRIPTED_EVENTS = [
     // devoid of color — is the player's to keep.
     id: 'alchemist_hot_water_demo',
     actor: (game) => game.alchemistNPC,
+    // Never on a Cursed Run: he only has the one line then (AlchemistNPC).
     when: (game, alchemist) =>
-      alchemist.placement === 'hut' && alchemist.lessonGiven && !alchemist.pathUnlocked &&
+      !game.cursedRun && alchemist.placement === 'hut' && alchemist.lessonGiven && !alchemist.pathUnlocked &&
       game.hutSystem.playerCarriesHotWater(),
     commands: [
       { type: 'say', lines: ["YOU BROUGHT IT. LET'S SEE."] },

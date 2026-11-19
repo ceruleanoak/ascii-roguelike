@@ -87,6 +87,15 @@ export class AlchemistNPC extends NeutralCharacter {
   }
 
   getDialogueLines(game) {
+    // Cursed Run: one line, and he is Forsaken — placed nowhere again this
+    // run (HutSystem._syncAlchemistHutPresence, maybeSpawnRoamingAlchemist).
+    // A Cursed Run never rescues him (RoundCombatSystem), so this is only
+    // ever the Alchemist rescued before the curse.
+    if (game?.cursedRun) {
+      game.cursedRunSystem.forsake(game, this);
+      return ['FASCINATING. EVERY ONE OF MY POTIONS APPEARS UNSTABLE IN YOUR PRESENCE.'];
+    }
+
     // 1. Rescue — one-time, delivered wherever he's first spoken to.
     if (!this._rescueDialogueGiven) {
       this._rescueDialogueGiven = true;

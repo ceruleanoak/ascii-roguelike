@@ -34,6 +34,10 @@ export class BridgeWorker extends NeutralCharacter {
     // trading is over, only the closing line remains.
     this.tradeComplete = false;
 
+    // Cursed Run: set once his one line is told; RidgeSystem then turns him
+    // into a Risen as soon as the box closes.
+    this.risesAfterLine = false;
+
     this._pool = [];       // shuffle-bag of not-yet-drawn pool lines
     this._lastPoolLine = null;
   }
@@ -63,6 +67,14 @@ export class BridgeWorker extends NeutralCharacter {
 
   getDialogueLines(game) {
     this.readyToTrade = true;
+
+    // Cursed Run: the bridge already stands (generateRidgeRoomImpl); he
+    // regrets it, is Forsaken, and rises as a Risen (RidgeSystem).
+    if (game?.cursedRun) {
+      game.cursedRunSystem.forsake(game, this);
+      this.risesAfterLine = true;
+      return ["I'M AFRAID. THIS WAS A MISTAKE."];
+    }
 
     if (this.tradeComplete || game?.currentRoom?.bridgeAnimating || game?.currentRoom?.bridgeBuilt) {
       return ['I HAVE NO REGRETS.'];

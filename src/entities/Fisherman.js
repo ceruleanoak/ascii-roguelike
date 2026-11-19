@@ -14,6 +14,9 @@ import { NeutralCharacter } from './NeutralCharacter.js';
  *   - The extraction hint — catches must be opened with a blade.
  *   - Ocean: the pearl legend. Hut and shore: the coin-trade breadcrumb.
  */
+// What a Fisherman gives the player on a Cursed Run, at his feet.
+const CURSED_OFFERING = '∝'; // Fish
+
 export class Fisherman extends NeutralCharacter {
   constructor(x, y) {
     super('f', '#66aadd', x, y);
@@ -29,6 +32,8 @@ export class Fisherman extends NeutralCharacter {
     this.homePosition = { x, y };
     this.cutTimer = 0;
     this.velocity = { x: 0, y: 0, vx: 0, vy: 0 }; // vx/vy: steerToward's
+    // Cursed Run: whether his one offering has been handed over.
+    this.offeringGiven = false;
   }
 
   /**
@@ -74,7 +79,17 @@ export class Fisherman extends NeutralCharacter {
     this.dialogueLines = [lines[Math.floor(Math.random() * lines.length)]];
   }
 
-  getDialogueLines() {
+  getDialogueLines(game) {
+    // Cursed Run: he gives the player a Fish and is Forsaken — never met
+    // again this run. His trades refuse (FishermanDemoSystem /
+    // ShoreFishermanSystem), and he has nothing more to say.
+    if (game?.cursedRun) {
+      if (this.offeringGiven) return [];
+      this.offeringGiven = true;
+      game.cursedRunSystem.forsake(game, this);
+      game.lootSystem.spawnItemDrop(CURSED_OFFERING, this.position.x, this.position.y, null, this);
+      return ["T-TAKE IT. F-FISHING'S GOOD HERE."];
+    }
     return this.dialogueLines;
   }
 

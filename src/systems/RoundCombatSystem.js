@@ -81,12 +81,13 @@ export class RoundCombatSystem {
   /**
    * Weighted roll over the Quagmire's final-round outcomes. First-pass
    * weights, needs playtest tuning. 'alchemist' drops out once he's already
-   * been rescued (a one-time event) — the remaining two entries renormalize
-   * automatically since the roll is bounded by their own summed weight.
+   * been rescued (a one-time event), and is never rolled on a Cursed Run —
+   * the remaining two entries renormalize automatically since the roll is
+   * bounded by their own summed weight.
    */
   _rollQuagmireFinalEncounter() {
     const weights = { hag: 0.3, rusalka: 0.2 };
-    if (!this.game.alchemistNPC?.rescued) weights.alchemist = 0.5;
+    if (!this.game.alchemistNPC?.rescued && !this.game.cursedRun) weights.alchemist = 0.5;
     const total = Object.values(weights).reduce((sum, w) => sum + w, 0);
     let roll = Math.random() * total;
     for (const [outcome, weight] of Object.entries(weights)) {

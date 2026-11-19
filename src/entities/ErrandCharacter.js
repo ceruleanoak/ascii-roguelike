@@ -95,7 +95,13 @@ export class ErrandCharacter extends NeutralCharacter {
    * item — ErrandSystem's confirm-menu check consumes SPACE first once a
    * trade is actually possible, so dialogue is purely "here's what I want."
    */
-  getDialogueLines() {
+  getDialogueLines(game) {
+    // Cursed Run: one line, no trade (ErrandSystem refuses it), and the
+    // traveler is Forsaken — never met again this run.
+    if (game?.cursedRun) {
+      game.cursedRunSystem.forsake(game, this);
+      return ["WE'RE ALL JUST RUNGS ON ANOTHER'S LADDER."];
+    }
     if (!this.requestedItem) return [];
     const itemName = (getItemData(this.requestedItem)?.name || 'SOMETHING').toUpperCase();
     // Stage 0 requests a raw ingredient; stages 1-2 request a crafted item

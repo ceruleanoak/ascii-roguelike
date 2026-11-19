@@ -49,6 +49,8 @@ export class ShoreFishermanSystem {
     const fisherman = this._fisherman();
     if (!fisherman || isInteriorActive(game) || !fisherman.isInRange(player)) return false;
     if (this.coinAnim) return true;
+    // Cursed Run: no trade — the press falls through to his one line.
+    if (game.cursedRun) return false;
     // First interaction is always the tips; the trades unlock after.
     if (!fisherman.spokenOnce) return false;
     if (sellCatchToFisherman(game)) return true;

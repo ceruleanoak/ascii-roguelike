@@ -43,6 +43,8 @@ export class FishermanDemoSystem {
     if (!fisherman || !fisherman.coinDemoEnabled) return false;
 
     if (!fisherman.isInRange(player)) return false;
+    // Cursed Run: no trade — the press falls through to his one line.
+    if (game.cursedRun && !this.state && !this.coinAnim) return false;
 
     // Demo already running (or coin in flight) — swallow the press so SPACE
     // can't reopen tips dialogue over the demonstration.
