@@ -340,6 +340,7 @@ export const RECIPES = [
 export const CURSED_RECIPES = [
   { left: 'b', right: 'F', result: '☠', name: 'Cursed Skull' },   // Bone + Fire = Cursed Skull
   { left: 'j', right: 'k', result: '⊷', name: 'Cursed Belt' },    // Jaw + Silk = Cursed Belt (two depths per exit)
+  { left: 'c', right: 'b', result: '¢', name: 'Cursed Coin' },    // Coin + Bone = Cursed Coin (twice the Coins and Gemstones)
 ];
 
 export function findCursedRecipe(leftChar, rightChar) {

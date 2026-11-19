@@ -2051,6 +2051,15 @@ identity, not standard programming terms.
 - **Not:** a maze cover (one ciphered ingredient letter). Never holds EXITGAME, CLOSEGAME or
   CLOSE.
 
+### Cursed Coin
+- **Definition:** A Cursed Run craft (Coin + Bone, ¢), worn as a passive. While it is worn,
+  every kill's Coin chance is doubled and each Gemstone a kill drops falls twice. Its Passive
+  Indicator is TWOFOLD.
+- **In code:** `'¢'` in `ITEMS` with `dropRateMultiplier: 2`; recipe in `CURSED_RECIPES`
+  (`src/data/recipes.js`); read by `CursedRunSystem.dropRateMultiplier()` in
+  `LootSystem.spawnLoot`.
+- **Not:** the Lucky Coin (★), which raises every drop's odds on any run.
+
 ### Cursed Spell Sign
 - **Definition:** A Spell Sign on a Cursed Run: it writes a Wish Spell's name in place of the
   standard pool, for the whole run. Same cipher, same Spectacles. The curse teaches the words

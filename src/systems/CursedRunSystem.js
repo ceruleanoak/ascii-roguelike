@@ -419,6 +419,26 @@ export class CursedRunSystem {
    * Depths one exit advances — 2 with a Cursed Belt equipped on a Cursed Run,
    * else 1. ZoneSystem.incrementZoneDepth clamps the step at the zone's cap.
    */
+  /**
+   * How much a worn Cursed Coin multiplies a kill's Coin chance and its
+   * Gemstone drops (LootSystem.spawnLoot). 1 when uncursed or not worn.
+   */
+  dropRateMultiplier(game) {
+    if (!game.cursedRun) return 1;
+    const coin = game.player?.equippedConsumables?.find(slot => slot?.data?.dropRateMultiplier);
+    return coin ? coin.data.dropRateMultiplier : 1;
+  }
+
+  /** The Cursed Coin's Passive Indicator, floated over the player when it adds a drop. */
+  announceDoubledDrop(game) {
+    const player = game.player;
+    const coin = player?.equippedConsumables?.find(slot => slot?.data?.dropRateMultiplier);
+    if (!coin) return;
+    game.combatSystem?.createDamageNumber?.(
+      coin.data.passiveIndicator, player.position.x, player.position.y - GRID.CELL_SIZE, coin.data.color, 1, 1.2
+    );
+  }
+
   depthStep(game) {
     if (!game.cursedRun) return 1;
     const belt = game.player?.equippedConsumables?.find(slot => slot?.data?.depthStepMultiplier);

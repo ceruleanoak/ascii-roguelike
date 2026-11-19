@@ -2652,6 +2652,16 @@ export const ITEMS = {
     depthStepMultiplier: 2,   // CursedRunSystem.depthStep: each exit advances zone depth by 2 (capped)
     color: '#aa66aa'
   },
+  '¢': {
+    rarity: 'uncommon',
+    char: '¢',
+    name: 'Cursed Coin',
+    type: ITEM_TYPES.CONSUMABLE,
+    passive: true,
+    dropRateMultiplier: 2,    // CursedRunSystem.dropRateMultiplier: kills drop Coins and Gemstones twice as often
+    passiveIndicator: 'TWOFOLD',
+    color: '#aa66aa'
+  },
   '∫': {
     rarity: 'uncommon',
     char: '∫',

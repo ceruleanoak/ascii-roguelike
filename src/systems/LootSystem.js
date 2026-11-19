@@ -1,6 +1,6 @@
 import { Ingredient } from '../entities/Ingredient.js';
 import { Item } from '../entities/Item.js';
-import { isIngredient, isItem, generateEnemyDrops, resolvePickupSfx } from '../data/items.js';
+import { isIngredient, isItem, generateEnemyDrops, resolvePickupSfx, GEM_CHARS } from '../data/items.js';
 import { planeOf, lootOnActiveLayer, tagLootLayer } from './PlaneSystem.js';
 import { GRID, GAME_STATES, PHYSICS } from '../game/GameConfig.js';
 import { STARTER_POTION_CHARS, starterPotionIngredientsFor } from '../data/alchemy.js';
@@ -238,9 +238,23 @@ export class LootSystem {
     // tooling above already rolled — not scaled by luckMult/bonusChance,
     // since it's deliberately separate from those systems rather than folded
     // into them. One in ten of those Coins is an Empty Bottle instead.
-    if (Math.random() < coinDropChance(player)) {
+    // A worn Cursed Coin (Cursed Run only) doubles that chance and drops every
+    // Gemstone the rolls above produced twice (CursedRunSystem).
+    const dropRate = game.cursedRunSystem.dropRateMultiplier(game);
+    const baseCoinChance = coinDropChance(player);
+    const coinRoll = Math.random();
+    if (coinRoll < Math.min(1, baseCoinChance * dropRate)) {
       drops.push(Math.random() < BOTTLE_FOR_COIN_CHANCE ? 'B' : 'c');
     }
+    let doubled = coinRoll >= baseCoinChance && coinRoll < baseCoinChance * dropRate;
+    if (dropRate > 1) {
+      const gems = drops.filter(char => GEM_CHARS.includes(char));
+      for (const gem of gems) {
+        for (let n = 1; n < dropRate; n++) drops.push(gem);
+      }
+      if (gems.length) doubled = true;
+    }
+    if (doubled) game.cursedRunSystem.announceDoubledDrop(game);
 
     // A beast killed while snared (Snare Trap, Bolo — Enemy.isSnared) always
     // drops a Meat on top of its normal drops: the hunter's catch.
