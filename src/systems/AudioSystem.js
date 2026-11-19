@@ -38,7 +38,8 @@ const REST_MUSIC_PATHS = {
 // DUNGEON_MUSIC_FALLBACK. Giving a Dungeon (or its Dungeon Boss) its own
 // track is a file in public/assets/audio/ plus one entry here — no code.
 const DUNGEON_MUSIC = {
-  green: { ambient: 'assets/audio/dungeon-green.mp3', boss: null }
+  green: { ambient: 'assets/audio/dungeon-green.mp3', boss: null },
+  gray:  { ambient: 'assets/audio/dungeon-gray.mp3',  boss: null }
 };
 const DUNGEON_MUSIC_FALLBACK = DUNGEON_MUSIC.green;
 
@@ -73,6 +74,13 @@ const SWAP_BARS = 2;
 const MOTIF_LOOKAHEAD = 0.25;
 const MOTIF_CUT_FADE = 0.012;
 const MOTIF_DRIFT_TOLERANCE = 0.05;
+
+// Zones whose EXPLORE music is one mono track (no combat stem). It fills both
+// dual-layer slots and layer 2 stays muted while it plays — combat in these
+// zones doesn't layer the music (setLayer2Enabled holds it down).
+const MONO_ZONE_MUSIC = {
+  gray: 'assets/audio/gray.mp3'
+};
 
 const SEQUENCE_MUSIC = {
   red: {
@@ -1048,6 +1056,12 @@ export class AudioSystem {
       return;
     }
     if (this.mode !== 'dual' || !this.layer2Gain) return;
+    // A mono zone track has no combat stem; layer 2 is the same audio, so
+    // unmuting it would only double the volume. Interior overrides (a
+    // Dungeon track) keep their own behavior.
+    if (enabled && MONO_ZONE_MUSIC[this.currentMusicZone] && !this.inRestMode && !this.dungeonTrack) {
+      enabled = false;
+    }
 
     if (!this.isPlaying) {
       this.pendingLayer2State = enabled;
@@ -1220,8 +1234,9 @@ export class AudioSystem {
    * `force` bypasses the currentMusicZone equality checks — used by interior
    * exits (e.g. the maze) to restore zone music after a non-zone override,
    * since currentMusicZone is never touched while inside the interior.
-   * @param {string} zone - a SEQUENCE_MUSIC zone, 'cyan', or anything else
-   *                        (which maps to the green dual-layer track)
+   * @param {string} zone - a SEQUENCE_MUSIC zone, a MONO_ZONE_MUSIC zone,
+   *                        'cyan', or anything else (which maps to the green
+   *                        dual-layer track)
    * @param {string} base - BASE_URL prefix
    * @param {boolean} force - bypass the already-on-this-zone check
    */
@@ -1248,9 +1263,15 @@ export class AudioSystem {
     } else if (zone === 'cyan' && (force || this.currentMusicZone !== 'cyan')) {
       this.currentMusicZone = 'cyan';
       swap(`${base}assets/audio/cyan-layer1.mp3`, `${base}assets/audio/cyan-layer2.mp3`);
-    } else if (zone !== 'cyan' && !SEQUENCE_MUSIC[zone]
+    } else if (MONO_ZONE_MUSIC[zone] && (force || this.currentMusicZone !== zone)) {
+      this.currentMusicZone = zone;
+      const url = `${base}${MONO_ZONE_MUSIC[zone]}`;
+      swap(url, url);
+      this.setLayer2Enabled(false);
+    } else if (zone !== 'cyan' && !SEQUENCE_MUSIC[zone] && !MONO_ZONE_MUSIC[zone]
                && (force || this.currentMusicZone === 'cyan'
-                   || SEQUENCE_MUSIC[this.currentMusicZone])) {
+                   || SEQUENCE_MUSIC[this.currentMusicZone]
+                   || MONO_ZONE_MUSIC[this.currentMusicZone])) {
       this.currentMusicZone = 'green';
       swap(`${base}assets/audio/layer1.mp3`, `${base}assets/audio/layer2.mp3`);
     }
