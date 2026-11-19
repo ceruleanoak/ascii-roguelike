@@ -4,7 +4,7 @@ import { isIngredient, isItem, generateEnemyDrops, resolvePickupSfx } from '../d
 import { planeOf, lootOnActiveLayer, tagLootLayer } from './PlaneSystem.js';
 import { GRID, GAME_STATES, PHYSICS } from '../game/GameConfig.js';
 import { STARTER_POTION_CHARS, starterPotionIngredientsFor } from '../data/alchemy.js';
-import { INGREDIENT_STACK_CAP } from './ingredientPile.js';
+import { isPileCapped } from './IngredientPile.js';
 import { slideLootOffRestSlots } from './restSlotClearance.js';
 import { slideLootOffWalls, pullPathClear } from './lootWallClearance.js';
 import { hasLuckBlessing, coinDropChance } from './luck.js';
@@ -60,7 +60,7 @@ export class LootSystem {
       // wallet, not the pile): stop pulling it toward the player instead of
       // dragging it in only to have collectIngredient bounce it right back.
       const capped = ingredient.char !== 'c'
-        && game.countIngredient(ingredient.char) >= INGREDIENT_STACK_CAP;
+        && isPileCapped(ingredient.char, game.countIngredient(ingredient.char));
       // The interior-overlay tags (hutPlane / mazePlane — distinct from the
       // surface/tunnel .plane field) — an ingredient tagged for one layer must
       // not be reachable from another, same as the render-side filters enforce.
@@ -80,18 +80,17 @@ export class LootSystem {
   }
 
   // Returns false (and leaves the ingredient in the world) when the pile is
-  // capped for that char — the special-cased goo/mana drains bypass the pile
-  // entirely so they're never capped.
+  // capped for that char. Emerald Robe goo bypasses the pile; Mana fills the
+  // meter when it has room and otherwise lands in the pile, which never caps
+  // Mana — so Mana is always collected.
   collectIngredient(ingredient) {
     const game = this.game;
     const player = game.player;
     if (ingredient.char === 'g' && player.gooConsume) {
       // Emerald Robe: goo consumed for 1HP heal instead of going to inventory
       player.hp = Math.min(player.hp + 1, player.maxHp);
-    } else if (ingredient.char === '𝑚' && player.magicMeter?.active) {
-      // Mana drop auto-refills the meter once the well/cauldron has
-      // activated it; bypass inventory entirely.
-      game.magicSystem.addMana(player, 2);
+    } else if (ingredient.char === '𝑚' && game.magicSystem.collectMana(player)) {
+      // The meter took it.
     } else if (!game.addIngredient(ingredient.char)) {
       return false;
     }

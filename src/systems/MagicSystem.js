@@ -63,6 +63,9 @@ export const SPELL_AREAS = {
 // Meter mana spent per Mana (𝑚) picked from the crafting menu.
 const CRAFT_MANA_COST = 3;
 
+// Meter mana a collected Mana (𝑚) adds (collectMana).
+const PICKUP_MANA_VALUE = 2;
+
 // Spend `cost` from the player's mana meter; false (nothing spent) when the
 // meter is inactive or short.
 export function spendMeterMana(player, cost) {
@@ -297,6 +300,17 @@ export class MagicSystem {
     const meter = player?.magicMeter;
     if (!meter?.active || meter.max - meter.current < CRAFT_MANA_COST) return false;
     this.addMana(player, CRAFT_MANA_COST);
+    return true;
+  }
+
+  // A collected Mana (𝑚) — ground pickup or crafted output — fills the meter
+  // when the meter is active and not full (true). Otherwise it is the
+  // caller's to put in the pile (false), so a full meter never throws Mana
+  // away: golems and the other Mana recipes still need it.
+  collectMana(player) {
+    const meter = player?.magicMeter;
+    if (!meter?.active || meter.current >= meter.max) return false;
+    this.addMana(player, PICKUP_MANA_VALUE);
     return true;
   }
 

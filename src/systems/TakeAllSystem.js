@@ -1,6 +1,6 @@
 import { GAME_STATES, PHYSICS } from '../game/GameConfig.js';
 import { canReachLoot } from './PlaneSystem.js';
-import { INGREDIENT_STACK_CAP } from './ingredientPile.js';
+import { isPileCapped } from './IngredientPile.js';
 import { settlePickup } from './pickupSettlement.js';
 
 // How fast loot flies to the player while TAKEALL pulls it (px/s). Well past
@@ -133,7 +133,7 @@ export class TakeAllSystem {
     const reachable = loot => !loot.consumed && !this.refused.has(loot) && !loot.noGravitate
       && (!this.only || this.only.has(loot)) && canReachLoot(game, player, loot);
     const ingredients = game.ingredients.filter(ing => reachable(ing)
-      && (ing.char === 'c' || game.countIngredient(ing.char) < INGREDIENT_STACK_CAP));
+      && (ing.char === 'c' || !isPileCapped(ing.char, game.countIngredient(ing.char))));
     const items = game.items.filter(item => reachable(item) && TAKEN_TYPES.has(item.data?.type));
     return [...ingredients, ...items];
   }

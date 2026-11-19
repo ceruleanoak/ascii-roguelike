@@ -1059,10 +1059,10 @@ export class MenuSystem {
   /** Route one crafted ingredient char to the pile (or the magic meter, for Mana). */
   _collectCraftedIngredient(char) {
     const game = this.game;
-    // Mirror LootSystem.collectIngredient: once the meter is active,
-    // Mana bypasses inventory entirely and tops the meter up directly.
-    if (char === '𝑚' && game.player.magicMeter?.active) {
-      game.magicSystem.addMana(game.player, 2);
+    // Mirror LootSystem.collectIngredient: Mana tops up the meter when it has
+    // room, and otherwise lands in the pile.
+    if (char === '𝑚' && game.magicSystem.collectMana(game.player)) {
+      // The meter took it.
     } else {
       game.addIngredient(char);
     }

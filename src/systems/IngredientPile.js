@@ -12,6 +12,18 @@
 // Per-char stack cap on the pile — see addIngredient().
 export const INGREDIENT_STACK_CAP = 10;
 
+// Chars the pile never caps. Mana (𝑚) must always be collectable: golems and
+// the other Mana recipes spend it, and a full magic meter overflows into the
+// pile (MagicSystem.collectMana).
+const UNCAPPED_PILE_CHARS = new Set(['𝑚']);
+
+// Whether a pile holding `count` of `char` refuses one more. Shared by
+// addIngredient and the pickup magnets (LootSystem, TakeAllSystem), which stop
+// pulling an ingredient the pile would refuse.
+export function isPileCapped(char, count) {
+  return !UNCAPPED_PILE_CHARS.has(char) && count >= INGREDIENT_STACK_CAP;
+}
+
 export function getIngredients(inv) {
   return inv.ingredients;
 }
@@ -26,11 +38,11 @@ export function countIngredient(inv, char) {
   return n;
 }
 
-// Each distinct char caps at INGREDIENT_STACK_CAP. Returns whether the
+// Each distinct char caps at INGREDIENT_STACK_CAP (except UNCAPPED_PILE_CHARS). Returns whether the
 // ingredient was actually added, so ground-pickup callers can leave a
 // capped-out ingredient sitting in the world instead of vanishing it.
 export function addIngredient(inv, char) {
-  if (countIngredient(inv, char) >= INGREDIENT_STACK_CAP) return false;
+  if (isPileCapped(char, countIngredient(inv, char))) return false;
   inv.ingredients.push(char);
   return true;
 }
