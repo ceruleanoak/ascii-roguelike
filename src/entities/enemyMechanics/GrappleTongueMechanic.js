@@ -1,4 +1,5 @@
 import { GRID } from '../../game/GameConfig.js';
+import { commitAttack } from '../enemyDecision.js';
 
 // Grapple Tongue — `data.grappleTongue`: a sticky tongue shot at a player in
 // mid range that hooks them and reels them in to the mouth, where it bites.
@@ -59,7 +60,7 @@ export const GrappleTongueMechanic = {
     if (!enemy.grappleTongue) {
       enemy.grappleTongueCooldown -= deltaTime;
       if (enemy.grappleTongueCooldown <= 0) {
-        if (distance >= CELL * cfg.minRange && distance <= CELL * cfg.maxRange) {
+        if (distance >= CELL * cfg.minRange && distance <= CELL * cfg.maxRange && commitAttack(enemy)) {
           const dx = px - sx;
           const dy = py - sy;
           const dist = Math.sqrt(dx * dx + dy * dy);

@@ -3,6 +3,8 @@
 // don't all pulse on the same frame. On windup completion, suspends
 // Enemy.update() and returns a buff payload for the orchestrator to apply.
 
+import { commitAttack } from '../enemyDecision.js';
+
 export const BuffMechanic = {
   isEnabled(enemy) {
     return enemy.data.buffMechanic?.enabled === true;
@@ -44,7 +46,7 @@ export const BuffMechanic = {
       }
     } else {
       enemy.buffTimer -= deltaTime;
-      if (enemy.buffTimer <= 0 && !enemy.isStunned()) {
+      if (enemy.buffTimer <= 0 && !enemy.isStunned() && commitAttack(enemy)) {
         enemy.buffWindupActive = true;
         enemy.buffWindupTimer = cfg.buffWindup;
       }

@@ -27,6 +27,7 @@
 import { inSamePlane } from '../../systems/PlaneSystem.js';
 import { reportDamageResult } from '../../systems/DamageNumberQueue.js';
 import { glyphsTouch } from './glyphContact.js';
+import { commitAttack } from '../enemyDecision.js';
 
 function stop(enemy) {
   enemy.velocity.vx = enemy.targetVelocity.vx = 0;
@@ -94,6 +95,7 @@ export const DartMechanic = {
     }
     if (!onScreen || !enemy.target || enemy.commanded) return;
     if (distance > cfg.triggerRange || !inSamePlane(enemy, enemy.target)) return;
+    if (!commitAttack(enemy)) return;
     enemy.dartPhase = 'tell';
     enemy.dartTimer = cfg.tellTime ?? 0;
     stop(enemy);

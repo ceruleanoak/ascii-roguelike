@@ -55,9 +55,12 @@ export default {
     // The wolf's headline condition. `packCoordination` currently only shares
     // memory marks; this is the first time it gates a transition, which is why
     // the sandbox has to run the real EnemyUpdateSystem to exercise it.
+    // Each member answers the pack on its own Decision Frame, so a pack that
+    // comes ready together still goes in one at a time, not as one body.
     if (cfg.requirePack) {
       const ready = (enemy.packmates ?? []).filter(m => !m.dead && m.enraged).length;
       if (ready + 1 < cfg.requirePack) return null;
+      if (!ctx.decisionFrame) return null;
     }
 
     const duration = cfg.duration ?? 0;

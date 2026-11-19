@@ -552,6 +552,19 @@ identity, not standard programming terms.
   beat, not a separate hesitation before Strike begins. Conflating the two would change
   behavior across the whole roster.
 
+### Decision Frame
+- **Definition:** The one frame per `decisionInterval` on which an Enemy may decide something:
+  notice or lose a target, or commit to an attack, a spawn or a buff. It is the Enemy's
+  reaction time. Only one thing is decided per frame, and while an attack is underway the clock
+  holds at a full interval, so the next attack is decided no sooner than one interval after the
+  last one ends; no attack chains straight into another. Each packmate decides on its own frame.
+- **In code:** `src/entities/enemyDecision.js` — `tickDecision` (top of `Enemy.update`),
+  `commitAttack` (every attack/spawn/buff commit site), `attackUnderway`; perception reads
+  `ctx.decisionFrame` in the State spine. `data.decisionInterval` (double-seconds, default 0.5).
+- **Not:** Reaction Time (the Act 2 Mist Battle bodies' perception lag); an attack's windup or
+  cooldown, which still run on their own timers after the commit; Anticipate, the visible tell
+  after a commit.
+
 ### Falter
 - **Definition:** A chance beat, rolled on an Enemy's decision frames while it is in Approach
   or Flee, during which it stands still and will not commit to Anticipate/Strike (or a

@@ -1,6 +1,7 @@
 import { GRID } from '../../game/GameConfig.js';
 import { inSamePlane } from '../../systems/PlaneSystem.js';
 import { ThiefMechanic } from './ThiefMechanic.js';
+import { commitAttack } from '../enemyDecision.js';
 
 // Giant Slime leap: 3-phase sequence (windup → airborne → cooldown). Airborne
 // lerps from a snapshot start to a target snapshot taken at windup completion.
@@ -211,6 +212,9 @@ export const LeapAttackMechanic = {
     const forced = enemy.forcedLeapPending && enemy.invulnerabilityTimer <= 0;
     if (!forced && (enemy.leapCooldown > 0 || !inRange)) return;
     if (cfg.holdTime && enemy.leapHoldTimer < holdRequired(enemy, cfg)) return;
+    // Even the counter-leap a hit arms waits for a Decision Frame: answering
+    // a blow is still a decision (enemyDecision.js).
+    if (!commitAttack(enemy)) return;
 
     // Windup scales down with lost HP — full HP leaps at cfg.windupTime,
     // 0 HP leaps at half that, linear in between. Makes the boss leap

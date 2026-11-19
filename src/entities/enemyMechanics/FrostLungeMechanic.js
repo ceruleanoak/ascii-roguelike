@@ -1,5 +1,6 @@
 import { inSamePlane } from '../../systems/PlaneSystem.js';
 import { targetSlipsLatch } from './sapLatch.js';
+import { commitAttack } from '../enemyDecision.js';
 
 // Frost Lunge (Ice Wraith): windup → frost line → lunge → latch.
 //
@@ -124,6 +125,7 @@ export const FrostLungeMechanic = {
     // must be inside its vision cone, so sneaking up on one still works.
     const ignoreCone = enemy.enraged || enemy.aggroMemoryActive;
     if (!enemy.hasVision(enemy.position, enemy.target.position, effectiveVisionLength, { ignoreCone })) return;
+    if (!commitAttack(enemy)) return;
     enemy.frostLungePhase = 'windup';
     enemy.frostLungeTimer = cfg.windupTime;
     stop(enemy);

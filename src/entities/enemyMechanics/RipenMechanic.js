@@ -1,4 +1,5 @@
 import { GRID } from '../../game/GameConfig.js';
+import { commitAttack } from '../enemyDecision.js';
 
 // Bomb's growth/detonation lifecycle: a Flee-type enemy that swells through
 // four discrete stages (0-3) — one per successful lookback (see flee.js's
@@ -116,7 +117,7 @@ export const RipenMechanic = {
     if (enemy.ripenGrowth < 3 || enemy.ripenPrimed) return;
 
     const { effectiveDistance, dotDamageEvents } = ctx;
-    if (effectiveDistance <= cfg.detonateRange) {
+    if (effectiveDistance <= cfg.detonateRange && commitAttack(enemy)) {
       enemy.ripenPrimed = true;
       enemy.ripenBlinkTimer = cfg.blinkDelay ?? 1.0;
       enemy.velocity.vx = 0;

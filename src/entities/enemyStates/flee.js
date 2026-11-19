@@ -20,6 +20,7 @@
 import { applyStateMovement, moveChaser, moveStill } from '../enemyMovement.js';
 import { updateFalter, isFaltering, clearFalter } from './falter.js';
 import { QuiverRechargeMechanic } from '../enemyMechanics/QuiverRechargeMechanic.js';
+import { commitAttack } from '../enemyDecision.js';
 
 export default {
   id: 'flee',
@@ -126,11 +127,12 @@ export default {
     // (e.g. `useTrap`, for a coward whose answer is a trap at its own feet).
     // Same commit condition as approach.js's own —
     // `canStrike` rather than `canSee` because being cornered doesn't
-    // require the enemy to be facing its pursuer.
+    // require the enemy to be facing its pursuer. Turning on the pursuer is
+    // a decision too, so it spends a Decision Frame (enemyDecision.js).
     if (cfg.cornered) {
       const cornerRange = cfg.cornerRange ?? enemy.attackRange;
       if (ctx.effectiveDistance <= cornerRange && enemy.attackTimer <= 0 && ctx.canStrike
-          && !isFaltering(enemy)) {
+          && !isFaltering(enemy) && commitAttack(enemy)) {
         return { id: cfg.cornerTo ?? 'anticipate', cause: 'cornered' };
       }
     }

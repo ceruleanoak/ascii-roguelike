@@ -1,8 +1,10 @@
 import { GRID } from '../../game/GameConfig.js';
+import { commitAttack } from '../enemyDecision.js';
 
 // Giant Slime goo spew cone: damage accumulates via onDamaged() (called from
-// takeDamage) until it crosses the threshold and triggers a windup; the windup
-// ticks down here and emits a fan of blobs aimed at the target. Suspends
+// takeDamage) until it crosses the threshold; the windup starts on the slime's
+// next Decision Frame (enemyDecision.js), ticks down here and emits a fan of
+// blobs aimed at the target. Suspends
 // Enemy.update() and hands the blob list back to the orchestrator so main.js
 // can spawn them as projectiles.
 
@@ -22,17 +24,22 @@ export const GooSpewMechanic = {
     const cfg = enemy.data.gooSpewCone;
     if (!cfg?.enabled) return;
     enemy.spewDamageAccum = (enemy.spewDamageAccum || 0) + amount;
-    if (!enemy.spewWindupActive && enemy.spewDamageAccum >= cfg.damageThreshold) {
-      enemy.spewDamageAccum -= cfg.damageThreshold;
-      enemy.spewWindupActive = true;
-      enemy.spewWindupTimer = cfg.chargeUpTime;
-    }
   },
 
   update(enemy, ctx) {
     const cfg = enemy.data.gooSpewCone;
-    if (!cfg?.enabled || !enemy.spewWindupActive) return;
+    if (!cfg?.enabled) return;
     const { deltaTime, dotDamageEvents, onScreen } = ctx;
+
+    // Past the threshold, the spew is the slime's to decide: it starts on a
+    // Decision Frame, not on the blow that crossed the line.
+    if (!enemy.spewWindupActive && enemy.spewDamageAccum >= cfg.damageThreshold
+        && onScreen && commitAttack(enemy)) {
+      enemy.spewDamageAccum -= cfg.damageThreshold;
+      enemy.spewWindupActive = true;
+      enemy.spewWindupTimer = cfg.chargeUpTime;
+    }
+    if (!enemy.spewWindupActive) return;
 
     // Lost visibility mid-windup — cancel rather than fan blobs the player
     // never saw charging up. Free retry: spewDamageAccum was already spent

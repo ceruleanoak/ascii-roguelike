@@ -15,6 +15,10 @@
 
 import { GRID } from '../../game/GameConfig.js';
 import { interruptDashes } from './dashInterrupt.js';
+import { commitAttack } from '../enemyDecision.js';
+
+// _launchFromShell's answer when only the Decision Frame is missing.
+const UNDECIDED = 'undecided';
 
 export const ShellFormMechanic = {
   isEnabled(enemy) {
@@ -51,9 +55,13 @@ export const ShellFormMechanic = {
     // the tense pause IS the tell, and popping out passively mid-coil would
     // swallow it. If launch conditions fail at coil end, the timer falls
     // through to the normal countdown below (passive re-emerge).
+    // The coil holds past its delay until the launch is decided (a Decision
+    // Frame, enemyDecision.js).
     if (launch?.enabled && enemy.shellLaunchTimer > 0) {
       enemy.shellLaunchTimer -= deltaTime;
-      if (enemy.shellLaunchTimer <= 0) this._launchFromShell(enemy, launch);
+      if (enemy.shellLaunchTimer <= 0 && this._launchFromShell(enemy, launch) === UNDECIDED) {
+        enemy.shellLaunchTimer = Number.EPSILON;
+      }
       return;
     }
 
@@ -99,6 +107,7 @@ export const ShellFormMechanic = {
     // Cone ignored: the striker may have hit from any side; a reactive launch
     // doesn't require first turning to face them.
     if (!enemy.hasVision(enemy.position, target.position, enemy.visionLength, { ignoreCone: true })) return;
+    if (!commitAttack(enemy)) return UNDECIDED;
 
     // The shell opens straight into the rolling rush.
     enemy.inShellForm = false;

@@ -1,6 +1,7 @@
 import { TRAP_TYPE_CHAR } from '../../systems/TrapSystem.js';
 import { getItemData } from '../../data/items.js';
 import { GRID } from '../../game/GameConfig.js';
+import { commitAttack } from '../enemyDecision.js';
 
 // Trap Goblin's trap drop — a reaction to the `useTrap` State, not a state of
 // its own. `useTrap` (enemyStates/useTrap.js) owns the cornered hold; this
@@ -46,6 +47,8 @@ export const TrapLayerMechanic = {
     // very same frame, so the enemy's own accelRate never got more than one
     // frame to bleed off its flee speed and the drop read as instantaneous
     // rather than a goblin skidding to a stop to plant something.
+    // Planting the trap is a decision: the windup starts on a Decision Frame.
+    if (!enemy.trapWindupActive && !commitAttack(enemy)) return null;
     enemy.trapWindupActive = true;
     enemy.trapWindupTimer += ctx.deltaTime;
     if (enemy.trapWindupTimer < (cfg.windup ?? 0)) return null;

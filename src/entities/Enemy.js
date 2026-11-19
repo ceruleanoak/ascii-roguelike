@@ -68,6 +68,7 @@ import { weaponAimAngle, onFiringLine } from '../systems/KeenAim.js';
 import { gooRenderScale, gooFontSize, gooBodyHitbox } from './gooBody.js';
 import { arrowCharForAngle } from './arrowGlyph.js';
 import { countsAsBoss } from './bossTest.js';
+import { tickDecision, commitAttack } from './enemyDecision.js';
 
 // ─── Enemy AI Debug Logger ─────────────────────────────────────────────────
 // Toggle in browser console: window.ENEMY_AI_DEBUG = true
@@ -642,6 +643,10 @@ export class Enemy {
       return { dotDamage: [] };
     }
 
+    // Decision Frame clock (enemyDecision.js) — ticked before anything that
+    // can commit an attack, so every commit below sees this frame's decision.
+    tickDecision(this, deltaTime);
+
     // Cyan rogue hide — actively scrub all detection state so the player can truly slip away.
     // hasVision() already returns false for hidden targets, but lastKnownPosition / memory
     // would otherwise keep this enemy hunting the player's last spot. Clearing here lets the
@@ -894,9 +899,6 @@ export class Enemy {
     let speedMultiplier = this.getSpeedMultiplier();
     if (inSteam) speedMultiplier *= 0.6; // Steam slows enemies (cautious movement)
 
-    // Update AI decision timer
-    this.decisionTimer -= deltaTime;
-
     // Bug 17 fix (part 2): expire memory marks that become stale when the player switches planes.
     // If the mark was created while the player was on planeX, and the player later moves to planeY,
     // the mark is unreachable — expire it after a short window so the enemy stops hunting the wrong plane.
@@ -940,8 +942,8 @@ export class Enemy {
       canStrike: (!this.data.strikesOnlyInLava || this.inLava)
         && onFiringLine(this, this.target.position)
         && this.hasVision(this.position, this.target.position, effectiveVisionLength, { ignoreCone: true }),
-      // True on exactly one frame per `decisionInterval` (decremented above,
-      // reset at the end of this update). States gate their *perception*
+      // True on exactly one frame per `decisionInterval` (ticked at the top of
+      // update by tickDecision, reset at the end of this update). States gate their *perception*
       // transitions on it so noticing, losing and re-acquiring a target all
       // run at the Enemy's thinking cadence instead of instantly.
       decisionFrame: this.decisionTimer <= 0,
@@ -1032,7 +1034,7 @@ export class Enemy {
       if (!this.spawnWindupActive && this.spawnTimer > 0) {
         this.spawnTimer -= deltaTime;
 
-        if (this.spawnTimer <= 0 && this.canSpawn()) {
+        if (this.spawnTimer <= 0 && this.canSpawn() && commitAttack(this)) {
           this.spawnWindupActive = true;
           this.spawnWindupTimer = this.spawning.spawnWindup || 1.0;
           this.spawnTimer = this.spawning.spawnCooldown;

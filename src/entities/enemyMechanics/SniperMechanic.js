@@ -1,6 +1,7 @@
 import { GRID } from '../../game/GameConfig.js';
 import { createActivationBurst } from '../Particle.js';
 import { tagInteriorPlane } from '../../systems/PlaneSystem.js';
+import { commitAttack } from '../enemyDecision.js';
 
 // Sniper: a stationary ranged attacker, aware of the player's position
 // regardless of vision, with a vanish-and-reposition evasion response and a
@@ -113,7 +114,7 @@ export const SniperMechanic = {
     // Only preempts states that haven't already committed to something else.
     // Gated on onScreen too — no starting a windup the player can't see.
     if (enemy.hp <= enemy.maxHp * 0.5 && distance <= meleeRange && onScreen
-        && UNCOMMITTED_STATES.has(enemy.sniperState)) {
+        && UNCOMMITTED_STATES.has(enemy.sniperState) && commitAttack(enemy)) {
       this._resetRangedSequence(enemy);
       enemy.sniperState = 'daggerWindup';
       enemy.sniperTimer = cfg.daggerWindup ?? 0.4;
@@ -318,7 +319,7 @@ export const SniperMechanic = {
       enemy.sniperReticulePos.y += (ry / rd) * step;
     }
     enemy.sniperLockTimer += deltaTime * this._visionSpeedFactor(enemy, cfg);
-    if (enemy.sniperLockTimer >= (cfg.visionLockTime2 ?? 1.0)) {
+    if (enemy.sniperLockTimer >= (cfg.visionLockTime2 ?? 1.0) && commitAttack(enemy)) {
       enemy.sniperState = 'telegraph';
       enemy.sniperTimer = cfg.telegraphTime ?? 0.5;
       enemy.sniperLockTimer = 0;

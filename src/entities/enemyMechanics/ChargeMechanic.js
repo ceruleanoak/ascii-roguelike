@@ -9,6 +9,7 @@
 
 import { GRID } from '../../game/GameConfig.js';
 import { planeOf, objectOnPlane } from '../../systems/PlaneSystem.js';
+import { commitAttack } from '../enemyDecision.js';
 
 // Near-death threshold shared with Enemy.getNearDeathBlinkColor (≤30% HP) so
 // an enemy's blink and its behavioral desperation start on the same hit —
@@ -232,7 +233,8 @@ export const ChargeMechanic = {
           && !enemy.parryActive
           && !enemy.parryWindupActive
           && onScreen
-          && enemy.hasVision(enemy.position, enemy.target.position, effectiveVisionLength, { ignoreCone: true })) {
+          && enemy.hasVision(enemy.position, enemy.target.position, effectiveVisionLength, { ignoreCone: true })
+          && commitAttack(enemy)) {
         enemy.chargeState = 'windup';
         enemy.chargeWindupTimer = cfg.chargeWindup;
         cancelMeleeStrike(enemy);

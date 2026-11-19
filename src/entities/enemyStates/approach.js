@@ -8,6 +8,7 @@
 // Strike.
 import { applyStateMovement, moveStill } from '../enemyMovement.js';
 import { updateFalter, isFaltering, clearFalter } from './falter.js';
+import { commitAttack } from '../enemyDecision.js';
 
 export default {
   id: 'approach',
@@ -61,9 +62,11 @@ export default {
     // because an enemy that has closed to arm's length is committing whether or
     // not its nose happens to be pointed at you. Ordering this below the sight
     // test would give every keeper and kiter a free pass out of every attack.
-    // A faltering Enemy waits out its beat before committing.
+    // A faltering Enemy waits out its beat before committing. Committing is
+    // a decision, so it waits for a Decision Frame too (enemyDecision.js) —
+    // tested last, because it spends the frame.
     if (ctx.effectiveDistance <= enemy.attackRange && enemy.attackTimer <= 0 && ctx.canStrike
-        && !isFaltering(enemy)) {
+        && !isFaltering(enemy) && commitAttack(enemy)) {
       return { id: 'anticipate', cause: 'in attack range, off cooldown' };
     }
 

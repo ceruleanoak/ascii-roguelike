@@ -13,6 +13,7 @@
 // question was actually asked in.
 import { GRID } from '../../game/GameConfig.js';
 import { applyStateMovement, moveStill } from '../enemyMovement.js';
+import { commitAttack } from '../enemyDecision.js';
 
 export default {
   id: 'search',
@@ -105,8 +106,12 @@ export default {
     // matter what the enemy was doing. A machine has to say it out loud, and
     // saying it here is the difference between a searcher that swings at what it
     // stumbles into and one that walks past you because it is busy looking.
+    // Swinging is still a decision, so it waits for a Decision Frame like
+    // approach.js's commit does (enemyDecision.js), tested last because it
+    // spends the frame.
     if (ctx.effectiveDistance <= enemy.attackRange && enemy.attackTimer <= 0 && ctx.canStrike
-        && (enemy.enraged || ctx.effectiveDistance <= ctx.effectiveAggroRange)) {
+        && (enemy.enraged || ctx.effectiveDistance <= ctx.effectiveAggroRange)
+        && commitAttack(enemy)) {
       return { id: 'anticipate', cause: 'searcher walked into attack range' };
     }
 
