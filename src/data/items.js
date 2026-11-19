@@ -69,11 +69,11 @@ export const WEAPON_TYPES = {
 export const ARMOR_FLAVORS = {
   fur: {
     word: 'SPEED+', color: '#e0a060',
-    masterRemark: 'FUR. YOU MOVE AND ROLL FASTER, BUT IT STOPS LITTLE DAMAGE.'
+    masterRemark: 'FUR. YOU MOVE AND ROLL FASTER, BUT A BLOW GOES RIGHT THROUGH IT.'
   },
   metal: {
     word: 'HEAVY', color: '#a8c0d8',
-    masterRemark: 'METAL. IT STOPS A LOT OF DAMAGE, BUT YOU MOVE AND ROLL SLOWER.'
+    masterRemark: 'METAL. IT TAKES THE WORST OF A BLOW, BUT YOU MOVE AND ROLL SLOWER.'
   },
   block: {
     word: 'BLOCK+', color: '#70d8c8',

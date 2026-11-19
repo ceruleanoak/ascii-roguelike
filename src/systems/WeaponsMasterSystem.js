@@ -40,11 +40,14 @@ const SUBMENUS = {
  * SPACE near him opens ASK ABOUT, a PauseSystem modal with the rows WEAPON,
  * ARMOR and LESSON (BUCKLER once the lesson is taken; gone once the Buckler
  * is sold). WEAPON opens CHECK / TRAIN, ARMOR opens CHECK / TRAIN DODGE /
- * TRAIN DEFENSE (SHIFT backs out to the top). Picking an answerable row
- * closes the menu and he answers it in the dialogue box. An answer that ends in an offer (training, the lesson, the Buckler) is
- * remembered as `pendingOffer`; picking that row again once he has been heard
- * out (`spokenOnce`) pays for it. Hearing any other answer in between means
- * the offer has to be heard again.
+ * TRAIN DEFENSE (SHIFT backs out to the top). Every interaction opens the
+ * menu at the top. Picking an answerable row keeps the menu open: he answers
+ * in the dialogue box drawn over it, SPACE tells each further line and then
+ * closes the box, and the cursor stays on the row. An answer that ends in an
+ * offer (training, the lesson, the Buckler) is remembered as `pendingOffer`;
+ * picking that row again once he has been heard out (`spokenOnce`) pays for
+ * it, which closes the menu so the payment can play out in the world.
+ * Hearing any other answer in between means the offer has to be heard again.
  *
  * Training spends a wallet coin to permanently train the held weapon's
  * category, for the active character only, once per category per character.
@@ -70,9 +73,9 @@ export class WeaponsMasterSystem {
     // 'buckler', 'dodge', 'defense'), or null. Bought by picking its row
     // again once heard out.
     this.pendingOffer = null;
-    // The last row he answered ({ layer, index }). The menu reopens on it, so
-    // buying a heard offer (or the next level of one) is one SPACE away.
-    this.lastRow = null;
+    // The menu draws his answer itself (over the dim), so DialogueBox's own
+    // pass skips it while this modal is open.
+    this.drawsDialogue = true;
 
     // ASK ABOUT modal state.
     this.master = null;
@@ -87,7 +90,6 @@ export class WeaponsMasterSystem {
   resetRunState() {
     this.coinAnim = null;
     this.pendingOffer = null;
-    this.lastRow = null;
     this.parryLesson.resetRunState();
   }
 
@@ -113,10 +115,6 @@ export class WeaponsMasterSystem {
     // Mid-lesson SPACE is a swing at him (his speech is suspended meanwhile).
     if (this.parryLesson.isRunning()) return false;
 
-    // An answer with lines still untold: SPACE tells the next one
-    // (DialogueSystem.tryOpenNearby), one line per press as for every speaker.
-    if (game.dialogueSystem.isMidSpeech(master)) return false;
-
     this.open(master);
     return true;
   }
@@ -126,8 +124,7 @@ export class WeaponsMasterSystem {
   open(master) {
     if (!this.game.pauseSystem.openModal(this)) return;
     this.master = master;
-    // Reopen on the last row he answered, else at the top.
-    this._showLayer(this.lastRow?.layer ?? 'root', this.lastRow?.index ?? 0);
+    this._showLayer('root', 0);
     this.openedAt = performance.now();
     // Same lockout + fade as the Shop: the SPACE that opened the menu can't
     // also pick a row.
@@ -159,6 +156,16 @@ export class WeaponsMasterSystem {
     if (event?.repeat) return;
     if (performance.now() < this.inputReadyAt) return;
     const intent = menuIntent(event);
+    if (this._answering()) {
+      // His answer is on screen over the menu. SPACE tells the next line, or
+      // closes the box after the last; any other key closes it and acts.
+      const dialogue = this.game.dialogueSystem;
+      dialogue.advance();
+      if (intent === 'confirm') {
+        if (dialogue.isMidSpeech(this.master)) dialogue.talk(this.master);
+        return;
+      }
+    }
     if (intent === 'up') {
       this.menuIndex = Math.max(0, this.menuIndex - 1);
     } else if (intent === 'down') {
@@ -170,8 +177,6 @@ export class WeaponsMasterSystem {
         this._showLayer(topic, 0);
         return;
       }
-      this.lastRow = { layer: this.layer, index: this.menuIndex };
-      this.game.pauseSystem.closeModal();
       this._ask(master, topic);
     } else if (intent === 'shift') {
       // SHIFT in a sub-layer backs out onto its parent row; at the top it closes.
@@ -190,10 +195,22 @@ export class WeaponsMasterSystem {
   }
 
   onClose() {
+    // Leaving the menu leaves his answer behind with it.
+    if (this._answering()) this.game.dialogueSystem.close();
     this.master = null;
     this.layer = 'root';
     this.rows = [];
     this.menuIndex = 0;
+  }
+
+  /** True while one of his answers is on screen over the open menu. */
+  _answering() {
+    return !!this.master && this.game.dialogueSystem?.getState()?.npc === this.master;
+  }
+
+  /** A payment is made: close the menu so the coin can fly (the world is paused under it). */
+  _closeForPayment() {
+    if (this.game.pauseSystem.activeModal === this) this.game.pauseSystem.closeModal();
   }
 
   // ── Answers ────────────────────────────────────────────────────────────────
@@ -215,6 +232,7 @@ export class WeaponsMasterSystem {
       const paid = training.pay(kind);
       if (paid !== false) {
         this.pendingOffer = null;
+        this._closeForPayment();
         this._flyCoin(master, { armorKind: kind, ...(paid ? { char: paid } : {}) });
         return;
       }
@@ -229,6 +247,7 @@ export class WeaponsMasterSystem {
     if (offer && this._heard(master, offer) && inv?.hasCoin()) {
       inv.removeCoin();
       this.pendingOffer = null;
+      this._closeForPayment();
       this._flyCoin(master, { category });
       return;
     }
@@ -238,15 +257,16 @@ export class WeaponsMasterSystem {
   _askLesson(master) {
     const lesson = this.parryLesson;
     if (!lesson.lessonOffered()) {
-      this._speak(master, ['THE LESSON IS FOR A MELEE WEAPON. YOU AREN\'T HOLDING ONE.']);
+      this._speak(master, ['THE LESSON IS FOR FIGHTING UP CLOSE. HOLD SOMETHING YOU SWING.']);
       return;
     }
     if (this._untrainedCategory()) {
-      this._speak(master, ['I TRAIN YOU IN THAT WEAPON BEFORE I TEACH THE LESSON.']);
+      this._speak(master, ['FIRST I TRAIN YOU WITH THAT WEAPON. THEN THE LESSON.']);
       return;
     }
     if (this._heard(master, 'lesson') && lesson.buyLesson()) {
       this.pendingOffer = null;
+      this._closeForPayment();
       this._flyCoin(master, { onArrive: () => lesson.begin(master) });
       return;
     }
@@ -255,7 +275,10 @@ export class WeaponsMasterSystem {
 
   _askBuckler(master) {
     const lesson = this.parryLesson;
-    if (this._heard(master, 'buckler') && lesson.buyBuckler(master)) {
+    if (this._heard(master, 'buckler') && lesson.canBuyBuckler()) {
+      // Close first: the hand-over opens his line, which must outlive the menu.
+      this._closeForPayment();
+      lesson.buyBuckler(master);
       this.pendingOffer = null;
       return;
     }

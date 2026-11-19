@@ -16,11 +16,18 @@ export class DialogueBox {
     this.renderer = renderer;
   }
 
-  render(game) {
+  /**
+   * Draws the line on screen. `ctx` defaults to the foreground layer; a modal
+   * that answers inside its own menu (the Weapons Master's, `drawsDialogue`)
+   * draws it on the UI layer over its dim instead, so the foreground pass
+   * skips it while that modal is open.
+   */
+  render(game, ctx = null) {
     const state = game.dialogueSystem?.getState();
     if (!state) return;
+    if (!ctx && game.pauseSystem?.activeModal?.drawsDialogue) return;
 
-    const ctx = this.renderer.fgCtx;
+    ctx = ctx ?? this.renderer.fgCtx;
     const cs = GRID.CELL_SIZE;
     const boxW = Math.floor(GRID.WIDTH * 0.72);
     const glyphCellW = cs * 2.5;

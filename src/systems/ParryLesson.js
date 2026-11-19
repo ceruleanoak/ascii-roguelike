@@ -114,6 +114,13 @@ export class ParryLesson {
     return true;
   }
 
+  /** True when the Buckler is on offer and its price can be paid now. */
+  canBuyBuckler() {
+    if (!this.bucklerOffered()) return false;
+    const price = this.bucklerPrice();
+    return price.kind !== 'coins' || !!this.game.inventorySystem?.hasCoin(BUCKLER_COIN_PRICE);
+  }
+
   /** Takes the Buckler's price and hands it over; false when it can't be paid. */
   buyBuckler(master) {
     if (!this.bucklerOffered() || !this._payForBuckler()) return false;
@@ -181,7 +188,7 @@ export class ParryLesson {
       return;
     }
     this._end();
-    game.dialogueSystem?.open(master, ['GOOD. HIT AFTER THE PARRY DROPS AND IT LANDS.']);
+    game.dialogueSystem?.open(master, ['GOOD. STRIKE AS THE GUARD DROPS AND YOU GET THROUGH.']);
   }
 
   /** A player melee hitbox overlapping him this frame, not yet counted. */

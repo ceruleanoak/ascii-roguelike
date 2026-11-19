@@ -9,10 +9,16 @@ const GEMS_CHEAPEST_FIRST = [...GEM_CHARS].sort(
   (a, b) => (INGREDIENTS[a]?.value ?? 0) - (INGREDIENTS[b]?.value ?? 0)
 );
 
-// What each training does, in his plain voice (one line per kind).
+// What each training does, in his plain, in-world voice (one line per kind):
+// literal, but no levels or percentages — those are the pickup notice's.
 const DESCRIPTIONS = {
-  dodge:   `EACH LEVEL OF DODGE ADDS A ${Math.round(ARMOR_TRAINING.perLevel.dodge * 100)}% CHANCE TO AVOID A HIT.`,
-  defense: `EACH LEVEL OF DEFENSE TAKES ${ARMOR_TRAINING.perLevel.defense} OFF EVERY HIT.`
+  dodge:   'I TEACH YOU TO SLIP A BLOW. EACH TIME YOU TRAIN, MORE HITS MISS YOU.',
+  defense: 'I TEACH YOU TO TAKE A BLOW. EACH TIME YOU TRAIN, EVERY HIT HURTS LESS.'
+};
+// What he has nothing left to teach of, once a kind is fully trained.
+const MASTERED = {
+  dodge:   'I HAVE TAUGHT YOU ALL I KNOW OF DODGING.',
+  defense: 'I HAVE TAUGHT YOU ALL I KNOW OF TAKING A BLOW.'
 };
 const LABELS = { dodge: 'DODGE', defense: 'DEFENSE' };
 const NUMBER_WORDS = ['ZERO', 'ONE', 'TWO', 'THREE', 'FOUR', 'FIVE'];
@@ -57,7 +63,7 @@ export class ArmorTraining {
 
   /** His answer to TRAIN DODGE / TRAIN DEFENSE: what it does, then the next level's price. */
   offerLines(kind) {
-    if (!this.offered(kind)) return [`YOUR ${LABELS[kind]} IS FULLY TRAINED.`];
+    if (!this.offered(kind)) return [MASTERED[kind]];
     const price = ARMOR_TRAINING.prices[this.level(kind)].map(priceWords).join(' OR ');
     return [DESCRIPTIONS[kind], `${price} AND I WILL TRAIN IT.`];
   }

@@ -1,22 +1,24 @@
 import { NeutralCharacter } from './NeutralCharacter.js';
 import { initParry } from './enemyMechanics/ParryMechanic.js';
 
-// One line of mechanically-grounded advice per weapon category. Melee weapons
+// One line of mechanically-grounded advice per weapon category, said the way
+// a man in the world would say it: plain and literal, never game terms
+// (no rooms, mana, levels or percentages). Melee weapons
 // key by weaponSubtype; ranged/wand weapons have no subtype and fall back to
 // weaponType (BOW/GUN) — see resolveWeaponCategory().
 const WEAPON_MASTER_ADVICE = {
   sword:   'A SWORD CUTS IN AN ARC IN FRONT OF YOU.',
   torch:   'A TORCH SETS WHAT IT HITS ON FIRE. DEEP WATER PUTS IT OUT.',
   dagger:  'A DAGGER HAS SHORT REACH. IT STABS AT THE END OF A ROLL.',
-  pickaxe: 'A PICKAXE BREAKS ROCK. IT IS A WEAK WEAPON.',
+  pickaxe: 'A PICKAXE IS FOR BREAKING ROCK, NOT FOR FIGHTING.',
   axe:     'AN AXE IS SLOW AND HITS HARD. IT CUTS DOWN TREES.',
   hammer:  'A HAMMER SENDS A SHOCKWAVE THROUGH THE GROUND. IT BREAKS ROCK.',
   spear:   'A SPEAR HITS HARDEST AT THE FULL LENGTH OF ITS REACH.',
   staff:   'HOLD A STAFF UP TO BLOCK. IT STOPS EVERY ARROW.',
   bat:     'WIND A BAT UP LONGER TO HIT HARDER AND KNOCK THEM FURTHER.',
-  wand:    'A WAND CASTS THE ELEMENT OF ITS GEM. EACH CAST COSTS MANA.',
+  wand:    'A WAND CASTS THE ELEMENT OF ITS GEM. EVERY CAST DRAWS ON YOUR MAGIC.',
   whip:    'A WHIP HITS IN A LONG LINE AND KNOCKS WEAPONS OUT OF HANDS.',
-  BOW:     'A BOW HAS A LIMITED NUMBER OF ARROWS IN EACH ROOM.',
+  BOW:     'A BOW CARRIES ONLY SO MANY ARROWS. YOUR QUIVER FILLS AGAIN WHEREVER YOU GO NEXT.',
   GUN:     'A GUN EMPTIES, THEN TAKES A WHILE TO RELOAD. ITS SHOTS SPREAD.'
 };
 
@@ -64,9 +66,9 @@ export class WeaponsMaster extends NeutralCharacter {
   // ASK ABOUT → WEAPON → TRAIN: what training the held weapon can still get.
   weaponTrainLines(game) {
     const category = resolveWeaponCategory(game.player?.heldItem);
-    if (!category) return ['I TRAIN WEAPONS. YOU AREN\'T HOLDING ONE.'];
+    if (!category) return ['PUT A WEAPON IN YOUR HAND AND I WILL TRAIN YOU WITH IT.'];
     const trained = game.inventorySystem?.characterInventories?.[game.activeCharacterType]?.trainedWeapons;
-    if (trained?.[category]) return ['YOU ARE ALREADY TRAINED IN THIS.'];
+    if (trained?.[category]) return ['I HAVE TAUGHT YOU ALL I KNOW OF THAT ONE.'];
     return ['ONE COIN AND I WILL TRAIN YOU IN IT.'];
   }
 
