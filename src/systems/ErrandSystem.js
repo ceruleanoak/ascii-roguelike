@@ -220,9 +220,9 @@ export class ErrandSystem {
   /**
    * Where the requested item sits on the player, as a `remove()` that hands
    * one over, or null when they don't carry it. Stage 0 spends from the
-   * ingredient pile. Item stages search only what the player carries (quick
-   * slots, worn armor, carried armor spares, equipped and spare
-   * consumables), never the REST chest, since the traveler is met out in
+   * ingredient pile. Item stages search only what the player carries (spare
+   * weapons swapped out of a quick slot this trip, quick slots, worn armor,
+   * carried armor spares, equipped and spare consumables), never the REST chest, since the traveler is met out in
    * the world. A stacked consumable gives up one unit, not the stack.
    */
   _findCarriedRequest(player, inv) {
@@ -232,6 +232,11 @@ export class ErrandSystem {
       if (!inv?.hasIngredient(requestedChar)) return null;
       return { remove: () => inv.removeIngredient(requestedChar) };
     }
+
+    // A spare weapon carried but not slotted (swapped out this trip, held in
+    // pendingChestDeposits until REST) goes first, so the one in hand stays.
+    const spareWeapon = inv?.pendingChestDeposits?.find(w => w.char === requestedChar);
+    if (spareWeapon) return { remove: () => !!inv.retrieveFromPendingChest(spareWeapon) };
 
     const slotIdx = player.quickSlots?.findIndex(slot => slot?.char === requestedChar) ?? -1;
     if (slotIdx !== -1) {

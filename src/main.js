@@ -3056,7 +3056,7 @@ class Game {
       // — the traveler just states what they're after.
       if (this.errandSystem.tryOpenMenu(this.player, npcArray, this.inventorySystem)) return;
 
-      // Artifact → errand traveler: consume ⚜, spawn 2 coin ingredients at NPC.
+      // Artifact → errand traveler: consume ⚜, spawn 3 coin ingredients at NPC.
       // Side trade — does not advance or alter the active stage errand.
       if (this.errandSystem.handleArtifactGiveSpacePress(this, npcArray)) return;
 
