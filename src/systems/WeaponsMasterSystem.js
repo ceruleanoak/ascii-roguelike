@@ -115,6 +115,7 @@ export class WeaponsMasterSystem {
     // Mid-lesson SPACE is a swing at him (his speech is suspended meanwhile).
     if (this.parryLesson.isRunning()) return false;
 
+    if (game.cursedRunSystem.greet(game, master, "YOU'VE DISCOVERED A POWER BEYOND MY KNOWLEDGE.")) return true;
     this.open(master);
     return true;
   }

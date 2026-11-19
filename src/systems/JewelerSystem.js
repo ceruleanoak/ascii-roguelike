@@ -20,6 +20,8 @@ import { JewelerOverlay } from '../rendering/ui/JewelerOverlay.js';
  *     Shopkeeper in every Settlement (roomFeatures / HutSystem).
  *   - Parched otherwise: not consumed here — DialogueSystem tells the plea.
  *   - Refreshed: the wares.
+ *   - Cursed Run: one Forsaken line (CursedRunSystem.greet), then the wares
+ *     with the coin waived — gems only.
  *
  * Modes:
  *   'give'   — Up/Down moves giveIndex across the drinks. Confirm gives it and
@@ -43,6 +45,9 @@ export class JewelerSystem {
     this.inputReadyAt = 0;
     // PERSUADE: the next ware bought costs nothing. Ends with the wares.
     this.freePurchase = false;
+    // Cursed Run: the Jeweler, frightened, asks no coin for the wares open
+    // now — the gems are still the cost. Ends with the wares.
+    this.coinsWaived = false;
   }
 
   /** SPACE dispatch — returns true when the press was consumed. */
@@ -62,6 +67,15 @@ export class JewelerSystem {
       return false;
     }
 
+    // Cursed Run: one line, then the wares for gems alone. In the J room the
+    // thirst is gone without a drink; behind a Settlement counter, fear.
+    if (game.cursedRun) {
+      const line = game.jewelerRefreshed ? 'YOU FRIGHTEN ME.' : 'IN YOUR PRESENCE, MY THIRST VANISHES.';
+      if (game.cursedRunSystem.greet(game, jeweler, line)) return true;
+      this._open(jeweler, 'list');
+      if (this.jeweler) this.coinsWaived = true;
+      return true;
+    }
     if (game.jewelerRefreshed) {
       this._open(jeweler, 'list');
       return true;
@@ -118,7 +132,12 @@ export class JewelerSystem {
   }
 
   hasCoins(row) {
-    return this.game.inventorySystem.hasCoin(row.coins);
+    return this.coinsWaived || this.game.inventorySystem.hasCoin(row.coins);
+  }
+
+  /** What `row` costs in coin at this counter right now (0 when waived). */
+  coinCost(row) {
+    return this.coinsWaived ? 0 : row.coins;
   }
 
   /** Per gem in `row.gems`: whether the player carries it (a repeated gem needs a copy each). */
@@ -191,6 +210,7 @@ export class JewelerSystem {
     this.giveIndex = 0;
     this.rowIndex = 0;
     this.freePurchase = false;
+    this.coinsWaived = false;
   }
 
   _buy(row) {
@@ -204,7 +224,7 @@ export class JewelerSystem {
     } else {
       const inv = game.inventorySystem;
       for (const gem of row.gems) inv.removeIngredient(gem);
-      inv.removeCoin(row.coins);
+      if (!this.coinsWaived) inv.removeCoin(row.coins);
     }
     deliverPurchase(game, row.char);
     return true;

@@ -162,7 +162,7 @@ export class JewelerOverlay {
       if (isCoin) {
         ctx.font = `${cs * 0.5}px 'Unifont', monospace`;
         ctx.fillStyle = '#888888';
-        ctx.fillText(String(row.coins), x, rowY + cs * 1.1);
+        ctx.fillText(String(state.coinCost(row)), x, rowY + cs * 1.1);
       }
     }
 

@@ -76,6 +76,7 @@ export class ShopSystem {
     if (!shopkeeper) return false;
     if (!shopkeeper.isInRange(player)) return false;
 
+    if (game.cursedRunSystem.greet(game, shopkeeper, 'HMPH.')) return true;
     this.open(shopkeeper);
     return true;
   }

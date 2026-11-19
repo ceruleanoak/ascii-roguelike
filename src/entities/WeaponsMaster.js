@@ -1,4 +1,5 @@
 import { NeutralCharacter } from './NeutralCharacter.js';
+import { GRID } from '../game/GameConfig.js';
 import { initParry } from './enemyMechanics/ParryMechanic.js';
 
 // One line of mechanically-grounded advice per weapon category, said the way
@@ -6,6 +7,14 @@ import { initParry } from './enemyMechanics/ParryMechanic.js';
 // (no rooms, mana, levels or percentages). Melee weapons
 // key by weaponSubtype; ranged/wand weapons have no subtype and fall back to
 // weaponType (BOW/GUN) — see resolveWeaponCategory().
+// On a Cursed Run he trembles: every few seconds his glyph shakes side to
+// side for a moment, then holds still again.
+const TREMBLE_GAP_MIN = 1.5;      // seconds of stillness between fits, at least
+const TREMBLE_GAP_SPREAD = 2.5;   // ...plus up to this much more, at random
+const TREMBLE_DURATION = 0.45;    // seconds one fit lasts
+const TREMBLE_STEP = 0.05;        // seconds between side-to-side flips
+const TREMBLE_PX = GRID.CELL_SIZE * 0.08;
+
 const WEAPON_MASTER_ADVICE = {
   sword:   'A SWORD CUTS IN AN ARC IN FRONT OF YOU.',
   torch:   'A TORCH SETS WHAT IT HITS ON FIRE. DEEP WATER PUTS IT OUT.',
@@ -54,6 +63,10 @@ export class WeaponsMaster extends NeutralCharacter {
     this.persuadeOwner = 'weaponsMasterSystem';
     // His parry, raised only during the Parry Lesson (ParryLesson).
     initParry(this);
+    // Cursed Run tremble: the glyph's sideways shift this frame, and the
+    // countdown to the next fit (negative while one is playing).
+    this.trembleX = 0;
+    this._trembleWait = TREMBLE_GAP_MIN;
   }
 
   // ASK ABOUT → WEAPON → CHECK (WeaponsMasterSystem): advice on the held weapon.
@@ -92,6 +105,7 @@ export class WeaponsMaster extends NeutralCharacter {
 
   update(dt, game) {
     super.update(dt); // pulse animation
+    this._updateTremble(dt, !!game?.cursedRun);
     // Mid-lesson his parry tell ']' takes the place of the talk '!'.
     if (game?.weaponsMasterSystem?.parryLesson?.isTeaching(this)) {
       if (this.parryActive) this.setIndicator(']', '#eeeeff');
@@ -99,5 +113,26 @@ export class WeaponsMaster extends NeutralCharacter {
       return;
     }
     this.updateTalkIndicator(game);
+  }
+
+  _updateTremble(dt, cursed) {
+    this.trembleX = 0;
+    if (!cursed) return;
+    this._trembleWait -= dt;
+    if (this._trembleWait > 0) return;
+    if (this._trembleWait < -TREMBLE_DURATION) {
+      this._trembleWait = TREMBLE_GAP_MIN + Math.random() * TREMBLE_GAP_SPREAD;
+      return;
+    }
+    const flip = Math.floor(-this._trembleWait / TREMBLE_STEP) % 2;
+    this.trembleX = flip ? TREMBLE_PX : -TREMBLE_PX;
+  }
+
+  render(ctx, gridToPixel) {
+    if (!this.trembleX) return super.render(ctx, gridToPixel);
+    super.render(ctx, (col, row) => {
+      const p = gridToPixel(col, row);
+      return { ...p, x: p.x + this.trembleX };
+    });
   }
 }

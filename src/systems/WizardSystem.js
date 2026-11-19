@@ -46,6 +46,8 @@ export class WizardSystem {
   handleSpacePress() {
     const npc = this._findNearbyWizard();
     if (!npc) return false;
+    const game = this.game;
+    if (game.cursedRunSystem.greet(game, npc, 'AH, THE POWER! LET US SPEAK OF MAN AND MANA AND MAMMON.')) return true;
     this.npc = npc;
     this._openMenu();
     return true;

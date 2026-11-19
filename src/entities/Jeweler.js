@@ -49,7 +49,8 @@ export class Jeweler extends NeutralCharacter {
 
   update(dt, game) {
     super.update(dt); // pulse animation
-    this.refreshed = !!game?.jewelerRefreshed;
+    // A Cursed Run's greeting ends the thirst too (JewelerSystem).
+    this.refreshed = !!game?.jewelerRefreshed || this.forsakenGreeted;
     this.updateTalkIndicator(game, this.range);
   }
 }
