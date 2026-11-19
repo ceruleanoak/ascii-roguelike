@@ -602,7 +602,8 @@ export class ExitSystem {
     // class. See resolveSequenceOffers for the single-winner tie-break — the
     // Path Amulet can only ever render one live sequence trail, so at most
     // one sequence is ever "in progress".
-    const sequenceOffer = this.resolveSequenceOffers(this.zoneSystem?.pathHistory);
+    // The Gray offers no next letter of a sequence (its combos don't work).
+    const sequenceOffer = zoneType === 'gray' ? null : this.resolveSequenceOffers(this.zoneSystem?.pathHistory);
     let sequenceColors = colors;
     if (sequenceOffer && sequenceOffer.offerClass !== 'passive' && !letters.includes(sequenceOffer.letter)) {
       const forceIt = sequenceOffer.offerClass === 'always' ||
@@ -954,8 +955,19 @@ export class ExitSystem {
     return 'X'; // Fallback to Crossroads
   }
 
+  /** True in the Gray zone, or when the exit just taken leads into it. */
+  _grayBound() {
+    const zs = this.zoneSystem;
+    return this.game?.currentRoom?.zone === 'gray'
+      || zs?.currentZone === 'gray'
+      || zs?.peekZoneTransition?.() === 'gray';
+  }
+
   checkSecretPattern(pathHistory) {
     if (!pathHistory || pathHistory.length < 3) return null;
+    // Letter combos don't work in the Gray zone: not on an exit taken there,
+    // nor on the exit that leads into it.
+    if (this._grayBound()) return null;
 
     // Extract letters from exit objects
     const letterPath = pathHistory.map(exit => exit.letter);
