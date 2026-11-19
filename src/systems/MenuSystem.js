@@ -225,6 +225,9 @@ export class MenuSystem {
     const centerInteractive = this.isCenterCraftingSlotInteractive();
     const filteredSlots = slots.filter(s => {
       if (s.type === 'crafting-center' && !centerInteractive) return false;
+      // A slot a wish broke takes nothing.
+      const chest = s.type.match(/^equipment-chest(\d)$/);
+      if (chest && game.player?.destroyedSlots?.[parseInt(chest[1], 10) - 1]) return false;
       if (meterSlots) {
         const m = s.type.match(/^equipment-consumable(\d)$/);
         if (m && meterSlots.has(parseInt(m[1], 10) - 1)) return false;

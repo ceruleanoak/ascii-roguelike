@@ -43,6 +43,7 @@ export class WishSystem {
           (s, i) => i !== slotIdx && s === null && !player.destroyedSlots[i]
         );
         if (emptySlot !== -1) player.quickSlots[emptySlot] = item;
+        else game.inventorySystem?.bankItem(item); // no free slot: into the chest, never lost
       }
       player.quickSlots[slotIdx] = null;
       player.destroyedSlots[slotIdx] = true;
@@ -52,12 +53,17 @@ export class WishSystem {
       }
     }
 
+    // The active character's REST-saved slots mirror the live ones (moved
+    // above); clear the broken slot so enterRestState() can't restore into it.
+    // Every other character is fitted when it next becomes active
+    // (InventorySystem.setActiveCharacter → fitLoadoutToSlots).
     const inv = game.inventorySystem;
     if (inv?.restQuickSlots) inv.restQuickSlots[slotIdx] = null;
     if (inv && game._savedDestroyedSlots[inv.restActiveSlotIndex ?? 0]) {
       const next = game._savedDestroyedSlots.findIndex(d => !d);
       inv.restActiveSlotIndex = next !== -1 ? next : 0;
     }
+    game.renderer?.markBackgroundDirty?.(); // REST draws slot glyphs on the cached layer
     game.updateUI?.();
     return true;
   }

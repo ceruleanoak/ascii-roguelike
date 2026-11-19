@@ -25,6 +25,45 @@ export function createCharacterLoadout(characterType) {
   };
 }
 
+// Fit a character's quick slots to the run's broken slots (spent wishes break
+// a slot for every character, game._savedDestroyedSlots). An item sitting in a
+// broken slot moves to a free unbroken one, else into the chest (`bank`), and
+// the active slot steps off a broken one. Without this a character other than
+// the one who wished kept the item in the broken slot (a Starter Weapon sits
+// in slot 0, the first wish's), and selecting it lost the item.
+export function fitLoadoutToSlots(slots, activeSlotIndex, destroyed, bank) {
+  for (let i = 0; i < slots.length; i++) {
+    if (!destroyed[i] || !slots[i]) continue;
+    const free = slots.findIndex((s, j) => s === null && !destroyed[j]);
+    if (free !== -1) slots[free] = slots[i];
+    else bank(slots[i]);
+    slots[i] = null;
+  }
+  if (!destroyed[activeSlotIndex]) return activeSlotIndex;
+  const next = slots.findIndex((_, i) => !destroyed[i]);
+  return next !== -1 ? next : 0;
+}
+
+// Make `characterType` the active character on InventorySystem `inv`
+// (InventorySystem.setActiveCharacter delegates here). A character's loadout
+// is created the first time it becomes active in a run, which is also when
+// its Starter Weapon is granted (once per run). It is fitted to the run's
+// broken slots (`destroyed`, absent before the Game wires it), then the
+// legacy pointers (restQuickSlots / restActiveSlotIndex) point at it. The
+// ingredient pile is shared across characters and not touched here.
+export function activateCharacterLoadout(inv, characterType, destroyed) {
+  if (!inv.characterInventories[characterType]) {
+    inv.characterInventories[characterType] = createCharacterLoadout(characterType);
+  }
+  const entry = inv.characterInventories[characterType];
+  if (destroyed) {
+    entry.activeSlotIndex = fitLoadoutToSlots(entry.quickSlots, entry.activeSlotIndex, destroyed, item => inv.bankItem(item));
+  }
+  inv.restQuickSlots = entry.quickSlots;
+  inv.restActiveSlotIndex = entry.activeSlotIndex;
+  inv._activeCharacterType = characterType;
+}
+
 // Park the live equipment slots (InventorySystem.equippedArmor /
 // equippedConsumables and their per-slot spent/cooldown state) on the
 // outgoing character's loadout entry.

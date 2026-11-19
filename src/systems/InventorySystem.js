@@ -13,8 +13,8 @@
 
 import { canReachLoot } from './PlaneSystem.js';
 import { Item } from '../entities/Item.js';
-import { createCharacterLoadout } from './characterLoadout.js';
-import { GRID } from '../game/GameConfig.js';
+import { createCharacterLoadout, activateCharacterLoadout } from './characterLoadout.js';
+import { GRID, GAME_STATES } from '../game/GameConfig.js';
 import { addItemToChestArray, removeItemFromChestArray, chestEntryLabel, trapAlreadyEquipped, mergeStackableConsumable as mergeStackableConsumableStack } from './TrapSystem.js';
 import { saveExploreRoomState, getSavedExploreRoomState, clearSavedExploreRoomState, saveRestIngredientsState, getSavedRestIngredientsState, clearSavedRestIngredientsState } from './RoomStatePersistence.js';
 import { EquipmentEffectsSystem } from './EquipmentEffectsSystem.js';
@@ -349,18 +349,7 @@ export class InventorySystem {
    * @param {string} characterType - Character type (e.g., 'default', 'red', 'cyan')
    */
   setActiveCharacter(characterType) {
-    // Ensure character inventory exists
-    // A character's loadout is created the first time it becomes active in a
-    // run — which is also when its Starter Weapon is granted (once per run).
-    if (!this.characterInventories[characterType]) {
-      this.characterInventories[characterType] = createCharacterLoadout(characterType);
-    }
-
-    // Update legacy property pointers to active character's data.
-    // The ingredient pile is shared across characters and not touched here.
-    this.restQuickSlots = this.characterInventories[characterType].quickSlots;
-    this.restActiveSlotIndex = this.characterInventories[characterType].activeSlotIndex;
-    this._activeCharacterType = characterType;
+    activateCharacterLoadout(this, characterType, this.game?._savedDestroyedSlots);
   }
 
   /**
@@ -989,6 +978,12 @@ export class InventorySystem {
   // Traps merge into an existing same-char stack instead of a new chest slot.
   addToChest(item) {
     addItemToChestArray(this.itemChest, item);
+  }
+
+  // Into the chest now in REST, or deferred until REST while away from it.
+  bankItem(item) {
+    if (this.game?.stateMachine?.getCurrentState?.() === GAME_STATES.REST) this.addToChest(item);
+    else this.deferToChest(item);
   }
 
   // EXPLORE-time deferred deposit; flushed to itemChest by saveRestLoadout().
