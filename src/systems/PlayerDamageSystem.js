@@ -9,6 +9,16 @@
 // pattern of a system operating directly on the player it's passed.
 import { PlayerParry, PARRY_REFLECT_FRACTION } from '../entities/enemyMechanics/ParryMechanic.js';
 import { ENEMIES } from '../data/enemies.js';
+import { ARMOR_TRAINING } from '../data/items.js';
+
+// What the Weapons Master's Armor Training adds to `kind` ('dodge' chance or
+// 'defense' points). Read here, at the hit, rather than folded into
+// EquipmentEffectsSystem's recompute, so it follows the character's own
+// levels (player.armorTraining, re-pointed by CharacterSystem) through every
+// swap without waiting for an equip.
+function armorTrainingBonus(player, kind) {
+  return (player.armorTraining?.[kind] || 0) * ARMOR_TRAINING.perLevel[kind];
+}
 
 // Frog form carries the Frog enemy's burn weakness, read from its data so the
 // two never drift apart.
@@ -63,7 +73,9 @@ export const PlayerDamageSystem = {
     // A source that ignores armor (damageSource.ignoresArmor, the Grasp's
     // Fingers) skips armor's dodge roll here and every cut below.
     const armored = !damageSource.ignoresArmor;
-    if (armored && player.dodgeChance > 0 && Math.random() < player.dodgeChance) {
+    // Armor Training's dodge stacks onto the worn armor's.
+    const dodgeChance = player.dodgeChance + armorTrainingBonus(player, 'dodge');
+    if (armored && dodgeChance > 0 && Math.random() < dodgeChance) {
       return { dodged: true, lucky: false };
     }
 
@@ -123,7 +135,7 @@ export const PlayerDamageSystem = {
     const elementAbsorb = player.elementReduction?.[electric ? 'electric' : damageSource.element] || 0;
 
     // Apply defense (reduce damage, minimum 1)
-    const armorCut = armored ? player.defense + meleeAbsorb + burnAbsorb + elementAbsorb : 0;
+    const armorCut = armored ? player.defense + armorTrainingBonus(player, 'defense') + meleeAbsorb + burnAbsorb + elementAbsorb : 0;
     let actualDamage = Math.max(1, amount - armorCut);
     if (damageSource.element === 'freeze' && player.freezeDamageCap > 0) {
       actualDamage = Math.min(actualDamage, player.freezeDamageCap);

@@ -269,9 +269,11 @@ export class HutInteriorOverlay {
     const coinAnim = game.fishermanDemoSystem?.getCoinAnim?.();
     if (coinAnim) drawCoinArc(this.renderer, coinAnim);
 
-    // Weapons Master coin pay — same shared spinning-arc draw helper.
+    // Weapons Master pay — the shared coin arc, or the paid gem's glyph
+    // (Armor Training taken in gems).
     const weaponsMasterCoinAnim = game.weaponsMasterSystem?.getCoinAnim?.();
-    if (weaponsMasterCoinAnim) drawCoinArc(this.renderer, weaponsMasterCoinAnim);
+    if (weaponsMasterCoinAnim?.char) drawDonationArc(this.renderer, weaponsMasterCoinAnim);
+    else if (weaponsMasterCoinAnim) drawCoinArc(this.renderer, weaponsMasterCoinAnim);
 
     // Artifact given to the Wise Fellow — the offered glyph spinning over to him.
     const artifactArc = game.interactionSystem?.getArtifactArc?.();

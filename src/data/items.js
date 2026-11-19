@@ -3463,9 +3463,28 @@ export const SUBTYPE_DEFAULTS = {
 //   whip   → 'stun'       the lash gains the stun it used to have by default
 //                         (Item.createMeleeWhipcrack). A gem whip already
 //                         carries its own status effect, which still wins.
+//   GUN    → 'accuracy'  shots fly truer: the pellet spread and the per-shot
+//                         inaccuracy are halved (Item.createBullets). Keyed by
+//                         weaponType — guns carry no weaponSubtype.
 export const TRAINING_TECHNIQUES = {
   dagger: 'doubleHit',
-  whip: 'stun'
+  whip: 'stun',
+  GUN: 'accuracy'
+};
+
+// Armor Training (Weapons Master, ARMOR → TRAIN DODGE / TRAIN DEFENSE): what
+// each level adds, and what each level costs. Per character, per run
+// (characterLoadout.armorTraining). `prices[level]` buys level + 1 and is a
+// list of alternatives — the first the player can pay is taken. `gems` counts
+// any GEM_CHARS (cheapest first); `diamond` asks for a Diamond (⧫).
+export const ARMOR_TRAINING = {
+  maxLevel: 3,
+  perLevel: { dodge: 0.15, defense: 1 },
+  prices: [
+    [{ coins: 2 }],
+    [{ coins: 5 }, { gems: 1 }],
+    [{ diamond: 1 }, { gems: 3 }]
+  ]
 };
 
 export function resolveWeaponDefaults(data) {
@@ -3500,6 +3519,10 @@ export function isItem(char) {
 // like any other ingredient (see MenuSystem.openCraftingMenu, which lists
 // game.getIngredients() unfiltered by category).
 export const TREASURE_CHARS = new Set(['◇', '⬥', '⬦', '⧫', '⬧', '◈', '⬨', '●', '⚜']);
+
+// The seven gems: the treasures less the Pearl and the Artifact. What the
+// Weapons Master takes as "a gem" (Buckler, Armor Training).
+export const GEM_CHARS = ['◇', '⬥', '⬦', '⧫', '⬧', '◈', '⬨'];
 
 /**
  * What each treasure does when offered to a fairy fountain (FountainSystem).

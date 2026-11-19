@@ -29,6 +29,7 @@ export class Player {
     this.maxHp = PLAYER_STATS.MAX_HP;
     this.passiveMaxHpBonus = 0; // share of maxHp currently granted by equipped hearts (EquipmentEffectsSystem)
     this.defense = 0; // Defense from armor
+    this.armorTraining = null; // the character's Armor Training levels (CharacterSystem points it at the loadout)
 
     // Armor special properties
     this.bulletResist = 0;

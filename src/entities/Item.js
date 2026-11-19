@@ -550,7 +550,9 @@ export class Item {
   createBullets(player, chargeRatio = 0) {
     const bullets = [];
     const bulletCount = this.data.bulletCount || 1;
-    const spread = bulletCount > 1 ? 0.3 : 0;
+    // Gun training's technique ('accuracy') halves the spread and inaccuracy.
+    const aim = this.trainedTechnique(player) === 'accuracy' ? 0.5 : 1;
+    const spread = (bulletCount > 1 ? 0.3 : 0) * aim;
     const angle = Math.atan2(player.facing.y, player.facing.x);
     // Unique ID for this burst — lets same-burst bullets bypass enemy iframes
     const attackId = `burst_${_nextAttackId++}`;
@@ -595,7 +597,7 @@ export class Item {
     for (let i = 0; i < bulletCount; i++) {
       // Add base spread for multi-bullet weapons, plus slight randomness for all bullets
       const baseSpread = (Math.random() - 0.5) * spread;
-      const randomness = (Math.random() - 0.5) * (this.data.inaccuracy ?? 0.1);
+      const randomness = (Math.random() - 0.5) * (this.data.inaccuracy ?? 0.1) * aim;
       const spreadAngle = angle + baseSpread + randomness;
 
       // Spawn bullets slightly offset from player center (avoids hitting sapping enemies)
@@ -1016,9 +1018,11 @@ export class Item {
    * pattern builder decides what its own technique means.
    */
   trainedTechnique(player) {
-    const subtype = this.data.weaponSubtype;
-    if (!subtype || !player?.trainedWeapons?.[subtype]) return null;
-    return TRAINING_TECHNIQUES[subtype] || null;
+    // Same category key as resolveWeaponCategory: the subtype, else the
+    // weaponType (guns have no subtype).
+    const category = this.data.weaponSubtype || this.data.weaponType;
+    if (!category || !player?.trainedWeapons?.[category]) return null;
+    return TRAINING_TECHNIQUES[category] || null;
   }
 
   createMeleeArc(player) {

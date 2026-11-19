@@ -2,6 +2,7 @@ import { GRID } from '../game/GameConfig.js';
 import { WeaponsMaster, resolveWeaponCategory } from '../entities/WeaponsMaster.js';
 import { TRAINING_TECHNIQUES } from '../data/items.js';
 import { ParryLesson } from './ParryLesson.js';
+import { ArmorTraining } from './ArmorTraining.js';
 import { menuIntent } from './MenuInput.js';
 import { WeaponsMasterOverlay } from '../rendering/ui/WeaponsMasterOverlay.js';
 
@@ -10,15 +11,26 @@ const COIN_ARC_DURATION = 0.55; // matches the well/camp-NPC/fisherman coin arcs
 // How each training technique reads back to the player on the training message.
 const TRAINING_TECHNIQUE_LABELS = {
   doubleHit: 'DOUBLE HIT',
-  stun: 'STUN LASH'
+  stun: 'STUN LASH',
+  accuracy: 'ACCURACY'
 };
 
-// ASK ABOUT rows: topic → its bare label.
+// ASK ABOUT rows: topic → its bare label. WEAPON and ARMOR open a sub-layer
+// (SUBMENUS) instead of being answered.
 const TOPICS = {
-  weapon:  'WEAPON',
-  armor:   'ARMOR',
-  lesson:  'LESSON',
-  buckler: 'BUCKLER'
+  weapon:      'WEAPON',
+  armor:       'ARMOR',
+  lesson:      'LESSON',
+  buckler:     'BUCKLER',
+  weaponCheck: 'CHECK',
+  weaponTrain: 'TRAIN',
+  armorCheck:  'CHECK',
+  dodge:       'TRAIN DODGE',
+  defense:     'TRAIN DEFENSE'
+};
+const SUBMENUS = {
+  weapon: ['weaponCheck', 'weaponTrain'],
+  armor:  ['armorCheck', 'dodge', 'defense']
 };
 
 /**
@@ -27,8 +39,9 @@ const TOPICS = {
  *
  * SPACE near him opens ASK ABOUT, a PauseSystem modal with the rows WEAPON,
  * ARMOR and LESSON (BUCKLER once the lesson is taken; gone once the Buckler
- * is sold). Picking a row closes the menu and he answers it in the dialogue
- * box. An answer that ends in an offer (training, the lesson, the Buckler) is
+ * is sold). WEAPON opens CHECK / TRAIN, ARMOR opens CHECK / TRAIN DODGE /
+ * TRAIN DEFENSE (SHIFT backs out to the top). Picking an answerable row
+ * closes the menu and he answers it in the dialogue box. An answer that ends in an offer (training, the lesson, the Buckler) is
  * remembered as `pendingOffer`; picking that row again once he has been heard
  * out (`spokenOnce`) pays for it. Hearing any other answer in between means
  * the offer has to be heard again.
@@ -42,21 +55,28 @@ const TOPICS = {
  * (Item.createMeleeMultistab), the whip earns `stun` (Item.createMeleeWhipcrack).
  *
  * With nothing left to train, he offers the Parry Lesson and then a Buckler
- * (ParryLesson, owned here).
+ * (ParryLesson, owned here). Armor Training (ArmorTraining, owned here) buys
+ * dodge and defense levels.
  */
 export class WeaponsMasterSystem {
   constructor(game) {
     this.game = game;
     this.coinAnim = null; // { startX, startY, endX, endY, t, spinPhase, master, category | onArrive }
     this.parryLesson = new ParryLesson(game);
+    this.armorTraining = new ArmorTraining(game);
     this.overlay = new WeaponsMasterOverlay();
 
     // The offer his last answer ended on ('weapon:<category>', 'lesson',
-    // 'buckler'), or null. Bought by picking its row again once heard out.
+    // 'buckler', 'dodge', 'defense'), or null. Bought by picking its row
+    // again once heard out.
     this.pendingOffer = null;
+    // The last row he answered ({ layer, index }). The menu reopens on it, so
+    // buying a heard offer (or the next level of one) is one SPACE away.
+    this.lastRow = null;
 
     // ASK ABOUT modal state.
     this.master = null;
+    this.layer = 'root';  // 'root' | a SUBMENUS key
     this.rows = [];       // [{ label, topic }]
     this.menuIndex = 0;
     this.openedAt = 0;
@@ -67,6 +87,7 @@ export class WeaponsMasterSystem {
   resetRunState() {
     this.coinAnim = null;
     this.pendingOffer = null;
+    this.lastRow = null;
     this.parryLesson.resetRunState();
   }
 
@@ -105,19 +126,32 @@ export class WeaponsMasterSystem {
   open(master) {
     if (!this.game.pauseSystem.openModal(this)) return;
     this.master = master;
-    this.rows = this._menuRows();
-    this.menuIndex = 0;
+    // Reopen on the last row he answered, else at the top.
+    this._showLayer(this.lastRow?.layer ?? 'root', this.lastRow?.index ?? 0);
     this.openedAt = performance.now();
     // Same lockout + fade as the Shop: the SPACE that opened the menu can't
     // also pick a row.
     this.inputReadyAt = this.openedAt + 1000;
   }
 
-  /** WEAPON, ARMOR, then LESSON — BUCKLER after the lesson, nothing once it's sold. */
-  _menuRows() {
-    const topics = ['weapon', 'armor'];
-    if (!this.parryLesson.taken) topics.push('lesson');
-    else if (this.parryLesson.bucklerOffered()) topics.push('buckler');
+  /** Shows `layer`'s rows with the cursor on `index` (clamped). */
+  _showLayer(layer, index = 0) {
+    this.layer = layer;
+    this.rows = this._menuRows(layer);
+    this.menuIndex = Math.max(0, Math.min(this.rows.length - 1, index));
+  }
+
+  /**
+   * Top: WEAPON, ARMOR, then LESSON — BUCKLER after the lesson, nothing once
+   * it's sold. A sub-layer: its SUBMENUS rows.
+   */
+  _menuRows(layer) {
+    let topics = SUBMENUS[layer];
+    if (!topics) {
+      topics = ['weapon', 'armor'];
+      if (!this.parryLesson.taken) topics.push('lesson');
+      else if (this.parryLesson.bucklerOffered()) topics.push('buckler');
+    }
     return topics.map(topic => ({ label: TOPICS[topic], topic }));
   }
 
@@ -132,9 +166,21 @@ export class WeaponsMasterSystem {
     } else if (intent === 'confirm') {
       const master = this.master;
       const { topic } = this.rows[this.menuIndex];
+      if (SUBMENUS[topic]) {
+        this._showLayer(topic, 0);
+        return;
+      }
+      this.lastRow = { layer: this.layer, index: this.menuIndex };
       this.game.pauseSystem.closeModal();
       this._ask(master, topic);
     } else if (intent === 'shift') {
+      // SHIFT in a sub-layer backs out onto its parent row; at the top it closes.
+      if (this.layer !== 'root') {
+        const parent = this.layer;
+        this._showLayer('root', 0);
+        this.menuIndex = Math.max(0, this.rows.findIndex(r => r.topic === parent));
+        return;
+      }
       this.game.pauseSystem.closeModal();
     }
   }
@@ -145,6 +191,7 @@ export class WeaponsMasterSystem {
 
   onClose() {
     this.master = null;
+    this.layer = 'root';
     this.rows = [];
     this.menuIndex = 0;
   }
@@ -152,13 +199,30 @@ export class WeaponsMasterSystem {
   // ── Answers ────────────────────────────────────────────────────────────────
 
   _ask(master, topic) {
-    if (topic === 'weapon') this._askWeapon(master);
-    else if (topic === 'armor') this._speak(master, master.armorLines(this.game));
+    if (topic === 'weaponCheck') this._speak(master, master.weaponCheckLines(this.game));
+    else if (topic === 'weaponTrain') this._askWeaponTrain(master);
+    else if (topic === 'armorCheck') this._speak(master, master.armorCheckLines(this.game));
+    else if (topic === 'dodge' || topic === 'defense') this._askArmorTraining(master, topic);
     else if (topic === 'lesson') this._askLesson(master);
     else this._askBuckler(master);
   }
 
-  _askWeapon(master) {
+  /** TRAIN DODGE / TRAIN DEFENSE: hear the next level's price, then pick again to pay it. */
+  _askArmorTraining(master, kind) {
+    const training = this.armorTraining;
+    const offer = training.offered(kind) ? kind : null;
+    if (offer && this._heard(master, offer)) {
+      const paid = training.pay(kind);
+      if (paid !== false) {
+        this.pendingOffer = null;
+        this._flyCoin(master, { armorKind: kind, ...(paid ? { char: paid } : {}) });
+        return;
+      }
+    }
+    this._speak(master, training.offerLines(kind), offer);
+  }
+
+  _askWeaponTrain(master) {
     const inv = this.game.inventorySystem;
     const category = this._untrainedCategory();
     const offer = category ? `weapon:${category}` : null;
@@ -168,7 +232,7 @@ export class WeaponsMasterSystem {
       this._flyCoin(master, { category });
       return;
     }
-    this._speak(master, master.weaponLines(this.game), offer);
+    this._speak(master, master.weaponTrainLines(this.game), offer);
   }
 
   _askLesson(master) {
@@ -240,9 +304,10 @@ export class WeaponsMasterSystem {
     this.coinAnim.spinPhase += dt * 12;
     if (this.coinAnim.t < COIN_ARC_DURATION) return;
 
-    const { category, onArrive } = this.coinAnim;
+    const { category, armorKind, onArrive } = this.coinAnim;
     this.coinAnim = null;
     if (onArrive) onArrive();
+    else if (armorKind) this._trainArmor(master, armorKind);
     else this._train(master, category);
   }
 
@@ -253,6 +318,14 @@ export class WeaponsMasterSystem {
     if (!category) return null;
     const trained = game.inventorySystem?.characterInventories?.[game.activeCharacterType]?.trainedWeapons;
     return trained?.[category] ? null : category;
+  }
+
+  /** Raises an Armor Training level once the payment lands. */
+  _trainArmor(master, kind) {
+    const notice = this.armorTraining.train(kind);
+    this.game.audioSystem?.playSFX?.('coin_plink');
+    if (notice) this.game.menuSystem?.showPickupMessage?.(notice);
+    this.game.dialogueSystem?.open(master, ['TRAINED.']);
   }
 
   // ── PERSUADE (InfluenceSystem) ──────────────────────────────────────────────

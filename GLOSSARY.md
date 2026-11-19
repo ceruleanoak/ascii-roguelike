@@ -2760,6 +2760,21 @@ identity, not standard programming terms.
 - **Not:** weapon training (the permanent +1 damage or technique per category); PERSUADE does
   not give either away.
 
+### Armor Training
+- **Definition:** What the Weapons Master sells under ASK ABOUT → ARMOR (TRAIN DODGE and TRAIN
+  DEFENSE, beside CHECK, his remark on the worn armor). Each has three levels per character,
+  per run: a dodge level adds a 15% chance to avoid a hit, a defense level takes 1 off every
+  hit. Both stack on the worn armor's own and, like it, don't apply to a hit that ignores
+  armor. Level 1 costs 2 coins, level 2 five coins or a gem, level 3 a Diamond or three gems
+  (cheapest gems taken first). As with every row of his, the first pick hears the price and
+  the next pays it.
+- **In code:** `src/systems/ArmorTraining.js`, owned by `WeaponsMasterSystem`
+  (`armorTraining`); levels on the character's loadout (`characterLoadout.armorTraining`,
+  pointed at by `player.armorTraining`), prices and per-level values in `ARMOR_TRAINING`
+  (`items.js`), applied at the hit by `PlayerDamageSystem` (`armorTrainingBonus`).
+- **Not:** weapon training (WEAPON → TRAIN: +1 damage, or the category's technique — a gun's
+  is accuracy, halving its spread); armor's own `dodgeChance` / `defense`; Luck's dodge.
+
 ### Impact Size
 - **Definition:** How much ground a shockwave hammer's blow covers: the side, in cells, of the
   square it strikes, centered on the carrier. Everything inside is hit once, at the instant

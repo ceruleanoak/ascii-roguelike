@@ -606,6 +606,9 @@ export class CharacterSystem {
     // is why it is re-pointed here rather than copied once.
     body.trainedWeapons =
       game.inventorySystem?.characterInventories?.[type]?.trainedWeapons || null;
+    // Armor Training levels, the same live reference (PlayerDamageSystem reads them).
+    body.armorTraining =
+      game.inventorySystem?.characterInventories?.[type]?.armorTraining || null;
 
     // Store character type and apply character-specific properties
     body.characterType = type;

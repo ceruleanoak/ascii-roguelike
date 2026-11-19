@@ -1,5 +1,5 @@
 import { GRID, PHYSICS } from '../game/GameConfig.js';
-import { TREASURE_CHARS, WEAPON_TYPES } from '../data/items.js';
+import { GEM_CHARS, WEAPON_TYPES } from '../data/items.js';
 import { initParry, tickParry, expendParry, playParrySound } from '../entities/enemyMechanics/ParryMechanic.js';
 
 // The Weapons Master's own parry while he teaches, in real seconds. 360°: he
@@ -31,9 +31,8 @@ const SWING_RESOLVE_GAP = 0.4;
 const BUCKLER = '◍';
 const BUCKLER_COIN_PRICE = 2;
 const ARTIFACT = '⚜';
-const PEARL = '●';
 // Gems he takes for the Buckler: the treasures, less the Artifact and the Pearl.
-const GEMS = [...TREASURE_CHARS].filter(c => c !== ARTIFACT && c !== PEARL);
+const GEMS = GEM_CHARS;
 
 /**
  * ParryLesson — what the Weapons Master offers once there is nothing left to

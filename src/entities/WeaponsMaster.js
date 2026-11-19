@@ -54,19 +54,24 @@ export class WeaponsMaster extends NeutralCharacter {
     initParry(this);
   }
 
-  // ASK ABOUT → WEAPON (WeaponsMasterSystem): advice on the held weapon,
-  // closing on what training it can still get.
-  weaponLines(game) {
+  // ASK ABOUT → WEAPON → CHECK (WeaponsMasterSystem): advice on the held weapon.
+  weaponCheckLines(game) {
     const category = resolveWeaponCategory(game.player?.heldItem);
-    if (!category) return ['I TRAIN WEAPONS. YOU AREN\'T HOLDING ONE.'];
-    const advice = WEAPON_MASTER_ADVICE[category] || 'I DON\'T KNOW THAT WEAPON.';
-    const trained = game.inventorySystem?.characterInventories?.[game.activeCharacterType]?.trainedWeapons;
-    if (trained?.[category]) return [advice, 'YOU ARE ALREADY TRAINED IN THIS.'];
-    return [advice, 'ONE COIN AND I WILL TRAIN YOU IN IT.'];
+    if (!category) return ['YOU AREN\'T HOLDING A WEAPON.'];
+    return [WEAPON_MASTER_ADVICE[category] || 'I DON\'T KNOW THAT WEAPON.'];
   }
 
-  // ASK ABOUT → ARMOR: a remark on what the player is wearing.
-  armorLines(game) {
+  // ASK ABOUT → WEAPON → TRAIN: what training the held weapon can still get.
+  weaponTrainLines(game) {
+    const category = resolveWeaponCategory(game.player?.heldItem);
+    if (!category) return ['I TRAIN WEAPONS. YOU AREN\'T HOLDING ONE.'];
+    const trained = game.inventorySystem?.characterInventories?.[game.activeCharacterType]?.trainedWeapons;
+    if (trained?.[category]) return ['YOU ARE ALREADY TRAINED IN THIS.'];
+    return ['ONE COIN AND I WILL TRAIN YOU IN IT.'];
+  }
+
+  // ASK ABOUT → ARMOR → CHECK: a remark on what the player is wearing.
+  armorCheckLines(game) {
     return [armorRemark(game)];
   }
 
@@ -75,7 +80,12 @@ export class WeaponsMaster extends NeutralCharacter {
   // offer when one stands.
   getDialogueLines(game) {
     const offer = game.weaponsMasterSystem?.parryLesson?.offerLine() ?? null;
-    return [...this.weaponLines(game), ...this.armorLines(game), ...(offer ? [offer] : [])];
+    return [
+      ...this.weaponCheckLines(game),
+      ...(resolveWeaponCategory(game.player?.heldItem) ? this.weaponTrainLines(game) : []),
+      ...this.armorCheckLines(game),
+      ...(offer ? [offer] : [])
+    ];
   }
 
   update(dt, game) {
