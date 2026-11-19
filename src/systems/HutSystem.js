@@ -12,6 +12,7 @@ import { WeaponsMaster } from '../entities/WeaponsMaster.js';
 import { Shopkeeper } from '../entities/Shopkeeper.js';
 import { Jeweler } from '../entities/Jeweler.js';
 import { WizardNPC } from '../entities/WizardNPC.js';
+import { AlchemistNPC } from '../entities/AlchemistNPC.js';
 import { isInteriorActive } from './PlaneSystem.js';
 import { HOT_WATER_CHAR } from '../data/alchemy.js';
 import { hasKeyItem } from './keyItems.js';
@@ -309,9 +310,11 @@ export class HutSystem {
       const zone = this.game.currentRoom?.zone || 'green';
       const centerCol = Math.floor(cols / 2);
       const centerRow = Math.floor(rows / 2) - 1;
-      const fisher = new Fisherman(centerCol * GRID.CELL_SIZE, centerRow * GRID.CELL_SIZE);
-      fisher.setZone(zone, { coinDemo: true });
-      npcs.push(fisher);
+      if (!this._isForsaken(Fisherman)) {
+        const fisher = new Fisherman(centerCol * GRID.CELL_SIZE, centerRow * GRID.CELL_SIZE);
+        fisher.setZone(zone, { coinDemo: true });
+        npcs.push(fisher);
+      }
 
     } else if (hutKind === 'witch') {
       // Witch at interior center
@@ -323,7 +326,9 @@ export class HutSystem {
       // Weapons Master at interior center
       const centerCol = Math.floor(cols / 2);
       const centerRow = Math.floor(rows / 2) - 1;
-      npcs.push(new WeaponsMaster(centerCol * GRID.CELL_SIZE, centerRow * GRID.CELL_SIZE));
+      if (!this._isForsaken(WeaponsMaster)) {
+        npcs.push(new WeaponsMaster(centerCol * GRID.CELL_SIZE, centerRow * GRID.CELL_SIZE));
+      }
 
     } else if (hutKind === 'shopkeeper') {
       // Shopkeeper stands in the sealed alcove behind the Counter (row 1 —
@@ -336,16 +341,18 @@ export class HutSystem {
       // this Settlement sits in and narrows the roll to that Zone's own
       // wares first (shopPricing.js's zoneCraftablePool) — a Green
       // Settlement and a Red Settlement stock different counters.
-      npcs.push(new Shopkeeper(
-        centerCol * GRID.CELL_SIZE,
-        SHOPKEEPER_ALCOVE_ROW * GRID.CELL_SIZE,
-        this.game.zoneDepths,
-        zone
-      ));
+      if (!this._isForsaken(Shopkeeper)) {
+        npcs.push(new Shopkeeper(
+          centerCol * GRID.CELL_SIZE,
+          SHOPKEEPER_ALCOVE_ROW * GRID.CELL_SIZE,
+          this.game.zoneDepths,
+          zone
+        ));
+      }
       // Once refreshed (JewelerSystem), the Jeweler sits beside the
       // Shopkeeper in every Settlement shop, a few cells along the same
       // alcove — far enough apart that the nearer of the two answers SPACE.
-      if (this.game.jewelerRefreshed) {
+      if (this.game.jewelerRefreshed && !this._isForsaken(Jeweler)) {
         const jewelerCol = Math.min(cols - 2, centerCol + 3);
         npcs.push(new Jeweler(
           jewelerCol * GRID.CELL_SIZE,
@@ -374,7 +381,9 @@ export class HutSystem {
       // re-derive it.
       const centerCol = Math.floor(cols / 2);
       const centerRow = Math.floor(rows / 2) - 1;
-      npcs.push(new WizardNPC(centerCol * GRID.CELL_SIZE, (centerRow - 1) * GRID.CELL_SIZE));
+      if (!this._isForsaken(WizardNPC)) {
+        npcs.push(new WizardNPC(centerCol * GRID.CELL_SIZE, (centerRow - 1) * GRID.CELL_SIZE));
+      }
 
       const circleCol = centerCol;
       const circleRow = centerRow + 2;
@@ -830,7 +839,9 @@ export class HutSystem {
     if (!floor || !alchemist?.rescued) return;
     floor.npcs = floor.npcs ?? [];
 
-    const shouldBePresent = !alchemist.lessonGiven || this.playerCarriesHotWater();
+    // A Forsaken Alchemist (Cursed Run) is no longer placed anywhere.
+    const shouldBePresent = !this._isForsaken(AlchemistNPC)
+      && (!alchemist.lessonGiven || this.playerCarriesHotWater());
 
     const idx = floor.npcs.indexOf(alchemist);
     if (shouldBePresent && idx === -1) {
@@ -844,6 +855,14 @@ export class HutSystem {
       floor.npcs.splice(idx, 1);
       if (alchemist.placement === 'hut') alchemist.placement = null;
     }
+  }
+
+  /**
+   * Whether NPC kind `Kind` has been Forsaken this Cursed Run
+   * (CursedRunSystem.forsake) — its hut is then left empty.
+   */
+  _isForsaken(Kind) {
+    return this.game.cursedRunSystem.isForsaken(this.game, Kind);
   }
 
   /**

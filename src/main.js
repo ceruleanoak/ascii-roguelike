@@ -208,7 +208,7 @@ class Game {
     // arrow); dungeon behavior lives in DungeonPuzzleSystem instead.
     this.compassSystem = new CompassSystem(this);
     this.neutralRoomSystem = new NeutralRoomSystem();
-    this.errandSystem = new ErrandSystem();
+    this.errandSystem = new ErrandSystem(this);
     this.cheatMenu = new CheatMenu(this);
     this.persistenceSystem = new PersistenceSystem();
     this.inventorySystem = new InventorySystem();

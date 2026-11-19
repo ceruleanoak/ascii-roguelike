@@ -153,6 +153,11 @@ export class CursedRunSystem {
     this._replayingAttack = false;
     // Seconds into the Curse Mark, or null when none is playing.
     this._markTime = null;
+
+    // NPC kinds (their classes) Forsaken this run — see forsake(). A Set of
+    // constructors, keyed the way FROG_LINES is, so every spawn site asks
+    // the same question of one place. System-internal; hardReset() clears it.
+    this._forsaken = new Set();
   }
 
   /** Full run-scoped reset — death/title. */
@@ -171,6 +176,7 @@ export class CursedRunSystem {
     this._dodgeWasHeld = false;
     this._replayingAttack = false;
     this._markTime = null;
+    this._forsaken = new Set();
   }
 
   // ── The curse begins ───────────────────────────────────────────────────────
@@ -686,5 +692,57 @@ export class CursedRunSystem {
     });
     fairy.uncounted = true;
     game._activeEnemies().push(fairy);
+  }
+
+  // ── Forsaken NPCs ──────────────────────────────────────────────────────────
+
+  /**
+   * A Cursed Run's NPC rule: one interaction, no reappearance. The first time
+   * the player deals with an NPC on a Cursed Run, that NPC's kind is Forsaken:
+   * no NPC of that kind is placed again for the rest of the run. The visit in
+   * progress still finishes, so a menu that interaction opened works as
+   * normal. Uncursed, this does nothing.
+   */
+  forsake(game, npc) {
+    if (game.cursedRun && npc) this._forsaken.add(npc.constructor);
+  }
+
+  /** Whether NPC kind `Kind` (its class) has been Forsaken this Cursed Run. */
+  isForsaken(game, Kind) {
+    return !!game.cursedRun && this._forsaken.has(Kind);
+  }
+
+  /**
+   * The Forsaken greeting for an NPC whose SPACE opens a menu (the Weapons
+   * Master, Wizard, Shopkeeper, Jeweler). On a Cursed Run the first press
+   * tells `line` in the DialogueBox and Forsakes the kind; every later press
+   * returns false, so the caller opens its menu as normal. Uncursed, always
+   * false.
+   * @returns {boolean} true when the press was spent on the greeting
+   */
+  greet(game, npc, line) {
+    if (!game.cursedRun || npc.forsakenGreeted) return false;
+    npc.forsakenGreeted = true;
+    this.forsake(game, npc);
+    return game.dialogueSystem.open(npc, [line]);
+  }
+
+  /**
+   * A Forsaken NPC that turns: `npc` leaves the world and a Risen ('Z')
+   * stands where it stood — the Bridge Worker's end (RidgeSystem). The room's
+   * peace was the NPC's to keep, so a no-combat room stops being one. The
+   * Risen is `uncounted`, like a wild fairy (releaseWildFairy): exits that
+   * were open stay open around it.
+   */
+  turnToRisen(game, npc) {
+    const index = game.neutralCharacters.indexOf(npc);
+    if (index !== -1) game.neutralCharacters.splice(index, 1);
+    if (game.currentRoom) game.currentRoom.noCombat = false;
+    const [risen] = game.roomGenerator.spawnEnemiesFrom(game, null, {
+      spawnChar: 'Z', spawnCount: 1, exactPosition: true,
+      spawnerPosition: { x: npc.position.x, y: npc.position.y },
+    });
+    risen.uncounted = true;
+    game._activeEnemies().push(risen);
   }
 }

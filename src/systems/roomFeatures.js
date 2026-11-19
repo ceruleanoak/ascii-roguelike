@@ -293,6 +293,8 @@ export function maybeSpawnPeacefulFishingRoom(gen, room) {
  * null if no valid land cell is found.
  */
 export function spawnShoreFisherman(gen, room) {
+  // Forsaken on a Cursed Run (CursedRunSystem.forsake): no Fisherman again.
+  if (gen.game?.cursedRunSystem?.isForsaken(gen.game, Fisherman)) return null;
   const candidates = [];
   const lakeNodes = gen.currentLetterTemplate?.lakeZone?.nodes;
   if (lakeNodes?.length) {
@@ -341,6 +343,8 @@ export function maybeSpawnRoamingAlchemist(gen, room) {
   const game = gen.game;
   const alchemist = game?.alchemistNPC;
   if (!alchemist?.rescued || !alchemist.lessonGiven || alchemist.placement) return false;
+  // Forsaken on a Cursed Run (CursedRunSystem.forsake): placed nowhere again.
+  if (game.cursedRunSystem?.isForsaken(game, alchemist.constructor)) return false;
 
   const placement =
     (room.exitLetter === 'L' && room.zone === 'red') ? 'red-L' :
@@ -504,7 +508,8 @@ export function generateCalderaRoom(gen, room) {
 
   // Rare outdoor Weapons Master — same interactions as the Settlement hut version.
   // Spawns on the pool's shore, not anywhere in the room.
-  if (Math.random() < 0.12 && shoreCells.length > 0) {
+  if (Math.random() < 0.12 && shoreCells.length > 0
+      && !gen.game?.cursedRunSystem?.isForsaken(gen.game, WeaponsMaster)) {
     const { col, row } = shoreCells[Math.floor(Math.random() * shoreCells.length)];
     room.calderaWeaponsMaster = new WeaponsMaster(col * C, row * C);
   }
@@ -1753,7 +1758,7 @@ export function generateJewelerRoom(gen, room) {
   }
   protectRegion(room, { kind: 'cells', cells });
 
-  if (!gen.game?.jewelerRefreshed) {
+  if (!gen.game?.jewelerRefreshed && !gen.game?.cursedRunSystem?.isForsaken(gen.game, Jeweler)) {
     room.jewelerNPC = new Jeweler(col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
   }
 }

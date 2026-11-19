@@ -2,6 +2,7 @@ import { EXIT_LETTERS, SECRET_PATTERNS } from '../data/exitLetters.js';
 import { LETTER_TEMPLATES } from '../data/letterTemplates.js';
 import { ZONES, ZONE_COLORS } from '../data/zones.js';
 import { GRID } from '../game/GameConfig.js';
+import { Jeweler } from '../entities/Jeweler.js';
 import { isInteriorActive } from './PlaneSystem.js';
 import { hasLuckBlessing } from './luck.js';
 import { INGREDIENT_STACK_CAP } from './IngredientPile.js';
@@ -118,9 +119,10 @@ export function cycleExitLetter(currentLetter, game = null, direction = null) {
 
 // A letter retired for the rest of the run: never rolled, never reached by
 // the Sword of the Letter. Only J today — once the Jeweler has been given
-// water (JewelerSystem) the J room has nothing left to offer.
+// water (JewelerSystem), or has been Forsaken on a Cursed Run
+// (CursedRunSystem.forsake), the J room has nothing left to offer.
 export function isLetterRetired(letter, game) {
-  return letter === 'J' && !!game?.jewelerRefreshed;
+  return letter === 'J' && (!!game?.jewelerRefreshed || !!game?.cursedRunSystem?.isForsaken(game, Jeweler));
 }
 
 // Fixed progression order for the Chromablade's color cycle — the same

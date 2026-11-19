@@ -857,13 +857,15 @@ export class RoomGenerator {
     const npcY = fireRow * GRID.CELL_SIZE;
     protectRegion(room, { kind: 'cells', cells: [{ col: npcCol, row: fireRow }, { col: fireCol - 1, row: fireRow }] });
 
-    const npc = new CampNPC(npcX, npcY, { x: fireX, y: fireY });
+    // Forsaken on a Cursed Run (CursedRunSystem.forsake): the fire burns alone.
+    const forsaken = this.game?.cursedRunSystem?.isForsaken(this.game, CampNPC);
+    const npc = forsaken ? null : new CampNPC(npcX, npcY, { x: fireX, y: fireY });
     room.campNPC = npc;
 
     // The item goes down last, clear of liquid, solid objects, the campfire
     // and the NPC (placed before them, lava or a rock could land on it).
     const itemChar = pickUnspawnedItem(this.game, basicItems);
-    const pos = this.getRandomPosition(room.collisionMap, [...room.enemies, npc], room.playerStartPos, room.backgroundObjects)
+    const pos = this.getRandomPosition(room.collisionMap, npc ? [...room.enemies, npc] : room.enemies, room.playerStartPos, room.backgroundObjects)
       ?? findSafeSpawnPosition(room);
     if (pos) {
       const item = new Item(itemChar, pos.x, pos.y);

@@ -97,7 +97,8 @@ const WARNING_GRACE_MS = 600;
  * layer. That keeps the hut, Settlement, and E room behaving the same.
  */
 export class ErrandSystem {
-  constructor() {
+  constructor(game = null) {
+    this.game = game;        // read only for the Cursed Run's Forsaken check (createTraveler)
     this.activeErrand = null; // { requestedItem: char, rewardIndex: number, stage: number }
     this.stage = 0;           // 0 | 1 | 2
     this.menuOpen = false;    // Confirm popup gate — mirrors game.bridgeMenuOpen,
@@ -155,6 +156,8 @@ export class ErrandSystem {
    */
   createTraveler(x, y, { seed = false, player = null } = {}) {
     if (this.slain) return null; // Killed this run — no site builds it again
+    // Forsaken on a Cursed Run (CursedRunSystem.forsake) — likewise gone.
+    if (this.game?.cursedRunSystem?.isForsaken(this.game, ErrandCharacter)) return null;
     if (!this.activeErrand && seed) this._pickRequest(player);
     if (!this.activeErrand) return null;
     return new ErrandCharacter(x, y, this.activeErrand.requestedItem, this.activeErrand.stage);
@@ -213,6 +216,8 @@ export class ErrandSystem {
    */
   canGive(player, neutralCharacters, inventorySystem) {
     if (!this.activeErrand) return false;
+    if (this.game?.cursedRun) return false; // a Forsaken traveler takes nothing
+
     if (!this.findTravelerInRange(player, neutralCharacters)) return false;
     return !!this._findCarriedRequest(player, inventorySystem);
   }
@@ -420,6 +425,7 @@ export class ErrandSystem {
    * Active errand is untouched — the player can still complete the stage trade.
    */
   tryGiveArtifact(player, neutralCharacters, inventorySystem) {
+    if (this.game?.cursedRun) return null; // a Forsaken traveler takes nothing
     const errandChar = this.findTravelerInRange(player, neutralCharacters);
     if (!errandChar) return null;
 

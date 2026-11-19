@@ -30,6 +30,10 @@ export class NeutralCharacter {
     // Master's Parry Lesson): DialogueSystem.tryOpenNearby passes it over.
     this.talkSuspended = false;
 
+    // True once a Cursed Run's Forsaken greeting has been told
+    // (CursedRunSystem.greet) — the next SPACE opens the menu as normal.
+    this.forsakenGreeted = false;
+
     // PERSUADE (InfluenceSystem): `persuadeOwner` names the game system that
     // gives this NPC's transaction away without its cost. An NPC without one
     // refuses with `persuadeRefusal`, and no wish is spent.
