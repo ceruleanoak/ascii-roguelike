@@ -1763,6 +1763,37 @@ export function generateJewelerRoom(gen, room) {
   }
 }
 
+/**
+ * The hut an H room stands up: combat, an errand traveler, the wise fellow,
+ * the witch, a red-zone Wizard, or any Settlement hut but the Shopkeeper's
+ * (so a Press, an Alchemy hut or the Weapons Master can turn up off the
+ * beaten path). Cheat override: `game.cheat_forceHutKind` set to any kind
+ * below forces every subsequent roll to that kind.
+ */
+export function rollHutRoomKind(game, zone) {
+  const isRedZone = zone === 'red';
+  const validKinds = new Set([
+    'enemy_encounter', 'neutral_npc', 'wise_man', 'fisherman', 'witch',
+    'press', 'alchemy', 'weapons_master',
+    ...(isRedZone ? ['wizard'] : [])
+  ]);
+  const cheatKind = game?.cheat_forceHutKind;
+  if (cheatKind && validKinds.has(cheatKind)) return cheatKind;
+  // Wizard Hut — red zone only, golem summoning. Drawn separately from the
+  // shared pool below (rather than folded into its thresholds) so every
+  // other zone's odds stay untouched.
+  if (isRedZone && Math.random() < 0.12) return 'wizard';
+  const r = Math.random();
+  return r < 0.35 ? 'enemy_encounter' :  // 35% — combat
+         r < 0.55 ? 'neutral_npc'      :  // 20% — errand traveler
+         r < 0.69 ? 'wise_man'         :  // 14% — wise fellow hint
+         r < 0.75 ? 'fisherman'        :  //  6% — fishing-loop tips
+         r < 0.80 ? 'press'            :  //  5% — Press + Fireplace
+         r < 0.85 ? 'alchemy'          :  //  5% — Alchemy hut
+         r < 0.90 ? 'weapons_master'   :  //  5% — Weapons Master
+                    'witch';               // 10% — chicken-leg hut
+}
+
 // Odds a Settlement includes the Shopkeeper's hut. Applied before the other
 // kinds are drawn, so it is the real appearance rate rather than a weight
 // competing with the rest of settlementHutPool.

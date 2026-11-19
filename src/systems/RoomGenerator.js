@@ -15,7 +15,7 @@ import { spawnCellBlockedByBackground, findSafeSpawnPosition } from './safeSpawn
 import { markDeepLava } from './DeepLava.js';
 import { maybeSpawnPeacefulFishingRoom, maybeSpawnRoamingAlchemist, buildVaultInteriorLoot, buildVaultCoinAbundance, buildVaultUnlockExtras, getIslandPosition, protectRegion, isCellProtected, cleanupStrayBackgroundObjects, resolveLavaHazards, seedCavern, rotatePattern, darkenColor, spawnBatFlock, spawnPhalanx, spawnBelfryBats, stampHutFootprint, placeWhirlpool, generateSettlementRoom as generateSettlementRoomImpl, generateJewelerRoom, cellularCaveGrid, isCaveEntranceLanding, generateCalderaRoom, seedAscentZone, seedSinkholes, injectSinkholeLake, spawnMinibossOrFallback, generateGrassSwaths, generateSnowFields, generateRedZoneDeflectors, spawnGuaranteedItems, offerL1Weapon, offerWeaponIfUnarmed, seedTunnelZone, generateOceanTerrain as generateOceanTerrainImpl, stampWaterBlobs as stampWaterBlobsImpl, generateLakeTerrain as generateLakeTerrainImpl, placeRoomLiquid } from './roomFeatures.js';
 import { seedRiverGlint } from './SunkenGlintSystem.js';
-import { stampDryBed } from './roomFeatures.js';
+import { stampDryBed, rollHutRoomKind } from './roomFeatures.js';
 import { pickUnspawnedItem, markItemSpawned } from './spawnedItems.js';
 import { placeVaultPushRock } from './PushRockSystem.js';
 import { attachVault } from './vaultWalls.js';
@@ -3213,32 +3213,8 @@ export class RoomGenerator {
     const extH = template?.exteriorHeight ?? 5;
 
     // Roll hut scenario first — witch huts shift the structure up by 2 rows
-    // to make room for chicken legs underneath. Cheat override:
-    //   game.cheat_forceHutKind = 'witch' | 'enemy_encounter' | 'neutral_npc'
-    // forces every subsequent hut roll to that kind.
-    const cheatKind = this.game?.cheat_forceHutKind;
-    const isRedZone = room.zone === 'red';
-    const validKinds = new Set([
-      'enemy_encounter', 'neutral_npc', 'wise_man', 'fisherman', 'witch',
-      ...(isRedZone ? ['wizard'] : [])
-    ]);
-    let hutKind;
-    if (cheatKind && validKinds.has(cheatKind)) {
-      hutKind = cheatKind;
-    } else if (isRedZone && Math.random() < 0.12) {
-      // Wizard Hut — red zone only, golem summoning. Drawn separately from
-      // the shared pool below (rather than folded into its thresholds) so
-      // every other zone's odds stay untouched.
-      hutKind = 'wizard';
-    } else {
-      const r = Math.random();
-      hutKind =
-        r < 0.40 ? 'enemy_encounter' :  // 40% — combat
-        r < 0.67 ? 'neutral_npc'      :  // 27% — errand traveler (placeholder)
-        r < 0.83 ? 'wise_man'         :  // 16% — wise fellow hint
-        r < 0.90 ? 'fisherman'        :  //  7% — fishing-loop tips
-                   'witch';               // 10% — chicken-leg hut
-    }
+    // to make room for chicken legs underneath.
+    const hutKind = rollHutRoomKind(this.game, room.zone);
 
     const isWitchRaised = hutKind === 'witch';
     const verticalShift = isWitchRaised ? 2 : 0;
