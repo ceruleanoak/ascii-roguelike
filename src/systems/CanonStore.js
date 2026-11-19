@@ -15,6 +15,7 @@
 
 const STORAGE_KEY = 'pure-rogue-canon-v1';
 const DEFAULT_STORY = 'Once upon a time...';
+const DEFAULT_CURSED_STORY = 'It was a dark and stormy night...';
 
 function emptyCanon() {
   // weapons: { glyph: fields } — `authored: true` (+ `recipe: {left, right}`)
@@ -22,13 +23,15 @@ function emptyCanon() {
   // existing weapon's data. Applied at boot by CanonOverlay.
   // story: Story.md, one line per newline. It is never blank to begin with;
   // its first line is the player's to keep, rewrite, or delete.
+  // cursedStory: Cursed.md, the story the Storyteller tells on a Cursed Run
+  // instead — same shape as `story`, with its own default first line.
   // disabled: { glyph: true } — weapons CUSTOMIZE has switched out of every run.
   // enemies: { glyph: fields } — `authored: true` (+ `style`, `zone`, `tier`)
   // marks an enemy the player created; otherwise the fields override a
   // shipped enemy's name, color, HP, damage and speed.
   // disabledEnemies: { glyph: true } — Disabled Enemies, cut from random spawns.
   return {
-    exited: false, story: DEFAULT_STORY, names: {}, cheats: {}, weapons: {}, disabled: {},
+    exited: false, story: DEFAULT_STORY, cursedStory: DEFAULT_CURSED_STORY, names: {}, cheats: {}, weapons: {}, disabled: {},
     enemies: {}, disabledEnemies: {},
   };
 }

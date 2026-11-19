@@ -61,27 +61,32 @@ function freeGlyphs(cli) {
 
 const STORY_LINE_MAX = 40;
 
-function storyLines(cli) {
-  return cli.canon.story ? cli.canon.story.split('\n') : [];
+// `field` is the canon key the story lives in: `story` (Story.md) or
+// `cursedStory` (Cursed.md, told on a Cursed Run). Both edit the same way.
+function storyLines(cli, field) {
+  return cli.canon[field] ? cli.canon[field].split('\n') : [];
 }
 
-function setStoryLines(cli, lines) {
-  cli.canon.story = lines.join('\n');
+function setStoryLines(cli, field, lines) {
+  cli.canon[field] = lines.join('\n');
   cli.save();
 }
 
 // One row per line; clearing a line removes it. `+` adds a line at the end.
-const STORY = (cli) => [
-  ...storyLines(cli).map((_, i) => textRow('', () => storyLines(cli)[i], text => {
-    const lines = storyLines(cli);
+const storyTable = (field) => (cli) => [
+  ...storyLines(cli, field).map((_, i) => textRow('', () => storyLines(cli, field)[i], text => {
+    const lines = storyLines(cli, field);
     if (text) lines[i] = text;
     else lines.splice(i, 1);
-    setStoryLines(cli, lines);
+    setStoryLines(cli, field, lines);
   }, STORY_LINE_MAX)),
   textRow('+', () => '', text => {
-    if (text) setStoryLines(cli, [...storyLines(cli), text]);
+    if (text) setStoryLines(cli, field, [...storyLines(cli, field), text]);
   }, STORY_LINE_MAX),
 ];
+
+const STORY = storyTable('story');
+const CURSED_STORY = storyTable('cursedStory');
 
 // ── Names ──────────────────────────────────────────────────────────────────
 
@@ -343,6 +348,7 @@ const WEAPONS = () => [
 
 export const LIST = () => [
   tableRow('STORY.MD', STORY),
+  tableRow('CURSED.MD', CURSED_STORY),
   tableRow('NAMES', NAMES),
   tableRow('CHEATS', CHEATS),
   tableRow('WEAPONS', WEAPONS),

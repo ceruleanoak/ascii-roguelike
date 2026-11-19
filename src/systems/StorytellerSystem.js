@@ -26,16 +26,31 @@ const LINES_PER_VISIT = 3;
  * reload, so the story is fixed for the page's life and read once, here. His
  * place in the story carries across deaths — the story is canon, not run state.
  *
+ * On a Cursed Run he tells Cursed.md (CanonStore `cursedStory`) instead,
+ * from its own place in that story. He is Forsaken (CursedRunSystem) at the
+ * first line he tells, so he sits by no other fire for the rest of the run;
+ * the Room he was met in keeps him until its few lines are told. Lines of
+ * Cursed.md never count toward Story.md being heard out.
+ *
  * Whether a Room holds him is rolled once, on first entry, and remembered per
  * Room (a WeakMap, so it goes when the Room does): walking back into a Room
  * finds him there again — already told out — or not at all.
  */
+/** A stored story's non-blank lines. */
+function storyLinesOf(story) {
+  return story.split('\n').filter(line => line.trim());
+}
+
 export class StorytellerSystem {
   constructor(game) {
     this.game = game;
-    this.lines = CanonStore.load().story.split('\n').filter(line => line.trim());
+    const canon = CanonStore.load();
+    this.lines = storyLinesOf(canon.story);
     // Index of the next untold line of Story.md.
     this.cursor = 0;
+    // Cursed.md and the index of its next untold line (Cursed Run only).
+    this.cursedLines = storyLinesOf(canon.cursedStory);
+    this.cursedCursor = 0;
     // Indices of the Story.md lines told at least once. Like the cursor, it
     // lives for the page's life and carries across deaths.
     this.toldLines = new Set();
@@ -60,7 +75,11 @@ export class StorytellerSystem {
    */
   storytellerFor(room) {
     if (this.visits.has(room)) return this.visits.get(room);
-    const campfire = this.lines.length && !this.storyHeardOut() && room.type === ROOM_TYPES.CAMP
+    const game = this.game;
+    const seated = game.cursedRun
+      ? this.cursedLines.length && !game.cursedRunSystem.isForsaken(game, Storyteller)
+      : this.lines.length && !this.storyHeardOut();
+    const campfire = seated && room.type === ROOM_TYPES.CAMP
       ? room.backgroundObjects.find(obj => obj.isCampfire && !obj.destroyed)
       : null;
     const npc = campfire ? this._placeAtFire(campfire) : null;
@@ -70,8 +89,20 @@ export class StorytellerSystem {
 
   // One cell west of the fire — the cell generateCampRoom keeps clear for him.
   _placeAtFire(campfire) {
-    const { lines, storyIndices } = this._nextChunk();
+    const { lines, storyIndices } = this.game.cursedRun ? this._nextCursedChunk() : this._nextChunk();
     return new Storyteller(campfire.position.x - GRID.CELL_SIZE, campfire.position.y, lines, storyIndices);
+  }
+
+  /** The next LINES_PER_VISIT lines of Cursed.md, advancing its cursor. No
+   *  indices: its lines are not Story.md's and are never marked told. */
+  _nextCursedChunk() {
+    const n = Math.min(LINES_PER_VISIT, this.cursedLines.length);
+    const lines = [];
+    for (let i = 0; i < n; i++) {
+      lines.push(this.cursedLines[this.cursedCursor]);
+      this.cursedCursor = (this.cursedCursor + 1) % this.cursedLines.length;
+    }
+    return { lines, storyIndices: null };
   }
 
   /** The next LINES_PER_VISIT lines of Story.md and their indices, advancing the cursor. */

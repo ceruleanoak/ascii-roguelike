@@ -2974,8 +2974,22 @@ identity, not standard programming terms.
   gives way (`isRestDecayed`), how Charon meets each REST visit (`charonVisit`), and whether
   his farewell has shut the way back (`isRestSealed`).
   The hut Wise Fellow rolls from the zone's `cursedSayings` (`zones.js`) instead of its
-  `wiseSayings` (`WiseFellow.setHint`).
+  `wiseSayings` (`WiseFellow.setHint`). Most NPCs meet it once and are then Forsaken.
 - **Not:** "cursed mode", "bad ending", "hard mode".
+
+### Forsaken
+- **Definition:** An NPC kind that has met the player on a Cursed Run. Each kind gets one
+  interaction with its own cursed line: the Camp NPC joins as companion, the Fisherman leaves a
+  fish, the Bridge Worker rises as a Risen, the Jeweler waives her coin, and the Storyteller
+  tells Cursed.md. After that, no NPC of that kind is met again for the rest of the run. The
+  visit that Forsook it still finishes, so a menu opened from that interaction works as normal.
+- **In code:** `CursedRunSystem.forsake(game, npc)` records `npc.constructor`;
+  `isForsaken(game, Kind)` gates every spawn site (HutSystem `_isForsaken`, roomFeatures,
+  RidgeSystem, RoomGenerator's camp, `ErrandSystem.createTraveler`, `StorytellerSystem`);
+  `greet(game, npc, line)` is the one-line greeting for menu NPCs (Weapons Master, Wizard,
+  Shopkeeper, Jeweler). A Forsaken NPC that turns hostile goes through `turnToRisen`. Run state:
+  cleared in `hardReset`.
+- **Not:** "banished", "cursed NPC", "dismissed", per-NPC (it is per kind).
 
 ### Curse Clock
 - **Definition:** The second timer, drawn in gray beside the run timer in the Tab inventory
@@ -3463,7 +3477,7 @@ identity, not standard programming terms.
 
 ### Canon Edit
 - **Definition:** Something the player authors in the CLI after leaving the game through
-  CLOSEGAME / EXITGAME: Story.md, a character's name, a cheat, a weapon or an enemy. It is the
+  CLOSEGAME / EXITGAME: Story.md, Cursed.md (the story told on a Cursed Run), a character's name, a cheat, a weapon or an enemy. It is the
   only thing that persists across sessions. FORGET erases every Canon Edit.
 - **In code:** the stored canon, read and written only by `CanonStore`
   (`src/systems/CanonStore.js`); the CLI tables (`cliTables.js`, `cliEnemyTables.js`) edit

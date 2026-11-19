@@ -11,7 +11,8 @@ import { NeutralCharacter } from './NeutralCharacter.js';
 export class Storyteller extends NeutralCharacter {
   /**
    * @param {string[]} lines — the lines he tells this visit
-   * @param {number[]} storyIndices — each line's index in Story.md
+   * @param {number[]|null} storyIndices — each line's index in Story.md;
+   *   null when the lines are Cursed.md's (a Cursed Run), which go uncounted
    */
   constructor(x, y, lines, storyIndices) {
     super('S', '#d8c8a0', x, y);
@@ -24,6 +25,8 @@ export class Storyteller extends NeutralCharacter {
   }
 
   onLineTold(lineIndex, game) {
+    // Cursed.md: the first line told Forsakes him (StorytellerSystem).
+    if (!this.storyIndices) return game.cursedRunSystem.forsake(game, this);
     game.storytellerSystem.markTold(this.storyIndices[lineIndex]);
   }
 
