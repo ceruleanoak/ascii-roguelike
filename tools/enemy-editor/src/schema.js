@@ -516,6 +516,8 @@ export const SECTIONS = [
     title: 'Elemental affinity',
     fields: [
       { key: 'elementalAffinity.immunity', label: 'Immunity', type: 'tagset', options: EFFECT_OPTIONS, default: [] },
+      { key: 'elementalAffinity.statusImmunity', label: 'Status immunity', type: 'tagset', options: EFFECT_OPTIONS, default: [],
+        help: 'The status never takes hold, but the hit still deals its damage.' },
       { key: 'elementalAffinity.resistance', label: 'Resistance map', type: 'json', default: {},
         help: 'e.g. { "physical": 0.5 } — multiplier < 1 = takes less.' },
       { key: 'elementalAffinity.weakness', label: 'Weakness map', type: 'json', default: {},

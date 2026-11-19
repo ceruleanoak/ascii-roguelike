@@ -556,7 +556,8 @@ export const ENEMIES = {
     // means reading the Area is the only answer, which is why this is the
     // enemy that teaches the Area at all.
     telegraph: { area: 'box', animation: 'blink' },
-    elementalAffinity: { immunity: ['poison'], weakness: { freeze: 2.0 } },
+    // Burn won't take on goo; a fire weapon's hit still lands (statusImmunity).
+    elementalAffinity: { immunity: ['poison'], statusImmunity: ['burn'], weakness: { freeze: 2.0 } },
     freezePermanent: true,
     wetDot: true,  // wet pips are damage over time (EnemyStatusEffects)
     mergeOnContact: true,  // two Slimes that touch become one (MergeMechanic)
@@ -648,7 +649,7 @@ export const ENEMIES = {
     // (SplitOnDamageMechanic.onStatusTicks). A Water Balloon or its own
     // arena pools both do it.
     wetDot: true,
-    elementalAffinity: { immunity: ['poison'], weakness: { freeze: 2.0, blade: 2.0 } },
+    elementalAffinity: { immunity: ['poison'], statusImmunity: ['burn'], weakness: { freeze: 2.0, blade: 2.0 } },
     freezePermanent: true,
     // Imbue: takes electric/ice/fire from its surroundings for `duration` s (ImbuePoolSystem).
     imbue: { enabled: true, duration: 10.0 },

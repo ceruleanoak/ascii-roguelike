@@ -38,6 +38,15 @@ export function isImmuneToEffect(elementalAffinity, affinities, effect) {
   return false;
 }
 
+// Status-only immunity: `elementalAffinity.statusImmunity: [effect, ...]` stops the
+// status from taking hold but leaves the hit's damage alone (getElementalModifierFor
+// never reads it). A Slime can't be set burning, but a fire sword still cuts it.
+export function blocksStatusEffect(elementalAffinity, affinities, effect) {
+  if (!effect) return false;
+  if (elementalAffinity?.statusImmunity?.includes(effect)) return true;
+  return isImmuneToEffect(elementalAffinity, affinities, effect);
+}
+
 export function getElementalModifierFor(elementalAffinity, affinities, elementType) {
   if (!elementType) return 1.0;
   if (isImmuneToEffect(elementalAffinity, affinities, elementType)) return 0.0;

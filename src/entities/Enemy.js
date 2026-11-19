@@ -1,6 +1,6 @@
 import { GRID, COLORS, PHYSICS } from '../game/GameConfig.js';
 import { ENEMIES, resolveHitSfx } from '../data/enemies.js';
-import { isImmuneToEffect, getElementalModifierFor } from './elementalAffinity.js';
+import { isImmuneToEffect, blocksStatusEffect, getElementalModifierFor } from './elementalAffinity.js';
 import { Item } from './Item.js';
 import { attachTelegraph, meleeAimOffset } from '../game/Telegraph.js';
 import { charmTargetOf } from '../systems/charmHits.js';
@@ -533,7 +533,7 @@ export class Enemy {
   }
 
   shouldApplyStatusEffect(effect) {
-    return !this._isImmuneToEffect(effect);
+    return !blocksStatusEffect(this.elementalAffinity, this.getAffinities(), effect);
   }
 
   // Activation + generic stack increment; ticking/expiry lives alongside it
@@ -544,6 +544,9 @@ export class Enemy {
   applyStatusEffect(effect, duration = 3.0, pips = null) {
     // Electric weapon hits: the zap becomes the electric Imbue (the hit's own damage still lands).
     if (effect === 'zap' && absorbsZap(this)) return;
+    // Status-only immunity holds at every source, including the call sites that
+    // apply a status without asking shouldApplyStatusEffect first (fire, traps).
+    if (this.elementalAffinity?.statusImmunity?.includes(effect)) return;
     applyStatusEffectImpl(this, effect, duration, pips);
   }
 
