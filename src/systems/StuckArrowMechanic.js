@@ -33,8 +33,11 @@ export function updateStuckArrows(stuckArrows, deltaTime, player, combat) {
         // A lodged boomerang never vanishes with its host — it falls where it was.
         BoomerangMechanic.dropStuckToGround(arrow);
       } else if (targetDead) {
-        // Small chance for an arrow stuck in a slain enemy to drop for re-pickup
-        if (arrow.stuckType === 'enemy' && arrow.weaponChar && Math.random() < 0.25) {
+        // An arrow that broke the object it struck falls where the object
+        // stood, always pickupable; one stuck in a slain enemy has a small
+        // chance to drop for re-pickup.
+        const brokeObject = arrow.stuckType === 'object' && arrow.weaponChar;
+        if (brokeObject || (arrow.stuckType === 'enemy' && arrow.weaponChar && Math.random() < 0.25)) {
           arrow.stuckTo = null;
           arrow.stuckType = 'ground';
           arrow.pickupable = true;
