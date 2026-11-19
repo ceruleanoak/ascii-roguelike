@@ -522,6 +522,7 @@ export class AlchemySystem {
     }
 
     if (!starterChar) return;
+    starterChar = game.cursedRunSystem.brewedStarter(game, starterChar);
 
     game.removeIngredient(ingredientChar);
 

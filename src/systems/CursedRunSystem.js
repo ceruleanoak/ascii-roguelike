@@ -8,6 +8,10 @@ import { createWildFairy } from '../entities/FairyKing.js';
 import { createDebris } from '../entities/Debris.js';
 import { createDustCloud } from './WorldEffectsSystem.js';
 
+// A Cauldron's Base Potion brews Unstable under the curse (brewedStarter).
+const BASE_POTION_CHAR = '🜄';
+const UNSTABLE_POTION_CHAR = '🜆';
+
 // The Graveyard is never empty on a first look, and it thickens from there.
 const GRAVEYARD_BASE = 5;
 const GRAVEYARD_PER_ROOM = 2;
@@ -695,6 +699,14 @@ export class CursedRunSystem {
   }
 
   // ── Forsaken NPCs ──────────────────────────────────────────────────────────
+
+  /**
+   * The starter potion a Cauldron brew yields under the curse: a Base Potion
+   * comes out Unstable. Every other starter brews as it would on any run.
+   */
+  brewedStarter(game, starterChar) {
+    return game.cursedRun && starterChar === BASE_POTION_CHAR ? UNSTABLE_POTION_CHAR : starterChar;
+  }
 
   /**
    * A Cursed Run's NPC rule: one interaction, no reappearance. The first time
