@@ -67,7 +67,7 @@ const DEATH_HITBOX = Math.round(GRID.CELL_SIZE * DEATH_SCALE * 0.7);
 // register's FORM. Getting the form wrong is what curses the run; getting it
 // right is merely permitted.
 //
-//   top   — Instinct    — a weapon
+//   top   — Instinct    — a weapon or a trap (anything quick-slotted)
 //   left  — Experience  — armor
 //   right — Convention  — a consumable
 //
@@ -81,7 +81,13 @@ const DEATH_HITBOX = Math.round(GRID.CELL_SIZE * DEATH_SCALE * 0.7);
 //                opens the way north, and what stands there is Death.
 //   the true 3  (these items exactly; the top slot takes either hammer) — liberates the path south of
 //                REST: the run ends by permission rather than by dying.
-const SLOT_FORMS = [ITEM_TYPES.WEAPON, ITEM_TYPES.ARMOR, ITEM_TYPES.CONSUMABLE];
+// Each slot lists the item types its form accepts. Instinct takes whatever
+// goes in a quick slot: a trap (the Sticky Tripline) is wielded like a weapon.
+const SLOT_FORMS = [
+  [ITEM_TYPES.WEAPON, ITEM_TYPES.TRAP],
+  [ITEM_TYPES.ARMOR],
+  [ITEM_TYPES.CONSUMABLE]
+];
 // Each slot lists every glyph that counts as its true offering.
 const TRUE_THREE = [
   ['⬢', '⫪'],  // top   — Onyx Hammer or Cinder Hammer
@@ -215,8 +221,7 @@ export class ThreeRoomSystem {
     slot.threeFilled = true;
     slot.threeOffering = char;
 
-    const wanted = SLOT_FORMS[slot.threeSlot];
-    const correctForm = !!data && data.type === wanted;
+    const correctForm = !!data && SLOT_FORMS[slot.threeSlot].includes(data.type);
 
     if (correctForm) {
       slot.char = char;

@@ -3284,6 +3284,13 @@ class Game {
       else if (!this.currentRoom.interactionsOff && this.sunkenGlintSystem.handleSpacePress()) {
         return;
       }
+      // A held wire or trap deploys as in EXPLORE (release throws it).
+      else if (this.wireSystem?.handleSpacePress()) {
+        return;
+      }
+      else if (this.trapSystem.canUseTrap()) {
+        this.trapSystem.startTrapCharge('deploy');
+      }
       else if (this.player.heldItem && this.player.canAttack()) {
         this.combatSystem.tryUseHeldWeapon();
       }

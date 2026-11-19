@@ -509,7 +509,7 @@ export const NEUTRAL_ROOMS = {
       //
       // Slot order is the Power of 3's registers, and ThreeRoomSystem's
       // SLOT_FORMS/TRUE_THREE tables are indexed by it:
-      //   0 apex  — Instinct   — takes a weapon
+      //   0 apex  — Instinct   — takes a weapon or a trap
       //   1 left  — Experience — takes armor
       //   2 right — Convention — takes a consumable
       const cs = GRID.CELL_SIZE;
