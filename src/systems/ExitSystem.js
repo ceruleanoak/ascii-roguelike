@@ -980,7 +980,7 @@ export class ExitSystem {
     // sequence someone authors.
     let best = null;
     for (const [pattern, data] of Object.entries(SECRET_PATTERNS)) {
-      if (!fullPath.includes(pattern)) continue;
+      if (data.disabled || !fullPath.includes(pattern)) continue;
       const patternLength = pattern.split('-').length;
       const lastNLetters = letterPath.slice(-patternLength).join('-');
       if (lastNLetters !== pattern) continue;
@@ -1019,6 +1019,7 @@ export class ExitSystem {
     let matchesAtBestK = [];
 
     for (const [pattern, data] of Object.entries(SECRET_PATTERNS)) {
+      if (data.disabled) continue;
       const letters = pattern.split('-');
       const maxK = Math.min(letters.length - 1, tailLetters.length);
       for (let k = maxK; k >= 1; k--) {

@@ -306,24 +306,31 @@ export const SECRET_PATTERNS = {
   // mid-to-high weight letters (see exit-letter weights in ExitSystem), so
   // this one is meant to be found by accident, unlike the rarer/gated
   // patterns above.
+  //
+  // Disabled (user, 2026-11-18): the Tea Party isn't finished. A `disabled`
+  // pattern never matches and never offers its next letter.
   'T-E-A': {
     name: 'Tea Party',
     neutralScript: 'teaParty',
+    disabled: true,
     message: 'A table is set for no one in particular.'
   },
   'E-A-T': {
     name: 'Tea Party',
     neutralScript: 'teaParty',
+    disabled: true,
     message: 'A table is set for no one in particular.'
   },
   'A-T-E': {
     name: 'Tea Party',
     neutralScript: 'teaParty',
+    disabled: true,
     message: 'A table is set for no one in particular.'
   },
   'H-A-T': {
     name: 'Tea Party',
     neutralScript: 'teaParty',
+    disabled: true,
     message: 'A table is set for no one in particular.'
   }
 };
