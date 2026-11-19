@@ -97,12 +97,16 @@ export class CharonSystem {
       return true;
     }
     if (!charon.npc.isInRange(game.player)) return false;
-    // Already heard this line this run — no second speech, straight to the toll.
+    // Already heard this line this run — no second speech, straight to what
+    // follows it: the toll, or for his farewell, his leaving. The line can be
+    // closed without SPACE (walking out of range), so this is the second way in.
     if (game.charonGreeted === charon.npc.voice) {
-      this._beginToll(charon);
+      this._afterLine(charon);
       return true;
     }
     game.charonGreeted = charon.npc.voice;
+    // His farewell is final the moment it is spoken, however the line closes.
+    if (charon.npc.voice === 'farewell') game.cursedRunSystem.sealRest();
     return dialogue.open(charon.npc, charon.npc.getDialogueLines(game));
   }
 
