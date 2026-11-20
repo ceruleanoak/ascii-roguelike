@@ -1497,6 +1497,9 @@ identity, not standard programming terms.
   met. Boss-spawned enemies carry `isBossEntity` flag. Every rule that treats a Boss (or a part
   of one) differently asks one predicate, `countsAsBoss(enemy)` (`src/entities/bossTest.js`):
   true for `isBoss` on the instance or its data, `isBossEntity`, or `tier: 'boss'` in its data.
+  Defeating a zone Boss gives the character who did it +3 max HP for the rest of the run
+  (`BossSystem._grantBossMaxHp` → the loadout's `bossMaxHp`, applied as `player.bossMaxHpBonus`
+  by `EquipmentEffectsSystem`), on top of the boss's own reward.
 - **Not:** just a difficult Enemy; a Boss is a gated milestone tied to zone depth. Not a
   Dungeon Boss (interior encounter, own system) or a Miniboss (`BOSS_ENCOUNTERS` B-room
   variant).

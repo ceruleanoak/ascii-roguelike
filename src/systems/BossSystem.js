@@ -28,6 +28,8 @@ import { WindFieldSystem } from './WindFieldSystem.js';
 import { stampStormEyeArena } from './roomFeatures.js';
 
 const GOO_DRAGON_SCALE_DROPS = 3;
+// Max HP every zone Boss adds to the character who defeats it.
+const BOSS_MAX_HP_REWARD = 3;
 
 
 
@@ -1155,12 +1157,30 @@ export class BossSystem {
 
   // ── Boss reward ────────────────────────────────────────────────────────────
 
-  /** Grant +1 consumable slot (unless the boss pays out otherwise), screen flash, and announce. */
+  /**
+   * Grant +1 consumable slot (unless the boss pays out otherwise) and +3 max
+   * HP to the active character, screen flash, and announce.
+   */
   _grantBossReward({ unlockSlot = true } = {}) {
     if (unlockSlot) this.game.inventorySystem.unlockConsumableSlot();
+    this._grantBossMaxHp();
     this.game.screenFlash = { startTime: performance.now(), duration: 600, color: '#ffffff' };
     this.game.menuSystem.showPickupMessage('Your power has grown');
     this.game.audioSystem.playSFX('boss_defeat');
+  }
+
+  // The max HP goes on the active character's loadout (EquipmentEffectsSystem
+  // applies it to the player every frame); it's applied here at once too, with
+  // the same amount of current HP, so the reward is felt as a heal on the spot.
+  _grantBossMaxHp() {
+    const inv = this.game.inventorySystem;
+    const player = this.game.player;
+    const loadout = inv.characterInventories[inv._activeCharacterType];
+    if (!loadout || !player) return;
+    loadout.bossMaxHp = (loadout.bossMaxHp ?? 0) + BOSS_MAX_HP_REWARD;
+    player.maxHp += BOSS_MAX_HP_REWARD;
+    player.bossMaxHpBonus += BOSS_MAX_HP_REWARD;
+    player.hp += BOSS_MAX_HP_REWARD;
   }
 
   /**

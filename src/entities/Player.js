@@ -28,6 +28,7 @@ export class Player {
     this.hp = PLAYER_STATS.START_HP;
     this.maxHp = PLAYER_STATS.MAX_HP;
     this.passiveMaxHpBonus = 0; // share of maxHp currently granted by equipped hearts (EquipmentEffectsSystem)
+    this.bossMaxHpBonus = 0;    // share of maxHp currently granted by the active character's Boss kills (EquipmentEffectsSystem)
     this.defense = 0; // Defense from armor
     this.armorTraining = null; // the character's Armor Training levels (CharacterSystem points it at the loadout)
 
@@ -668,6 +669,7 @@ export class Player {
     this.hp = PLAYER_STATS.START_HP;
     this.maxHp = PLAYER_STATS.MAX_HP;
     this.passiveMaxHpBonus = 0;
+    this.bossMaxHpBonus = 0;
     this.hurtPending = false;
     this.velocity = { vx: 0, vy: 0 };
     this.acceleration = { ax: 0, ay: 0 };

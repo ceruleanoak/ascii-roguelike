@@ -168,6 +168,14 @@ export class EquipmentEffectsSystem {
     });
     player.maxHp += maxHpBonus - player.passiveMaxHpBonus;
     player.passiveMaxHpBonus = maxHpBonus;
+
+    // Zone Boss kills raise the max HP of the character who made them, and
+    // only that one: the bonus lives in the active character's loadout
+    // (bossMaxHp), applied by the same change-since-last-call shape as hearts,
+    // so a character swap takes one bonus off and puts the other on.
+    const bossMaxHp = inventorySystem.characterInventories[inventorySystem._activeCharacterType]?.bossMaxHp ?? 0;
+    player.maxHp += bossMaxHp - player.bossMaxHpBonus;
+    player.bossMaxHpBonus = bossMaxHp;
     if (player.hp > player.maxHp) player.hp = player.maxHp;
 
     // Store equipped consumables for condition checking during gameplay
