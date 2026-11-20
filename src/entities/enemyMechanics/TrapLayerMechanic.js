@@ -23,6 +23,31 @@ export const TrapLayerMechanic = {
     enemy.ownTrapPositions = []; // This enemy's own traps — {x, y, radius} — so
     // moveFlee can steer around them and useTrap.js can distance-gate its
     // post-placement retreat against the real blast radius.
+    enemy.sprungTimer = 0; // > 0 while Sprung (GLOSSARY.md): see `springAll`.
+  },
+
+  // The player walked into a Trap Goblin's trap. Every Trap Goblin in `enemies`
+  // hears it and turns Sprung for `sprungDuration` (double-seconds): its Flee
+  // runs at the player instead of away (flee.js), and the cornered bite that
+  // follows ends it.
+  springAll(enemies) {
+    for (const enemy of enemies) {
+      if (!TrapLayerMechanic.isEnabled(enemy) || enemy.hp <= 0) continue;
+      enemy.sprungTimer = enemy.data.trapLayerMechanic.sprungDuration ?? 8.0;
+    }
+  },
+
+  // Called with the State spine's ctx just before the machine runs. Ticks the
+  // Sprung window and pulls a Sprung goblin into Flee from any uncommitted
+  // State (Alert, Withdraw, Lookback), the way Smitten pulls a rat to Feed.
+  // Hearing the trap is perception, so the turn waits for a Decision Frame.
+  updateSprung(enemy, ctx) {
+    if (!(enemy.sprungTimer > 0)) return;
+    enemy.sprungTimer -= ctx.deltaTime;
+    const machine = enemy.stateMachine;
+    if (enemy.sprungTimer <= 0 || !ctx.samePlane) { enemy.sprungTimer = 0; return; }
+    if (machine.current === 'flee' || machine.isCommitted() || !ctx.decisionFrame) return;
+    machine.transition(enemy, ctx, 'flee', 'sprung');
   },
 
   update(enemy, ctx) {

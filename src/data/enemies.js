@@ -2485,7 +2485,11 @@ export const ENEMIES = {
       windup: 0.7,          // 0.35 real seconds — lets moveStill's decelerate-to-zero
                              // (accelRate 420) actually play out as a visible skid
                              // instead of firing same-frame as a teleport-stop
-      trapTypes: ['slow', 'slow', 'fire', 'freeze', 'stun']  // slow sets up; fire/freeze/stun punish stopping
+      trapTypes: ['slow', 'slow', 'fire', 'freeze', 'stun'],  // slow sets up; fire/freeze/stun punish stopping
+      // The player walks into a goblin's trap: every Trap Goblin turns Sprung
+      // and runs in for the bite, for up to 8.0 (4 real seconds) — long enough
+      // to cross its aggro range while a Slime Bomb's goo still holds the player.
+      sprungDuration: 8.0
     },
     idleBehavior: 'wander',
     elementalAffinity: {

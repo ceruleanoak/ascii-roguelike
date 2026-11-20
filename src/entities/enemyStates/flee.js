@@ -92,6 +92,14 @@ export default {
       return;
     }
 
+    // Sprung (TrapLayerMechanic): the player is caught in a trap, so the run
+    // turns around and goes at them, with no Falter or glance back, until the
+    // cornered bite in `next` lands it (or the window runs out).
+    if (enemy.sprungTimer > 0 && enemy.target) {
+      moveChaser(enemy, ctx.speedMultiplier, ctx.targetPos, ctx.deltaTime);
+      return;
+    }
+
     // A Falter (falter.js) stops the flight for a beat. The lookback timer
     // above keeps running through it.
     const mark = enemy.lastKnownPosition;
@@ -133,9 +141,15 @@ export default {
       const cornerRange = cfg.cornerRange ?? enemy.attackRange;
       if (ctx.effectiveDistance <= cornerRange && enemy.attackTimer <= 0 && ctx.canStrike
           && !isFaltering(enemy) && commitAttack(enemy)) {
+        // The bite is what a Sprung goblin came for; after it, it runs again.
+        if (enemy.sprungTimer > 0) enemy.sprungTimer = 0;
         return { id: cfg.cornerTo ?? 'anticipate', cause: 'cornered' };
       }
     }
+
+    // A Sprung run is going at the player, not fleeing: no time limit and no
+    // glance back until it ends.
+    if (enemy.sprungTimer > 0) return null;
 
     // A dead end with no barrier ever found would otherwise run forever —
     // bounded the same way Search bounds an unreachable mark, just on time

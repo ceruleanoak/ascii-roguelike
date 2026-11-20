@@ -733,6 +733,20 @@ identity, not standard programming terms.
 - **Not:** Lookback (the sensory check that leads here); a general escape-and-hide State — this
   is specifically the trap-laying beat, named for its one shipped user.
 
+### Sprung
+- **Definition:** A Trap Goblin that has heard the player walk into a Trap Goblin's trap. Every
+  Trap Goblin in the room turns Sprung at once, whoever laid the trap. A Sprung goblin stops
+  running away and runs at the player for one bite, then flees again. It lasts until the bite
+  commits or a short window runs out. A trap set off by an enemy, a weapon, electricity or its
+  fuse springs no one.
+- **In code:** `enemy.sprungTimer` (> 0 while Sprung; window `data.trapLayerMechanic.sprungDuration`,
+  double-seconds). Set by `TrapLayerMechanic.springAll`, called from `TrapSystem.updatePlacedTraps`'s
+  player-proximity trigger. `TrapLayerMechanic.updateSprung` ticks it and pulls the goblin into
+  Flee from any uncommitted State on a Decision Frame. `flee.js` runs at the target while Sprung,
+  skips Lookback and the give-up timer, and clears it when the cornered bite commits.
+- **Not:** a State (it is a flag Flee reads, like a weapon left to retrieve); Enraged (provoked
+  into hunting for good); Use Trap (laying the trap, not answering one).
+
 ### Smitten
 - **Definition:** A wild rat or crow drawn to the Feed the player is carrying. While any quick
   slot holds Feed it eats (`isFeed` for a rat, `isCrowFeed` for a crow) and the player is near,

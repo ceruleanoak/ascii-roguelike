@@ -951,6 +951,8 @@ export class Enemy {
     };
     // Carrying Feed draws a rat into Smitten from any uncommitted State.
     SmittenMechanic.update(this, spineCtx);
+    // Walking into a Trap Goblin's trap draws every Trap Goblin into Flee, Sprung.
+    if (TrapLayerMechanic.isEnabled(this)) TrapLayerMechanic.updateSprung(this, spineCtx);
     this.stateMachine.update(this, deltaTime, spineCtx);
     // Everything still reading `enemy.state` — the renderer's indicator picker,
     // TrailMechanic, Telegraph — keeps working through the translation.

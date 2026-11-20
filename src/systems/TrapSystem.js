@@ -1,4 +1,5 @@
 import { Item, equippedDaggerOils } from '../entities/Item.js';
+import { TrapLayerMechanic } from '../entities/enemyMechanics/TrapLayerMechanic.js';
 import { Puddle } from '../entities/Puddle.js';
 import { createActivationBurst, createEmberBurst, createIceBurst, createShockBurst } from '../entities/Particle.js';
 import { GRID, BACKGROUND_OBJECT_VARIANTS } from '../game/GameConfig.js';
@@ -1054,6 +1055,8 @@ export class TrapSystem {
           const pdy = (game.player.position.y + GRID.CELL_SIZE / 2) - (ty + GRID.CELL_SIZE / 2);
           if (Math.sqrt(pdx * pdx + pdy * pdy) <= trapData.triggerRadius) {
             triggered = true;
+            // Walking into a Trap Goblin's trap turns every Trap Goblin Sprung.
+            if (entry.owner && TrapLayerMechanic.isEnabled(entry.owner)) TrapLayerMechanic.springAll(enemies);
           }
         }
 
