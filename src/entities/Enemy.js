@@ -1875,7 +1875,10 @@ export class Enemy {
       type: 'tongue',
       owner: this,
       direction: { x: dx / dist, y: dy / dist },
-      maxLength: GRID.CELL_SIZE * 2.5,
+      // Reaches exactly where the target stood when the windup began
+      // (markedTargetPosition), capped at 2.5 cells, so a step aside — not
+      // just a step back — is what dodges it.
+      maxLength: Math.min(dist, GRID.CELL_SIZE * 2.5),
       currentLength: 0,
       phase: 'extending',
       extendDuration: 0.10, // 100ms to snap out
