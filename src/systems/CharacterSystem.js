@@ -758,6 +758,17 @@ export class CharacterSystem {
     });
   }
 
+  /**
+   * Add a character to the run's playable roster (`game.unlockedCharacters`,
+   * Reset Scope `run`) if it isn't on it already. Recruiting a Captive and the
+   * CheatMenu's character pick both land here, so a Captive freed for a
+   * character the cheat already added can't list it twice.
+   */
+  unlockCharacter(type) {
+    const roster = this.game.unlockedCharacters;
+    if (!roster.includes(type)) roster.push(type);
+  }
+
   swapWithCharacter(newType) {
     const game = this.game;
     if (newType === game.activeCharacterType) {

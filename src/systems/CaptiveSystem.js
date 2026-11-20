@@ -186,7 +186,7 @@ export class CaptiveSystem {
         } else {
           // Second interaction: recruit the character
           captive.freed = true;
-          game.unlockedCharacters.push(captive.characterType);
+          game.characterSystem.unlockCharacter(captive.characterType);
           const charData = CHARACTER_TYPES[captive.characterType];
           game.showPickupMessage(`${charData.name} obtained`);
           game.saveGameState();

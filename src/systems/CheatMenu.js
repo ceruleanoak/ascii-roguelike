@@ -397,6 +397,9 @@ export class CheatMenu {
         game.cheatWarpSystem.enterMazeTestRoom(game);
         break;
       case 'change_character':
+        // Joins the roster for the rest of the run, not just while played:
+        // swapping away leaves it a REST NPC and a Zenith Platform body.
+        game.characterSystem.unlockCharacter(result.characterType);
         game.swapWithCharacter(result.characterType);
         break;
       case 'boss_test':
