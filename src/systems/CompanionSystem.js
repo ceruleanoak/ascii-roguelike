@@ -1,6 +1,7 @@
 import { GRID } from '../game/GameConfig.js';
 import { isCrowFeed, isFeed } from './feed.js';
 import { feedHurtCompanions } from './companionFeed.js';
+import { inBumpFlight } from '../entities/enemyMechanics/BumpMechanic.js';
 import { NPCRat } from '../entities/NPCRat.js';
 import { Ingredient } from '../entities/Ingredient.js';
 import { planeOf, PLANE_SURFACE, tagInteriorPlane, isInteriorActive, canReachLoot, lootOnActiveLayer, lootOnSurface } from './PlaneSystem.js';
@@ -200,6 +201,7 @@ export class CompanionSystem {
         game.tamedRats.splice(i, 1);
         continue;
       }
+      if (inBumpFlight(rat, deltaTime)) continue;
       const result = rat.update(deltaTime, enemies, game.player, siblings);
       if (result?.attacked) {
         const victim = result.attacked;
@@ -392,6 +394,7 @@ export class CompanionSystem {
           game.physicsSystem.removeEntity(weapon);
         }
       }
+      if (inBumpFlight(golem, deltaTime)) continue;
       const result = golem.update(deltaTime, enemies, game.player, siblings);
       if (result?.attacked) {
         const victim = result.attacked;

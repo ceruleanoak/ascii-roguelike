@@ -5,6 +5,7 @@ import { ZONES } from '../data/zones.js';
 import { CampNPC, CAMP_NPC_STATE } from '../entities/CampNPC.js';
 import { Item } from '../entities/Item.js';
 import { isInteriorActive, activeInteriorFloor } from './PlaneSystem.js';
+import { inBumpFlight } from '../entities/enemyMechanics/BumpMechanic.js';
 
 /**
  * CampNPCSystem
@@ -123,7 +124,7 @@ export class CampNPCSystem {
     if (npc.state === CAMP_NPC_STATE.INTERESTED) {
       this._updateInterested(dt, npc);
     } else if (npc.state === CAMP_NPC_STATE.COMPANION) {
-      this._updateCompanion(dt, npc);
+      if (!inBumpFlight(npc, dt)) this._updateCompanion(dt, npc);
     }
 
     // Damage from enemy attacks (only when armed/active to keep idle NPC safe)
@@ -908,6 +909,7 @@ export class CampNPCSystem {
     npc.hp = npc.maxHp;
     npc.invulnerabilityTimer = 0;
     npc._attackCooldown = 0;
+    npc.bumpFlightTimer = 0;
     // Mirror the player's per-room reset, and additionally clear any lingering
     // charge/windup state so the bow/gun fire pipeline starts clean each room.
     if (npc.weapon) this._sanitizeWeaponForCarrier(npc.weapon);

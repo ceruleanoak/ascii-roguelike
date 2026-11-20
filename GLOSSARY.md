@@ -955,7 +955,10 @@ identity, not standard programming terms.
   resolved in `EnemyUpdateSystem._runEnemyLoop` beside charge contact. The shove starts a
   **Bump Flight** (`player.bumpFlightTimer`, `duration` real seconds): `Player.updateInput`
   drops input acceleration and the walk-speed cap for its length, so friction alone decays
-  the throw. Without it the cap would clip the shove to a single step.
+  the throw. Without it the cap would clip the shove to a single step. A Bumper shoves a
+  Companion it touches the same way (one body per cooldown, the player first); the
+  Companion's own `bumpFlightTimer` makes its owner skip steering (`inBumpFlight`) until it
+  runs out.
 - **Not:** a Charge (no windup, no rush), and not an attack, since it never deals damage.
   It is also not `knockbackTaken`, which scales how far the player's weapon hits shove an
   Enemy (`src/entities/knockbackTaken.js`).

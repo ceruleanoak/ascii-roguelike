@@ -95,6 +95,8 @@ export class NPCRat {
     this.commandTarget = null;
     // Feed it is walking to while hurt (companionFeed.js); null otherwise.
     this.feedTarget = null;
+    // Bump Flight: real seconds left on a Bumper's shove (BumpMechanic).
+    this.bumpFlightTimer = 0;
 
     this.state = 'idle';
     this.target = null;
@@ -154,6 +156,7 @@ export class NPCRat {
     this.target = null;
     this.commandTarget = null;
     this.feedTarget = null;
+    this.bumpFlightTimer = 0;
     this.fleeTimer = 0;
     this.fleeFromPos = null;
     this.fleeTargetPos = null;

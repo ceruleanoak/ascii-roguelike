@@ -56,6 +56,8 @@ export class CampNPC extends NeutralCharacter {
 
     // Physics-compatible velocity (overwrites NeutralCharacter's {x,y}-only format)
     this.velocity = { x: 0, y: 0, vx: 0, vy: 0 };
+    // Bump Flight: real seconds left on a Bumper's shove (BumpMechanic).
+    this.bumpFlightTimer = 0;
     this.hasCollision = true;
     this.boundToGrid = true;
 
