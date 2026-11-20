@@ -25,7 +25,9 @@ const SCRIPTED_FIT_IN_SECONDS = 1.2;
  * and no threat is left inside the zoomed frame — an enemy the player can
  * still see keeps the frame (and its Motif) engaged. However soon that
  * happens, a zoom-in holds at least ZOOM.MIN_ZOOMED_MS, so the frame can't
- * pump in and out.
+ * pump in and out. That hold (and the ZOOM.ZOOM_OUT_DELAY_MS gap hold) only
+ * starts counting once the frame has finished easing in: a threat that clears
+ * mid-zoom-in cancels it, and the frame eases back out from where it was.
  * A concealed enemy (isConcealedEnemy) is no threat to the frame, and the
  * Ancient Shell's phase 2 holds it fully open (BossSystem.holdsFrameOpen).
  * Inside the Maze interior, zoom is forced on permanently at the tighter
@@ -209,7 +211,14 @@ export class CameraZoomSystem {
       // ZOOM.MIN_ZOOMED_MS however soon the threat clears, so a fight at the
       // edge of the trigger range can't pump the camera in and out. A threat
       // that hid itself still releases at once, for the same reason as above.
+      //
+      // Neither hold applies to a zoom still easing in: a threat that clears
+      // before the frame has arrived cancels the zoom-in, and the frame eases
+      // back out from wherever it was caught, instead of finishing the
+      // zoom-in and then holding on nothing.
       const threatHid = !enemyDetected && this._aThreatJustHid();
+      const easingIn = this.targetZoom > 1 && this.currentZoom < this.targetZoom;
+      const holdsApply = !threatHid && !easingIn;
       if (enemyDetected) {
         this._noEnemyElapsedMs = 0;
       } else if (threatHid) {
@@ -220,9 +229,17 @@ export class CameraZoomSystem {
       this._rememberThreats(entities);
       if (enemyDetected && this._zoomedElapsedMs === Infinity) this._zoomedElapsedMs = 0;
       else if (this._zoomedElapsedMs !== Infinity) this._zoomedElapsedMs += deltaTime * 1000;
-      const heldIn = !threatHid && this._zoomedElapsedMs < ZOOM.MIN_ZOOMED_MS;
-      const wantsZoom = enemyDetected || heldIn || this._noEnemyElapsedMs < ZOOM.ZOOM_OUT_DELAY_MS;
-      if (!wantsZoom) this._zoomedElapsedMs = Infinity;
+      const heldIn = holdsApply && this._zoomedElapsedMs < ZOOM.MIN_ZOOMED_MS;
+      const delayHeld = holdsApply && this._noEnemyElapsedMs < ZOOM.ZOOM_OUT_DELAY_MS;
+      const wantsZoom = enemyDetected || heldIn || delayHeld;
+      // Released: both holds are spent. A zoom-in cancelled mid-ease would
+      // otherwise find its gap delay still running on the next frame (the
+      // target is 1 now, so it no longer reads as easing in) and zoom right
+      // back in, flip-flopping the target until the delay ran out.
+      if (!wantsZoom) {
+        this._zoomedElapsedMs = Infinity;
+        this._noEnemyElapsedMs = Math.max(this._noEnemyElapsedMs, ZOOM.ZOOM_OUT_DELAY_MS);
+      }
       desiredScale = wantsZoom ? ZOOM.SCALE : 1;
 
       // Maze interiors stay permanently zoomed in, regardless of ghost
