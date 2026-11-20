@@ -79,8 +79,12 @@ export const GameAnimalMechanic = {
 
     if (enemy.hp < enemy.gaMaxHpSeen) enemy.gaHasBeenDamaged = true;
     enemy.gaMaxHpSeen = Math.min(enemy.gaMaxHpSeen, enemy.hp);
-    // A wound ends burrowing for good, so the cover stops giving it away.
-    if (enemy.gaHasBeenDamaged) this._leaveCover(enemy);
+    // A wound ends burrowing for good: it surfaces (onDamaged usually got
+    // there first) and the cover stops giving it away.
+    if (enemy.gaHasBeenDamaged) {
+      this._surface(enemy);
+      this._leaveCover(enemy);
+    }
 
     if (cfg.role === 'rabbit' && !enemy.gaHasBeenDamaged) {
       if (this._updateRabbitBurrow(enemy, game, cfg, deltaTime)) return;
@@ -135,6 +139,27 @@ export const GameAnimalMechanic = {
     }
   },
 
+  // Called by Enemy.takeDamage on any hit that leaves it alive. A burrowed
+  // Rabbit is hidden on plane 1, and only _updateRabbitBurrow ever brought it
+  // back up — which a wounded Rabbit never runs again. Damage that reaches it
+  // there (a Slime Bomb's blast) left it fleeing invisibly. Any damage
+  // surfaces it on the spot, even while a status (goo, freeze) holds its
+  // update.
+  onDamaged(enemy) {
+    if (!this.isEnabled(enemy)) return;
+    enemy.gaHasBeenDamaged = true;
+    this._surface(enemy);
+    this._leaveCover(enemy);
+  },
+
+  // Back up out of its burrow onto plane 0, visible and hittable.
+  _surface(enemy) {
+    if (!enemy.gaBurrowed) return;
+    enemy.gaBurrowed = false;
+    enemy.gaBurrowRunning = false;
+    enemy.plane = 0;
+  },
+
   // Returns true when it has fully handled this frame's movement (burrowed,
   // running-before-burrow, or just re-emerged) — caller should skip the
   // generic flee-to-exit branch in that case.
@@ -143,8 +168,7 @@ export const GameAnimalMechanic = {
       const stillness = game?.huntingSystem?.stillnessTimer ?? 0;
       const required = game?.huntingSystem?.requiredStillness ?? 10;
       if (stillness >= required) {
-        enemy.gaBurrowed = false;
-        enemy.plane = 0;
+        this._surface(enemy);
         this._leaveCover(enemy);
         if (enemy.gaBurrowPosition) {
           enemy.position.x = enemy.gaBurrowPosition.x;
