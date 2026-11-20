@@ -347,6 +347,19 @@ export class ZenithSystem {
     player.maxHp += ZENITH_MAX_HP;
     player.zenithMaxHpBonus += ZENITH_MAX_HP;
     player.hp += ZENITH_MAX_HP;
+
+    // The gift floats over all five, each in their own color: the player, and
+    // the four standing on their platforms (cx/cy are cell centers; the
+    // floating text takes a cell's top-left).
+    const text = `+${ZENITH_MAX_HP} MAX HP`;
+    const half = GRID.CELL_SIZE / 2;
+    const combat = game.combatSystem;
+    combat?.createDamageNumber(text, player.position.x, player.position.y,
+      CHARACTER_TYPES[game.activeCharacterType]?.color);
+    for (const type of this.standingCharacters(game)) {
+      const p = zenith.platforms.find(pl => pl.characterType === type);
+      if (p) combat?.createDamageNumber(text, p.cx - half, p.cy - half, CHARACTER_TYPES[type].color);
+    }
   }
 
   /** Converging progress 0..1, or null when no motes are in flight. */
