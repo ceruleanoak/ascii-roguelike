@@ -93,6 +93,8 @@ export class NPCRat {
     // A point it is sent to and holds (a Branch panel, DungeonPuzzleSystem);
     // null = follow the player. Enemies still come first.
     this.commandTarget = null;
+    // Feed it is walking to while hurt (companionFeed.js); null otherwise.
+    this.feedTarget = null;
 
     this.state = 'idle';
     this.target = null;
@@ -151,6 +153,7 @@ export class NPCRat {
     this.state = 'idle';
     this.target = null;
     this.commandTarget = null;
+    this.feedTarget = null;
     this.fleeTimer = 0;
     this.fleeFromPos = null;
     this.fleeTargetPos = null;
@@ -207,6 +210,10 @@ export class NPCRat {
       this._clearDig();
       this.state = 'idle';
       this._holdAt(this.commandTarget);
+    } else if (this.feedTarget) {
+      this._clearDig();
+      this.state = 'idle';
+      this._holdAt(this.feedTarget.position);
     } else {
       const dig = this._updateDig(deltaTime, player, siblings);
       if (dig) {

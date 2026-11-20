@@ -2002,6 +2002,10 @@ identity, not standard programming terms.
   point (the Branch panel puzzle sends one to the free panel); it holds there until the
   room is left or the puzzle solves (`clearCommandTargets()`), enemies still first.
   The Fire Elemental golem is the one ranged golem (see Fire Elemental (golem)).
+  A hurt tamed rat walks to Feed within six cells and a hurt golem to Mana (𝑚), whoever put
+  it there, and eating it heals them to full (a rat's hit count too); `feedTarget` holds what
+  it is walking to (`src/systems/companionFeed.js`). Every Companion also heals to full on
+  room entry (`onRoomEnter`), but not between Dungeon floors (`snapPetsIntoFloor`).
 - **Not:** an Enemy; not an NPC (Companions don't initiate dialogue).
 
 ### Fire Elemental (golem)
@@ -2407,13 +2411,15 @@ identity, not standard programming terms.
 ### Feed
 - **Definition:** A Consumable that crows and rats seek out and eat once it lies on the ground.
   Throwing (SHIFT) or dropping Feed is how crows are befriended and rats tamed into
-  Companions. Feed can also have its own SPACE effect: Bread (⌬) has none, while the Sandwich
+  Companions. A wild rat tames only on Feed the player put down (`droppedByPlayer`), and only
+  within six cells of it; berries a Shrub shakes loose don't tame. Feed can also have its own SPACE effect: Bread (⌬) has none, while the Sandwich
   (☰, Bread + Meat) heals 3 when eaten. The Forest Berry (⁖) is Feed for rats alone: a 1-in-10
   Shrub holds three of them, and crows pass them by.
 - **In code:** the `feed: true` flag on the item's data in `src/data/items.js`; test it with
   `isFeed(item)` (`src/systems/feed.js`), or `isCrowFeed(item)` for what a crow will eat
   (`crowsRefuse` opts out). Never compare against a Bread char. Consumers:
-  `CompanionSystem` (rat bread-seek, crow targeting, crow loot exclusion),
+  `CompanionSystem` (rat bread-seek, crow targeting, crow loot exclusion), `companionFeed.js`
+  (a hurt tamed rat eats it),
   `Crow._closestPickable` exclusion, and `CampNPC.acceptsHeal`.
 - **Not:** "bread" as a category (Bread is one Feed item); "bait" or "lure" (Lure is the
   Charm Lure trap).

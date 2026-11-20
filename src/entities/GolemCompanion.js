@@ -97,6 +97,8 @@ export class GolemCompanion {
     // A point it is sent to and holds (a Branch panel, DungeonPuzzleSystem);
     // null = follow the player. Enemies still come first.
     this.commandTarget = null;
+    // Mana it is walking to while hurt (companionFeed.js); null otherwise.
+    this.feedTarget = null;
 
     this.state = 'idle';
     this.target = null;
@@ -154,6 +156,7 @@ export class GolemCompanion {
     }
     this.target = null;
     this.commandTarget = null;
+    this.feedTarget = null;
     this.fireBolts.length = 0;
     if (game) {
       this.game = game;
@@ -221,6 +224,9 @@ export class GolemCompanion {
     } else if (this.commandTarget) {
       this.state = 'idle';
       this._holdAt(this.commandTarget);
+    } else if (this.feedTarget) {
+      this.state = 'idle';
+      this._holdAt(this.feedTarget.position);
     } else {
       this.state = 'idle';
       this._driftTowardPlayer(deltaTime, player);

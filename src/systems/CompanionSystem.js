@@ -1,5 +1,6 @@
 import { GRID } from '../game/GameConfig.js';
 import { isCrowFeed, isFeed } from './feed.js';
+import { feedHurtCompanions } from './companionFeed.js';
 import { NPCRat } from '../entities/NPCRat.js';
 import { Ingredient } from '../entities/Ingredient.js';
 import { planeOf, PLANE_SURFACE, tagInteriorPlane, isInteriorActive, canReachLoot, lootOnActiveLayer, lootOnSurface } from './PlaneSystem.js';
@@ -21,6 +22,10 @@ const DIG_DIRT_RATE = 6;
 // updateCrows) — a peck-strength hit, not a real threat on its own, but it
 // stacks with however many other room crows got enraged by the same catch.
 const CROW_ENRAGE_DAMAGE = 1;
+
+// How far a wild rat will notice Feed the player put down. Past this the loaf
+// is out of its nose — the player brings the bread to the rat, not the reverse.
+const RAT_FEED_SEEK_RANGE = GRID.CELL_SIZE * 6;
 
 // Companion behavior: the bread-feed pipeline and per-frame drivers for every
 // befriendable creature — wild rat → NPCRat companion, wild crow → follower
@@ -54,8 +59,12 @@ export class CompanionSystem {
     // mazePlane — those positions are in interior grid space (top-left ≈ the
     // outer-room origin) and must be excluded, or surface rats path to the
     // wrong coordinates and "eat" a loaf the player never dropped.
+    //
+    // Only Feed the player put down tames (`droppedByPlayer` — a SHIFT toss or
+    // a drop): berries a Shrub shakes loose and loaves lying in a room are
+    // just food on the floor to a wild rat.
     const loaves = game.items.filter(it =>
-      it && isFeed(it) && !it.consumed && !it.hutPlane && !it.mazePlane
+      it && isFeed(it) && it.droppedByPlayer && !it.consumed && !it.hutPlane && !it.mazePlane
     );
     if (loaves.length > 0) {
       const claimedLoaves = new Set();
@@ -77,7 +86,7 @@ export class CompanionSystem {
       for (const loaf of loaves) {
         if (claimedLoaves.has(loaf)) continue;
         let nearest = null;
-        let nearestDistSq = Infinity;
+        let nearestDistSq = RAT_FEED_SEEK_RANGE * RAT_FEED_SEEK_RANGE;
         for (const r of enemies) {
           if (!r.data?.tameableByBread) continue;
           if (r.hp <= 0) continue;
@@ -403,6 +412,9 @@ export class CompanionSystem {
   updateGolemsAndDamage(deltaTime) {
     this.updateGolems(deltaTime);
     this.applyEnemyDamageToGolems();
+    // Last in the frame's companion pass (main.js runs the rats first): hurt
+    // rats walk to Feed, hurt golems to Mana, and eat it (companionFeed.js).
+    feedHurtCompanions(this.game);
   }
 
   // Apply enemy melee + projectile hits to golems. Mirrors
