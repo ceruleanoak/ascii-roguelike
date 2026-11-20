@@ -27,6 +27,7 @@ import { ZONES } from '../data/zones.js';
 import { isInteriorActive } from './PlaneSystem.js';
 import { MIST_BATTLE_LOST } from './MistBattleSystem.js';
 import { ENDINGS } from './EndingSystem.js';
+import { buildMistMotes, motePosition, moteShimmer, prepareMoteFont } from '../rendering/effects/MistMotes.js';
 
 const GRACE_DURATION = 1.0;   // See the tenth room before the mist moves
 const SHRINK_DURATION = 5.0;  // Vision radius 10 → 0 cells
@@ -40,12 +41,9 @@ const DEATH_CLOSE_DURATION = 2.0;
 const MIN_RADIUS_CELLS = 4;   // Mourners can never blind the player completely
 const RADIUS_LERP_RATE = 6;   // Cells/sec toward target (Mourner thickening)
 
-// Mist glyph field tuning
-const MOTE_SKIP_CHANCE = 0.08;  // Sparse gaps so it reads as mist, not a grid
-const MOTE_SIZE = 1.15;         // Glyph size × CELL_SIZE — overlapping, thick cover
+// Mist glyph field tuning (the motes themselves: rendering/effects/MistMotes.js)
 const ALPHA_FAR = 0.92;         // Glyph alpha outside the vision radius (obscuring)
 const ALPHA_NEAR = 0.15;        // Glyph alpha at the player's feet — thinned, never gone
-const MOTE_COLORS = ['#8a8a8e', '#74747a', '#9a9aa0', '#67676d'];
 
 // World-dimming veil: drawn under the glyphs, so everything already rendered
 // (enemies, bg objects, items, exits) fades inversely to the mist — clear at
@@ -93,28 +91,9 @@ export class GrayZoneSystem {
     return this.deathSwallowPhase === 'hold' || this.deathSwallowPhase === 'close';
   }
 
-  // One '~' mote per grid cell (minus random gaps), each with its own drift
-  // phase/speed/amplitude and baked sub-cell jitter so the field never reads
-  // as a lattice.
+  // The '~' field over the whole Room (MistMotes).
   _buildMistField() {
-    const motes = [];
-    for (let row = 0; row < GRID.ROWS; row++) {
-      for (let col = 0; col < GRID.COLS; col++) {
-        if (Math.random() < MOTE_SKIP_CHANCE) continue;
-        motes.push({
-          x: col * GRID.CELL_SIZE + GRID.CELL_SIZE / 2 + (Math.random() * 6 - 3),
-          y: row * GRID.CELL_SIZE + GRID.CELL_SIZE / 2 + (Math.random() * 6 - 3),
-          phase: Math.random() * Math.PI * 2,
-          speedX: 0.4 + Math.random() * 0.5,   // Slow, mist-like idle
-          speedY: 0.25 + Math.random() * 0.35,
-          ampX: 1.5 + Math.random() * 1.5,     // Mild pixel offsets
-          ampY: 1.0 + Math.random() * 1.2,
-          breath: 0.04 + Math.random() * 0.05, // Subtle alpha shimmer
-          color: MOTE_COLORS[Math.floor(Math.random() * MOTE_COLORS.length)]
-        });
-      }
-    }
-    this.mistField = motes;
+    this.mistField = buildMistMotes();
   }
 
   get mistOutActive() {
@@ -354,13 +333,10 @@ export class GrayZoneSystem {
     ctx.fillStyle = ZONES.gray.environmentColors.background || '#050505';
     ctx.fillRect(0, 0, GRID.WIDTH, GRID.HEIGHT);
 
-    ctx.font = `${Math.round(GRID.CELL_SIZE * MOTE_SIZE)}px 'Unifont', monospace`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
+    prepareMoteFont(ctx);
     for (const m of this.mistField) {
-      const mx = m.x + Math.sin(t * m.speedX + m.phase) * m.ampX;
-      const my = m.y + Math.cos(t * m.speedY + m.phase * 1.7) * m.ampY;
-      ctx.globalAlpha = Math.min(0.95, ALPHA_FAR + Math.sin(t * 0.8 + m.phase * 3) * m.breath);
+      const { x: mx, y: my } = motePosition(m, t);
+      ctx.globalAlpha = Math.min(0.95, ALPHA_FAR + moteShimmer(m, t));
       ctx.fillStyle = m.color;
       ctx.fillText('~', mx, my);
     }
@@ -443,13 +419,10 @@ export class GrayZoneSystem {
       ctx.globalAlpha = 1;
     }
 
-    ctx.font = `${Math.round(GRID.CELL_SIZE * MOTE_SIZE)}px 'Unifont', monospace`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
+    prepareMoteFont(ctx);
 
     for (const m of this.mistField) {
-      const mx = m.x + Math.sin(t * m.speedX + m.phase) * m.ampX;
-      const my = m.y + Math.cos(t * m.speedY + m.phase * 1.7) * m.ampY;
+      const { x: mx, y: my } = motePosition(m, t);
 
       // Skip mist motes that are within the Ascent plateau radius
       if (plateauR > 0) {
@@ -460,7 +433,7 @@ export class GrayZoneSystem {
       // Proximity thinning: 0 at the player, 1 at/beyond the vision radius.
       const near = this._nearness(mx, my, clearings);
       let alpha = ALPHA_NEAR + (ALPHA_FAR - ALPHA_NEAR) * near * near
-        + Math.sin(t * 0.8 + m.phase * 3) * m.breath;
+        + moteShimmer(m, t);
 
       ctx.globalAlpha = Math.min(0.95, Math.max(0.08, alpha));
       ctx.fillStyle = m.color;
