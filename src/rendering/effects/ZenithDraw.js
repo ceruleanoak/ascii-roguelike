@@ -126,6 +126,11 @@ function onTop(zenith, col, row) {
   return true;
 }
 
+// The Room's border wall (and the exits in it): never sunk under the clouds.
+function onBorder(col, row) {
+  return col === 0 || row === 0 || col === GRID.COLS - 1 || row === GRID.ROWS - 1;
+}
+
 export function drawZenithLevels(renderer, game) {
   const zenith = game.currentRoom?.zenith;
   if (!zenith?.above) return;
@@ -152,14 +157,18 @@ export function drawZenithLevels(renderer, game) {
   // From above: the veil, whole cells sinking as units, deeper further out.
   const band = (row, col) => CLOUD_VEIL[Math.min(CLOUD_VEIL.length - 1, zenith.cloudDepth[row][col])];
   zenith.cloudDepth.forEach((line, row) => line.forEach((depth, col) => {
-    if (depth === 0) return;
+    if (depth === 0 || onBorder(col, row)) return;
     const alpha = Math.round(cover * band(row, col) * 10) / 10;
     if (alpha < 0.1) return;
     ctx.globalAlpha = alpha;
     ctx.fillRect(col * CS, row * CS, CS, CS);
   }));
 
-  // The mist itself, drifting over the low ground.
+  // The mist itself, drifting over the low ground, kept off the border wall:
+  // a mote beside it drifts a few px over, so the mist is clipped inside it.
+  ctx.beginPath();
+  ctx.rect(CS, CS, (GRID.COLS - 2) * CS, (GRID.ROWS - 2) * CS);
+  ctx.clip();
   prepareMoteFont(ctx);
   const t = zenith.clock;
   for (const m of zenith.clouds) {

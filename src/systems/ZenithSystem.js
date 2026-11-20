@@ -197,7 +197,9 @@ export class ZenithSystem {
       platforms,
       above,                                  // above[row][col]: up on the mountain (summitLevels)
       cloudDepth: depth,                      // cells from the mountain, for each low cell
-      clouds: buildMistMotes((col, row) => !above[row]?.[col]), // the mist laid over the low ground
+      // the mist laid over the low ground, inside the border wall
+      clouds: buildMistMotes((col, row) => !above[row]?.[col]
+        && col > 0 && row > 0 && col < GRID.COLS - 1 && row < GRID.ROWS - 1),
       cloudCover: 0,                          // 0..1: how far the clouds have come in round the player
       center: cairn,
       cairnObject,
