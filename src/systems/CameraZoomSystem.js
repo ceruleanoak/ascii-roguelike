@@ -23,7 +23,9 @@ const SCRIPTED_FIT_IN_SECONDS = 1.2;
  * stays zoomed until the nearest threat clears the wider
  * ZOOM.RELEASE_RANGE_CELLS (hysteresis, avoids flicker at the boundary)
  * and no threat is left inside the zoomed frame — an enemy the player can
- * still see keeps the frame (and its Motif) engaged.
+ * still see keeps the frame (and its Motif) engaged. However soon that
+ * happens, a zoom-in holds at least ZOOM.MIN_ZOOMED_MS, so the frame can't
+ * pump in and out.
  * A concealed enemy (isConcealedEnemy) is no threat to the frame, and the
  * Ancient Shell's phase 2 holds it fully open (BossSystem.holdsFrameOpen).
  * Inside the Maze interior, zoom is forced on permanently at the tighter
@@ -79,6 +81,9 @@ export class CameraZoomSystem {
     this.originXPercent = 50;
     this.originYPercent = 50;
     this._noEnemyElapsedMs = Infinity;
+    // How long the combat trigger has wanted the zoom since it last zoomed
+    // in; it can't release before ZOOM.MIN_ZOOMED_MS (Infinity = not zoomed).
+    this._zoomedElapsedMs = Infinity;
     this._lastThreats = []; // _rememberThreats: last frame's threats
     this._lastState = null;
     // A scripted frame (holdZoom): { scale, focus, at } where focus() returns
@@ -123,6 +128,7 @@ export class CameraZoomSystem {
     this.originXPercent = 50;
     this.originYPercent = 50;
     this._noEnemyElapsedMs = Infinity;
+    this._zoomedElapsedMs = Infinity;
     this._lastThreats = [];
   }
 
@@ -198,15 +204,25 @@ export class CameraZoomSystem {
       // after its shot (or any enemy turning Invisible) would otherwise keep
       // the frame zoomed on nothing for the hold, which gives the hiding away.
       // An enemy that hid this frame releases the zoom at once.
+      //
+      // Minimum hold: once zoomed in, the frame stays in for
+      // ZOOM.MIN_ZOOMED_MS however soon the threat clears, so a fight at the
+      // edge of the trigger range can't pump the camera in and out. A threat
+      // that hid itself still releases at once, for the same reason as above.
+      const threatHid = !enemyDetected && this._aThreatJustHid();
       if (enemyDetected) {
         this._noEnemyElapsedMs = 0;
-      } else if (this._aThreatJustHid()) {
+      } else if (threatHid) {
         this._noEnemyElapsedMs = ZOOM.ZOOM_OUT_DELAY_MS;
       } else {
         this._noEnemyElapsedMs += deltaTime * 1000;
       }
       this._rememberThreats(entities);
-      const wantsZoom = enemyDetected || this._noEnemyElapsedMs < ZOOM.ZOOM_OUT_DELAY_MS;
+      if (enemyDetected && this._zoomedElapsedMs === Infinity) this._zoomedElapsedMs = 0;
+      else if (this._zoomedElapsedMs !== Infinity) this._zoomedElapsedMs += deltaTime * 1000;
+      const heldIn = !threatHid && this._zoomedElapsedMs < ZOOM.MIN_ZOOMED_MS;
+      const wantsZoom = enemyDetected || heldIn || this._noEnemyElapsedMs < ZOOM.ZOOM_OUT_DELAY_MS;
+      if (!wantsZoom) this._zoomedElapsedMs = Infinity;
       desiredScale = wantsZoom ? ZOOM.SCALE : 1;
 
       // Maze interiors stay permanently zoomed in, regardless of ghost
@@ -249,6 +265,7 @@ export class CameraZoomSystem {
       desiredScale = this.targetZoom;
     } else {
       this._noEnemyElapsedMs = Infinity;
+      this._zoomedElapsedMs = Infinity;
       this._lastThreats = [];
       // Origin deliberately left untouched here — see class doc comment.
     }

@@ -74,6 +74,7 @@ export const ZOOM = {
   TRIGGER_RANGE_CELLS: 6.6,   // enemy/ghost within this many cells triggers zoom (+10% over the original 6 — cowards no longer trigger it at all, see CameraZoomSystem)
   RELEASE_RANGE_CELLS: 7,     // once zoomed, enemy must clear this range (and leave the zoomed frame) before zoom releases (hysteresis — prevents flicker at the trigger boundary)
   ZOOM_OUT_DELAY_MS: 500,     // hold the zoom this long after the last detected enemy before actually releasing
+  MIN_ZOOMED_MS: 5000,        // once the combat trigger zooms in, it stays in at least this long — no rapid in/out
   TRANSITION_IN_MS: 700,      // duration of the eased zoom-in transition (slower, deliberate)
   TRANSITION_OUT_MS: 700,     // duration of the eased zoom-out transition (matches zoom-in)
   TRANSITION_DEATH_MS: 180    // rapid correction back to 1.0 on player death (GAME_OVER) — the
