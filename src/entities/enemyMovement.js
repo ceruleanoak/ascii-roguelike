@@ -1,6 +1,7 @@
 import { GRID } from '../game/GameConfig.js';
 import { hasVisionBarrier } from './enemyVision.js';
 import { firingLineStep } from '../systems/KeenAim.js';
+import { attackUnderway } from './enemyDecision.js';
 
 // Every way an Enemy can drive its own targetVelocity, in one place.
 //
@@ -141,6 +142,32 @@ export function moveKeeper(enemy, speedMultiplier, targetPos, deltaTime) {
 }
 
 /**
+ * Constructor-time state for the movement archetypes, set once per Enemy so
+ * no verb has to lazily create its own fields. Lives beside the verbs that
+ * read it.
+ */
+export function initArchetypeState(enemy) {
+  if (enemy.movementStyle === 'keeper') {
+    // Randomly pick strafe direction so grouped keepers orbit in different directions
+    enemy.keeperStrafeDir = Math.random() < 0.5 ? 1 : -1;
+    // Countdown for the optional `strafeFlipInterval` flip (moveKeeper);
+    // seeded to the full interval so the first flip lands on cadence.
+    enemy.keeperFlipTimer = enemy.movementConfig?.strafeFlipInterval ?? 0;
+  }
+  if (enemy.movementStyle === 'kiter') {
+    // Patience and the harm-gated retreat (moveKiter).
+    enemy.patienceTimer = enemy.movementConfig?.patience ?? 6.0;
+    enemy.harmedTimer = 0;
+    enemy.kiteHpSeen = enemy.hp;
+  }
+  if (enemy.movementStyle === 'ambusher') {
+    enemy.burstTimer = 0;
+    enemy.burstActive = false;
+    enemy.state = 'rest'; // Ambushers start dormant
+  }
+}
+
+/**
  * dance: close to melee reach, then step from side to side across the
  * target's line while the attack cools down — a fencer's footwork, not an
  * orbit. Out of reach it closes like a chaser; inside it the sidestep flips
@@ -187,10 +214,21 @@ export function moveDance(enemy, speedMultiplier, targetPos, deltaTime) {
  * The dive cadence IS attackCooldown — there is no separate hover/rush
  * sub-state. Pack dive desync emerges from per-enemy cooldown timing.
  *
+ * Patience (GLOSSARY.md) keeps a kiter from circling forever: it runs down
+ * while the kiter's attack is ready and nothing is underway, and refills the
+ * moment an attack (a Strike, a leap, any committed mechanic) starts or the
+ * cooldown is running. When it runs out the kiter dives even if `dive` is
+ * false, so a player who keeps it at bay still gets attacked.
+ *
  * Config (all optional — defaults shown):
  *   kiteDistance       = GRID.CELL_SIZE * 4
  *   retreatThreshold   = GRID.CELL_SIZE * 2
  *   dive               = true   (false: never dive — e.g. Trap Goblin)
+ *   patience           = 6.0    double-seconds (3s) of ready-but-idle before it dives
+ *   retreatOn          = 'close' (retreat inside retreatThreshold) |
+ *                        'harmed' (retreat toward kiteDistance only for
+ *                        `retreatTime` after taking damage — the Frost Wolf)
+ *   retreatTime        = 1.6    double-seconds (0.8s); 'harmed' only
  */
 export function moveKiter(enemy, speedMultiplier, targetPos, deltaTime) {
   // Only activate kite tactics if this enemy or a packmate has detected the player
@@ -206,8 +244,21 @@ export function moveKiter(enemy, speedMultiplier, targetPos, deltaTime) {
   const dy = targetPos.y - enemy.position.y;
   const dist = Math.sqrt(dx * dx + dy * dy) || 1;
 
-  // DIVE: attack off cooldown — close in; windup triggers at attackRange
-  if (cfg.dive !== false && enemy.attackTimer <= 0) {
+  if (enemy.attackTimer > 0 || attackUnderway(enemy)) {
+    enemy.patienceTimer = cfg.patience ?? 6.0;
+  } else {
+    enemy.patienceTimer -= deltaTime;
+  }
+
+  // Harm is read as an hp drop since the last kiting frame, so this verb
+  // needs no hook in takeDamage.
+  if (enemy.hp < enemy.kiteHpSeen) enemy.harmedTimer = cfg.retreatTime ?? 1.6;
+  enemy.kiteHpSeen = enemy.hp;
+  enemy.harmedTimer = Math.max(0, enemy.harmedTimer - deltaTime);
+
+  // DIVE: attack off cooldown — close in; windup triggers at attackRange.
+  // A kiter that never dives still does once its Patience runs out.
+  if (enemy.attackTimer <= 0 && (cfg.dive !== false || enemy.patienceTimer <= 0)) {
     enemy.targetVelocity.vx = (dx / dist) * enemy.speed * speedMultiplier * 1.2;
     enemy.targetVelocity.vy = (dy / dist) * enemy.speed * speedMultiplier * 1.2;
     return;
@@ -232,8 +283,11 @@ export function moveKiter(enemy, speedMultiplier, targetPos, deltaTime) {
   }
 
   let vx, vy;
-  if (dist < retreatThreshold) {
-    // Too close — retreat
+  const retreating = cfg.retreatOn === 'harmed'
+    ? enemy.harmedTimer > 0 && dist < kiteDistance
+    : dist < retreatThreshold;
+  if (retreating) {
+    // Too close (or hurt) — retreat
     vx = (-dx / dist) * 0.8 + sepX * 0.2;
     vy = (-dy / dist) * 0.8 + sepY * 0.2;
   } else if (dist <= kiteDistance + GRID.CELL_SIZE * 2) {

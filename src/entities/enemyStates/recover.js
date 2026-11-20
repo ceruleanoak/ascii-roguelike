@@ -151,7 +151,10 @@ export default {
     // is what makes Recover match its own header comment ("the window after a
     // strike where the enemy is not yet dangerous again") and lets Approach's
     // `next()` fire on the very next frame, straight through to a commit.
-    if (enemy.attackTimer > 0) return null;
+    // `holdCooldown: false` (set by stateDefaults for the `dance` and `orbit`
+    // Approach verbs) ends at `duration` instead: those verbs are the
+    // between-attacks behavior, and holding here would leave them none.
+    if (enemy.attackTimer > 0 && cfg.holdCooldown !== false) return null;
     if (!ctx.canSee) {
       return enemy.lastKnownPosition
         ? { id: 'search', cause: 'lost sight while recovering' }

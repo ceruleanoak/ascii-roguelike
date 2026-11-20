@@ -17,6 +17,10 @@
 // archetypes differ only in which verb their Approach uses, and the fifth
 // (ambusher) differs by declaring one extra State — so `movementStyle` was never
 // five behaviors, it was one field doing two unrelated jobs.
+// Approach verbs that do their own thing while the attack cooldown runs, so
+// Recover hands back to them early (see `defaultStates`).
+const COOLDOWN_VERBS = new Set(['dance', 'orbit']);
+
 const APPROACH_VERB = {
   chaser:   'close',
   keeper:   'hold',
@@ -120,6 +124,18 @@ export function defaultStates(data) {
   // Declared on Approach alone because that is the only place legacy reaches it —
   // an imp that has not noticed you has nothing to back away from.
   if (data.reflectShield?.shieldPhaseMovement) states.approach.shieldPhase = true;
+
+  // Two Approach verbs are written to fill the gap between attacks: `dance`
+  // sidesteps inside reach and `orbit` circles at range, both while the
+  // cooldown runs. A Recover that holds through the whole cooldown (its
+  // default, and the fix for the chaser waggle) left them no gap to fill —
+  // the Duelist backed off until ready, then lunged, and the Bat, Breeze Wisp
+  // and Volt Spider dove on every frame of Approach and never circled. For
+  // these verbs Recover ends at its own `duration` and Approach takes the rest
+  // of the cooldown. An authored `holdCooldown` on `data.recover` still wins.
+  if (states.recover && COOLDOWN_VERBS.has(states.approach.movement)) {
+    states.recover.holdCooldown ??= false;
+  }
 
   if (style === 'ambusher') {
     // The two halves of an ambush, finally separate: when it wakes, and how it

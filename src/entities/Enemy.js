@@ -1,4 +1,5 @@
 import { GRID, COLORS, PHYSICS } from '../game/GameConfig.js';
+import { initArchetypeState } from './enemyMovement.js';
 import { ENEMIES, resolveHitSfx } from '../data/enemies.js';
 import { isImmuneToEffect, blocksStatusEffect, getElementalModifierFor } from './elementalAffinity.js';
 import { Item } from './Item.js';
@@ -363,19 +364,9 @@ export class Enemy {
       if (this.data.jumpBehavior?.enabled) this.movementStyle = 'jumper';
     }
 
-    // Per-archetype state initialization
-    if (this.movementStyle === 'keeper') {
-      // Randomly pick strafe direction so grouped keepers orbit in different directions
-      this.keeperStrafeDir = Math.random() < 0.5 ? 1 : -1;
-      // Countdown for the optional `strafeFlipInterval` flip (moveKeeper);
-      // seeded to the full interval so the first flip lands on cadence.
-      this.keeperFlipTimer = this.movementConfig?.strafeFlipInterval ?? 0;
-    }
-    if (this.movementStyle === 'ambusher') {
-      this.burstTimer = 0;
-      this.burstActive = false;
-      this.state = 'rest'; // Ambushers start dormant
-    }
+    // Per-archetype movement state (strafe side, Patience, burst) — owned by
+    // the verbs that read it, in enemyMovement.js.
+    initArchetypeState(this);
 
     // The State spine — every enemy's AI, from spawn.
     this.stateMachine = new EnemyStateMachine(this, statesFor(this.data));

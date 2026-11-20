@@ -531,6 +531,8 @@ identity, not standard programming terms.
   `dance` is the one Approach verb no archetype defaults to: closes like `close` until within
   attack range, then steps side to side across the target's line, flipping every
   `movementConfig.danceStep` seconds, until the attack comes off cooldown (the Duelist).
+  `dance` and `orbit` fill the attack cooldown, so Recover hands back to them at its own
+  `duration` rather than holding through the cooldown.
   Losing sight with a mark, Approach goes to Search; `searchChance` below 1 makes that a roll,
   and a failed roll drops the mark and goes back to Alert (wander) instead.
 - **In code:** `src/entities/enemyStates/approach.js`; verb comes from
@@ -564,6 +566,17 @@ identity, not standard programming terms.
 - **Not:** Reaction Time (the Act 2 Mist Battle bodies' perception lag); an attack's windup or
   cooldown, which still run on their own timers after the commit; Anticipate, the visible tell
   after a commit.
+
+### Patience
+- **Definition:** How long a kiter will circle with its attack ready before it commits anyway.
+  It runs down only while the attack is off cooldown and nothing is underway, and refills the
+  moment any attack (a Strike, a leap, any committed mechanic) starts. When it runs out the
+  kiter dives in even if it never dives otherwise, so keeping a kiter at bay never stops it
+  attacking.
+- **In code:** `moveKiter` in `src/entities/enemyMovement.js`; `enemy.patienceTimer`,
+  `movementConfig.patience` (double-seconds, default 6.0 = 3s).
+- **Not:** a Decision Frame (`decisionTimer`/`decisionInterval`, the reaction-time beat on
+  which any commit happens); Anticipate (the tell after a commit); a State.
 
 ### Falter
 - **Definition:** A chance beat, rolled on an Enemy's decision frames while it is in Approach
@@ -600,9 +613,11 @@ identity, not standard programming terms.
   all). Six named variants (`retreat`, `stationary`, `jumpBack`, `knockback`, `lockPlayer`,
   `hide`) cover everything from a plain backpedal to briefly rooting the player or vanishing.
 - **In code:** `src/entities/enemyStates/recover.js`; variant selected by
-  `data.states.recover.variant` (default `retreat`); declared by default only for
-  `chaser`/`keeper` archetypes (the fix for the Chase-state waggle), opt-in for any archetype
-  via `data.recover`.
+  `data.states.recover.variant` (default `retreat`); declared by default for
+  `chaser`/`keeper` archetypes and any melee attacker (the fix for the Chase-state waggle),
+  opt-in for any archetype via `data.recover`. Holds until the attack cooldown is spent, except
+  `holdCooldown: false` (the default when Approach's verb is `dance` or `orbit`) ends at
+  `duration` and leaves the rest of the cooldown to Approach.
 - **Not:** Recovery, the Weapon Timing phase (`items.js` `recovery` field — a weapon-data
   cooldown-after-impact value). Two different domains — weapon data vs. Enemy State — one
   letter apart; kept distinct on purpose, since the contexts never overlap and neither is a

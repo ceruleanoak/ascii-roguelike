@@ -1940,8 +1940,9 @@ export const ENEMIES = {
     movementStyle: 'kiter',
     movementConfig: {
       kiteDistance: GRID.CELL_SIZE * 4,     // Maintain 4 units from player
-      retreatThreshold: GRID.CELL_SIZE * 3, // Retreat if player within 3 units during hover
-      dive: false,                          // Never closes to bite; it circles and leaps instead
+      retreatOn: 'harmed',                  // Backs off to the ring only after it is hit
+      dive: false,                          // Circles and leaps rather than closing to bite —
+                                            // until its Patience runs out (moveKiter)
     },
     // Circles at leap range until it has held there holdTime (enemy timer
     // seconds, half of real time; less for each aggroed packmate), then
