@@ -3222,6 +3222,9 @@ class Game {
       // A spent item in hand (Item.isSpent) fights like empty hands.
       const armed = this.player.heldItem && !this.player.heldItem.isSpent();
       if (armed && !this.captiveInteractionThisFrame && this.player.canAttack()) {
+        // Out of ammo (reloading, or a wand used up): the press fires nothing,
+        // so it touches the background object in reach as empty hands would.
+        if (this.player.heldItem.isOutOfAmmo()) this.interactionSystem.touchNearbyObject();
         this.combatSystem.tryUseHeldWeapon();
         this.mistBattleSystem.onAttackPress(); // Flanks fire with the Primary
         this.dragonSpiritSystem.onAttackPress();
@@ -3229,8 +3232,7 @@ class Game {
         // Nothing to swing: touch a background object in reach (a shake, the
         // Leshy's bush), and with nothing usable in hand the Punch is the
         // attack, at the same priority as a weapon. A touch never replaces it.
-        const nearbyObject = this.findNearbyBackgroundObject();
-        if (nearbyObject) this.interactWithObject(nearbyObject);
+        this.interactionSystem.touchNearbyObject();
         if (!armed) this.punchSystem.handleEmptyHandedPress();
       }
     } else if (state === GAME_STATES.NEUTRAL) {
@@ -3245,27 +3247,7 @@ class Game {
       const nearbyObject = this.findNearbyBackgroundObject();
 
       if (nearbyObject && nearbyObject.leshyGrass && nearbyObject.char === '|') {
-
-        // Call neutral room system to handle interaction (grass cutting)
-        const result = this.neutralRoomSystem.handleInteraction(nearbyObject, this.player, this.currentRoom);
-
-        // Add spawned entities to game (separate ingredients from items)
-        if (result && result.spawnedItems) {
-          for (const entity of result.spawnedItems) {
-            // Route to appropriate array based on entity type
-            if (entity instanceof Ingredient) {
-              this.ingredients.push(entity);
-            } else {
-              this.items.push(entity);
-            }
-            this.physicsSystem.addEntity(entity);
-          }
-        }
-
-        // Always redraw background when a cluster is cut (covers cutAllRemaining too)
-        if (result) {
-          this.renderer.markBackgroundDirty();
-        }
+        this.neutralRoomSystem.cutLeshyGrass(this, nearbyObject);
       }
       else if (nearbyObject?.threeDoor) {
         // The shut way north — ThreeRoomSystem owns the opening and what it

@@ -2,6 +2,7 @@ import { GRID, ROOM_TYPES, GAME_STATES } from '../game/GameConfig.js';
 import { NEUTRAL_ROOMS } from '../data/neutralRooms.js';
 import { seedZonePath } from './CrossZoneWarp.js';
 import { findSafeSpawnPosition } from './safeSpawn.js';
+import { Ingredient } from '../entities/Ingredient.js';
 
 // The edge a neutral room is left through, given the exit taken to reach it.
 // 'south' entry (REST → the Graveyard) is the only one that puts the door home
@@ -285,6 +286,22 @@ export class NeutralRoomSystem {
   returnToOuterRoom(game) {
     const { scriptName, entryDirection } = game.currentRoom.outerRoom;
     game.transitionToNeutralRoom(scriptName, entryDirection, { inner: true });
+    game.renderer.markBackgroundDirty();
+  }
+
+  /**
+   * SPACE on a Leshy grass blade: the room script cuts it, and whatever the
+   * cut turns up joins the world — ingredients to game.ingredients, anything
+   * else to game.items, each into physics. The background redraws after any
+   * cut (cutAllRemaining included).
+   */
+  cutLeshyGrass(game, blade) {
+    const result = this.handleInteraction(blade, game.player, game.currentRoom);
+    if (!result) return;
+    for (const entity of result.spawnedItems ?? []) {
+      (entity instanceof Ingredient ? game.ingredients : game.items).push(entity);
+      game.physicsSystem.addEntity(entity);
+    }
     game.renderer.markBackgroundDirty();
   }
 

@@ -503,6 +503,14 @@ export class InteractionSystem {
     return null;
   }
 
+  // SPACE that swings nothing (empty hands, a spent item, a weapon out of
+  // ammo): touch the background object in reach — a shake, the Leshy's bush.
+  // Goes through game.interactWithObject so the touch still makes its sound.
+  touchNearbyObject() {
+    const obj = this.findNearbyBackgroundObject();
+    if (obj) this.game.interactWithObject(obj);
+  }
+
   // Nearest spacebar-openable container (chest, barrel, crate, tomb…) in
   // range. Scanned on its own rather than through findNearbyBackgroundObject,
   // which returns the first in-range object of any kind — a rock or bush

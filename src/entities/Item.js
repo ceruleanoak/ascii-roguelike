@@ -1729,6 +1729,17 @@ export class Item {
       && this.maxUses !== null && this.usesRemaining <= 0 && !data.reloadTime;
   }
 
+  // No shot to fire right now: an empty bow/gun (spent, or waiting on its
+  // reload) or a limited wand used up for this room. A press then fires
+  // nothing, so SPACE is free to touch a background object instead.
+  isOutOfAmmo() {
+    const data = this.data;
+    const emptyMag = (data.weaponType === 'GUN' || data.weaponType === 'BOW')
+      && this.maxUses !== null && this.usesRemaining <= 0;
+    const emptyWand = this.wandUsesRemaining !== null && this.wandUsesRemaining <= 0;
+    return emptyMag || emptyWand;
+  }
+
   // AoE melee — the explode-on-hit maces/hammers and every shockwave swing —
   // must hold its windup the way a gem wand holds its charge: SPACE stays down
   // until the swing fires, and letting go early drops it (cancelHeldWindup).
