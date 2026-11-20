@@ -130,3 +130,33 @@ Whether this is good depends on design intent. It fits "mental progression": lea
 - Fights are one enemy, or one species pack, in open rooms with no other room features.
 - Phalanx's Anticipate sets no `stateTell`, so if it shows a visual tell that the detector can't see, P2b's Phalanx call is wrong in its favor.
 - Only the Sword was used across the roster. Weapon effects (blunt vs frozen, elements) were not exercised.
+
+---
+
+## Addendum — kiting and the Duelist's dance (follow-up question)
+
+**Method.** I added a movement probe to the lab. For each enemy, on every frame, it records the enemy's State and movement verb, its distance from the player, and how much of its movement is sideways ("lateral") rather than toward or away from the player. For kiters it also records which branch of `moveKiter` is running: ring (circling), retreat, dive, or the chase fallback used before the enemy has spotted the player. It also counts Duelist side-flips and wolf leap crouches. The probe ran against four players:
+- **still**: never moves.
+- **idle**: walks in and doesn't attack.
+- **trade**: attacks.
+- **react**: dodges.
+
+Each combination ran on 6 seeds, plus a one-Duelist frame trace (`tools/debug/dance-trace.mjs`).
+
+### Default Recover uses up the attack cooldown that dance and orbit were written to fill
+Every melee attacker gets a default Recover (`stateDefaults.js`), and Recover holds until `attackTimer <= 0` (`recover.js:154`). So by the time Approach runs again, the attack is already off cooldown. Approach's "between attacks" behaviour never gets a between:
+- **Duelist `d`.** The trace cycle is close → lunge (`chargeMechanic`) → Strike → Recover, backing away at 0.5× until the cooldown is spent and ending 2.2–2.4 cells out, just outside its 2-cell reach → close → lunge. The dance sidestep showed up only in ~0.1–0.3s slivers. Against a still player the Duelist spent 37% of its time in Approach, with only **5% of its movement sideways**. Its description, "dances side to side within reach between attacks", is not what it does.
+- **Bat `^`, Breeze Wisp `c`, Volt Spider `j`.** These are labelled `kiter`, but they were in the dive branch for 99–100% of Approach frames under every policy. The circling branch needs `attackTimer > 0`, which can't happen inside Approach, so for these three it is dead code. They behave as chasers.
+- **Frost Wolf `w`, Magma Slug `l`, and the casters** (Cryomancer `C`, Alchemist `q`, Thunder Hawk `h`) do kite. The wolf because `dive: false`, the others because they aren't melee and so get no default Recover.
+
+### Kiting holds up against a player who stands still, and falls apart against one who chases
+| | still: ring / retreat | chased (trade): ring / retreat | leaps per fight, still → trade | killed by trade |
+|---|---|---|---|---|
+| Frost Wolf ×1 | 56% / 32% | 26% / 64% | 7.2 → 0.3 | 3.0s, 0.3 dmg taken |
+| Frost Wolf ×3 | 72% / 20% | 49% / 45% | 16.8 → 3.3 | 6.4s, 2.3 dmg taken |
+| Cryomancer | 70% / 4% | 25% / 14% (60% dive) | — | 3.8s, 2.0 dmg taken |
+| Alchemist | 73% / 0% | 1% / 48% | — | 3.2s, 1.0 dmg taken |
+
+The retreat branch backs straight away from the player, so a chased kiter walks into a wall. The wolf has a second, numeric problem: `retreatThreshold` (3 cells) equals the leap's `triggerRangeMin` (3 cells). A player who stays inside 3 cells keeps the wolf retreating and never inside leap range. Its identity (circle, then pounce) only shows up when the player lets it.
+
+Correction to Part 2: the pack-wolf hits I listed as "no tell" were leap crouches my detector didn't count yet. With `leapWindupActive` counted, every wolf hit in this run had a tell.
