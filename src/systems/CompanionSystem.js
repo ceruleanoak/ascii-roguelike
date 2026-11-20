@@ -11,6 +11,7 @@ import { GolemCompanion } from '../entities/GolemCompanion.js';
 import { CAMP_NPC_STATE } from '../entities/CampNPC.js';
 import { GOLEM_TYPES, GOLEM_CAP } from '../data/golems.js';
 import { stepOutOfWalls } from './companionWallClearance.js';
+import { carriesFeed, floatSmittenHeart, floatBrokenHeart, SMITTEN_HEART_INTERVAL } from './smitten.js';
 
 // Grace period before a wild crow may loot-seek a piece of ground loot,
 // timed from the first frame it's observed as a valid target (effectively
@@ -29,6 +30,27 @@ const CROW_ENRAGE_DAMAGE = 1;
 // How far a wild rat will notice Feed the player put down. Past this the loaf
 // is out of its nose — the player brings the bread to the rat, not the reverse.
 const RAT_FEED_SEEK_RANGE = GRID.CELL_SIZE * 6;
+
+// A wild rat that hasn't noticed the player: still in Alert (or asleep), not
+// carrying a mark, not provoked, not Smitten. Only such a rat goes after Feed
+// the player didn't put down.
+function ratUnaware(rat, player) {
+  const current = rat.stateMachine?.current;
+  if (current !== 'alert' && current !== 'dormant') return false;
+  if (rat.aggroMemoryActive || rat.enraged || rat.lastKnownPosition) return false;
+  return !ratSpotsPlayer(rat, player);
+}
+
+// What ends a forage: the player inside the rat's aggro range and in its sight.
+// The seek owns the rat's AI (BreadSeekMechanic skips the State spine), so its
+// own senses would never run — this asks the same question they would.
+function ratSpotsPlayer(rat, player) {
+  if (!player || player.hidden || (rat.plane ?? 0) !== (player.plane ?? 0)) return false;
+  const dx = player.position.x - rat.position.x;
+  const dy = player.position.y - rat.position.y;
+  if (dx * dx + dy * dy > rat.aggroRange * rat.aggroRange) return false;
+  return rat.hasVision(rat.position, player.position, rat.visionLength);
+}
 
 // Companion behavior: the bread-feed pipeline and per-frame drivers for every
 // befriendable creature — wild rat → NPCRat companion, wild crow → follower
@@ -64,11 +86,13 @@ export class CompanionSystem {
     // wrong coordinates and "eat" a loaf the player never dropped.
     //
     // Only Feed the player put down tames (`droppedByPlayer` — a SHIFT toss or
-    // a drop): berries a Shrub shakes loose and loaves lying in a room are
-    // just food on the floor to a wild rat.
+    // a drop). Berries a Shrub shakes loose and loaves lying in a room are
+    // just food on the floor: a rat that hasn't noticed the player goes and
+    // eats it, and stays wild (see ratUnaware below). Player-dropped Feed is
+    // listed first so it claims the nearest rat before floor food does.
     const loaves = game.items.filter(it =>
-      it && isFeed(it) && it.droppedByPlayer && !it.consumed && !it.hutPlane && !it.mazePlane
-    );
+      it && isFeed(it) && !it.consumed && !it.hutPlane && !it.mazePlane
+    ).sort((a, b) => Number(!!b.droppedByPlayer) - Number(!!a.droppedByPlayer));
     if (loaves.length > 0) {
       const claimedLoaves = new Set();
       const claimedRats = new Set();
@@ -78,7 +102,11 @@ export class CompanionSystem {
         // Release the rat if its target vanished or is an interior-tagged loaf
         // (covers any stale assignment from before the surface-only filter
         // landed) — otherwise it'd march to the top-left forever.
-        if (!t || t.consumed || t.hutPlane || t.mazePlane) {
+        // Floor food is only worth it while the player goes unnoticed — a rat
+        // that spots the player mid-forage drops it and is a rat again.
+        if (!t || t.consumed || t.hutPlane || t.mazePlane
+            || (!t.droppedByPlayer && ratSpotsPlayer(e, game.player))
+            || (t.droppedByPlayer && e.heartbroken)) {
           e.seekingBread = false;
           e.breadTarget = null;
           continue;
@@ -94,6 +122,9 @@ export class CompanionSystem {
           if (!r.data?.tameableByBread) continue;
           if (r.hp <= 0) continue;
           if (claimedRats.has(r)) continue;
+          // Heartbroken: Feed never tames it again (GLOSSARY.md). Floor food
+          // it may still eat, like any rat that hasn't noticed the player.
+          if (loaf.droppedByPlayer ? r.heartbroken : !ratUnaware(r, game.player)) continue;
           const dx = r.position.x - loaf.position.x;
           const dy = r.position.y - loaf.position.y;
           const d = dx * dx + dy * dy;
@@ -137,6 +168,17 @@ export class CompanionSystem {
       if (lIdx !== -1) {
         game.physicsSystem.removeEntity(loaf);
         game.items.splice(lIdx, 1);
+      }
+      rat.seekingBread = false;
+      rat.breadTarget = null;
+
+      // Floor food is just a meal: the rat stays wild and goes on its way.
+      if (!loaf.droppedByPlayer) {
+        game.particles.push(tagInteriorPlane(game, {
+          x: rat.position.x + GRID.CELL_SIZE / 2, y: rat.position.y + GRID.CELL_SIZE / 2,
+          vx: 0, vy: -12, life: 0.4, maxLife: 0.4, char: '·', color: '#daa520'
+        }));
+        continue;
       }
 
       // Yank the wild Enemy out of every room.enemies-style cache and physics.
@@ -597,6 +639,7 @@ export class CompanionSystem {
   // by a caught flockmate instead of a direct hit on the crow itself.
   snareCrow(crow) {
     if (!crow || crow.snared) return;
+    this.breakCrowHeart(crow);
     crow.snared = true;
     crow.velocity.vx = 0;
     crow.velocity.vy = 0;
@@ -605,6 +648,13 @@ export class CompanionSystem {
       if (other === crow) continue;
       other.enraged = true;
     }
+  }
+
+  // Any harm landing on a Smitten crow (GLOSSARY.md "Heartbroken").
+  breakCrowHeart(crow) {
+    if (crow.heartbroken || crow.state !== 'smitten') return;
+    crow.heartbroken = true;
+    floatBrokenHeart(this.game, crow);
   }
 
   updateCrows(deltaTime) {
@@ -707,6 +757,10 @@ export class CompanionSystem {
     // crow seeks → enters scare radius → flees → returns → seeks → forever.
     // Weapon attacks below still scare.
     const surfaceLive = !isInteriorActive(game);
+    // Smitten: crow Feed in any quick slot draws wild crows to the player.
+    const feedCarrier = (surfaceLive && game.player && game.player.plane === 0 && carriesFeed(game.player, isCrowFeed))
+      ? { x: game.player.position.x, y: game.player.position.y }
+      : null;
     const playerThreat = (surfaceLive && game.player && game.player.plane === 0 && breadItems.length === 0)
       ? { x: game.player.position.x, y: game.player.position.y }
       : null;
@@ -746,7 +800,7 @@ export class CompanionSystem {
       // Other room crows take off toward the feed point and join the flock.
       for (let i = crows.length - 1; i >= 0; i--) {
         const other = crows[i];
-        if (other === crow) continue;
+        if (other === crow || other.heartbroken) continue;
         other.becomeFollower(ex, ey);
         game.followerCrows.push(other);
         crows.splice(i, 1);
@@ -819,16 +873,25 @@ export class CompanionSystem {
         continue;
       }
 
-      crow.update(deltaTime, bgObjects, crows, breadItems, onAteBread, lootItems, onGrabLoot);
+      crow.update(deltaTime, bgObjects, crows, breadItems, onAteBread, lootItems, onGrabLoot, feedCarrier);
+
+      if (crow.state === 'smitten') {
+        crow.smittenHeartTimer -= deltaTime;
+        if (crow.smittenHeartTimer <= 0) {
+          crow.smittenHeartTimer = SMITTEN_HEART_INTERVAL;
+          floatSmittenHeart(game, crow);
+        }
+      }
 
       // Tagged threats: weapon contact counts as an attack and shakes
       // whatever the crow is carrying loose; player proximity only spooks
-      // the crow into the air.
+      // the crow into the air — never a Smitten one, which is following.
       const threats = [];
-      if (playerThreat) threats.push({ x: playerThreat.x, y: playerThreat.y, isAttack: false });
+      if (playerThreat && crow.state !== 'smitten') threats.push({ x: playerThreat.x, y: playerThreat.y, isAttack: false });
       for (const t of weaponThreats) threats.push({ x: t.x, y: t.y, isAttack: true });
       for (const t of threats) {
         if (crow.isWithinScareRange(t.x, t.y)) {
+          if (t.isAttack) this.breakCrowHeart(crow);
           materializeDrop(crow.scare(t.x, t.y, t.isAttack), crow);
           break;
         }

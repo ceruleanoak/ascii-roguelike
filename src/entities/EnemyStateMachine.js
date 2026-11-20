@@ -35,6 +35,7 @@ import withdraw from './enemyStates/withdraw.js';
 import flee from './enemyStates/flee.js';
 import lookback from './enemyStates/lookback.js';
 import useTrap from './enemyStates/useTrap.js';
+import smitten from './enemyStates/smitten.js';
 
 // What the spine's current State looks like to everything still reading
 // `enemy.state`: ExploreRenderer's indicator picker, TrailMechanic, Telegraph.
@@ -58,6 +59,8 @@ export const LEGACY_STATE = {
   withdraw: 'idle',
   // A fleeing enemy is running, same visual language as a chase.
   flee: 'chase',
+  // Following the Feed, not the player — no aggro indicator.
+  smitten: 'idle',
 };
 
 // The legacy id for a State, resolving Strike's two halves by its windup timer.
@@ -66,7 +69,7 @@ export function legacyStateFor(machine, enemy) {
   return LEGACY_STATE[machine.current] ?? 'idle';
 }
 
-export const STATES = { dormant, alert, approach, anticipate, strike, recover, search, withdraw, flee, lookback, useTrap };
+export const STATES = { dormant, alert, approach, anticipate, strike, recover, search, withdraw, flee, lookback, useTrap, smitten };
 
 // Where a transition lands when its target State is not one this enemy declares.
 //
@@ -110,6 +113,7 @@ const FALLBACK = {
   withdraw:   ['alert'],
   lookback:   ['flee'],
   useTrap:    ['withdraw'],
+  smitten:    ['alert'],
 };
 
 // Conditions that preempt whatever State is current, in the order they are

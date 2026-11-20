@@ -51,6 +51,8 @@ import { MazePathingMechanic } from './enemyMechanics/MazePathingMechanic.js';
 import { BumpMechanic } from './enemyMechanics/BumpMechanic.js';
 import { CloseQuartersMechanic } from './enemyMechanics/CloseQuartersMechanic.js';
 import { BreadSeekMechanic } from './enemyMechanics/BreadSeekMechanic.js';
+import { SmittenMechanic } from './enemyMechanics/SmittenMechanic.js';
+import { BladeGrassCutMechanic } from './enemyMechanics/BladeGrassCutMechanic.js';
 import { EnemyStateMachine, legacyStateFor } from './EnemyStateMachine.js';
 import { computeNodePath as computeNodePathImpl } from '../systems/EnemyPathfinding.js';
 import { statesFor } from '../data/stateDefaults.js';
@@ -475,6 +477,7 @@ export class Enemy {
     this.knockbackMultiplier = this.data.knockbackMultiplier ?? 1.0;
 
     BreadSeekMechanic.init(this);
+    SmittenMechanic.init(this);
   }
 
   setCollisionMap(collisionMap) {
@@ -539,6 +542,7 @@ export class Enemy {
     // Status-only immunity holds at every source, including the call sites that
     // apply a status without asking shouldApplyStatusEffect first (fire, traps).
     if (this.elementalAffinity?.statusImmunity?.includes(effect)) return;
+    SmittenMechanic.onHurt(this);
     applyStatusEffectImpl(this, effect, duration, pips);
   }
 
@@ -916,7 +920,7 @@ export class Enemy {
     }
 
     // AI behavior — the State spine.
-    this.stateMachine.update(this, deltaTime, {
+    const spineCtx = {
       distance,
       effectiveDistance,
       effectiveAggroRange,
@@ -943,30 +947,15 @@ export class Enemy {
       deltaTime,
       targetPos: this.target.position,
       onScreen,
-    });
+    };
+    // Carrying Feed draws a rat into Smitten from any uncommitted State.
+    SmittenMechanic.update(this, spineCtx);
+    this.stateMachine.update(this, deltaTime, spineCtx);
     // Everything still reading `enemy.state` — the renderer's indicator picker,
     // TrailMechanic, Telegraph — keeps working through the translation.
     this.state = legacyStateFor(this.stateMachine, this);
 
-    // Cut grass when searching with blade weapons
-    if (this.aggroMemoryActive && this.backgroundObjects && this.equippedWeapon) { // layer-guard-ok
-      const weaponData = this.equippedWeapon.data;
-      if (weaponData && weaponData.isBlade) {
-        // Check if overlapping with tall grass
-        for (const obj of this.backgroundObjects) { // layer-guard-ok
-          if (obj.destroyed || obj.char !== '|') continue;
-
-          const dx = obj.position.x - this.position.x;
-          const dy = obj.position.y - this.position.y;
-          const distance = Math.sqrt(dx * dx + dy * dy);
-
-          // Cut grass within melee range
-          if (distance < GRID.CELL_SIZE * 1.5) {
-            obj.cutGrass();
-          }
-        }
-      }
-    }
+    BladeGrassCutMechanic.update(this);
 
     // Reset decision timer if expired. Cached before the reset so systems
     // driven after this tick (e.g. EnemyUpdateSystem's item-pickup pass) can
@@ -2092,6 +2081,7 @@ export class Enemy {
       SplitOnDamageMechanic.onDamaged(this, amount);
       GooSpewMechanic.onDamaged(this, amount);
       RipenMechanic.onDamaged(this);
+      SmittenMechanic.onHurt(this);
       ThiefMechanic.onDamaged(this);
       SniperMechanic.onDamaged(this);
       GameAnimalMechanic.onDamaged(this);

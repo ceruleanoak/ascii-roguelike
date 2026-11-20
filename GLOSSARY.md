@@ -733,6 +733,32 @@ identity, not standard programming terms.
 - **Not:** Lookback (the sensory check that leads here); a general escape-and-hide State — this
   is specifically the trap-laying beat, named for its one shipped user.
 
+### Smitten
+- **Definition:** A wild rat or crow drawn to the Feed the player is carrying. While any quick
+  slot holds Feed it eats (`isFeed` for a rat, `isCrowFeed` for a crow) and the player is near,
+  it follows at a cell or two and floats a ♥ now and then. It does not bite, steal or flee. Stop
+  carrying the Feed and it is a wild thing again. Dropping the Feed still tames it as before.
+  For a rat it is an Enemy State, declared by every Enemy that can be tamed with Feed.
+- **In code:** Enemy: `src/entities/enemyStates/smitten.js` (the State; never leads to Strike),
+  declared via `tameableByBread` in `src/data/stateDefaults.js`, entered by `SmittenMechanic.update`
+  (`src/entities/enemyMechanics/SmittenMechanic.js`) from any uncommitted State. A thief running
+  off with coin is never drawn. Crow: the `'smitten'` state in `Crow.update`, fed the
+  `feedCarrier` position by `CompanionSystem.updateCrows`. Shared pieces (`carriesFeed`, the
+  heart particles) live in `src/systems/smitten.js`.
+- **Not:** tamed (a Companion has eaten Feed; a Smitten creature has only seen it); a follower
+  crow (joined the flock after another crow ate); "charmed" or "lured" (Lure is the Charm Lure trap).
+
+### Heartbroken
+- **Definition:** A rat or crow hurt while Smitten. Any damage or status counts. A grey,
+  sinking ♡ marks the moment. It is never Smitten again, and Feed never tames it: it will not
+  go for Feed the player puts down. A rat may still eat Feed lying on the floor. Hurting a rat or
+  crow that wasn't Smitten does not break its heart.
+- **In code:** the `heartbroken` field on Enemy (`SmittenMechanic.onHurt`, called from
+  `Enemy.takeDamage` and `Enemy.applyStatusEffect`) and on Crow (`CompanionSystem.breakCrowHeart`,
+  on weapon contact or a snare). Never cleared. Checked by `CompanionSystem` bread taming and
+  follower recruitment.
+- **Not:** Enraged (provoked into attacking); the Thief's cowardly flip.
+
 ### Mechanic
 - **Definition:** A composable enemy behavior added by data, not by branching in `Enemy.js`.
   New enemy behaviors are authored as Mechanics.
@@ -2430,13 +2456,17 @@ identity, not standard programming terms.
 - **Definition:** A Consumable that crows and rats seek out and eat once it lies on the ground.
   Throwing (SHIFT) or dropping Feed is how crows are befriended and rats tamed into
   Companions. A wild rat tames only on Feed the player put down (`droppedByPlayer`), and only
-  within six cells of it; berries a Shrub shakes loose don't tame. Feed can also have its own SPACE effect: Bread (⌬) has none, while the Sandwich
+  within six cells of it; berries a Shrub shakes loose don't tame. Feed the player didn't put
+  down is just food: a rat that hasn't noticed the player goes and eats it and stays wild,
+  breaking off the moment it spots the player. Carried in a quick slot, Feed makes wild rats
+  and crows Smitten. Feed can also have its own SPACE effect: Bread (⌬) has none, while the Sandwich
   (☰, Bread + Meat) heals 3 when eaten. The Forest Berry (⁖) is Feed for rats alone: a 1-in-10
   Shrub holds three of them, and crows pass them by.
 - **In code:** the `feed: true` flag on the item's data in `src/data/items.js`; test it with
   `isFeed(item)` (`src/systems/feed.js`), or `isCrowFeed(item)` for what a crow will eat
   (`crowsRefuse` opts out). Never compare against a Bread char. Consumers:
-  `CompanionSystem` (rat bread-seek, crow targeting, crow loot exclusion), `companionFeed.js`
+  `CompanionSystem` (rat bread-seek and floor-food foraging, crow targeting, crow loot
+  exclusion), `carriesFeed` (`src/systems/smitten.js`, Smitten), `companionFeed.js`
   (a hurt tamed rat eats it),
   `Crow._closestPickable` exclusion, and `CampNPC.acceptsHeal`.
 - **Not:** "bread" as a category (Bread is one Feed item); "bait" or "lure" (Lure is the

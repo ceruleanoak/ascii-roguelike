@@ -24,6 +24,11 @@ const BREAD_EAT_DIST = GRID.CELL_SIZE * 0.7;
 const LOOT_SEEK_RADIUS = GRID.CELL_SIZE * 6;
 const LOOT_SEEK_SPEED = 60;
 const LOOT_GRAB_DIST = GRID.CELL_SIZE * 0.7;
+// Smitten (GLOSSARY.md): how near the player, carrying crow Feed, has to come
+// before a perched crow takes off after it, and how close it then hovers.
+const SMITTEN_NOTICE_RADIUS = GRID.CELL_SIZE * 6;
+const SMITTEN_FOLLOW_DIST = GRID.CELL_SIZE * 1.5;
+const SMITTEN_SPEED = 55;
 
 // Companion tuning. Orbit radius is wider for enemies (don't crowd combat)
 // and tighter for pickup items (so the visual cue reads clearly).
@@ -113,10 +118,16 @@ export class Crow {
     // Driven by CompanionSystem.updateCrows via the companion dive machinery
     // below (beginDive/updateDive), aimed at the player instead of an enemy.
     this.enraged = false;
+    // Heartbroken (GLOSSARY.md): hurt while Smitten. Never Smitten again, and
+    // Feed never tames it — set by CompanionSystem, never cleared.
+    this.heartbroken = false;
+    // Seconds to the next heart a Smitten crow floats (CompanionSystem).
+    this.smittenHeartTimer = 0;
 
     // State machine:
     //   'idle' → 'fleeing' (scared by weapon/player) → 'returning' → 'idle'
     //   'idle'/'returning'/'fleeing' → 'seekingBread' on bread sighted → eats → promoted to companion.
+    //   'idle'/'returning' → 'smitten' while the player carries crow Feed nearby → 'returning' once not.
     this.state = 'idle';
     this.fleeTimer = 0;
     this.bobPhase = Math.random() * Math.PI * 2;
@@ -378,7 +389,9 @@ export class Crow {
     return null;
   }
 
-  update(deltaTime, backgroundObjects = [], otherCrows = [], breadItems = [], onAteBread = null, lootItems = [], onGrabLoot = null) {
+  // `feedCarrier`: the player's position while they carry crow Feed in a
+  // quick slot (Smitten), else null.
+  update(deltaTime, backgroundObjects = [], otherCrows = [], breadItems = [], onAteBread = null, lootItems = [], onGrabLoot = null, feedCarrier = null) {
     // Snared crows are rooted — no bread/loot/flee, just a stuck idle bob.
     // Enraged crows are driven separately by CompanionSystem (dive machinery),
     // which skips this method entirely for them.
@@ -392,7 +405,7 @@ export class Crow {
 
     // Bread sighting overrides idle/returning. Fleeing crows still finish
     // their flee arc first — getting shot at is a higher signal than food.
-    if (breadItems.length && this.state !== 'fleeing' && this.state !== 'seekingBread') {
+    if (breadItems.length && !this.heartbroken && this.state !== 'fleeing' && this.state !== 'seekingBread') {
       const nearest = this._pickClosestBread(breadItems);
       if (nearest) {
         this.breadTarget = nearest;
@@ -417,6 +430,36 @@ export class Crow {
         this.lootTarget = nearest;
         this.state = 'seekingLoot';
       }
+    }
+
+    // Smitten: a wild crow drawn off its perch by the Feed the player carries.
+    if (this.mode === 'wild' && !this.heartbroken && feedCarrier
+        && (this.state === 'idle' || this.state === 'returning')
+        && Math.hypot(feedCarrier.x - this.position.x, feedCarrier.y - this.position.y) <= SMITTEN_NOTICE_RADIUS) {
+      this.state = 'smitten';
+      this.smittenHeartTimer = 0;
+      this.takeoffPending = true;
+    }
+
+    if (this.state === 'smitten') {
+      if (!feedCarrier || this.heartbroken) {
+        this.homePosition = this._choosePerch(backgroundObjects, otherCrows);
+        this.state = 'returning';
+        return;
+      }
+      const dx = feedCarrier.x - this.position.x;
+      const dy = feedCarrier.y - this.position.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist > SMITTEN_FOLLOW_DIST) {
+        this.velocity.vx = (dx / dist) * SMITTEN_SPEED;
+        this.velocity.vy = (dy / dist) * SMITTEN_SPEED;
+        this.position.x += this.velocity.vx * deltaTime;
+        this.position.y += this.velocity.vy * deltaTime;
+      } else {
+        this.velocity.vx = 0;
+        this.velocity.vy = 0;
+      }
+      return;
     }
 
     if (this.state === 'seekingLoot') {

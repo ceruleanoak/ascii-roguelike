@@ -137,6 +137,10 @@ export function defaultStates(data) {
     states.recover.holdCooldown ??= false;
   }
 
+  // An Enemy that eats Feed can be drawn to it — Smitten (enemyStates/smitten.js,
+  // entered by SmittenMechanic while the player carries Feed).
+  if (data.tameableByBread) states.smitten = {};
+
   if (style === 'ambusher') {
     // The two halves of an ambush, finally separate: when it wakes, and how it
     // moves once woken.
