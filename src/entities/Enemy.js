@@ -1011,8 +1011,12 @@ export class Enemy {
         }
       }
 
-      if (!this.spawnWindupActive && this.spawnTimer > 0) {
-        this.spawnTimer -= deltaTime;
+      // The cooldown runs out, then the spawn waits — at zero, not re-armed —
+      // for a Decision Frame with nothing else underway and room under the
+      // spawn caps. Testing the commit only on the frame the cooldown crossed
+      // zero lost every spawn that didn't land on a Decision Frame, for good.
+      if (!this.spawnWindupActive) {
+        if (this.spawnTimer > 0) this.spawnTimer -= deltaTime;
 
         if (this.spawnTimer <= 0 && this.canSpawn() && commitAttack(this)) {
           this.spawnWindupActive = true;
