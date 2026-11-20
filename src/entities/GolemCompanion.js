@@ -305,6 +305,9 @@ export class GolemCompanion {
       const modifier = getElementalModifierFor(this.def.elementalAffinity, this.def.affinities, onHit);
       amount = Math.max(0, Math.round(amount * modifier));
     }
+    // Immune (a fire-affine Fire Elemental under a flame): the hit never
+    // lands — no iframes, no hit sound, and the caller shows no number.
+    if (amount <= 0) return false;
     this.hp -= amount;
     this.invulnerabilityTimer = INVULNERABILITY_DURATION;
     this.game?.audioSystem?.playSFX?.('enemy_hit');
@@ -314,11 +317,11 @@ export class GolemCompanion {
         this.state = 'dead';
         this.resurrectTimer = this.def.resurrectCooldown;
         this.target = null;
-        return { damaged: true, died: true, resurrecting: true };
+        return { damaged: true, amount, died: true, resurrecting: true };
       }
-      return { damaged: true, died: true };
+      return { damaged: true, amount, died: true };
     }
-    return { damaged: true };
+    return { damaged: true, amount };
   }
 
   // Render-path compatibility shims.

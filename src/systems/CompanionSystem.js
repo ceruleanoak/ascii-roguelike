@@ -443,7 +443,7 @@ export class CompanionSystem {
         if (dx * dx + dy * dy < r * r) {
           result = golem.takeDamage(p.damage || 1, p.owner, p.onHit);
           projs.splice(i, 1);
-          cs.createDamageNumber?.(p.damage || 1, golem.position.x, golem.position.y, golem.color);
+          if (result) cs.createDamageNumber?.(result.amount, golem.position.x, golem.position.y, golem.color);
           break;
         }
       }
@@ -464,7 +464,7 @@ export class CompanionSystem {
           ) {
             m.hasHit = true;
             result = golem.takeDamage(m.damage || 1, m.owner, m.onHit);
-            cs.createDamageNumber?.(m.damage || 1, golem.position.x, golem.position.y, golem.color);
+            if (result) cs.createDamageNumber?.(result.amount, golem.position.x, golem.position.y, golem.color);
             break;
           }
         }
