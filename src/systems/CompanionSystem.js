@@ -10,6 +10,7 @@ import { enemyVisualAnchor } from './enemyHitTest.js';
 import { GolemCompanion } from '../entities/GolemCompanion.js';
 import { CAMP_NPC_STATE } from '../entities/CampNPC.js';
 import { GOLEM_TYPES, GOLEM_CAP } from '../data/golems.js';
+import { stepOutOfWalls } from './companionWallClearance.js';
 
 // Grace period before a wild crow may loot-seek a piece of ground loot,
 // timed from the first frame it's observed as a valid target (effectively
@@ -326,6 +327,8 @@ export class CompanionSystem {
       game.golems[i].onRoomEnter?.(game.player, game, i, golemCount);
     }
     game.companion?.onRoomEnter?.(game.player, game);
+    // The ring around the player can land inside a wall or a Barricade plug.
+    for (const pet of [...(game.tamedRats || []), ...(game.golems || [])]) stepOutOfWalls(game, pet);
   }
 
   registerTamedRatsWithPhysics() {
@@ -501,11 +504,13 @@ export class CompanionSystem {
       this._placePetAtPlayerSlot(rat, game.player, slot++, total);
       rat.setCollisionMap(floor.collisionMap);
       rat.setBackgroundObjects(floor.backgroundObjects); // layer-guard-ok: router-injected
+      stepOutOfWalls(game, rat);
     }
     for (const golem of game.golems || []) {
       this._placePetAtPlayerSlot(golem, game.player, slot++, total);
       golem.setCollisionMap(floor.collisionMap);
       golem.setBackgroundObjects(floor.backgroundObjects); // layer-guard-ok: router-injected
+      stepOutOfWalls(game, golem);
     }
   }
 
@@ -552,11 +557,13 @@ export class CompanionSystem {
       this._placePetAtPlayerSlot(rat, game.player, slot++, total);
       rat.setCollisionMap(game.currentRoom?.collisionMap || null);
       rat.setBackgroundObjects(game.currentRoom?.backgroundObjects || null); // layer-guard-ok
+      stepOutOfWalls(game, rat);
     }
     for (const golem of game.golems || []) {
       this._placePetAtPlayerSlot(golem, game.player, slot++, total);
       golem.setCollisionMap(game.currentRoom?.collisionMap || null);
       golem.setBackgroundObjects(game.currentRoom?.backgroundObjects || null); // layer-guard-ok
+      stepOutOfWalls(game, golem);
     }
     this.setPetsGilded(false);
   }
