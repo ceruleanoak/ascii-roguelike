@@ -127,7 +127,7 @@ export class RoomGenerator {
       type = ROOM_TYPES.JEWELER; // yellow clearing, the parched Jeweler (JewelerSystem)
     }
     if (exitLetter === 'Z') {
-      type = ROOM_TYPES.ZENITH; // green ring of five Zenith Platforms (ZenithSystem)
+      type = ROOM_TYPES.ZENITH; // green mountain summit with five Zenith Platforms (ZenithSystem)
     }
 
     // Determine room type if not specified
@@ -3061,7 +3061,7 @@ export class RoomGenerator {
       case ROOM_TYPES.WELL:        return 0; // Well room places its own central structure
       case ROOM_TYPES.FOUNTAIN:    return 0; // Fountain places its own pool + waterfall structure
       case ROOM_TYPES.PUZZLE:      return 0; // PuzzleSystem places its own arena layout
-      case ROOM_TYPES.ZENITH:      return 0; // ZenithSystem lays its own ring of platforms
+      case ROOM_TYPES.ZENITH:      return 0; // ZenithSystem lays its own summit (src/data/zenithSummit.js)
       default:
         console.warn(`[RoomGenerator] getStructureCount: no case for room type "${roomType}". ` +
           'Add an explicit case to RoomGenerator.getStructureCount(). Returning 0 as safe fallback.');

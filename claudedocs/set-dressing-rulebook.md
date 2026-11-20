@@ -57,6 +57,7 @@ Silhouette is the outline left when every cell of a thing is one flat colour.
 | S4 | **Solid-fill test.** The thing stays identifiable with every cell filled one colour, and stays distinct from its neighbours. | Render a solid-fill view. Hide the label: can you say what it is? | Provisional | The 5×5 hut stamp fails; Witch's legs pass |
 | S5 | **Component contribution.** Every named part earns its place in the outline. | Remove each component in turn. Each removal must change the outline. A part that doesn't is detail: keep it only if §4 or §6 wants it, and don't count it for S1. | Ratified | "individual component contributions to the silhouette" |
 | S6 | **Readable, with interest.** Reads at a glance, and holds one thing that raises a question. | Name the first read and the question separately. If there's no question, it's only legible. | Ratified | "readability yes but with interest" |
+| S7 | **Positions tell the story.** Where each key thing stands follows from the space's own logic (a climb, a current, a hierarchy), not from even spacing or symmetry round a centre. | For every key placement, say why it stands *there* and not in its mirror spot. "It balances the layout" is not an answer. | Provisional | Zenith: "put some real appeal effort into the positions for memorability" |
 
 ---
 
@@ -115,6 +116,7 @@ exemptions are named here with a reason and are **proposed until the user confir
 | G3 | **Verify every new glyph in game.** Unifont is BMP-only, and glyph width varies. | Render it. Check for tofu, and check the advance (table below). | Provisional | Advance measured with canvas `measureText` at 16px |
 | G4 | **Every glyph has a chosen colour, and interactive objects outrank dressing in brightness.** | No dressing cell at the `#888888` fallback (`src/entities/BackgroundObject.js:65`). Squint: the interactive thing is the brightest. | Provisional | Bug #517 |
 | G5 | **No strokes, no alpha gradients.** | Existing rules: strokes smear pixel fonts, and alpha is quantized to 10% steps. Use stepped bands. | Ratified | Bug #472 |
+| G6 | **Markers are glyphs, never boxes.** Code-drawn floor markers, zones and outlines are made of glyphs, not `fillRect`/`strokeRect` squares; a solid object's cell stays out of `collisionMap`, which paints a grey square behind the glyph. A "missing" or "off" state differs in shape (hollow vs filled), not only by a darker hue. | `grep -n "fillRect\|strokeRect" ` the feature's draw file. Render it: no square reads under or round a glyph. | Provisional | Zenith: "ugly and breaks design rules such as using bordered boxes" |
 
 **Glyph width.** This is a width list, not a free list: run G2 on anything you take from it.
 
@@ -270,7 +272,13 @@ applicable. The I2 number counts separate interactive objects.
 | Cavern | Natural rock cluster | Pass | Part | Exempt | The hidden door is the point |
 
 Not scored: the Aquifer has no building (its entrance is a Whirlpool in the Quagmire). The Jeweler
-and Dragon Forge have no building, and neither has the Zenith (five floor platforms). The Well, Fountain and Vault aren't entered.
+and Dragon Forge have no building. The Well, Fountain and Vault aren't entered.
+
+**Authored letter rooms**
+
+| Room | S1 | S2 | S4 | S6 | S7 | G4 | Note |
+|------|----|----|----|----|----|----|------|
+| Zenith (Z) | Pass | Pass | Part | Part | Pass | Pass | Summit map in `src/data/zenithSummit.js`: foot cliff, upper cliff, steps, trail, gully scree, frost, cairn. Stations climb trailhead → summit in zone order. Solid-fill still reads as two nested outlines to someone who doesn't know contours |
 
 **Interiors**
 
@@ -341,3 +349,4 @@ to do.
 | Date | Change | Why |
 |------|--------|-----|
 | 2026-11-01 | First draft. | The user's brief, plus rulings on I2 (two separate objects) and its scope (huts and neutral rooms). |
+| 2026-11-20 | Added S7 (positions tell the story) and G6 (markers are glyphs, never boxes; "off" states differ in shape). Added the Authored letter rooms scorecard, which brings authored set pieces in EXPLORE letter rooms into scope for §2 and §6. | The user on the Zenith's first build: "this room is ugly and breaks design rules such as using bordered boxes", and "put some real appeal effort into the positions for memorability". |

@@ -753,19 +753,20 @@ export const LETTER_TEMPLATES = {
 
   Z: {
     name: 'Zenith',
-    description: 'Five Zenith Platforms in a ring, one per character color (ZenithSystem.generateZenithRoom)',
+    description: 'A mountain summit with five Zenith Platforms along its trail, one per character color (ZenithSystem.generateZenithRoom, src/data/zenithSummit.js)',
 
     wallStructures: {
-      allow: false // nothing breaks the ring's read
+      allow: false // nothing breaks the summit's silhouette
     },
 
     bgObjectRules: {
-      // The ring (radius 7 around 15,15) stays open; dressing keeps to the edges.
+      // The massif (cols 4-24, rows 2-24 of the summit map) takes no dressing;
+      // ZenithSystem also protects every massif cell, so stray spawns are cleaned off.
       clearingZone: {
-        centerCol: 15,
-        centerRow: 15,
-        width: 19,
-        height: 19,
+        centerCol: 14,
+        centerRow: 13,
+        width: 23,
+        height: 25,
         allowGrass: true,
         allowObjects: false
       },

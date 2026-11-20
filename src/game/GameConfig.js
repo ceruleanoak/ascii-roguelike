@@ -1452,6 +1452,84 @@ export const BACKGROUND_OBJECT_VARIANTS = {
     flammability: 'none',
     conductivity: 'none'
   },
+  // The Zenith summit (Z room, src/data/zenithSummit.js). Scenery only: none
+  // of it is harvested, burnt or broken; the cliffs and the cairn are solid.
+  // Colours climb with altitude: mossy foot cliff, dark grass on the terrace,
+  // cold slate upper cliff, dim frost on the summit. All of it stays below the
+  // stations in brightness (G4); the cairn is the brightest stone, and turns
+  // gold once the five have gathered (ZENITH_CAIRN_GATHERED_COLOR).
+  'zenith_foot_cliff': {
+    name: 'Cliff',
+    color: '#5f6b45',
+    indestructible: true,
+    solid: true,
+    bulletInteraction: 'block',
+    flammability: 'none',
+    conductivity: 'none'
+  },
+  'zenith_upper_cliff': {
+    name: 'Cliff',
+    color: '#6f8196',
+    indestructible: true,
+    solid: true,
+    bulletInteraction: 'block',
+    flammability: 'none',
+    conductivity: 'none'
+  },
+  'zenith_steps': {
+    name: 'Steps',
+    color: '#a89470',
+    indestructible: true,
+    solid: false,
+    bulletInteraction: 'pass-through',
+    flammability: 'none',
+    conductivity: 'none'
+  },
+  'zenith_trail': {
+    name: 'Trail',
+    color: '#8c7c5a',
+    indestructible: true,
+    solid: false,
+    bulletInteraction: 'pass-through',
+    flammability: 'none',
+    conductivity: 'none'
+  },
+  'zenith_scree': {
+    name: 'Scree',
+    color: '#6e6a5e',
+    indestructible: true,
+    solid: false,
+    bulletInteraction: 'pass-through',
+    flammability: 'none',
+    conductivity: 'none'
+  },
+  'zenith_grass': {
+    name: 'Grass',
+    color: '#3a6a34',
+    indestructible: true,
+    solid: false,
+    bulletInteraction: 'pass-through',
+    flammability: 'none',
+    conductivity: 'none'
+  },
+  'zenith_frost': {
+    name: 'Frost',
+    color: '#7d9aa6',
+    indestructible: true,
+    solid: false,
+    bulletInteraction: 'pass-through',
+    flammability: 'none',
+    conductivity: 'none'
+  },
+  'zenith_cairn': {
+    name: 'Cairn',
+    color: '#cfc7ae',
+    indestructible: true,
+    solid: true,
+    bulletInteraction: 'block',
+    flammability: 'none',
+    conductivity: 'none'
+  },
   // Barricade Wall — the unbreakable plug a 'trigger' or 'circuit' Barricade
   // stands in the exit gap. Solid block, because that is what the room's own
   // perimeter is: ASCIIRenderer.drawBorder paints the border as filled cells,

@@ -1516,17 +1516,20 @@ identity, not standard programming terms.
 - **Not:** a Companion (a Captive joins the playable roster); a Neutral Room NPC.
 
 ### Zenith
-- **Definition:** The Z room, green zone only. A ring of five Zenith Platforms, one in each
-  character's color, with no enemies. Rare, and more common the more characters are living; once
+- **Definition:** The Z room, green zone only. A mountain summit with no enemies: five
+  Zenith Platforms, one in each character's color, climb its trail in zone order (the Gold Hero at
+  the trailhead, Cyan on the summit), each tied to the summit cairn by a line of pennants. Rare, and more common the more characters are living; once
   the Zenith Gathering is done the letter is never offered again that run.
 - **In code:** `ROOM_TYPES.ZENITH`; `EXIT_LETTERS.Z` (weight × living characters in
   `ExitSystem.getLetterWeightsForZone`, retired by `isLetterRetired` on `game.zenithGathered`);
-  laid out by `ZenithSystem.generateZenithRoom`, state on `room.zenith` (Room-scoped).
+  laid out by `ZenithSystem.generateZenithRoom` from `ZENITH_SUMMIT_MAP` (`src/data/zenithSummit.js`),
+  state on `room.zenith` (Room-scoped).
 - **Not:** a Neutral Room; the Settlement's "gathering" (S's spell text).
 
 ### Zenith Platform
-- **Definition:** One of the Zenith's five floor squares, 3x3 cells, in one character's color.
-  Every living character not being played stands on their own while the player is in the room;
+- **Definition:** One of the Zenith's five stations on the summit trail, marked by a spot glyph in
+  one character's color (filled when that character is there, hollow while it waits). Every
+  living character not being played stands on their own while the player is in the room;
   the played character's platform waits empty for the player.
 - **In code:** `room.zenith.platforms` (`ZenithSystem`), drawn by the `zenithPlatforms` (ground)
   and `zenithGathering` (combat) Frame Passes (`src/rendering/effects/ZenithDraw.js`).
@@ -1535,8 +1538,8 @@ identity, not standard programming terms.
 
 ### Zenith Gathering
 - **Definition:** What happens when the player stands on their own Zenith Platform with all four
-  other characters on theirs: a mote leaves each platform for the ring's center, they meet in a
-  burst of the five colors, and every character gains +5 max HP for the rest of the run.
+  other characters on theirs: a mote climbs each platform's pennant line to the summit cairn, they
+  meet in a burst of the five colors, the cairn turns gold for the rest of the run, and every character gains +5 max HP for the rest of the run.
 - **In code:** `ZenithSystem.update` (`'waiting'` → `'converging'` → `'gathered'`);
   `game.zenithGathered` (Reset Scope `run`); each loadout's `zenithMaxHp`, applied as
   `player.zenithMaxHpBonus` by `EquipmentEffectsSystem`.
