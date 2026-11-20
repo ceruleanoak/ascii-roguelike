@@ -58,6 +58,8 @@ Silhouette is the outline left when every cell of a thing is one flat colour.
 | S5 | **Component contribution.** Every named part earns its place in the outline. | Remove each component in turn. Each removal must change the outline. A part that doesn't is detail: keep it only if §4 or §6 wants it, and don't count it for S1. | Ratified | "individual component contributions to the silhouette" |
 | S6 | **Readable, with interest.** Reads at a glance, and holds one thing that raises a question. | Name the first read and the question separately. If there's no question, it's only legible. | Ratified | "readability yes but with interest" |
 | S7 | **Positions tell the story.** Where each key thing stands follows from the space's own logic (a climb, a current, a hierarchy), not from even spacing or symmetry round a centre. | For every key placement, say why it stands *there* and not in its mirror spot. "It balances the layout" is not an answer. | Provisional | Zenith: "put some real appeal effort into the positions for memorability" |
+| S8 | **The perimeter carries the terrain.** An outline's edge shows the forces that made it: a mountain's foot is ridges and ravines, not a smooth ring. Each notch has a reason inside (a ravine bed running up the slope) and a consequence outside (a fan spilled below it). Walkable dressing past the edge (grass, scree) can carry the shape further without blocking the way. | Walk the outline: count the notches and spurs, and for each say what runs into it and what spills out. A ring whose radius barely changes fails S2 as well. | Provisional | Zenith, 2026-11-20: "the topology doesn't look organic enough… perimeters of the base [should] imply furrows"; "use the green grass pattern… around the base… without restricting player movement" |
+| S9 | **Height reads by what falls away.** A raised level shows its height by sinking what lies below it once the player is up there (mist, a veil), not by drawing the high part brighter. The lower ground thins in first at the cliff foot, so the cliffs rise out of it. | Stand on the raised level and screenshot it: the low ground must read as far below. Step down: it comes back. | Provisional | Zenith, 2026-11-20: "use render layers so that the top half of the mountain is surrounded by fog (re-use mist)" |
 
 ---
 
@@ -117,6 +119,7 @@ exemptions are named here with a reason and are **proposed until the user confir
 | G4 | **Every glyph has a chosen colour, and interactive objects outrank dressing in brightness.** | No dressing cell at the `#888888` fallback (`src/entities/BackgroundObject.js:65`). Squint: the interactive thing is the brightest. | Provisional | Bug #517 |
 | G5 | **No strokes, no alpha gradients.** | Existing rules: strokes smear pixel fonts, and alpha is quantized to 10% steps. Use stepped bands. | Ratified | Bug #472 |
 | G6 | **Markers are glyphs, never boxes.** Code-drawn floor markers, zones and outlines are made of glyphs, not `fillRect`/`strokeRect` squares; a solid object's cell stays out of `collisionMap`, which paints a grey square behind the glyph. A "missing" or "off" state differs in shape (hollow vs filled), not only by a darker hue. | `grep -n "fillRect\|strokeRect" ` the feature's draw file. Render it: no square reads under or round a glyph. | Provisional | Zenith: "ugly and breaks design rules such as using bordered boxes" |
+| G7 | **On is colour, off is the floor.** Something that lights (energy on a line, a powered marker) is drawn in its colour when on, and not drawn at all when off. Never show "on" as white or a tint over an already coloured glyph: at 16px the difference doesn't read. Show motion by moving a short lit segment, not by lighting the whole run. | Screenshot the on and off frames side by side at game scale: each lit glyph must be obvious at a glance. | Provisional | Zenith, 2026-11-20: "The 'white on color' approach is not clearly visible, better to simply use off (black as-is) and on (character color), no need to have the whole line filled" |
 
 **Glyph width.** This is a width list, not a free list: run G2 on anything you take from it.
 
@@ -143,6 +146,7 @@ each works in only one renderer:
 | P1 | **Look before calling it done.** | A cell dump or screenshot exists, with a solid-fill view for anything S4 applies to. | Provisional |
 | P2 | **Corrections become rules.** When the user corrects art, the same session adds or amends a rule here, with the date and example. A repeated correction promotes the rule to Ratified. | §10 has an entry for every art correction. | Provisional |
 | P3 | **New space, new scorecard row.** | A commit adding a building or room touches §9. | Provisional |
+| P4 | **Authored rooms go through the room review.** An authored letter room or set piece follows `claudedocs/room-review-schematic.md`, from anatomy to screenshots and reviewers. | The commit's message or plan names which steps it ran. | Provisional |
 
 ---
 
@@ -278,7 +282,7 @@ and Dragon Forge have no building. The Well, Fountain and Vault aren't entered.
 
 | Room | S1 | S2 | S4 | S6 | S7 | G4 | Note |
 |------|----|----|----|----|----|----|------|
-| Zenith (Z) | Pass | Pass | Part | Part | Pass | Pass | Summit map in `src/data/zenithSummit.js`: foot cliff, upper cliff, steps, trail, gully scree, frost, cairn. Stations climb trailhead → summit in zone order. Solid-fill still reads as two nested outlines to someone who doesn't know contours |
+| Zenith (Z) | Pass | Pass | Part | Part | Pass | Pass | Summit map in `src/data/zenithSummit.js`: foot cliff with ridges and ravines (scree beds, fans), upper cliff, steps, trail, frost, cairn, a grass skirt below the foot (S8). Stations climb from the head of the south steps to the summit in zone order; clouds sink the low ground once the player is up (S9). S4 still Part: the solid fill reads as a furrowed massif, but its two levels only separate in game, by the clouds |
 
 **Interiors**
 
@@ -349,4 +353,5 @@ to do.
 | Date | Change | Why |
 |------|--------|-----|
 | 2026-11-01 | First draft. | The user's brief, plus rulings on I2 (two separate objects) and its scope (huts and neutral rooms). |
+| 2026-11-20 | Added S8 (the perimeter carries the terrain), S9 (height reads by what falls away), G7 (on is colour, off is the floor) and P4 (authored rooms go through `room-review-schematic.md`). | The user on the Zenith's second pass: the base not organic enough, fog for the upper level, the white-on-colour energy not visible, grass dressing round the base. |
 | 2026-11-20 | Added S7 (positions tell the story) and G6 (markers are glyphs, never boxes; "off" states differ in shape). Added the Authored letter rooms scorecard, which brings authored set pieces in EXPLORE letter rooms into scope for §2 and §6. | The user on the Zenith's first build: "this room is ugly and breaks design rules such as using bordered boxes", and "put some real appeal effort into the positions for memorability". |
