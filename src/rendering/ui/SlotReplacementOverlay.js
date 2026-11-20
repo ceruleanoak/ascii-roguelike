@@ -114,7 +114,8 @@ export class SlotReplacementOverlay {
       // Small number indicator below slot
       ctx.font = `${cs * 0.5}px 'Unifont', monospace`;
       ctx.fillStyle = '#888888';
-      ctx.fillText((i + 1).toString(), x + cellSize / 2, rowY + cellSize + cs * 0.3);
+      const slotKey = state.shortcutKeyFor(i);
+      if (slotKey) ctx.fillText(slotKey, x + cellSize / 2, rowY + cellSize + cs * 0.3);
     }
 
     // STORE IN CHEST option — hidden in puzzle rooms (see storeAvailable)
@@ -133,7 +134,8 @@ export class SlotReplacementOverlay {
       // Small number indicator for STORE option
       ctx.font = `${cs * 0.5}px 'Unifont', monospace`;
       ctx.fillStyle = '#888888';
-      ctx.fillText((storeIndex + 1).toString(), boxX + boxW / 2, storeY + cs * 0.6);
+      const storeKey = state.shortcutKeyFor(storeIndex);
+      if (storeKey) ctx.fillText(storeKey, boxX + boxW / 2, storeY + cs * 0.6);
     }
 
     // DISMANTLE option — only offered when the pending item has a known recipe
@@ -152,7 +154,8 @@ export class SlotReplacementOverlay {
       // Small number indicator for DISMANTLE option
       ctx.font = `${cs * 0.5}px 'Unifont', monospace`;
       ctx.fillStyle = '#888888';
-      ctx.fillText((dismantleIndex + 1).toString(), boxX + boxW / 2, dismantleY + cs * 0.6);
+      const dismantleKey = state.shortcutKeyFor(dismantleIndex);
+      if (dismantleKey) ctx.fillText(dismantleKey, boxX + boxW / 2, dismantleY + cs * 0.6);
     }
 
     ctx.restore();

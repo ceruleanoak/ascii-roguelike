@@ -48,6 +48,20 @@ export class SlotReplacementSystem {
     this.fromInventory = false;
   }
 
+  // The number key for the first option. Consumable slots answer to 4-8 in
+  // play (main.js handleSelectConsumableSlot), so the pickup prompt uses the
+  // same keys for them; weapon and armor slots start at 1. STORE IN CHEST and
+  // DISMANTLE take the keys after the last slot.
+  get firstShortcutKey() {
+    return this.slotType === 'consumable' ? 4 : 1;
+  }
+
+  // The digit that picks option `optionIdx`, or null past 9 (no key reaches it).
+  shortcutKeyFor(optionIdx) {
+    const key = this.firstShortcutKey + optionIdx;
+    return key <= 9 ? String(key) : null;
+  }
+
   get storeIndex() {
     if (this.slotType === 'armor') return 1;
     if (this.slotType === 'consumable') return this.game.inventorySystem.equippedConsumables.length;
@@ -167,8 +181,9 @@ export class SlotReplacementSystem {
     const intent = menuIntent(event);
 
     // Number key shortcuts: slots, then STORE IN CHEST, then DISMANTLE (if available)
-    if (key >= '1' && key <= '5') {
-      const optionIdx = parseInt(key) - 1;
+    if (key >= '1' && key <= '9') {
+      const optionIdx = parseInt(key) - this.firstShortcutKey;
+      if (optionIdx < 0) return;
       const maxIdx = this.dismantleIndex !== -1 ? this.dismantleIndex
         : this.storeAvailable ? this.storeIndex : this.storeIndex - 1;
       if (optionIdx > maxIdx) return;
