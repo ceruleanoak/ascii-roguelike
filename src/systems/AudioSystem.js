@@ -1622,6 +1622,7 @@ export class AudioSystem {
     // Gray zone — placeholder names, no assets yet (playSFX no-ops on null).
     this.loadSFX('mist_take', null);   // depth-10 mist-out sequence
     this.loadSFX('jeweler_drink', null); // the parched Jeweler drinks the water given
+    this.loadSFX('zenith_gather', null); // the Zenith Gathering's five motes set off for the center
     this.loadSFX('bone_rise', null);   // Risen reassembling from its bone pile
     // P-room puzzles + key items — placeholder names, no assets yet.
     this.loadSFX('puzzle_pulse', null);  // correct listening-stone strike

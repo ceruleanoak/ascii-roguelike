@@ -54,6 +54,7 @@ import { drawTrine } from './effects/TrineDraw.js';
 import { drawGraspScenery, drawGraspParts } from './effects/GraspDraw.js';
 import { drawEcho } from './effects/EchoDraw.js';
 import { drawMetalPlatform } from './effects/MetalPlatformDraw.js';
+import { drawZenithPlatforms, drawZenithGathering } from './effects/ZenithDraw.js';
 import { hasTorchLight, drawPlayerTorchLight } from './ui/torchLight.js';
 import { drawPlayerGlyph } from './effects/PlayerGlyphDraw.js';
 import { drawDizzyOrbitals } from './effects/DizzyOrbitals.js';
@@ -107,6 +108,7 @@ const STORM_EYE_ONLY = 'Wind Fields blow only in the Storm Eye arena, a surface 
 const NO_PUNCH = 'an unarmed SPACE at REST makes the idle echo, not a Punch (PunchSystem rest-parity)';
 const NO_PUNCH_NEUTRAL = 'SPACE in a NEUTRAL room interacts and never attacks, armed or not';
 const ISLAND_ONLY = 'the Metal Platform crosses only the lava lake of an Island Room (surface)';
+const ZENITH_ONLY = 'the Zenith Platforms stand only in the Z Room (surface)';
 
 // NEUTRAL included: it runs the EXPLORE world tick (Limited Explore).
 const everywhere = { surface: true, floor: true, maze: true, rest: true, neutral: true };
@@ -123,6 +125,7 @@ export const FRAME_PASSES = {
     // The Grasp's North Barrier, Climb Scenery and speed streaks (Mist Battle).
     { id: 'graspScenery', on: surfaceOnly(TRINE_ONLY), draw: (rc, game) => drawGraspScenery(rc.renderer, game) },
     { id: 'metalPlatform', on: surfaceOnly(ISLAND_ONLY), draw: (rc, game) => drawMetalPlatform(rc.renderer, game) },
+    { id: 'zenithPlatforms', on: surfaceOnly(ZENITH_ONLY), draw: (rc, game) => drawZenithPlatforms(rc.renderer, game) },
     { id: 'puddles', on: everywhere, draw: (rc, game, owner) => er(rc).drawPuddles(game, isInterior(owner)) },
     { id: 'gooBlobs', on: everywhere, draw: (rc, game, owner) => er(rc).drawGooBlobs(game, isInterior(owner)) },
     { id: 'debris', on: everywhere, draw: (rc, game, owner) => er(rc).drawDebris(game, isInterior(owner)) },
@@ -135,6 +138,8 @@ export const FRAME_PASSES = {
   combat: [
     // The Grasp's Great Hands, Clutch and Fingers — under every attack.
     { id: 'graspParts', on: surfaceOnly(TRINE_ONLY), draw: (rc, game) => drawGraspParts(rc.renderer, game) },
+    // The rescued characters on their Zenith Platforms, and the Zenith Gathering's motes.
+    { id: 'zenithGathering', on: surfaceOnly(ZENITH_ONLY), draw: (rc, game) => drawZenithGathering(rc.renderer, game) },
     { id: 'consumableWindups', on: everywhere, draw: (rc, game) => er(rc).drawConsumableWindups(game) },
     { id: 'projectiles', on: everywhere, draw: (rc, game, owner) => er(rc).drawProjectiles(game, isInterior(owner)) },
     { id: 'enemyProjectiles', on: enemySide, draw: (rc, game, owner) => er(rc).drawEnemyProjectiles(game, isInterior(owner)) },

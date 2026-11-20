@@ -751,6 +751,28 @@ export const LETTER_TEMPLATES = {
     }
   },
 
+  Z: {
+    name: 'Zenith',
+    description: 'Five Zenith Platforms in a ring, one per character color (ZenithSystem.generateZenithRoom)',
+
+    wallStructures: {
+      allow: false // nothing breaks the ring's read
+    },
+
+    bgObjectRules: {
+      // The ring (radius 7 around 15,15) stays open; dressing keeps to the edges.
+      clearingZone: {
+        centerCol: 15,
+        centerRow: 15,
+        width: 19,
+        height: 19,
+        allowGrass: true,
+        allowObjects: false
+      },
+      grassDensity: 0.4
+    }
+  },
+
   '?': {
     name: 'Mystery',
     description: 'A discovery room of unknown type — stub template, open floor',

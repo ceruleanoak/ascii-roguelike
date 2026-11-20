@@ -177,6 +177,12 @@ export class EquipmentEffectsSystem {
     player.maxHp += bossMaxHp - player.bossMaxHpBonus;
     player.bossMaxHpBonus = bossMaxHp;
 
+    // The Zenith Gathering raises the max HP of all five characters, each on
+    // their own loadout (zenithMaxHp, ZenithSystem), applied the same way.
+    const zenithMaxHp = inventorySystem.characterInventories[inventorySystem._activeCharacterType]?.zenithMaxHp ?? 0;
+    player.maxHp += zenithMaxHp - player.zenithMaxHpBonus;
+    player.zenithMaxHpBonus = zenithMaxHp;
+
     // Overheal is the HP still standing above max; a hit takes it first, and
     // what a hit took never comes back. A lost bonus can't turn into Overheal.
     player.overhealHp = Math.max(0, Math.min(player.overhealHp, player.hp - player.maxHp));

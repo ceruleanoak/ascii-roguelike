@@ -716,6 +716,12 @@ export const RESET_REGISTRY = [
     why: "The voice Charon last spoke in this run ('ferry' or 'cursed'; CharonSystem.trySpacePress); later visits in the same voice skip the dialogue and go straight to the toll. A new run hears him again.",
   },
   {
+    path: 'zenithGathered',
+    scope: 'run',
+    value: false,
+    why: "Set by the Zenith Gathering (ZenithSystem): every character's max HP is +5 for the rest of the run (EquipmentEffectsSystem) and the Z letter is never offered again. A new run starts without it.",
+  },
+  {
     path: 'jewelerRefreshed',
     scope: 'run',
     value: false,

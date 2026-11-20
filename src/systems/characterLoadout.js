@@ -20,6 +20,7 @@ export function createCharacterLoadout(characterType) {
     trainedWeapons: {},   // { [weaponCategory]: true } — Weapons Master training, per character
     armorTraining: { dodge: 0, defense: 0 }, // Armor Training levels (ARMOR_TRAINING), per character
     bossMaxHp: 0,         // max HP this character earned from zone Bosses (BossSystem._grantBossReward)
+    zenithMaxHp: 0,       // max HP the run's Zenith Gathering gave this character (ZenithSystem)
     // Worn armor + equipped consumables, parked here while another character
     // is active. The live slots are InventorySystem's; see stash/loadEquipment.
     equipment: { armor: null, consumables: [], spent: [], cooldowns: [] }

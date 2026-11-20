@@ -30,6 +30,7 @@ export class Player {
     this.maxHp = PLAYER_STATS.MAX_HP;
     this.passiveMaxHpBonus = 0; // share of maxHp currently granted by equipped hearts (EquipmentEffectsSystem)
     this.bossMaxHpBonus = 0;    // share of maxHp currently granted by the active character's Boss kills (EquipmentEffectsSystem)
+    this.zenithMaxHpBonus = 0;  // share of maxHp currently granted by the run's Zenith Gathering (EquipmentEffectsSystem)
     this.overhealHp = 0;        // Overheal: HP held above maxHp (a Sandwich, ConsumableTriggerSystem); hits wear it off first
     this.defense = 0; // Defense from armor
     this.armorTraining = null; // the character's Armor Training levels (CharacterSystem points it at the loadout)
@@ -651,6 +652,7 @@ export class Player {
     this.maxHp = PLAYER_STATS.MAX_HP;
     this.passiveMaxHpBonus = 0;
     this.bossMaxHpBonus = 0;
+    this.zenithMaxHpBonus = 0;
     this.overhealHp = 0;
     this.hurtPending = false;
     this.velocity = { vx: 0, vy: 0 };

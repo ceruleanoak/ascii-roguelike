@@ -105,6 +105,7 @@ import { MagicSystem } from './systems/MagicSystem.js';
 import { WeaponEffectsSystem } from './systems/WeaponEffectsSystem.js';
 import { BatSystem } from './systems/BatSystem.js';
 import { WellSystem } from './systems/WellSystem.js';
+import { ZenithSystem } from './systems/ZenithSystem.js';
 import { LavaAscentSystem } from './systems/LavaAscentSystem.js';
 import { IceAscentSystem } from './systems/IceAscentSystem.js';
 import { StormAscentSystem } from './systems/StormAscentSystem.js';
@@ -294,6 +295,7 @@ class Game {
     this.weaponEffectsSystem = new WeaponEffectsSystem(this);
     this.batSystem = new BatSystem(this);
     this.wellSystem = new WellSystem(this);
+    this.zenithSystem = new ZenithSystem(this); // Z room: the five Zenith Platforms
     this.lavaAscentSystem = new LavaAscentSystem(this);
     this.iceAscentSystem = new IceAscentSystem(this);
     this.stormAscentSystem = new StormAscentSystem(this);
@@ -2629,6 +2631,9 @@ class Game {
 
     // Drive Infused Coin → well arc animation + post-ritual flash
     this.wellSystem.update(deltaTime);
+
+    // Z room: detect the Zenith Gathering and run its converging motes
+    this.zenithSystem.update(deltaTime);
 
     // Drive the red-zone Ascent mud→lava flood/recede cycle
     this.lavaAscentSystem.update(deltaTime);

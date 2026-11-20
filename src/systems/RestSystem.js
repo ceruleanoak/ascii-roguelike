@@ -61,6 +61,7 @@ export const RestSystem = {
       // record of it too, or the next equipment pass adds it a second time.
       newPlayer.passiveMaxHpBonus = priorPlayer.passiveMaxHpBonus;
       newPlayer.bossMaxHpBonus = priorPlayer.bossMaxHpBonus;
+      newPlayer.zenithMaxHpBonus = priorPlayer.zenithMaxHpBonus;
     }
   }
 };

@@ -124,7 +124,8 @@ export const ROOM_TYPES = {
   WELL: 'WELL',
   FOUNTAIN: 'FOUNTAIN',
   PUZZLE: 'PUZZLE',
-  JEWELER: 'JEWELER'
+  JEWELER: 'JEWELER',
+  ZENITH: 'ZENITH'
 };
 
 export const COLORS = {

@@ -270,7 +270,7 @@ applicable. The I2 number counts separate interactive objects.
 | Cavern | Natural rock cluster | Pass | Part | Exempt | The hidden door is the point |
 
 Not scored: the Aquifer has no building (its entrance is a Whirlpool in the Quagmire). The Jeweler
-and Dragon Forge have no building. The Well, Fountain and Vault aren't entered.
+and Dragon Forge have no building, and neither has the Zenith (five floor platforms). The Well, Fountain and Vault aren't entered.
 
 **Interiors**
 

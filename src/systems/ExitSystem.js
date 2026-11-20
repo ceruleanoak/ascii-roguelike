@@ -6,6 +6,7 @@ import { Jeweler } from '../entities/Jeweler.js';
 import { isInteriorActive } from './PlaneSystem.js';
 import { hasLuckBlessing } from './luck.js';
 import { INGREDIENT_STACK_CAP } from './IngredientPile.js';
+import { livingCharacters } from './ZenithSystem.js';
 
 // Letters whose weights get boosted when the player has the well-vested luck
 // blessing. V (Vault), ? (Mystery), C (Camp) — all desirable stops that make
@@ -118,10 +119,12 @@ export function cycleExitLetter(currentLetter, game = null, direction = null) {
 }
 
 // A letter retired for the rest of the run: never rolled, never reached by
-// the Sword of the Letter. Only J today — once the Jeweler has been given
-// water (JewelerSystem), or has been Forsaken on a Cursed Run
-// (CursedRunSystem.forsake), the J room has nothing left to offer.
+// the Sword of the Letter. J — once the Jeweler has been given water
+// (JewelerSystem), or has been Forsaken on a Cursed Run
+// (CursedRunSystem.forsake), the J room has nothing left to offer. Z — once
+// the Zenith Gathering is done (ZenithSystem), the same.
 export function isLetterRetired(letter, game) {
+  if (letter === 'Z') return !!game?.zenithGathered;
   return letter === 'J' && (!!game?.jewelerRefreshed || !!game?.cursedRunSystem?.isForsaken(game, Jeweler));
 }
 
@@ -923,6 +926,9 @@ export class ExitSystem {
       if (letter === 'D' && !offersDungeonAt(depth)) {
         weight = 0;
       }
+
+      // Zenith: more common the more characters are living (ZenithSystem).
+      if (letter === 'Z') weight *= livingCharacters(this.game ?? {}).length;
 
       if (isLetterRetired(letter, this.game) || isLetterHeldBack(letter, this.game)) weight = 0;
 

@@ -229,6 +229,23 @@ export const EXIT_LETTERS = {
     weight: 0.15,
     spellDescription: 'MANY PASS, FEW LOOK.'
   },
+  // Zenith: green only, and rare. ExitSystem multiplies the weight by the
+  // number of living characters, so it turns up more the more are rescued,
+  // and retires the letter for the run once the Zenith Gathering is done
+  // (ExitSystem.isLetterRetired; ZenithSystem).
+  'Z': {
+    name: 'Zenith',
+    roomType: 'ZENITH',
+    weight: 0.012,
+    zoneBoosts: {
+      green: 1.0,
+      yellow: 0,
+      red: 0,
+      cyan: 0,
+      gray: 0
+    },
+    spellDescription: 'ALL AS ONE.'
+  },
   '?': {
     name: 'Mystery',
     roomType: 'DISCOVERY',
