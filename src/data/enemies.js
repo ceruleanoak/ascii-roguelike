@@ -2193,6 +2193,7 @@ export const ENEMIES = {
     attackCooldown: 1.5,
     attackWindup: 1.0,
     attackType: 'magic',
+    magicMissileCount: 1, // one bolt, not the Wizard's spread
     movementStyle: 'jumper',
     movementConfig: {
       jumpInterval: 0.9,
@@ -2664,6 +2665,11 @@ export const ENEMIES = {
     attackCooldown: 2.0,
     attackWindup: 1.0,  // Minimum 1 second telegraph
     attackType: 'magic',
+    // One looping shot, flown the way Fester's Gun ('ƒ') flies its bullet.
+    magicMissileCount: 1,
+    loopOmega: Math.PI * 4,
+    loopRadius: 10,
+    loopLinearSpeed: 130,
     movementStyle: 'keeper',  // Retreats to casting range while summoning reinforcements
     decisionInterval: 0.4,
     color: '#9944ff',

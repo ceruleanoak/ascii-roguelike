@@ -72,6 +72,7 @@ import { gooRenderScale, gooFontSize, gooBodyHitbox } from './gooBody.js';
 import { arrowCharForAngle } from './arrowGlyph.js';
 import { countsAsBoss } from './bossTest.js';
 import { tickDecision, commitAttack } from './enemyDecision.js';
+import { createMagicMissiles } from './magicMissiles.js';
 
 // ─── Enemy AI Debug Logger ─────────────────────────────────────────────────
 // Toggle in browser console: window.ENEMY_AI_DEBUG = true
@@ -1886,46 +1887,7 @@ export class Enemy {
   }
 
   createMagicAttack() {
-    const aimPos = this.markedTargetPosition || this.target.position;
-    const dx = aimPos.x - this.position.x;
-    const dy = aimPos.y - this.position.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-
-    if (distance === 0) return null;
-
-    const dirX = dx / distance;
-    const dirY = dy / distance;
-
-    let targetAngle = Math.atan2(dirY, dirX) + this._dizzyAngleOffset();
-
-    // Reckless misdirection (applied to all missiles)
-
-    // Wizard shoots 3 magic missiles in a spread
-    const projectiles = [];
-    for (let i = -1; i <= 1; i++) {
-      const baseAngle = targetAngle + (i * 0.2);
-      const randomness = (Math.random() - 0.5) * 0.06; // ±0.03 radians (~2 degrees)
-      const angle = baseAngle + randomness;
-
-      projectiles.push({
-        type: 'enemy_projectile',
-        char: '*',
-        position: {
-          x: this.position.x + this.width / 2,
-          y: this.position.y + this.height / 2
-        },
-        velocity: {
-          vx: Math.cos(angle) * 180,
-          vy: Math.sin(angle) * 180
-        },
-        damage: this.getEffectiveDamage(),
-        color: '#8800ff',
-        owner: this,
-        shooterPlane: this.plane
-      });
-    }
-
-    return projectiles;
+    return createMagicMissiles(this);
   }
 
   createFireBreath() {
