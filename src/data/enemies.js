@@ -589,6 +589,10 @@ export const ENEMIES = {
     attackType: 'melee',
     decisionInterval: 0.7,
     color: '#00cc00',
+    // The Slime's box at the big Size: the mother-slime's bite takes a block
+    // of ground the size of her reach, where the shapeless windup was one
+    // cell. windupImmune, so as with the Slime, reading the Area is the answer.
+    telegraph: { area: 'box', size: 'big', animation: 'blink' },
     // Re-authored rather than left on the chaser preset (stateDefaults.js) so
     // the bite is a real strike.bands entry, not the empty `{}` every
     // un-re-authored melee chaser gets. One band today — `within` matches
