@@ -54,7 +54,7 @@ import { drawTrine } from './effects/TrineDraw.js';
 import { drawGraspScenery, drawGraspParts } from './effects/GraspDraw.js';
 import { drawEcho } from './effects/EchoDraw.js';
 import { drawMetalPlatform } from './effects/MetalPlatformDraw.js';
-import { drawZenithPlatforms, drawZenithGathering, drawZenithClouds } from './effects/ZenithDraw.js';
+import { drawZenithPlatforms, drawZenithGathering, drawZenithLevels } from './effects/ZenithDraw.js';
 import { hasTorchLight, drawPlayerTorchLight } from './ui/torchLight.js';
 import { drawPlayerGlyph } from './effects/PlayerGlyphDraw.js';
 import { drawDizzyOrbitals } from './effects/DizzyOrbitals.js';
@@ -242,9 +242,9 @@ export const FRAME_PASSES = {
   // Character-ability readouts: above everything an owner layers over the
   // player (surface grass, sapping enemies, a Maze companion).
   indicators: [
-    // The clouds below the Zenith once the player has climbed above them:
-    // over everything on the low ground, never over the mountain (ZenithDraw).
-    { id: 'zenithClouds', on: surfaceOnly(ZENITH_ONLY), draw: (rc, game) => drawZenithClouds(rc.renderer, game) },
+    // The Zenith's two levels, over everything: from below, the mountain's top
+    // is unseen; from above, clouds sink the low ground (ZenithDraw).
+    { id: 'zenithLevels', on: surfaceOnly(ZENITH_ONLY), draw: (rc, game) => drawZenithLevels(rc.renderer, game) },
     // Rolling rocks sit here, not in combat, so they stay above surface tall
     // grass (where they always drew). The Maze has no rock to roll.
     {

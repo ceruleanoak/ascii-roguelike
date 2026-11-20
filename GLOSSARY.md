@@ -1519,14 +1519,15 @@ identity, not standard programming terms.
 - **Definition:** The Z room, green zone only. A mountain summit with no enemies: five
   Zenith Platforms, one in each character's color, climb its trail in zone order (the Gold Hero at
   the head of the south steps, Cyan on the summit), each tied to the summit cairn by a line of pennants.
-  The south steps are the only way up; once the player is above them, mist (the Gray's motes)
-  sinks the low ground round the mountain. Rare, and more common the more characters are living; once
+  The south steps are the only way up. From below, the top inside the foot cliff is unseen
+  (black, whoever stands there included); once the player is above the steps, mist (the Gray's
+  motes) sinks the low ground round the mountain instead. Rare, and more common the more characters are living; once
   the Zenith Gathering is done the letter is never offered again that run.
 - **In code:** `ROOM_TYPES.ZENITH`; `EXIT_LETTERS.Z` (weight × living characters in
   `ExitSystem.getLetterWeightsForZone`, retired by `isLetterRetired` on `game.zenithGathered`);
   laid out by `ZenithSystem.generateZenithRoom` from `ZENITH_SUMMIT_MAP` (`src/data/zenithSummit.js`),
-  state on `room.zenith` (Room-scoped). The mist is `room.zenith.clouds` / `cloudCover`, drawn by the
-  `zenithClouds` Frame Pass with the shared `src/rendering/effects/MistMotes.js`.
+  state on `room.zenith` (Room-scoped). The levels are `room.zenith.above` / `clouds` / `cloudCover`,
+  drawn by the `zenithLevels` Frame Pass with the shared `src/rendering/effects/MistMotes.js`.
 - **Not:** a Neutral Room; the Settlement's "gathering" (S's spell text); the Gray's mist (the same
   motes, but it obscures; here it only marks height).
 

@@ -5,10 +5,11 @@ import { ZENITH_SUMMIT_MAP, ZENITH_SOLID_KEYS } from '../../data/zenithSummit.js
 import { motePosition, moteShimmer, prepareMoteFont } from './MistMotes.js';
 
 // ZenithDraw — the Z room's Zenith Platforms, the energy running from each one
-// to the summit cairn, who stands on them, and the clouds below the mountain
-// (ZenithSystem). Three Frame Passes: spots and pennants on the ground, the
-// standing characters and the climbing motes over items (combat), the clouds
-// over everything (indicators). The summit itself (cliffs, trail, cairn) is
+// to the summit cairn, who stands on them, and the two levels (ZenithSystem).
+// Three Frame Passes: spots and pennants on the ground, the standing
+// characters and the climbing motes over items (combat), and the levels over
+// everything (indicators): from below, the top of the mountain is unseen
+// (black inside the foot cliff); from above, clouds sink the low ground. The summit itself (cliffs, trail, cairn) is
 // background objects laid by ZenithSystem.generateZenithRoom.
 //
 // A pennant line is dark until energy runs along it: only the pennants at the
@@ -114,17 +115,42 @@ export function drawZenithGathering(renderer, game) {
   }
 }
 
-export function drawZenithClouds(renderer, game) {
+// A cell of the mountain's top: up on the mountain, inside the foot cliff.
+// The foot cliff and the steps cut through it stay seen from below; they are
+// what faces you. Steps higher up (onto the summit) are part of the top.
+function onTop(zenith, col, row) {
+  if (!zenith.above[row][col]) return false;
+  const key = ZENITH_SUMMIT_MAP[row]?.[col];
+  if (key === '#') return false;
+  if (key === '=') return ![[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dc, dr]) => zenith.above[row + dr]?.[col + dc] === false);
+  return true;
+}
+
+export function drawZenithLevels(renderer, game) {
   const zenith = game.currentRoom?.zenith;
-  if (!zenith || zenith.cloudCover <= 0) return;
+  if (!zenith?.above) return;
   const ctx = renderer.fgCtx;
   const CS = GRID.CELL_SIZE;
   const cover = zenith.cloudCover;
-  const band = (row, col) => CLOUD_VEIL[Math.min(CLOUD_VEIL.length - 1, zenith.cloudDepth[row][col])];
+  const background = ZONES[game.currentRoom.zone]?.environmentColors?.background ?? '#000000';
 
   ctx.save();
-  // The veil: whole cells sink as units, a 10% step each (G5), deeper further out.
-  ctx.fillStyle = ZONES[game.currentRoom.zone]?.environmentColors?.background ?? '#000000';
+  ctx.fillStyle = background;
+
+  // From below: the top is unseen, everything on it included (cliffs, cairn,
+  // stations, pennants, the characters standing there). It comes into view as
+  // the clouds come in, in whole-cell 10% steps (G5).
+  const hidden = Math.round((1 - cover) * 10) / 10;
+  if (hidden >= 0.1) {
+    ctx.globalAlpha = hidden;
+    zenith.above.forEach((line, row) => line.forEach((_, col) => {
+      if (onTop(zenith, col, row)) ctx.fillRect(col * CS, row * CS, CS, CS);
+    }));
+  }
+  if (cover <= 0) { ctx.restore(); return; }
+
+  // From above: the veil, whole cells sinking as units, deeper further out.
+  const band = (row, col) => CLOUD_VEIL[Math.min(CLOUD_VEIL.length - 1, zenith.cloudDepth[row][col])];
   zenith.cloudDepth.forEach((line, row) => line.forEach((depth, col) => {
     if (depth === 0) return;
     const alpha = Math.round(cover * band(row, col) * 10) / 10;
