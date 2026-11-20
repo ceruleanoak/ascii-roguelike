@@ -3,6 +3,7 @@ import { ITEMS, WEAPON_TYPES, TRAINING_TECHNIQUES, resolveWeaponDefaults } from 
 import { canonStandIn } from '../systems/CanonOverlay.js';
 import { arrowCharForAngle } from './arrowGlyph.js';
 import { PlayerInputSystem } from '../systems/PlayerInputSystem.js';
+import { armLoopingBullet } from '../systems/LoopingBullet.js';
 
 /**
  * Carrier interface (duck-typed)
@@ -648,23 +649,7 @@ export class Item {
       };
 
       // Orbital looping bullet: center advances along firing line, bullet revolves around it.
-      // pos(t) = origin + fwd*(ls*t + R - R*cos(ω*t)) + perp*R*sin(ω*t)
-      // vel(t) = fwd*(ls + R*ω*sin(ω*t)) + perp*R*ω*cos(ω*t)  →  at t=0: fwd*ls + perp*R*ω
-      if (this.data.loopOmega) {
-        const fwd = { x: Math.cos(spreadAngle), y: Math.sin(spreadAngle) };
-        const perp = { x: -fwd.y, y: fwd.x };
-        const R = this.data.loopRadius || 30;
-        const ls = this.data.loopLinearSpeed || 130;
-        const omega = this.data.loopOmega;
-        bullet.velocity.vx = fwd.x * ls + perp.x * R * omega;
-        bullet.velocity.vy = fwd.y * ls + perp.y * R * omega;
-        bullet.loopOmega = omega;
-        bullet.loopRadius = R;
-        bullet.loopLinearSpeed = ls;
-        bullet.loopForward = fwd;
-        bullet.loopPerp = perp;
-        bullet.loopTime = 0;
-      }
+      if (this.data.loopOmega) armLoopingBullet(bullet, spreadAngle, this.data);
 
       bullets.push(bullet);
     }

@@ -3,6 +3,7 @@ import { planeOf, inSamePlane, objectOnPlane, tagInteriorPlane, isInteriorActive
 import { applyExitMutatingSwordHit } from './ExitSystem.js';
 import { BoomerangMechanic } from './BoomerangMechanic.js';
 import { WallRicochetMechanic } from './WallRicochetMechanic.js';
+import { stepLoopingBullet } from './LoopingBullet.js';
 import { updateStuckArrows, STUCK_ARROW_LIFETIME, STUCK_BOOMERANG_LIFETIME } from './StuckArrowMechanic.js';
 import { WaterLavaHitMechanic } from './WaterLavaHitMechanic.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
@@ -271,16 +272,8 @@ export class CombatSystem {
         }
       }
 
-      // Orbital looping bullets (e.g. Fester's Gun): velocity derived analytically so the
-      // bullet revolves around a center point advancing along the straight firing line.
-      if (proj.loopOmega) {
-        const t = proj.loopTime;
-        const { loopForward: fwd, loopPerp: perp, loopRadius: R, loopLinearSpeed: ls, loopOmega: omega } = proj;
-        proj.velocity.vx = fwd.x * (ls + R * omega * Math.sin(omega * t)) + perp.x * R * omega * Math.cos(omega * t);
-        proj.velocity.vy = fwd.y * (ls + R * omega * Math.sin(omega * t)) + perp.y * R * omega * Math.cos(omega * t);
-        proj.drawAngle = Math.atan2(proj.velocity.vy, proj.velocity.vx);
-        proj.loopTime += deltaTime;
-      }
+      // Orbital looping bullets (e.g. Fester's Gun) — LoopingBullet.js.
+      stepLoopingBullet(proj, deltaTime);
 
       if (proj.spinRate) proj.drawAngle += proj.spinRate * deltaTime; // Bolo Launcher's whirl
 
@@ -1266,6 +1259,9 @@ export class CombatSystem {
           continue;
         }
       }
+
+      // An enemy-held Fester's Gun, or a Necromancer's own shot, loops too.
+      stepLoopingBullet(proj, deltaTime);
 
       this.game?.bossSystem?.windFieldSystem.pushProjectile(proj, deltaTime);
       this.game?.slopeFlightSystem.bendProjectile(proj, deltaTime);
