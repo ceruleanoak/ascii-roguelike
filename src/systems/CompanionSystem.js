@@ -1,5 +1,6 @@
 import { GRID } from '../game/GameConfig.js';
 import { isCrowFeed, isFeed } from './feed.js';
+import { Crow } from '../entities/Crow.js';
 import { feedHurtCompanions } from './companionFeed.js';
 import { inBumpFlight } from '../entities/enemyMechanics/BumpMechanic.js';
 import { NPCRat } from '../entities/NPCRat.js';
@@ -754,7 +755,6 @@ export class CompanionSystem {
       if (cIdx !== -1) crows.splice(cIdx, 1);
       const fIdx = game.followerCrows.indexOf(crow);
       if (fIdx !== -1) game.followerCrows.splice(fIdx, 1);
-      crow.becomeCompanion();
 
       // A companion is never scared, so scare()'s drop path can never fire
       // again — hand over whatever this crow was still carrying (a spawn
@@ -769,9 +769,7 @@ export class CompanionSystem {
         materializeDrop(carried, crow);
       }
 
-      crow.setGame(game);
-      crow.companionShoulderIndex = game.companionCrows.length;
-      game.companionCrows.push(crow);
+      this.promoteCrow(crow);
       game.fedCrowCount = Math.min(3, (game.fedCrowCount || 0) + 1);
 
       // Promotion burst: feather puff + golden crumbs + rising heart.
@@ -1043,6 +1041,28 @@ export class CompanionSystem {
           }));
         }
       }
+    }
+  }
+
+  /** Park a crow on the companion roster, on the next free shoulder. */
+  promoteCrow(crow) {
+    const game = this.game;
+    crow.becomeCompanion();
+    crow.setGame(game);
+    crow.companionShoulderIndex = game.companionCrows.length;
+    game.companionCrows.push(crow);
+  }
+
+  /**
+   * TWOCROWS (Wish Spell): `count` crows come to the player's shoulder as
+   * Companions, with no bread. Feeding reputation (fedCrowCount) is untouched —
+   * a wished crow wasn't fed.
+   */
+  grantCrows(count) {
+    const player = this.game.player;
+    if (!player) return;
+    for (let i = 0; i < count; i++) {
+      this.promoteCrow(new Crow(player.position.x, player.position.y));
     }
   }
 

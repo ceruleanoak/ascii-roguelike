@@ -368,6 +368,12 @@ export const RESET_REGISTRY = [
     why: 'True game over — full reset.',
   },
   {
+    path: 'manaFlow',
+    scope: 'run',
+    value: false,
+    why: 'MANAFLOW wish lasts the run it was spent in.',
+  },
+  {
     path: 'wishesUsed',
     scope: 'run',
     value: 0,

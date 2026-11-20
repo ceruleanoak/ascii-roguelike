@@ -375,6 +375,18 @@ export const SPELLS = {
   'HEAL':    _cureSpell('NOTHING AILS YOU.'),
   'UNCURSE': _cureSpell('NO CURSE FOUND.'),
 
+  // TWOCROWS: two crows come to the shoulder as Companions, no bread.
+  'TWOCROWS': wishSpell('power', {
+    effect: (game) => game.companionSystem.grantCrows(2),
+  }),
+
+  // MANAFLOW: the mana meter refills on its own, slowly, for the rest of the
+  // run (MagicSystem._updateManaFlow). Without a meter it has nothing to fill.
+  'MANAFLOW': wishSpell('power', {
+    refusal: (game) => (game.player?.magicMeter?.active ? null : '...NOTHING.'),
+    effect: (game) => { game.manaFlow = true; },
+  }),
+
   // Completion Spells (Gain): one per room letter, each completing its room
   // through the system that owns it (three-voice-plan.md §8, GAIN table).
   // X, the Crossroads: the χ-blade comes up without its chain (#478).

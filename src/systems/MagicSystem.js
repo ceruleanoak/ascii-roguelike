@@ -66,6 +66,9 @@ const CRAFT_MANA_COST = 3;
 // Meter mana a collected Mana (𝑚) adds (collectMana).
 const PICKUP_MANA_VALUE = 2;
 
+// MANAFLOW's pace: one mana this many seconds (a full 10-mana slot in 30s).
+const MANA_FLOW_SECONDS_PER_MANA = 3;
+
 // Spend `cost` from the player's mana meter; false (nothing spent) when the
 // meter is inactive or short.
 export function spendMeterMana(player, cost) {
@@ -368,6 +371,16 @@ export class MagicSystem {
     this._updateChargeHammer();
     this._updateBossManaSlot(dt);
     this._updateStaffGrassEffects(dt);
+    this._updateManaFlow(dt);
+  }
+
+  // MANAFLOW (Wish Spell): the meter fills itself by one mana every
+  // MANA_FLOW_SECONDS_PER_MANA, in every state, for the rest of the run.
+  _updateManaFlow(dt) {
+    if (!this.game.manaFlow) return;
+    const meter = this.game.player?.magicMeter;
+    if (!meter?.active || meter.current >= meter.max) return;
+    meter.current = Math.min(meter.max, meter.current + dt / MANA_FLOW_SECONDS_PER_MANA);
   }
 
   _updateBossManaSlot(dt) {

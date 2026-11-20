@@ -2117,13 +2117,15 @@ identity, not standard programming terms.
 - **Definition:** A Spell whose cast spends a Wish. Each has one Wish Kind. Most ask
   `USE NTH WISH?` and act on YES; REVIVE / CONTINUE act at once on the death screen.
 - **In code:** a `SPELLS` entry with a `wish` field, built by `wishSpell(kind, { refusal,
-  granted, effect })` in `src/data/spells.js` (PURGE / CLEANSE, HEAL / UNCURSE); REVIVE,
+  granted, effect })` in `src/data/spells.js` (PURGE / CLEANSE, HEAL / UNCURSE, TWOCROWS — two crow Companions via
+  `CompanionSystem.grantCrows` — and MANAFLOW — `game.manaFlow`, the meter refilling itself for
+  the rest of the run in `MagicSystem._updateManaFlow`); REVIVE,
   CONTINUE and BRIDGE carry the field by hand. `npm run check:data` fails an unknown kind.
   Design: `claudedocs/three-voice-plan.md`.
 - **Not:** an ordinary Spell (no cost); not gem-wand magic.
 
 ### Wish Kind
-- **Definition:** What a Wish Spell is for — **Power** (combat: PURGE, REVIVE, HEAL),
+- **Definition:** What a Wish Spell is for — **Power** (combat: PURGE, REVIVE, HEAL, TWOCROWS, MANAFLOW),
   **Influence** (bending NPCs and enemies), **Gain** (completing a room, e.g. BRIDGE). CONSUME
   is Power.
 - **In code:** the `wish` field's value: `'power'`, `'influence'` or `'gain'`.
