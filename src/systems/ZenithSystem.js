@@ -25,8 +25,10 @@ import { protectRegion, darkenColor } from './roomFeatures.js';
 import { createBurstParticles } from './WorldEffectsSystem.js';
 import { createCharacterLoadout } from './characterLoadout.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
+import { buildMistMotes } from '../rendering/effects/MistMotes.js';
 import {
-  ZENITH_SUMMIT_MAP, ZENITH_SUMMIT_TILES, ZENITH_STATION_KEYS, ZENITH_CAIRN_GATHERED_COLOR
+  ZENITH_SUMMIT_MAP, ZENITH_SUMMIT_TILES, ZENITH_STATION_KEYS, ZENITH_CAIRN_GATHERED_COLOR,
+  ZENITH_SOLID_KEYS
 } from '../data/zenithSummit.js';
 
 export const ZENITH_MAX_HP = 5;
@@ -49,6 +51,60 @@ export const ENERGY_SPEED = 170;           // px/s a pulse climbs its line
 const CAIRN_PULSE = [[0.12, 0], [0.3, 0.2], [0.55, 0.35]]; // [until, darkenColor amount]
 const CAIRN_REST_DARKEN = 0.5;             // between arrivals the cairn holds the last color, dimmed
 const CONVERGE_CYCLE = 0.1;                // seconds per color while all five motes climb
+
+// Clouds: once the player is up the south steps (above the foot cliff), the
+// ground below the mountain sinks under the mist (MistMotes), so the stations'
+// level reads as high. The cover eases in and out over CLOUD_FADE seconds.
+const CLOUD_FADE = 0.8;
+
+/**
+ * Which cells are up on the mountain: everything the foot cliff and its steps
+ * enclose (the cliffs and steps themselves included). Found by flooding the
+ * open ground in from the Room's edge; whatever the flood can't reach is up.
+ * Also how many cells each low cell lies from the mountain, for the clouds'
+ * depth. Returns { above: bool[row][col], depth: number[row][col] }.
+ */
+function summitLevels() {
+  const rows = ZENITH_SUMMIT_MAP.length;
+  const cols = ZENITH_SUMMIT_MAP[0].length;
+  const wall = (col, row) => ZENITH_SOLID_KEYS.has(ZENITH_SUMMIT_MAP[row][col]) || ZENITH_SUMMIT_MAP[row][col] === '=';
+  const steps = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  const below = Array.from({ length: rows }, () => new Array(cols).fill(false));
+  const queue = [];
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const onEdge = row === 0 || col === 0 || row === rows - 1 || col === cols - 1;
+      if (onEdge && !wall(col, row)) { below[row][col] = true; queue.push([col, row]); }
+    }
+  }
+  while (queue.length) {
+    const [col, row] = queue.shift();
+    for (const [dc, dr] of steps) {
+      const c = col + dc, r = row + dr;
+      if (c < 0 || r < 0 || c >= cols || r >= rows || below[r][c] || wall(c, r)) continue;
+      below[r][c] = true;
+      queue.push([c, r]);
+    }
+  }
+  const above = below.map(line => line.map(b => !b));
+
+  // Distance (8-way steps) from the mountain out over the low ground.
+  const depth = above.map(line => line.map(a => (a ? 0 : Infinity)));
+  const ring = [];
+  above.forEach((line, row) => line.forEach((a, col) => { if (a) ring.push([col, row]); }));
+  while (ring.length) {
+    const [col, row] = ring.shift();
+    for (let dr = -1; dr <= 1; dr++) {
+      for (let dc = -1; dc <= 1; dc++) {
+        const c = col + dc, r = row + dr;
+        if (c < 0 || r < 0 || c >= cols || r >= rows || depth[r][c] <= depth[row][col] + 1) continue;
+        depth[r][c] = depth[row][col] + 1;
+        ring.push([c, r]);
+      }
+    }
+  }
+  return { above, depth };
+}
 
 // Characters still in the run: rescued, not dead, not lost to the mist.
 export function livingCharacters(game) {
@@ -136,8 +192,13 @@ export class ZenithSystem {
     // Stations in the climb's order (ZENITH_ORDER), not map order.
     platforms.sort((a, b) => ZENITH_ORDER.indexOf(a.characterType) - ZENITH_ORDER.indexOf(b.characterType));
 
+    const { above, depth } = summitLevels();
     room.zenith = {
       platforms,
+      above,                                  // above[row][col]: up on the mountain (summitLevels)
+      cloudDepth: depth,                      // cells from the mountain, for each low cell
+      clouds: buildMistMotes((col, row) => !above[row]?.[col]), // the mist laid over the low ground
+      cloudCover: 0,                          // 0..1: how far the clouds have come in round the player
       center: cairn,
       cairnObject,
       cairnColor: cairnObject?.color ?? null, // the cairn's own stone color, when no power is arriving
@@ -160,6 +221,11 @@ export class ZenithSystem {
     const zenith = room?.zenith;
     if (!zenith || room.type !== ROOM_TYPES.ZENITH || !game.player) return;
     zenith.clock += dt;
+    const towardCover = this.isPlayerAbove(zenith) ? 1 : 0;
+    const step = dt / CLOUD_FADE;
+    zenith.cloudCover = towardCover > zenith.cloudCover
+      ? Math.min(1, zenith.cloudCover + step)
+      : Math.max(0, zenith.cloudCover - step);
 
     if (zenith.phase === 'waiting') {
       if (this._allGatheredOnPlatforms(zenith)) {
@@ -235,6 +301,14 @@ export class ZenithSystem {
     const own = zenith.platforms.find(p => p.characterType === game.activeCharacterType);
     if (!own) return false;
     return this.isOnPlatform(own);
+  }
+
+  /** True while the player is up on the mountain: on the south steps or anywhere above them. */
+  isPlayerAbove(zenith) {
+    const player = this.game.player;
+    const col = Math.floor((player.position.x + player.width / 2) / GRID.CELL_SIZE);
+    const row = Math.floor((player.position.y + player.height / 2) / GRID.CELL_SIZE);
+    return zenith.above[row]?.[col] === true;
   }
 
   /** True while the player stands on (or right beside) the platform's spot. */

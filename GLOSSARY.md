@@ -1518,19 +1518,26 @@ identity, not standard programming terms.
 ### Zenith
 - **Definition:** The Z room, green zone only. A mountain summit with no enemies: five
   Zenith Platforms, one in each character's color, climb its trail in zone order (the Gold Hero at
-  the trailhead, Cyan on the summit), each tied to the summit cairn by a line of pennants. Rare, and more common the more characters are living; once
+  the head of the south steps, Cyan on the summit), each tied to the summit cairn by a line of pennants.
+  The south steps are the only way up; once the player is above them, mist (the Gray's motes)
+  sinks the low ground round the mountain. Rare, and more common the more characters are living; once
   the Zenith Gathering is done the letter is never offered again that run.
 - **In code:** `ROOM_TYPES.ZENITH`; `EXIT_LETTERS.Z` (weight × living characters in
   `ExitSystem.getLetterWeightsForZone`, retired by `isLetterRetired` on `game.zenithGathered`);
   laid out by `ZenithSystem.generateZenithRoom` from `ZENITH_SUMMIT_MAP` (`src/data/zenithSummit.js`),
-  state on `room.zenith` (Room-scoped).
-- **Not:** a Neutral Room; the Settlement's "gathering" (S's spell text).
+  state on `room.zenith` (Room-scoped). The mist is `room.zenith.clouds` / `cloudCover`, drawn by the
+  `zenithClouds` Frame Pass with the shared `src/rendering/effects/MistMotes.js`.
+- **Not:** a Neutral Room; the Settlement's "gathering" (S's spell text); the Gray's mist (the same
+  motes, but it obscures; here it only marks height).
 
 ### Zenith Platform
 - **Definition:** One of the Zenith's five stations on the summit trail, marked by a spot glyph in
   one character's color (filled when that character is there, hollow while it waits). Every
   living character not being played stands on their own while the player is in the room;
-  the played character's platform waits empty for the player.
+  the played character's platform waits empty for the player. While they wait, energy runs up
+  each present character's pennant line in turn: only the pennants at the pulse light, in that
+  character's color, and the cairn flashes that color as each pulse arrives. A missing
+  character's line stays dark.
 - **In code:** `room.zenith.platforms` (`ZenithSystem`), drawn by the `zenithPlatforms` (ground)
   and `zenithGathering` (combat) Frame Passes (`src/rendering/effects/ZenithDraw.js`).
 - **Not:** the Metal Platform; the dungeon Platform plank; a solid object (the standing

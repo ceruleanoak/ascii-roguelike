@@ -1,29 +1,35 @@
 import { CHARACTER_TYPES } from '../../data/characters.js';
 import { GRID } from '../../game/GameConfig.js';
+import { ZONES } from '../../data/zones.js';
 import { ZENITH_SUMMIT_MAP, ZENITH_SOLID_KEYS } from '../../data/zenithSummit.js';
+import { motePosition, moteShimmer, prepareMoteFont } from './MistMotes.js';
 
-// ZenithDraw — the Z room's Zenith Platforms, the pennant lines strung from
-// each one to the summit cairn, and who stands on them (ZenithSystem). Two
-// Frame Passes: spots and pennants on the ground, the standing characters and
-// the climbing motes over items (combat). The summit itself (cliffs, trail,
-// cairn) is background objects laid by ZenithSystem.generateZenithRoom.
+// ZenithDraw — the Z room's Zenith Platforms, the energy running from each one
+// to the summit cairn, who stands on them, and the clouds below the mountain
+// (ZenithSystem). Three Frame Passes: spots and pennants on the ground, the
+// standing characters and the climbing motes over items (combat), the clouds
+// over everything (indicators). The summit itself (cliffs, trail, cairn) is
+// background objects laid by ZenithSystem.generateZenithRoom.
 //
-// A missing character reads by shape, not by a darker hue (a dimmed color
-// lands on the cliffs' own olive and slate): their station is a hollow ring,
-// and their line keeps only every other pennant, hollow.
+// A pennant line is dark until energy runs along it: only the pennants at the
+// pulse (or the climbing mote) light, in the character's color. A missing
+// character's station is a hollow ring, and their line never lights.
 
 const SPOT_GLYPH = '⦾';          // a station whose character is there
 const EMPTY_SPOT_GLYPH = '⚬';    // a station still waiting for its character
 const PENNANT_GLYPH = '▾';
-const EMPTY_PENNANT_GLYPH = '▿';
 const PENNANT_SPACING = 12;      // px between pennants along a line
 const LINE_END_GAP = 1.5;        // cells left bare at each end, so the cairn and the spot keep clear ground round them
 const LINE_SAG = 5;              // px a line sags at its middle
 const TRAIL = [0, 0.06, 0.12];   // mote trail: how far behind the head each glyph lags (progress units)
-// An energy pulse's tail: [px behind the head, how far toward white]. Stepped,
-// not a gradient (G5), so the pulse reads as a bright head trailing off.
-const ENERGY_TAIL = [[6, 1], [18, 0.6], [32, 0.3]];
-const ENERGY_LEAD_PX = 4;        // a pennant this far ahead of the head is already caught
+const LIT_BEHIND_PX = 26;        // pennants this far behind the energy's head are still lit
+const LIT_AHEAD_PX = 4;          // and this far ahead of it already
+
+// Clouds, by how many cells a low cell lies from the mountain: the veil that
+// sinks the ground there, and how thick the mist motes over it are. Thin at
+// the cliff foot, so the cliffs rise out of them.
+const CLOUD_VEIL = [0, 0.5, 0.7, 0.85];
+const CLOUD_MOTE_ALPHA = [0, 0.5, 0.75, 0.9];
 
 // A point on the pennant line from the platform (t = 0) to the cairn (t = 1), sagging between them.
 function linePoint(p, center, t) {
@@ -44,23 +50,6 @@ function moteReach(progress) {
   return progress === null ? 0 : progress * progress;
 }
 
-// Blend two #rrggbb colors; amount 0 = a, 1 = b.
-function mix(a, b, amount) {
-  const ch = (hex, i) => parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16);
-  return '#' + [0, 1, 2].map(i =>
-    Math.round(ch(a, i) + (ch(b, i) - ch(a, i)) * amount).toString(16).padStart(2, '0')
-  ).join('');
-}
-
-// A pennant's color as an energy pulse passes it: white at the pulse's head,
-// stepping back to the line's own color over the ENERGY_TAIL px behind it.
-// Pennants ahead of the head (or with no pulse on the line) keep their color.
-function energyColor(color, behindPx) {
-  if (behindPx === null || behindPx < -ENERGY_LEAD_PX) return color;
-  const step = ENERGY_TAIL.find(([until]) => behindPx < until);
-  return step ? mix(color, '#ffffff', step[1]) : color;
-}
-
 export function drawZenithPlatforms(renderer, game) {
   const zenith = game.currentRoom?.zenith;
   if (!zenith?.center) return;
@@ -75,27 +64,26 @@ export function drawZenithPlatforms(renderer, game) {
     const own = p.characterType === game.activeCharacterType;
     ctx.fillStyle = p.color;
 
-    // Pennants, platform to cairn. Energy runs up a present character's line:
-    // a pulse in turn with the other present lines while they wait, and the
-    // mote itself while the five climb. No energy on a missing one's line.
+    // Pennants, platform to cairn, lit only where energy is passing: a pulse
+    // in turn with the other present lines while they wait, and the mote
+    // itself while the five climb. No energy runs on a missing one's line.
     const length = Math.hypot(zenith.center.x - p.cx, zenith.center.y - p.cy);
     let head = null;
     if (progress !== null) head = moteReach(progress);
     else if (isPresent && zenith.phase === 'waiting') {
       head = system.energyPulse(zenith, length, present.indexOf(p.characterType), present.length).head;
     }
-    const gap = (LINE_END_GAP * GRID.CELL_SIZE) / length;
-    const count = Math.max(1, Math.floor((length * (1 - 2 * gap)) / PENNANT_SPACING));
-    for (let i = 0; i <= count; i++) {
-      if (!isPresent && i % 2) continue;
-      const t = gap + (i / count) * (1 - 2 * gap);
-      const at = linePoint(p, zenith.center, t);
-      if (overSolid(at)) continue;
-      const behindPx = head !== null && head >= 0 && head <= 1 + ENERGY_TAIL.at(-1)[0] / length
-        ? (head - t) * length
-        : null;
-      ctx.fillStyle = energyColor(p.color, behindPx);
-      ctx.fillText(isPresent ? PENNANT_GLYPH : EMPTY_PENNANT_GLYPH, at.x, at.y);
+    if (head !== null) {
+      const gap = (LINE_END_GAP * GRID.CELL_SIZE) / length;
+      const count = Math.max(1, Math.floor((length * (1 - 2 * gap)) / PENNANT_SPACING));
+      for (let i = 0; i <= count; i++) {
+        const t = gap + (i / count) * (1 - 2 * gap);
+        const behindPx = (head - t) * length;
+        if (behindPx < -LIT_AHEAD_PX || behindPx > LIT_BEHIND_PX) continue;
+        const at = linePoint(p, zenith.center, t);
+        if (overSolid(at)) continue;
+        ctx.fillText(PENNANT_GLYPH, at.x, at.y);
+      }
     }
 
     ctx.fillStyle = p.color;
@@ -124,4 +112,36 @@ export function drawZenithGathering(renderer, game) {
       else renderer.drawTextWithAlpha(at.x, at.y, '.', p.color, 1 - i * 0.3);
     });
   }
+}
+
+export function drawZenithClouds(renderer, game) {
+  const zenith = game.currentRoom?.zenith;
+  if (!zenith || zenith.cloudCover <= 0) return;
+  const ctx = renderer.fgCtx;
+  const CS = GRID.CELL_SIZE;
+  const cover = zenith.cloudCover;
+  const band = (row, col) => CLOUD_VEIL[Math.min(CLOUD_VEIL.length - 1, zenith.cloudDepth[row][col])];
+
+  ctx.save();
+  // The veil: whole cells sink as units, a 10% step each (G5), deeper further out.
+  ctx.fillStyle = ZONES[game.currentRoom.zone]?.environmentColors?.background ?? '#000000';
+  zenith.cloudDepth.forEach((line, row) => line.forEach((depth, col) => {
+    if (depth === 0) return;
+    const alpha = Math.round(cover * band(row, col) * 10) / 10;
+    if (alpha < 0.1) return;
+    ctx.globalAlpha = alpha;
+    ctx.fillRect(col * CS, row * CS, CS, CS);
+  }));
+
+  // The mist itself, drifting over the low ground.
+  prepareMoteFont(ctx);
+  const t = zenith.clock;
+  for (const m of zenith.clouds) {
+    const depth = Math.min(CLOUD_MOTE_ALPHA.length - 1, zenith.cloudDepth[m.row][m.col]);
+    const { x, y } = motePosition(m, t);
+    ctx.globalAlpha = Math.max(0, Math.min(0.95, cover * (CLOUD_MOTE_ALPHA[depth] + moteShimmer(m, t))));
+    ctx.fillStyle = m.color;
+    ctx.fillText('~', x, y);
+  }
+  ctx.restore();
 }
