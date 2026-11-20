@@ -176,7 +176,11 @@ export class EquipmentEffectsSystem {
     const bossMaxHp = inventorySystem.characterInventories[inventorySystem._activeCharacterType]?.bossMaxHp ?? 0;
     player.maxHp += bossMaxHp - player.bossMaxHpBonus;
     player.bossMaxHpBonus = bossMaxHp;
-    if (player.hp > player.maxHp) player.hp = player.maxHp;
+
+    // Overheal is the HP still standing above max; a hit takes it first, and
+    // what a hit took never comes back. A lost bonus can't turn into Overheal.
+    player.overhealHp = Math.max(0, Math.min(player.overhealHp, player.hp - player.maxHp));
+    if (player.hp > player.maxHp + player.overhealHp) player.hp = player.maxHp + player.overhealHp;
 
     // Store equipped consumables for condition checking during gameplay
     player.equippedConsumables = [...inventorySystem.equippedConsumables];

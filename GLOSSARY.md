@@ -440,6 +440,16 @@ identity, not standard programming terms.
 - **Not:** the Lucky Coin (the full-power passive it is traded for); the well's raw-coin blessing
   (`player.luckBlessed`, a run flag that needs nothing held).
 
+### Overheal
+- **Definition:** HP standing above max HP. Only a heal that carries an Overheal cap makes it:
+  the Sandwich, eaten at or near full HP, keeps what would spill over, up to +5 above max. A hit
+  takes Overheal first and it never grows back; an ordinary heal can't add to it or take it away.
+- **In code:** `player.overhealHp`. Granted by `overheal()` in `ConsumableTriggerSystem` for a heal
+  item whose data has `overheal: <cap>`. `Player.heal` caps at `maxHp + overhealHp`, and
+  `EquipmentEffectsSystem` shrinks it every frame to the HP still above max.
+- **Not:** a max-HP bonus (hearts, fountain blessing, Boss kills raise `maxHp` itself); not a
+  shield or a second HP bar. The HP readout just shows the higher number.
+
 ### Passive Indicator
 - **Definition:** The floating word unique to one passive item, shown over the player each time
   that passive acts. No two passives share one. The Compass's is `!`, with every beep.

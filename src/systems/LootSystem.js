@@ -88,7 +88,7 @@ export class LootSystem {
     const player = game.player;
     if (ingredient.char === 'g' && player.gooConsume) {
       // Emerald Robe: goo consumed for 1HP heal instead of going to inventory
-      player.hp = Math.min(player.hp + 1, player.maxHp);
+      player.heal(1);
     } else if (ingredient.char === '𝑚' && game.magicSystem.collectMana(player)) {
       // The meter took it.
     } else if (!game.addIngredient(ingredient.char)) {

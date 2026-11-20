@@ -5,6 +5,7 @@ import { PlayerDamageSystem } from '../systems/PlayerDamageSystem.js';
 import { PlayerDodgeRollSystem } from '../systems/PlayerDodgeRollSystem.js';
 import { PlayerInputSystem } from '../systems/PlayerInputSystem.js';
 import { initParry } from './enemyMechanics/ParryMechanic.js';
+import { pickupIntoLoadout } from '../systems/characterLoadout.js';
 
 const INVULNERABILITY_DURATION = 1.0;
 const BLINK_FREQUENCY = 0.1;
@@ -29,6 +30,7 @@ export class Player {
     this.maxHp = PLAYER_STATS.MAX_HP;
     this.passiveMaxHpBonus = 0; // share of maxHp currently granted by equipped hearts (EquipmentEffectsSystem)
     this.bossMaxHpBonus = 0;    // share of maxHp currently granted by the active character's Boss kills (EquipmentEffectsSystem)
+    this.overhealHp = 0;        // Overheal: HP held above maxHp (a Sandwich, ConsumableTriggerSystem); hits wear it off first
     this.defense = 0; // Defense from armor
     this.armorTraining = null; // the character's Armor Training levels (CharacterSystem points it at the loadout)
 
@@ -582,7 +584,8 @@ export class Player {
 
   heal(amount) {
     this.hp += Math.round(amount); // HP is whole hearts; no heal source is fractional
-    if (this.hp > this.maxHp) this.hp = this.maxHp;
+    const ceiling = this.maxHp + this.overhealHp; // an ordinary heal never eats Overheal
+    if (this.hp > ceiling) this.hp = ceiling;
   }
 
   // True when a new weapon/trap has nowhere to go without displacing one:
@@ -595,31 +598,9 @@ export class Player {
       !this.quickSlots.some((slot, i) => slot === null && usable(slot, i));
   }
 
+  // Slot placement rules live with the rest of the Loadout's (characterLoadout.js).
   pickupItem(item, selectedSlotIdx = 0) {
-    // Apply trap capacity affinity (`weaponAffinities.trap.additionalCharge`: +N trap charges on pickup)
-    if (item?.data?.type === 'TRAP' && item.charges != null) {
-      const affinity = this.weaponAffinities?.['trap'];
-      if (affinity?.additionalCharge) item.charges += affinity.additionalCharge;
-    }
-
-    // Prefer selected slot if empty, else first empty
-    const empty = (i) => this.quickSlots[i] === null && !this.destroyedSlots[i];
-    const targetSlot = (empty(selectedSlotIdx) ? selectedSlotIdx : this.quickSlots.findIndex((_, i) => empty(i)));
-
-    if (targetSlot !== -1) {
-      this.quickSlots[targetSlot] = item;
-      return null;
-    } else {
-      let swapIdx = this.activeSlotIndex;
-      if (this.destroyedSlots[swapIdx]) {
-        swapIdx = this.quickSlots.findIndex((_, i) => !this.destroyedSlots[i]);
-        if (swapIdx === -1) return item;
-      }
-      const droppedItem = this.quickSlots[swapIdx];
-      this.quickSlots[swapIdx] = item;
-      this.activeSlotIndex = swapIdx;
-      return droppedItem;
-    }
+    return pickupIntoLoadout(this, item, selectedSlotIdx);
   }
 
   dropItem() {
@@ -670,6 +651,7 @@ export class Player {
     this.maxHp = PLAYER_STATS.MAX_HP;
     this.passiveMaxHpBonus = 0;
     this.bossMaxHpBonus = 0;
+    this.overhealHp = 0;
     this.hurtPending = false;
     this.velocity = { vx: 0, vy: 0 };
     this.acceleration = { ax: 0, ay: 0 };

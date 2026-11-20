@@ -123,7 +123,7 @@ export class WeaponEffectsSystem {
   onMeleeHit(attack, enemy, wasFrozen) {
     if (attack.shattersFrozen && wasFrozen) this._shatter(attack, enemy);
     if (attack.healOnKill && enemy.hp <= 0 && attack.owner) {
-      attack.owner.hp = Math.min(attack.owner.hp + attack.healOnKill, attack.owner.maxHp);
+      attack.owner.hp = Math.min(attack.owner.hp + attack.healOnKill, Math.max(attack.owner.hp, attack.owner.maxHp)); // never below standing Overheal
       this.game.combatSystem.createDamageNumber('+' + attack.healOnKill, attack.owner.position.x, attack.owner.position.y - 12, '#88ff88');
     }
     if (attack.pullsDisarmedGear && enemy._disarmed && attack.owner) this._pullGear(enemy, attack.owner);

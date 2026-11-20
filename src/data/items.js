@@ -3113,7 +3113,8 @@ export const ITEMS = {
   },
   // Sandwich (Bread + Meat): Feed like Bread — SHIFT throws it and crows/rats
   // eat it exactly as they eat a loaf — but SPACE eats it for a bigger heal
-  // than Meat Jerky, and it auto-eats at low HP the same way.
+  // than Meat Jerky, and it auto-eats at low HP the same way. Eaten at or
+  // near full HP, what would spill over max becomes Overheal, up to +5.
   '☰': {
     rarity: 'uncommon',
     char: '☰',
@@ -3121,6 +3122,7 @@ export const ITEMS = {
     type: ITEM_TYPES.CONSUMABLE,
     effect: 'heal',
     amount: 3,
+    overheal: 5,
     oneShot: true,
     stackable: true,
     autoTriggerHP: 0.18,

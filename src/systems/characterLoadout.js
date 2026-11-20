@@ -93,3 +93,34 @@ export function loadEquipment(inv, entry) {
   // A throw still in the air belongs to the character who threw it.
   inv.consumableWindups = [];
 }
+
+// Put a picked-up weapon/trap into `player`'s quick slots (Player.pickupItem).
+// The selected slot when it's empty, else the first empty unbroken slot; with
+// none empty it swaps with the active slot (stepping off a broken one) and
+// returns the item it displaced, or null when nothing was displaced. A Trap
+// first gains the character's trap-capacity affinity
+// (`weaponAffinities.trap.additionalCharge`: +N charges on pickup).
+export function pickupIntoLoadout(player, item, selectedSlotIdx = 0) {
+  if (item?.data?.type === 'TRAP' && item.charges != null) {
+    const affinity = player.weaponAffinities?.['trap'];
+    if (affinity?.additionalCharge) item.charges += affinity.additionalCharge;
+  }
+
+  const slots = player.quickSlots;
+  const empty = (i) => slots[i] === null && !player.destroyedSlots[i];
+  const targetSlot = empty(selectedSlotIdx) ? selectedSlotIdx : slots.findIndex((_, i) => empty(i));
+  if (targetSlot !== -1) {
+    slots[targetSlot] = item;
+    return null;
+  }
+
+  let swapIdx = player.activeSlotIndex;
+  if (player.destroyedSlots[swapIdx]) {
+    swapIdx = slots.findIndex((_, i) => !player.destroyedSlots[i]);
+    if (swapIdx === -1) return item;
+  }
+  const droppedItem = slots[swapIdx];
+  slots[swapIdx] = item;
+  player.activeSlotIndex = swapIdx;
+  return droppedItem;
+}

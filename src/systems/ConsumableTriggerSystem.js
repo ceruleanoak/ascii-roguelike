@@ -23,6 +23,14 @@ const LIQUID_SPLASH_THROW_DISTANCE = GRID.CELL_SIZE * 4;
 
 // The point `distance` px along the player's facing, from their true center
 // (a Liquid Splash lands on cells, so the legacy +20 offset would skew it).
+// A heal with an `overheal` cap (the Sandwich): whatever would spill over max
+// HP is kept as Overheal, up to `cap` above max (player.overhealHp). Overheal
+// already standing still counts toward the cap.
+function overheal(player, amount, cap) {
+  player.hp = Math.min(player.hp + Math.round(amount), player.maxHp + Math.max(cap, player.overhealHp));
+  player.overhealHp = Math.max(player.overhealHp, player.hp - player.maxHp);
+}
+
 function facingThrowTarget(player, distance) {
   const c = entityCenter(player);
   let fx = player.facing?.x ?? 0;
@@ -461,7 +469,8 @@ export class ConsumableTriggerSystem {
           player.takeDamage?.(-amount, { cause: consumable });
           break;
         }
-        player.heal(amount);
+        if (cd.overheal) overheal(player, amount, cd.overheal);
+        else player.heal(amount);
         this.game.combatSystem.showHeal(amount, player.position.x, player.position.y, player);
         break;
       }

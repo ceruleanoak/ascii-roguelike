@@ -617,7 +617,7 @@ export class InteractionSystem {
   healFromFairy(fairy) {
     const game = this.game;
     const player = game.player;
-    player.hp = Math.min(player.maxHp, player.hp + FAIRY_HEAL);
+    player.heal(FAIRY_HEAL);
     game.audioSystem?.playSFX?.('fairy_pickup');
     game.menuSystem?.updateUI?.();
     this._blinkHPDisplay();
@@ -718,7 +718,7 @@ export class InteractionSystem {
     const game = this.game;
     const player = game.player;
     player.maxHp += 1;
-    player.hp = player.maxHp;
+    player.hp = Math.max(player.hp, player.maxHp); // to full, keeping any Overheal
     game.audioSystem?.playSFX?.('fairy_pickup');
     game.menuSystem?.showPickupMessage?.('+1 MAX HP');
     game.menuSystem?.updateUI?.();

@@ -302,7 +302,7 @@ export class FountainSystem {
         return 'FEELING LUCKY?';
       case 'maxHp':
         player.maxHp += 1;
-        player.hp = player.maxHp;
+        player.hp = Math.max(player.hp, player.maxHp); // to full, keeping any Overheal
         return 'FEELING HEARTY?';
       case 'sprint':
         if (player.fountainSprintBlessed) return STILL;

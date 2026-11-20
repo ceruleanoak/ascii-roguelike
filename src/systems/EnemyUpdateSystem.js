@@ -686,7 +686,7 @@ export class EnemyUpdateSystem {
 
         // Blood Robe: blade kill heals 1HP
         if (enemy.killedByBlade && game.player?.bladeKillHeal) {
-          game.player.hp = Math.min(game.player.hp + 1, game.player.maxHp);
+          game.player.heal(1);
         }
 
         // Per-enemy death SFX (data.sfx.death — string or array for random pick).

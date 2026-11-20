@@ -35,7 +35,7 @@ export function applyBlessing(player, blessingItem, blessingsCollected) {
 
     case 'hpBuff':
       player.maxHp += blessing.effect.value;
-      player.hp = Math.min(player.hp + blessing.effect.value, player.maxHp); // Heal to new max
+      player.heal(blessing.effect.value); // Heal to new max
       return `${blessing.name} (+${blessing.effect.value} HP)`;
 
     case 'speedBuff':
