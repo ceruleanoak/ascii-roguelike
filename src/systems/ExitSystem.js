@@ -111,7 +111,7 @@ export function cycleExitLetter(currentLetter, game = null, direction = null) {
   const startCode = /^[A-Z]$/.test(currentLetter) ? currentLetter.charCodeAt(0) : 64;
   for (let i = 1; i <= 26; i++) {
     const next = String.fromCharCode(((startCode - 65 + i) % 26) + 65);
-    if (EXIT_LETTERS[next] && !isLetterRetired(next, game) &&
+    if (EXIT_LETTERS[next] && !isLetterRetired(next, game) && !isLetterHeldBack(next, game) &&
         !(direction && letterRefusesSide(next, direction))) return next;
   }
   return currentLetter;
@@ -123,6 +123,15 @@ export function cycleExitLetter(currentLetter, game = null, direction = null) {
 // (CursedRunSystem.forsake), the J room has nothing left to offer.
 export function isLetterRetired(letter, game) {
   return letter === 'J' && (!!game?.jewelerRefreshed || !!game?.cursedRunSystem?.isForsaken(game, Jeweler));
+}
+
+// A letter withheld for now, not for the run: never rolled, and skipped by the
+// Sword of the Letter, while the condition holds. Only C today — while the
+// Camp NPC walks with the player as `game.companion`, another Camp's NPC can't
+// be hired (CampNPCSystem.handleSpacePress aims every coin at the companion), so
+// C comes back only once that companion is gone.
+function isLetterHeldBack(letter, game) {
+  return letter === 'C' && !!game?.companion;
 }
 
 // Fixed progression order for the Chromablade's color cycle — the same
@@ -915,7 +924,7 @@ export class ExitSystem {
         weight = 0;
       }
 
-      if (isLetterRetired(letter, this.game)) weight = 0;
+      if (isLetterRetired(letter, this.game) || isLetterHeldBack(letter, this.game)) weight = 0;
 
       // Lucky blessing reshapes the route: more vaults, key rooms, mystery,
       // and camps. Boss is intentionally excluded — depth pacing owns it.
