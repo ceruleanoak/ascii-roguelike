@@ -21,7 +21,7 @@
 
 import { GRID, ROOM_TYPES } from '../game/GameConfig.js';
 import { CHARACTER_TYPES } from '../data/characters.js';
-import { protectRegion } from './roomFeatures.js';
+import { protectRegion, darkenColor } from './roomFeatures.js';
 import { createBurstParticles } from './WorldEffectsSystem.js';
 import { createCharacterLoadout } from './characterLoadout.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
@@ -38,6 +38,17 @@ const PLATFORM_REACH = 1.5;       // cells from a platform's spot that still cou
 const CONVERGE_DURATION = 1.4;    // seconds for the five motes to reach the center
 const BURST_COUNT = 16;           // burst particles per color at the meeting
 const HALO = 1;                   // cells round the massif the room's dressing must also keep off
+
+// Energy: while a character stands on their platform, a pulse of energy runs up
+// their pennant line to the cairn every ENERGY_PERIOD seconds, the present
+// lines taking even turns, so the cairn receives one color after another.
+export const ENERGY_PERIOD = 2.4;          // seconds between one line's pulses
+export const ENERGY_SPEED = 170;           // px/s a pulse climbs its line
+// How the cairn answers each arrival: stepped brightness (alpha and color are
+// quantized, so no smooth fade), by seconds since the pulse landed.
+const CAIRN_PULSE = [[0.12, 0], [0.3, 0.2], [0.55, 0.35]]; // [until, darkenColor amount]
+const CAIRN_REST_DARKEN = 0.5;             // between arrivals the cairn holds the last color, dimmed
+const CONVERGE_CYCLE = 0.1;                // seconds per color while all five motes climb
 
 // Characters still in the run: rescued, not dead, not lost to the mist.
 export function livingCharacters(game) {
@@ -129,6 +140,8 @@ export class ZenithSystem {
       platforms,
       center: cairn,
       cairnObject,
+      cairnColor: cairnObject?.color ?? null, // the cairn's own stone color, when no power is arriving
+      clock: 0,                               // seconds in the room: drives the energy pulses
       // 'waiting' → 'converging' (motes in flight) → 'gathered'.
       phase: this.game.zenithGathered ? 'gathered' : 'waiting',
       t: 0
@@ -146,6 +159,7 @@ export class ZenithSystem {
     const room = game.currentRoom;
     const zenith = room?.zenith;
     if (!zenith || room.type !== ROOM_TYPES.ZENITH || !game.player) return;
+    zenith.clock += dt;
 
     if (zenith.phase === 'waiting') {
       if (this._allGatheredOnPlatforms(zenith)) {
@@ -157,6 +171,59 @@ export class ZenithSystem {
       zenith.t += dt;
       if (zenith.t >= CONVERGE_DURATION) this._completeGathering(zenith);
     }
+    if (zenith.phase !== 'gathered') this._pulseCairn(zenith);
+  }
+
+  /**
+   * Whose platform is occupied right now: the standing characters, plus the
+   * player's own once they step onto it. After the Gathering, all of them.
+   * Returned in the climb's order.
+   */
+  presentTypes(zenith) {
+    const game = this.game;
+    const occupied = new Set(this.standingCharacters(game));
+    const own = zenith.platforms.find(p => p.characterType === game.activeCharacterType);
+    if (own && this.isOnPlatform(own)) occupied.add(own.characterType);
+    if (zenith.phase === 'gathered') for (const p of zenith.platforms) occupied.add(p.characterType);
+    return ZENITH_ORDER.filter(type => occupied.has(type));
+  }
+
+  /**
+   * Where the energy pulse on a present platform's line is: its head as a
+   * fraction of the line (0 at the platform, 1 at the cairn; outside 0..1 the
+   * pulse is not on the line), and seconds since its last pulse reached the
+   * cairn. `slot` is the platform's turn among the present lines, of `count`.
+   */
+  energyPulse(zenith, length, slot, count) {
+    const phase = ((zenith.clock - (slot * ENERGY_PERIOD) / count) % ENERGY_PERIOD + ENERGY_PERIOD) % ENERGY_PERIOD;
+    const toArrive = ENERGY_PERIOD - phase;
+    return { head: 1 - (toArrive * ENERGY_SPEED) / length, sinceArrival: phase };
+  }
+
+  // The cairn pulses in the color of whichever line's energy reached it last
+  // (all five in turn while the motes climb), or rests as stone when no one stands.
+  _pulseCairn(zenith) {
+    const cairn = zenith.cairnObject;
+    if (!cairn) return;
+    let color = zenith.cairnColor;
+    if (zenith.phase === 'converging') {
+      color = zenith.platforms[Math.floor(zenith.t / CONVERGE_CYCLE) % zenith.platforms.length].color;
+    } else {
+      const present = this.presentTypes(zenith);
+      let latest = null;
+      present.forEach((type, slot) => {
+        const p = zenith.platforms.find(pl => pl.characterType === type);
+        const length = Math.hypot(zenith.center.x - p.cx, zenith.center.y - p.cy);
+        const { sinceArrival } = this.energyPulse(zenith, length, slot, present.length);
+        if (!latest || sinceArrival < latest.sinceArrival) latest = { color: p.color, sinceArrival };
+      });
+      if (latest) {
+        const band = CAIRN_PULSE.find(([until]) => latest.sinceArrival < until);
+        color = darkenColor(latest.color, band ? band[1] : CAIRN_REST_DARKEN);
+      }
+    }
+    cairn.color = color;
+    cairn.animationColor = color;
   }
 
   // True once all five characters are living, and the player stands on their own platform.
