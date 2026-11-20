@@ -162,12 +162,8 @@ export class FountainSystem {
     if (room.fountain.upgradeUsed) return false;
     if (room.fountain.activeRitual) return false;
 
-    const C = GRID.CELL_SIZE;
     const f = room.fountain;
-    const targetCol = Math.floor(t.targetX / C);
-    const targetRow = Math.floor(t.targetY / C);
-    if (Math.abs(targetRow - f.centerRow) > f.poolRadius) return false;
-    if (Math.abs(targetCol - f.centerCol) > f.poolRadius) return false;
+    if (!this._throwReachedPool(t, f)) return false;
 
     const item = t.weaponItem;
     if (!item?.data || item.data.type !== 'WEAPON') return false;
@@ -430,6 +426,24 @@ export class FountainSystem {
   // Walks WEAPON_TIERS to find the family that contains `char` and returns a
   // random char from the next tier. Null if at top tier, not in any family, or
   // if every candidate on that rung is locked behind an attunement we don't have.
+  // A throw reaches the pool when it was aimed into the water, or when the
+  // water stopped it: pool tiles are solid, so a long throw (a Dagger's reach
+  // is 12 cells, the pool 9) aimed past the far edge stops at the near one.
+  // The cell just beyond where it stopped, toward its aim, is then water.
+  _throwReachedPool(t, f) {
+    const C = GRID.CELL_SIZE;
+    const inPool = (x, y) =>
+      Math.abs(Math.floor(y / C) - f.centerRow) <= f.poolRadius &&
+      Math.abs(Math.floor(x / C) - f.centerCol) <= f.poolRadius;
+    if (inPool(t.targetX, t.targetY)) return true;
+    const dx = t.targetX - t.x;
+    const dy = t.targetY - t.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 1) return false;
+    const step = Math.min(dist, C * 0.75);
+    return inPool(t.x + (dx / dist) * step, t.y + (dy / dist) * step);
+  }
+
   _findNextTierChar(char) {
     const attunement = this.game.currentRoom?.fountain?.attunement || null;
     for (const family of Object.keys(WEAPON_TIERS)) {
