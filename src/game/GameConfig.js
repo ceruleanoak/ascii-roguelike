@@ -1485,6 +1485,18 @@ export const BACKGROUND_OBJECT_VARIANTS = {
     flammability: 'none',
     conductivity: 'none'
   },
+  // One variant for every Yard prop (src/data/yards.js): the glyph, name, colour,
+  // solidity and any customSprite arrive as overrides from YARD_PROPS. Solid props
+  // also stop shots; nothing in a Yard burns, breaks or carries current.
+  'yard_prop': {
+    name: 'Yard',
+    color: '#7a6a50',
+    indestructible: true,
+    solid: false,
+    bulletInteraction: 'pass-through',
+    flammability: 'none',
+    conductivity: 'none'
+  },
   'zenith_trail': {
     name: 'Trail',
     color: '#8c7c5a',

@@ -2786,7 +2786,7 @@ identity, not standard programming terms.
   outside, and the props, glyphs and colours placed in a room to make it feel like somewhere. Set
   Dressing is judged by the rules in `claudedocs/set-dressing-rulebook.md`.
 - **In code:** no single owner. It's built from Background Objects placed by the room's generator
-  (`stampHutFootprint`, `generateDungeonRoom`, the `neutralRooms.js` entries). Dungeon floors get
+  (`stampHutFootprint`, `generateDungeonRoom`, the `neutralRooms.js` entries, `dressYards`). Dungeon floors get
   random decor from `DungeonFloorGenerator._addDecor`, which doesn't meet the rulebook.
 - **Not:** a Background Object (the unit it's made from), or a Floor (the traversable space it
   sits on). Random decor scatter alone isn't Set Dressing.
@@ -2806,6 +2806,38 @@ identity, not standard programming terms.
   `generateDungeonRoom` and `generateMazeRoom` (`src/systems/RoomGenerator.js`) for Dungeons and
   Mazes.
 - **Not:** an Interior (the space entered through the door).
+
+### Yard
+- **Definition:** The dressing outside a hut that shows who lives there: the Press hut's woodpile
+  and splitting block, the Alchemy Lab's spills, the Weapons Master's target and rack, claw marks at
+  an enemy hut's door. A lone Hut shows a few of its Yard's props; a Settlement hut shows them all.
+  The same marks stand beside the Settlement's sign, which names the occupant, so a player can later
+  read a lone Hut, which has no sign, from its Yard alone. The Errand hut is bare on purpose.
+- **In code:** `YARDS` (per hut kind) and `YARD_PROPS` in `src/data/yards.js`, placed by
+  `dressYards` (`src/systems/yardDressing.js`) from `generateHutRoom` and `generateSettlementRoom`.
+  Every prop is a `yard_prop` Background Object variant; solid props block through `data.solid`,
+  never `collisionMap`. Fence rails, posts and palisade stakes are drawn as custom sprites
+  (`src/rendering/sprites/fenceSprite.js`).
+- **Not:** the Exterior (the building's own outline, which the Yard doesn't change), or the room's
+  random scatter, which is cleared from round a Settlement's huts so the Yard reads.
+
+### Footpath
+- **Definition:** The worn track from a hut's door: toward the south exit from a lone Hut, to the
+  Commons in a Settlement. It wanders like a real track instead of turning in right angles, and
+  thins out as it leaves the yard. Every hut has one, so a path never gives away what lives inside:
+  a hostile hut's Footpath has gone to ruin (broken, with something cut across it), and the Wise
+  Fellow's is stepping stones.
+- **In code:** `YardPlacer.layFootpaths` in `src/systems/yardDressing.js`; `footpath` and `step`
+  in `YARD_PROPS`. Walkable.
+- **Not:** the Zenith's Trail (`zenith_trail`), which is part of the summit's authored map.
+
+### Commons
+- **Definition:** The trampled patch where a Settlement's Footpaths meet, between the huts and the
+  south exit, with one zone mark at its edge (a crate, a lightning rod, cinders, a lantern). It's
+  what makes the huts read as one place.
+- **In code:** `YardPlacer.findCommons` and `placeCommonsMark` in `src/systems/yardDressing.js`;
+  `COMMONS_MARK` in `src/data/yards.js`. Settlements only.
+- **Not:** a room or an interactable. Nothing happens there.
 
 ### Background Object
 - **Definition:** A non-entity environmental object that occupies a room tile, can be destroyed

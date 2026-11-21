@@ -2,6 +2,7 @@ import { GRID, ROOM_TYPES, BACKGROUND_OBJECTS, WALL_STRUCTURES, WATER_STRUCTURES
 import { ENEMIES, getRandomEnemy, getZoneRandomEnemy } from '../data/enemies.js';
 import { ZONES, applyZoneCombatModifiers } from '../data/zones.js';
 import { LETTER_TEMPLATES } from '../data/letterTemplates.js';
+import { dressYards } from './yardDressing.js';
 import { Enemy } from '../entities/Enemy.js';
 import { Item } from '../entities/Item.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
@@ -3260,6 +3261,9 @@ export class RoomGenerator {
     if (this.currentLetterTemplate?.bgObjectRules) {
       this.currentLetterTemplate.bgObjectRules.clearingZone = prevClearingZone;
     }
+
+    // The hut's Yard and Footpath, before enemies take their positions — yardDressing.js.
+    dressYards(room, { zone: room.zone, abundant: false });
 
     // Spawn enemies outside the hut perimeter (including legs for witch huts)
     const enemyCount = this.randInt(2, 4);

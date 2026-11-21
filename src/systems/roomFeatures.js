@@ -20,6 +20,7 @@ import { makeMire } from './MireLake.js';
 import { createLightningSpire } from './LightningSpire.js';
 import { pickUnspawnedItem, markItemSpawned } from './spawnedItems.js';
 import { findSafeSpawnPosition } from './safeSpawn.js';
+import { dressYards } from './yardDressing.js';
 
 // Room-generation feature helpers extracted from RoomGenerator (arch budget).
 // Each takes the generator instance (`gen`) for its placement utilities.
@@ -1890,6 +1891,8 @@ export function generateSettlementRoom(gen, room) {
   }
 
   gen.generateBackgroundObjects(room);
+  // Every hut's Yard, the Footpaths to a Commons, and the zone's layer — yardDressing.js.
+  dressYards(room, { zone: room.zone, abundant: true });
   room.exitsLocked = false;
 }
 
