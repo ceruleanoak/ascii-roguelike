@@ -179,6 +179,8 @@ export class YardPlacer {
     const overrides = { name: propName, color, solid: prop.solid };
     if (prop.solid) overrides.bulletInteraction = 'block';
     if (prop.sprite) overrides.customSprite = prop.sprite;
+    // A harvestable prop (YARD_PROPS `harvest`) is no longer indestructible.
+    if (prop.harvest) Object.assign(overrides, { indestructible: false }, prop.harvest);
     const obj = new BackgroundObject(prop.char, c * CS, r * CS, { typeId: 'yard_prop', variantOverrides: overrides });
     obj.color = color;
     obj.animationColor = color;

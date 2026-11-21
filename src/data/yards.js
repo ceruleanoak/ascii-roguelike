@@ -7,10 +7,13 @@
 // ground tone at placement (YARD_ZONE_TINT) so dressing stays duller than anything
 // interactive (rulebook G4).
 
-// name: { char, color, solid, wide?, sprite? }
-//   wide   — a 16px glyph that spills into its east neighbour, so that cell must stay clear (G3)
-//   sprite — drawn by src/rendering/sprites/customSprites.js instead of the glyph. Fences
-//            and palisades must read as an unbroken run, and their glyphs are half width.
+// name: { char, color, solid, wide?, sprite?, harvest? }
+//   wide    — a 16px glyph that spills into its east neighbour, so that cell must stay clear (G3)
+//   sprite  — drawn by src/rendering/sprites/customSprites.js instead of the glyph. Fences
+//             and palisades must read as an unbroken run, and their glyphs are half width.
+//   harvest — the prop can be cut once for a drop, the way Sand is scooped: one hit spends
+//             it in place (depletedColor, BackgroundObject.deplete) and fires dropEffect.
+//             `cuttable` makes it answer to blades as grass does (a hammer only rustles it).
 export const YARD_PROPS = {
   woodpile: { char: '≣', color: '#9a7448', solid: true },
   block:    { char: '⊼', color: '#7a5a3a', solid: true },
@@ -35,7 +38,9 @@ export const YARD_PROPS = {
   claw:     { char: '⫽', color: '#9a5a4a', solid: false, wide: true },
   scraps:   { char: '⁙', color: '#8a8a80', solid: false },
   rune:     { char: 'ᚼ', color: '#a04a20', solid: false },
-  sprout:   { char: '⸙', color: '#4a8a3a', solid: false },
+  sprout:   { char: '⸙', color: '#4a8a3a', solid: false,
+    // Cut, a crop gives Grain (ψ), which bakes into Bread at a lit Fireplace.
+    harvest: { hp: 1, cuttable: true, dropEffect: 'destroyObject:spawnIngredient:ψ', depletedColor: '#5a5434' } },
   rod:      { char: '⊺', color: '#a08a40', solid: true }, // not an arrow: arrows are spears and daggers
   cinders:  { char: '∷', color: '#8a3a20', solid: false },
   lantern:  { char: '⍙', color: '#a0b0c0', solid: true },
