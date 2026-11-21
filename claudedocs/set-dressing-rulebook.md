@@ -144,6 +144,53 @@ each works in only one renderer:
 
 `☰` is full width too, but it's the Sandwich, so G2 rules it out.
 
+**Dressing glyphs.** Every glyph authored dressing uses, so a new room can see what is taken
+before it `git grep`s (G2) and can pair with a Yard on purpose (E5). The source table is the
+truth; this index follows it. A room that adds props adds its rows in the same commit, as it
+adds its scorecard row. Advance measured in Unifont at 16px (G3). Headless screenshots fall back
+to system fonts unless the Unifont face is loaded by hand (`new FontFace(...)` from the
+cdnfonts woff); check `measureText` returns 8 or 16 before trusting a screenshot.
+
+| Glyph | Px | Depicts | Where (source) |
+|-------|----|---------|----------------|
+| `≣` | 8 | woodpile | Yards (`YARD_PROPS`, `src/data/yards.js`) |
+| `⊼` | 8 | splitting block | Yards |
+| `∴` | 8 | scuffed earth | Yards |
+| `∘` | 8 | spill, stain | Yards (stains); Alchemy Lab (spills to the door, `LAB_PROPS`, `src/data/alchemyLab.js`) |
+| `⸪` | 8 | glass shards | Yards; Alchemy Lab (a blown flask by the still) |
+| `Ʊ` | 8 | bucket | Yards |
+| `◌` | 8 | stepping stone | Yards |
+| `⍊` | 8 | standing stone | Yards |
+| `⌗` | 8 | net | Yards |
+| `◠` | 8 | upturned boat | Yards |
+| `╱` | 8 | oar | Yards |
+| `⦾` | 16 | archery target | Yards |
+| `ǁ` | 8 | target post | Yards |
+| `ǂ` | 8 | weapon rack | Yards |
+| `⏚` | 8 | blade in the ground | Yards |
+| `▯` | 8 | crate | Yards |
+| `⁚` | 8 | track | Yards |
+| `⁞` | 8 | grass tuft | Yards |
+| `⫽` | 16 | claw marks | Yards |
+| `⁙` | 8 | scraps | Yards; Crossroads post |
+| `ᚼ` | 8 | rune | Yards |
+| `⸙` | 8 | sprout, herbs | Yards (crop); Alchemy Lab (herbs drying on the east wall) |
+| `⊺` | 8 | fishing rod | Yards |
+| `∷` | 8 | cinders | Yards |
+| `⍙` | 8 | lantern | Yards |
+| `╥ ─ │` | 8 | fence post and rails (customSprite) | Yards |
+| `⍿` | 8 | palisade stake (customSprite) | Yards |
+| `·` | 8 | footpath | Yards |
+| `⍜ ⌸ ⍓ ⌺` | 8 | shelved jars | Alchemy Lab, north wall |
+| `ꙮ` | 16 | jar of eyes | Alchemy Lab, north wall |
+| `⍡` | 8 | pump | Alchemy Lab, west wall |
+| `⁝` | 8 | overflow runnel | Alchemy Lab |
+| `⁕` | 8 | fire spark | Alchemy Lab, beside the cauldron |
+| `─ │ ┘` | 8 | vapour pipe (customSprite `pipeH`/`pipeV`/`pipeElbowWN`) | Alchemy Lab |
+| `⧙` | 8 | condenser worm | Alchemy Lab |
+| `⍥` | 8 | drip flask | Alchemy Lab |
+| `⩌` | 16 | mortar | Alchemy Lab |
+
 ---
 
 ## 7. Process
@@ -297,7 +344,7 @@ and Dragon Forge have no building. The Well, Fountain and Vault aren't entered.
 
 | Space | I1 | I2 | I3 | Note |
 |-------|----|----|----|------|
-| Alchemy Lab | Fail | 5, Pass | Part | Trough, mud pit, cauldron, condenser, Alchemist. The mud pit mirrors the trough across the north wall (2026-11-18) |
+| Alchemy Lab | Pass, 13 | 5, Pass | Pass | Authored map (`src/data/alchemyLab.js`), reviewed 2026-11-21: a wet west side (pump, trough, runnel, mud pit) and a hot east side (pipe, condenser, worm, flask, shards, mortar, herbs), the cauldron between them on the door axis. S6: the jar of eyes. E5: spills and shards answer the Yard, a shade darker indoors. The trough stays a 2×2 block (S2 Part): every rule that names it, poisoning among them, counts four cells |
 | Press hut | Fail | 2, Pass | Fail | Press and Fireplace, both guaranteed |
 | Three Room | Fail | 2, Pass | Pass | Slots and door |
 | Shop | Fail | 1, or 2 with the Jeweler | Part | Conditional. The Counter is inert |
@@ -350,8 +397,8 @@ to do.
 4. **Per-kind hut Exteriors**, starting with the kinds the player visits most: Shop, Alchemy Lab,
    Wise Fellow.
 5. **Dungeon wear layer**, replacing `_addDecor` with zone clusters.
-6. **I1 glyph pass** on Wise Fellow, then on the Alchemy Lab and Shop, whose interactions are
-   already there.
+6. **I1 glyph pass** on Wise Fellow, then on the Shop, whose interactions are already there.
+   The Alchemy Lab's passed in its room review (2026-11-21).
 7. **Second interactions** for the rooms at 1, one at a time. Each is a design question and not a
    dressing job.
 
@@ -368,3 +415,4 @@ to do.
 | 2026-11-21 | Added E5 (a Yard teaches what a sign says). Added `customSprite` as the third fix for half-width runs. | The user on the Hut and Settlement Yards: per-kind tells stay in both rooms; "Fences can be fixed by creating a custom sprite"; the Errand hut is bare on purpose; snow drifts are not wanted. |
 | 2026-11-21 | Added S10 (a variant keeps the rhythm) and S11 (lines make a place). | The user on the Yards: the Wise Fellow's stepping-stone path was "too spread out"; "Fences do a lot of work, so use them more". |
 | 2026-11-21 | P4 covers hut interiors; the room review gains a hut interior track. | The user: the room review should be lifted for hut interiors, from the Alchemy Lab and Wise Fellow work. |
+| 2026-11-21 | Added the Dressing glyphs index to §6. Alchemy Lab rescored after its room review (I1 Pass, I3 Pass). | The user asked for the decoration inventory to be kept for reference; the Lab review found a glyph (`⸙`) shared with a Yard only by `git grep`. |
