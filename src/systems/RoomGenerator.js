@@ -24,6 +24,9 @@ import { attachVault } from './vaultWalls.js';
 import { generateRecipeSign, generateSpellSign } from './roomSigns.js';
 import { seedMetalPlatform, makeZoneLava, islandLavaFeatures } from './MetalPlatformSystem.js';
 
+// Chance a U room leaves a Lantern (♁) on a cave passage, underground only.
+const U_ROOM_LANTERN_CHANCE = 0.25;
+
 // Zone-boss arena → letter template key. Boss rooms are entered without a
 // letter (cheat warp) or with an arbitrary one (normal progression), so we
 // force the dedicated arena template by zone here.
@@ -1378,6 +1381,19 @@ export class RoomGenerator {
       room.backgroundObjects.push(new BackgroundObject('⊙', veinX, veinY));
       veinCell = cell;
       break;
+    }
+
+    // ── One U room in four leaves a Lantern down in the caves ────────────────
+    // Plane 1 only: it lies on a passage cell no glittering rock or enemy
+    // took, and never on the vein marker, so it is found by going under.
+    if (Math.random() < U_ROOM_LANTERN_CHANCE) {
+      const lanternCells = veinCandidates.filter(cell => cell !== veinCell);
+      if (lanternCells.length > 0) {
+        const cell = lanternCells[Math.floor(Math.random() * lanternCells.length)];
+        const lantern = new Item('♁', cell.col * GRID.CELL_SIZE, cell.row * GRID.CELL_SIZE);
+        lantern.plane = 1;
+        room.items.push(lantern);
+      }
     }
 
     // ── Carve a hidden trail of false obsidian through the field ─────────────
