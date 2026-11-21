@@ -2786,7 +2786,7 @@ identity, not standard programming terms.
   outside, and the props, glyphs and colours placed in a room to make it feel like somewhere. Set
   Dressing is judged by the rules in `claudedocs/set-dressing-rulebook.md`.
 - **In code:** no single owner. It's built from Background Objects placed by the room's generator
-  (`stampHutFootprint`, `generateDungeonRoom`, the `neutralRooms.js` entries, `dressYards`). Dungeon floors get
+  (`stampHutFootprint`, `generateDungeonRoom`, the `neutralRooms.js` entries, `dressYards`, `dressCrossroads`). Dungeon floors get
   random decor from `DungeonFloorGenerator._addDecor`, which doesn't meet the rulebook.
 - **Not:** a Background Object (the unit it's made from), or a Floor (the traversable space it
   sits on). Random decor scatter alone isn't Set Dressing.
@@ -2828,7 +2828,8 @@ identity, not standard programming terms.
   a hostile hut's Footpath has gone to ruin (broken, with something cut across it), and the Wise
   Fellow's is stepping stones.
 - **In code:** `YardPlacer.layFootpaths` in `src/systems/yardDressing.js`; `footpath` and `step`
-  in `YARD_PROPS`. Walkable.
+  in `YARD_PROPS`. Walkable. The Crossroads' roads are laid with the same `footpath` prop
+  (`src/systems/crossroadsDressing.js`), which is why they share its colour and rhythm.
 - **Not:** the Zenith's Trail (`zenith_trail`), which is part of the summit's authored map.
 
 ### Commons

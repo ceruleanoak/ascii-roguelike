@@ -25,8 +25,10 @@ export function drawFencePiece(ctx, cx, cy, shape, color) {
       ctx.fillRect(left, top + 11, cs, 2);
       break;
     case 'fenceRailV':
-      ctx.fillRect(midX - 3, top, 2, cs);
-      ctx.fillRect(midX + 1, top, 2, cs);
+      // A rail seen running away from the viewer: one bar with a cross-piece, so a
+      // run reads as a fence and never as two blades of Tall Grass (`||`, rulebook G2).
+      ctx.fillRect(midX - 1, top, 3, cs);
+      ctx.fillRect(midX - 4, top + 7, 9, 2);
       break;
     case 'palisadeStake':
       // One sharpened log per cell: a stepped point over a body nearly the cell's

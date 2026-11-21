@@ -317,9 +317,12 @@ export class YardPlacer {
   // A straight fence run: posts at its ends, rails between. A cell that already
   // holds a prop is left alone, so the run breaks round it; `gaps` drops a few rails
   // more, and `gate` leaves one cell open on purpose. The run stops short at water,
-  // a wall or anything solid: a fence ends at the water's edge, it never fills it in.
+  // a wall, anything solid or an exit lane: a fence ends at the water's edge, it
+  // never fills it in.
   fenceRun(cells, { startPost = true, endPost = true, gaps = 0, gate = -1 } = {}) {
-    const stop = cells.findIndex(({ c, r }) => this.liquid.has(key(c, r)) || this.blocked(c, r));
+    // Fence pieces are solid, so an exit lane stops the run too, and the run still
+    // ends on a post rather than a dangling rail.
+    const stop = cells.findIndex(({ c, r }) => this.liquid.has(key(c, r)) || this.blocked(c, r) || inExitLane(c, r));
     if (stop >= 0) { cells = cells.slice(0, stop); endPost = true; }
     if (!cells.length) return;
     const horizontal = cells.length < 2 || cells[0].r === cells[1].r;

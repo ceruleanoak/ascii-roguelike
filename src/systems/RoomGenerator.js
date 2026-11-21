@@ -3,6 +3,7 @@ import { ENEMIES, getRandomEnemy, getZoneRandomEnemy } from '../data/enemies.js'
 import { ZONES, applyZoneCombatModifiers } from '../data/zones.js';
 import { LETTER_TEMPLATES } from '../data/letterTemplates.js';
 import { dressYards } from './yardDressing.js';
+import { dressCrossroads } from './crossroadsDressing.js';
 import { Enemy } from '../entities/Enemy.js';
 import { Item } from '../entities/Item.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
@@ -648,6 +649,8 @@ export class RoomGenerator {
     }
     // Quagmire: the Whirlpool down to the Aquifer, dormant until the rounds clear.
     if (this.currentLetterTemplate?.quagmire) placeWhirlpool(this, room);
+    // Crossroads: roads in from each exit and fenced fields — crossroadsDressing.js.
+    if (this.currentLetterTemplate?.crossroads) dressCrossroads(room, { zone: room.zone });
 
     // Spawn training dummy in Green zone L1 (a pacifist Enemy — see data/enemies.js '@')
     if (this.currentDepth === 1 && room.zone === 'green') {

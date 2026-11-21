@@ -796,6 +796,10 @@ export const LETTER_TEMPLATES = {
     // trees and stumps so a flock of crows has somewhere to settle.
     description: 'Open central clearing ringed by trees — crows hoard shiny things here',
 
+    // Roads in from every exit meet at the centre, with fenced fields in the corners
+    // between them (src/systems/crossroadsDressing.js).
+    crossroads: true,
+
     // Eligible for SecretEventSystem's chi_grass secret event — see getSecretEventTypes.
     chiSecret: true,
 
