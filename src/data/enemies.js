@@ -1002,12 +1002,12 @@ export const ENEMIES = {
     speed: 55,          // Fast enough to actually reach allies before you catch it
     acceleration: 400,  // Snappy — hard to corner
     mass: 0.6,          // Light — knockback disrupts its positioning
-    damage: 0,
-    attackRange: 0,
+    damage: 1,          // A weak hex from behind its pack — the buff stays the real threat
+    attackRange: GRID.CELL_SIZE * 10, // Reaches past its preferredRange (9) so the standoff can still bite
     aggroRange: GRID.CELL_SIZE * 12,  // Activates early — starts fleeing before you close in
-    attackCooldown: 999,
-    attackWindup: 2.0,  // Required ≥1.0; irrelevant (never fires)
-    attackType: 'melee',
+    attackCooldown: 4.0,
+    attackWindup: 2.0,  // 1s real telegraph (double-seconds, ENEMY_TIMER_RATE)
+    attackType: 'magic',
     decisionInterval: 0.3,
     color: '#cc8800',  // More saturated — reads as "important"
     movementStyle: 'keeper',
@@ -1015,6 +1015,11 @@ export const ENEMIES = {
       preferredRange: GRID.CELL_SIZE * 9,  // Stays at far edge — behind its pack
       rangeTolerance: GRID.CELL_SIZE * 1   // Tight: always actively repositioning
     },
+    // Recover counts as an attack underway, which holds the Decision Frame
+    // clock. Holding it for the whole hex cooldown would starve the buff
+    // pulse (it commits through the same clock), so the Shaman leaves Recover
+    // after a short step back and pulses between hexes.
+    recover: { variant: 'retreat', duration: 0.4, holdCooldown: false },
     buffMechanic: {
       enabled: true,
       buffRadius: GRID.CELL_SIZE * 4,   // Tighter — must physically reach the cluster
