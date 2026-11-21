@@ -153,7 +153,7 @@ each works in only one renderer:
 | P1 | **Look before calling it done.** | A cell dump or screenshot exists, with a solid-fill view for anything S4 applies to. | Provisional |
 | P2 | **Corrections become rules.** When the user corrects art, the same session adds or amends a rule here, with the date and example. A repeated correction promotes the rule to Ratified. | §10 has an entry for every art correction. | Provisional |
 | P3 | **New space, new scorecard row.** | A commit adding a building or room touches §9. | Provisional |
-| P4 | **Authored rooms go through the room review.** An authored letter room or set piece follows `claudedocs/room-review-schematic.md`, from anatomy to screenshots and reviewers. | The commit's message or plan names which steps it ran. | Provisional |
+| P4 | **Authored rooms go through the room review.** An authored letter room, set piece, procedural dressing or hut interior follows `claudedocs/room-review-schematic.md`, from anatomy to screenshots and reviewers, on the track that fits. | The commit's message or plan names which steps it ran. | Provisional |
 
 ---
 
@@ -367,3 +367,4 @@ to do.
 | 2026-11-20 | Added S7 (positions tell the story) and G6 (markers are glyphs, never boxes; "off" states differ in shape). Added the Authored letter rooms scorecard, which brings authored set pieces in EXPLORE letter rooms into scope for §2 and §6. | The user on the Zenith's first build: "this room is ugly and breaks design rules such as using bordered boxes", and "put some real appeal effort into the positions for memorability". |
 | 2026-11-21 | Added E5 (a Yard teaches what a sign says). Added `customSprite` as the third fix for half-width runs. | The user on the Hut and Settlement Yards: per-kind tells stay in both rooms; "Fences can be fixed by creating a custom sprite"; the Errand hut is bare on purpose; snow drifts are not wanted. |
 | 2026-11-21 | Added S10 (a variant keeps the rhythm) and S11 (lines make a place). | The user on the Yards: the Wise Fellow's stepping-stone path was "too spread out"; "Fences do a lot of work, so use them more". |
+| 2026-11-21 | P4 covers hut interiors; the room review gains a hut interior track. | The user: the room review should be lifted for hut interiors, from the Alchemy Lab and Wise Fellow work. |
