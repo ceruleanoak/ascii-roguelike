@@ -51,7 +51,7 @@ export const WeaponConversion = {
         enemy.stateMachine.declared.recover = { duration: 0.4, variant: 'retreat', speed: 0.5 };
       }
       // The swung weapon's own windup (Item `data.windup`) is the telegraph.
-      // Stacking the native Strike windup in front of it (the Goblin's 1.0 is
+      // Stacking the native Strike windup in front of it (the Goblin's 2.0 is
       // tuned for drawing a bow) made a melee goblin stand in reach of the
       // player for a full beat with no visual before even starting the swing.
       enemy.attackWindup = 0;
@@ -110,7 +110,7 @@ export const WeaponConversion = {
    * attackCooldown — a Goblin's 2.0 itemUseCooldown outlasting its 1.8
    * attackCooldown wasted every other cycle, doubling the gap between swings.
    * The next Strike's own windup also runs before it fires, so only the part
-   * of the wait it doesn't cover is added (a bow's 1.0 windup already covers
+   * of the wait it doesn't cover is added (a bow's 2.0 windup already covers
    * the Goblin's gap).
    */
   holdStrikeForWeapon(enemy) {
