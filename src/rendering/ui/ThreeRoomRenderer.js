@@ -1,5 +1,6 @@
 import { GRID } from '../../game/GameConfig.js';
 import { hasTorchLight } from './torchLight.js';
+import { shiverOffset } from '../effects/ShiverDraw.js';
 
 /**
  * ThreeRoomRenderer — the slot cluster's frames, and Death's arrival.
@@ -37,12 +38,6 @@ const FRAME_LIT_COLOR = '#b8b0a0';
 // (`#00ff0066`), in gray: REST says green, the source says nothing good.
 const HIGHLIGHT_COLOR = '#9a9a9a55';
 
-// The shiver on a lit frame. Two incommensurate sines per axis rather than one
-// — a single sine reads as a decorative wobble, where a beat that never quite
-// repeats reads as something not holding still. Roughly a pixel and a half at
-// full swing, which at a 16px cell is a tremor and not a bounce.
-const SHAKE_X = [{ rate: 37.1, amp: 0.9 }, { rate: 23.7, amp: 0.6 }];
-const SHAKE_Y = [{ rate: 41.3, amp: 0.7 }, { rate: 19.1, amp: 0.5 }];
 // Torchlight shows what the stone is: carrying a light (any Torch or Lantern
 // in a quick slot, or a lit Fire Berry — hasTorchLight) colors each frame
 // with its slot's REST role color, so the slots read as the same three
@@ -106,7 +101,7 @@ export class ThreeRoomRenderer {
   _drawFrames(game, room, lit) {
     const ctx = game.renderer.fgCtx;
     const cs = GRID.CELL_SIZE;
-    const shake = this._shake();
+    const shake = shiverOffset();
     const torchlit = hasTorchLight(game);
 
     ctx.save();
@@ -137,13 +132,6 @@ export class ThreeRoomRenderer {
     }
 
     ctx.restore();
-  }
-
-  /** The lit frame's offset this instant. See SHAKE_X / SHAKE_Y. */
-  _shake() {
-    const t = performance.now() / 1000;
-    const sum = (terms) => terms.reduce((a, s) => a + Math.sin(t * s.rate) * s.amp, 0);
-    return { x: sum(SHAKE_X), y: sum(SHAKE_Y) };
   }
 
   /**

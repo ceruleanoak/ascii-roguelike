@@ -21,6 +21,7 @@ import { drawUndead } from '../ui/UndeadRenderer.js';
 import { spectaclesTransform, spectaclesTransformString, isSpectaclesActive, CIPHER_FONT_SCALE, cipherFont } from '../../data/cipher.js';
 import { drawGolems } from '../ui/CompanionRenderers.js';
 import { drawFramePasses } from '../framePasses.js';
+import { shiverOffset, isAtCraftingSlot } from '../effects/ShiverDraw.js';
 
 const IDLE_ECHO_DURATION = 0.5;          // seconds — must match WorldEffectsSystem's IDLE_ECHO_DURATION
 const IDLE_ECHO_MAX_RADIUS = GRID.CELL_SIZE * 1.5;
@@ -61,9 +62,6 @@ export class RestRenderer {
       // so the border reads the room instead of asserting the shape itself.
       this.renderer.drawBorder(game.currentRoom.exits, chrome);
 
-      // Draw crafting station
-      this.renderController.craftingStation.render(game);
-
       this.renderer.backgroundDirty = false;
     }
 
@@ -84,7 +82,8 @@ export class RestRenderer {
     this._lastVacuumTime = _vpNow;
     if (game.currentRoom.exits.north) this._updateAndDrawVacuumParticles(_vpDt);
 
-    // Cycling upgrade animation on center crafting slot (updates every frame)
+    // Crafting station slots (every frame: the cycling center slot animates,
+    // and the slot the player stands at shivers)
     this.renderController.craftingStation.renderForeground(game);
 
     // Draw active quick slot's chest in white on foreground (updates every frame)
@@ -165,13 +164,18 @@ export class RestRenderer {
     _hintCandidates.sort((a, b) => a.dist - b.dist);
     const activeHint = _hintCandidates.length > 0 ? _hintCandidates[0].source : null;
 
+    // At the crafting station, the lit slot and the SPACE hint shiver together
+    // (SHIFT too, in ArrowKeyIndicators): the keys read as acting on the station.
+    const craftShiver = isAtCraftingSlot(nearestSlot) ? shiverOffset() : { x: 0, y: 0 };
+
     if (nearestSlot) {
       let highlightX, highlightY;
 
       // Determine highlight position based on slot type
-      if (nearestSlot.type.startsWith('crafting-')) {
-        highlightX = (nearestSlot.x + 1) * GRID.CELL_SIZE;
-        highlightY = nearestSlot.y * GRID.CELL_SIZE;
+      if (isAtCraftingSlot(nearestSlot)) {
+        // Shivers with the slot it lights (CraftingStation.renderForeground).
+        highlightX = (nearestSlot.x + 1) * GRID.CELL_SIZE + craftShiver.x;
+        highlightY = nearestSlot.y * GRID.CELL_SIZE + craftShiver.y;
       } else {
         highlightX = nearestSlot.x * GRID.CELL_SIZE;
         highlightY = nearestSlot.y * GRID.CELL_SIZE;
@@ -518,11 +522,13 @@ export class RestRenderer {
     const spaceRow = Math.floor(spaceY / GRID.CELL_SIZE);
     wasdCtx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
     wasdCtx.fillStyle = chrome;
-    wasdCtx.fillText('[', (wasdCenterCol - 6) * GRID.CELL_SIZE + half, spaceY);
-    wasdCtx.fillText(']', (wasdCenterCol + 6) * GRID.CELL_SIZE + half, spaceY);
+    const spaceX = wasdCenterCol * GRID.CELL_SIZE + half + craftShiver.x;
+    const spaceShiverY = spaceY + craftShiver.y;
+    wasdCtx.fillText('[', spaceX - 6 * GRID.CELL_SIZE, spaceShiverY);
+    wasdCtx.fillText(']', spaceX + 6 * GRID.CELL_SIZE, spaceShiverY);
     wasdCtx.font = `${spaceStyle.fontSize}px 'Unifont', monospace`;
     wasdCtx.fillStyle = spaceStyle.color;
-    wasdCtx.fillText('SPACE', wasdCenterCol * GRID.CELL_SIZE + half, spaceY);
+    wasdCtx.fillText('SPACE', spaceX, spaceShiverY);
 
     // INTERACT label right below SPACE — dissolves fully out then in when the
     // action changes (e.g. INTERACT -> PICK UP), same pixelated effect as CRAFT.
@@ -533,8 +539,8 @@ export class RestRenderer {
       text: spectaclesTransformString(spaceLabel.split('').join(' '), spectaclesOn),
       font: spaceLabelFont,
       color: '#666666',
-      x: wasdCenterCol * GRID.CELL_SIZE + half,
-      y: spaceY + GRID.CELL_SIZE * 1.3,
+      x: spaceX,
+      y: spaceShiverY + GRID.CELL_SIZE * 1.3,
     });
 
     wasdCtx.restore();
