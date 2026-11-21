@@ -11,6 +11,7 @@ import { drawErrandConfirmPanel } from './ErrandConfirmOverlay.js';
 import { drawTamedRats, drawGolems } from './CompanionRenderers.js';
 import { SLOT_CHROME } from '../../data/slotChrome.js';
 import { drawFramePasses } from '../framePasses.js';
+import { drawCustomSprite } from '../sprites/customSprites.js';
 
 /**
  * HutInteriorOverlay — picture-in-picture rendering for every floor Interior
@@ -213,6 +214,9 @@ export class HutInteriorOverlay {
           cx, cy, obj.data.deflectorElbow, renderData.color);
         continue;
       }
+      // A run that has to read as one piece (a pipe, a fence) draws its customSprite;
+      // its half-width glyph would read as dashes (rulebook G3).
+      if (drawCustomSprite(ctx, cx, cy, obj, renderData.color)) continue;
       ctx.fillStyle = renderData.color;
       ctx.fillText(renderData.char, cx, cy);
     }
