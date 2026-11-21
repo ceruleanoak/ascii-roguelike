@@ -1,6 +1,6 @@
 {
   "src/main.js": 168286,
-  "src/systems/RoomGenerator.js": 153240,
+  "src/systems/RoomGenerator.js": 151517,
   "src/entities/Enemy.js": 105269,
   "src/rendering/state/ExploreRenderer.js": 87726,
   "src/systems/CombatSystem.js": 98290,
