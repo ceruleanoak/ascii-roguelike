@@ -1,7 +1,7 @@
 import { GRID } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import {
-  YARD_PROPS, YARDS, YARD_HOSTILE_KINDS, YARD_ZONE_TINT, YARD_ZONE_PATH, YARD_ZONE_GRASS, COMMONS_MARK,
+  YARD_PROPS, YARDS, YARD_HOSTILE_KINDS, YARD_PEN_KINDS, YARD_PEN_CHANCE_HUT, YARD_ZONE_TINT, YARD_ZONE_PATH, YARD_ZONE_GRASS, COMMONS_MARK,
 } from '../data/yards.js';
 
 // Yard dressing for H (Hut) and S (Settlement) rooms. GLOSSARY.md: Yard, Footpath, Commons.
@@ -18,20 +18,25 @@ const CS = GRID.CELL_SIZE;
 const COLS = GRID.COLS;
 const ROWS = GRID.ROWS;
 // Approach cells just inside each exit, for Footpath routing and the reachability check.
-const EXIT_CELLS = {
+export const EXIT_CELLS = {
   south: { c: 15, r: ROWS - 3 }, north: { c: 15, r: 2 }, east: { c: COLS - 3, r: 15 }, west: { c: 2, r: 15 },
 };
 // Water and lava stay when a Settlement's scatter is cleared round its huts.
 const LIQUID_CHARS = new Set(['~', '≈']);
 
-const key = (c, r) => r * COLS + c;
+export const key = (c, r) => r * COLS + c;
 const cellOf = o => [Math.round(o.position.x / CS), Math.round(o.position.y / CS)];
-const randInt = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+export const randInt = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
 
 // The four exit lanes, near the edge. No solid prop stands in one.
 function inExitLane(c, r) {
   return (c >= 12 && c <= 18 && (r <= 4 || r >= ROWS - 5))
     || (r >= 12 && r <= 18 && (c <= 4 || c >= COLS - 5));
+}
+
+// Per-cell route costs, so a Footpath wanders like a worn track instead of drawing L's.
+export function trackNoise() {
+  return Array.from({ length: ROWS }, () => Array.from({ length: COLS }, () => 1 + Math.random() * 1.5));
 }
 
 function tintToward(color, tint) {
@@ -58,6 +63,7 @@ export function dressYards(room, { zone, abundant }) {
       if (yard.wants(where, abundant)) yard.put(minCol + dc, minRow + dr, prop);
     }
     approaches.push({ c: hut.doorPosition.col, r: hut.doorPosition.row + 1, kind: hut.hutKind });
+    if (YARD_PEN_KINDS.has(hut.hutKind) && (abundant || Math.random() < YARD_PEN_CHANCE_HUT)) yard.placePen(hut);
     if (!abundant) continue;
     if (hut.hutKind === 'shed') {
       // Tufts grown up round the Shed, thicker on the west, none on the door side.
@@ -88,7 +94,7 @@ export function dressYards(room, { zone, abundant }) {
   yard.keepExitsReachable(room, approaches);
 }
 
-class YardPlacer {
+export class YardPlacer {
   constructor(room, zone) {
     this.room = room;
     this.zone = zone;
@@ -98,8 +104,10 @@ class YardPlacer {
     this.placedObjs = [];      // in placement order, for the reachability rollback
     this.structural = new Set();
     this.solidScatter = new Set();
+    this.liquid = new Set();
     for (const o of room.backgroundObjects) {
       const [c, r] = cellOf(o);
+      if (LIQUID_CHARS.has(o.char)) this.liquid.add(key(c, r));
       if (o.structural) this.structural.add(key(c, r));
       else if (o.data?.solid) this.solidScatter.add(key(c, r));
     }
@@ -155,6 +163,7 @@ class YardPlacer {
   put(c, r, propName) {
     const prop = YARD_PROPS[propName];
     if (!this.inGrid(c, r) || this.room.collisionMap[r]?.[c] || this.structural.has(key(c, r))) return false;
+    if (this.liquid.has(key(c, r))) return false; // a Yard never fills in water
     if (prop.solid && inExitLane(c, r)) return false;
     // A 16px glyph spills into its east neighbour, so that cell must stay clear (rulebook G3),
     // both when the wide prop goes down and when anything later lands beside it.
@@ -194,7 +203,9 @@ class YardPlacer {
 
   // Dijkstra over open cells. With noise, the route wanders and cuts corners the
   // way a worn track does instead of drawing L's.
-  route(from, to, noise = null) {
+  // `fordCost`: a road may cross water at that cost per cell (the Footpath isn't
+  // laid on the water, so it resumes on the far bank); without it, water is a wall.
+  route(from, to, noise = null, fordCost = 0) {
     const dist = new Map([[key(from.c, from.r), 0]]);
     const prev = new Map();
     const open = [from];
@@ -207,9 +218,11 @@ class YardPlacer {
       if (cur.c === to.c && cur.r === to.r) break;
       for (const [dc, dr] of [[0, 1], [1, 0], [0, -1], [-1, 0]]) {
         const n = { c: cur.c + dc, r: cur.r + dr };
-        if (this.blocked(n.c, n.r) && !(n.c === to.c && n.r === to.r)) continue;
+        // A Footpath goes round water as it goes round anything solid, unless it may ford.
+        const wet = this.liquid.has(key(n.c, n.r));
+        if ((this.blocked(n.c, n.r) || (wet && !fordCost)) && !(n.c === to.c && n.r === to.r)) continue;
         const k = key(n.c, n.r);
-        const d = dist.get(key(cur.c, cur.r)) + (noise ? noise[n.r][n.c] : 1);
+        const d = dist.get(key(cur.c, cur.r)) + (noise ? noise[n.r][n.c] : 1) + (wet ? fordCost : 0);
         if (!dist.has(k) || d < dist.get(k)) {
           dist.set(k, d);
           prev.set(k, cur);
@@ -224,24 +237,22 @@ class YardPlacer {
   }
 
   layFootpaths(approaches, abundant) {
-    const noise = Array.from({ length: ROWS }, () => Array.from({ length: COLS }, () => 1 + Math.random() * 1.5));
+    const noise = trackNoise();
     const pathCells = new Map(); // cell key -> prop name
     const lay = (cells, kind, fadeFrom = Infinity) => {
       if (!cells) return;
-      if (kind === 'wise_man') {
-        // The Wise Fellow's Footpath is stepping stones, laid every other cell.
-        cells.forEach((p, i) => { if (i % 2 === 0 && i < 9) pathCells.set(key(p.c, p.r), 'step'); });
-        return;
-      }
       if (YARD_HOSTILE_KINDS.has(kind)) {
         // Gone to ruin: a few broken cells, then nothing, with something cut across it.
         cells.slice(0, 6).forEach((p, i) => { if (i % 2 === 0) pathCells.set(key(p.c, p.r), 'footpath'); });
         if (cells[3]) pathCells.set(key(cells[3].c, cells[3].r), kind === 'witch' ? 'scraps' : 'claw');
         return;
       }
+      // The Wise Fellow's Footpath is stepping stones, in the same rhythm as every
+      // other Footpath: a variant changes the glyph, never the spacing.
+      const prop = kind === 'wise_man' ? 'step' : 'footpath';
       cells.forEach((p, i) => {
         if (i > fadeFrom && i % 2) return; // thins out as it leaves the yard
-        if (!pathCells.has(key(p.c, p.r))) pathCells.set(key(p.c, p.r), 'footpath');
+        if (!pathCells.has(key(p.c, p.r))) pathCells.set(key(p.c, p.r), prop);
       });
     };
 
@@ -301,6 +312,45 @@ class YardPlacer {
       if (this.blocked(c, r) || pathCells.has(key(c, r)) || this.placed.has(key(c, r))) continue;
       if (this.put(c, r, mark)) return;
     }
+  }
+
+  // A straight fence run: posts at its ends, rails between. A cell that already
+  // holds a prop is left alone, so the run breaks round it; `gaps` drops a few rails
+  // more, and `gate` leaves one cell open on purpose. The run stops short at water,
+  // a wall or anything solid: a fence ends at the water's edge, it never fills it in.
+  fenceRun(cells, { startPost = true, endPost = true, gaps = 0, gate = -1 } = {}) {
+    const stop = cells.findIndex(({ c, r }) => this.liquid.has(key(c, r)) || this.blocked(c, r));
+    if (stop >= 0) { cells = cells.slice(0, stop); endPost = true; }
+    if (!cells.length) return;
+    const horizontal = cells.length < 2 || cells[0].r === cells[1].r;
+    cells.forEach(({ c, r }, i) => {
+      const post = (i === 0 && startPost) || (i === cells.length - 1 && endPost);
+      if (i === gate || (!post && Math.random() < gaps) || this.placed.has(key(c, r))) return;
+      this.put(c, r, post ? 'post' : horizontal ? 'rail' : 'vrail');
+    });
+  }
+
+  // A pen off the side wall where the hut's Yard props stand, so it fences them in:
+  // rails out from the wall at the back and the front, a side of rails, a post at
+  // each outer corner, and a gate left in the front rail.
+  placePen(hut) {
+    const { minCol, maxCol, minRow, maxRow } = hut.exteriorBounds;
+    const count = (c0, c1) => {
+      let n = 0;
+      for (let r = minRow; r <= maxRow; r++) for (let c = c0; c <= c1; c++) if (this.placed.has(key(c, r))) n++;
+      return n;
+    };
+    const west = count(minCol - 3, minCol - 1);
+    const east = count(maxCol + 1, maxCol + 3);
+    const side = west === east ? (Math.random() < 0.5 ? -1 : 1) : (west > east ? -1 : 1);
+    const wallCol = side < 0 ? minCol - 1 : maxCol + 1;
+    const span = [0, 1, 2, 3].map(i => wallCol + side * i); // from the wall out to the fence side
+    const fenceCol = span[3];
+    this.fenceRun(span.map(c => ({ c, r: minRow })), { startPost: false });
+    const sideCells = [];
+    for (let r = minRow + 1; r < maxRow; r++) sideCells.push({ c: fenceCol, r });
+    this.fenceRun(sideCells, { startPost: false, endPost: false });
+    this.fenceRun([...span].reverse().map(c => ({ c, r: maxRow })), { endPost: false, gate: randInt(1, 3) });
   }
 
   // Green: a worked plot beside a hut. One rail missing, one corner post down, open to the south.

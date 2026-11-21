@@ -59,7 +59,8 @@ export const YARDS = {
   // Spills run downhill from the door; a bucket of rinse water at the corner.
   alchemy: [[3, 5, 'stainP', 'hut'], [1, 6, 'stainG', 'hut'], [5, 3, 'shards', 'hut'],
     [4, 7, 'stainO', 'settlement'], [0, 7, 'stainP', 'settlement'], [5, 4, 'bucket', 'settlement']],
-  // The stepping stones are its Footpath (yardDressing lays them); a standing stone beside
+  // The stepping stones are its Footpath (yardDressing lays them, as close-set as any
+  // other Footpath); a standing stone beside
   // them, and in a Settlement a second off the hut's far side.
   wise_man: [[4, 6, 'standing', 'hut'], [-2, 0, 'standing', 'settlement']],
   // Nets drying on the sunny side; the boat only when there is water to row on.
@@ -83,6 +84,11 @@ export const YARDS = {
   wizard: [[-3, 4, 'rune', 'hut'], [-5, 6, 'rune', 'hut'], [-1, 6, 'rune', 'hut'],
     [-3, 8, 'rune', 'hut']],
 };
+
+// Working huts fence in the side of their Yard where their props stand: always in a
+// Settlement, often at a lone Hut. Fences read a place as kept before any prop does.
+export const YARD_PEN_KINDS = new Set(['press', 'alchemy', 'fisherman', 'weapons_master', 'shopkeeper']);
+export const YARD_PEN_CHANCE_HUT = 0.65;
 
 // Hostile huts get a Footpath that has gone to ruin: a few broken cells, and
 // something cut across it. Every hut has a Footpath, so a path never gives away
