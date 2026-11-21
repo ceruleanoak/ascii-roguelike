@@ -71,6 +71,7 @@ Silhouette is the outline left when every cell of a thing is one flat colour.
 | E2 | **The occupant shows.** The building has at least one feature only this occupant would have. | Name who lives here from the feature alone. | Provisional | Witch's legs |
 | E3 | **The door stays findable.** However strange the building, its entrance reads as one. | Find the door in a screenshot without being told. Deliberately hidden entries are named here: Cavern (behind a Bombable Rock). | Provisional | Dungeon faces keep `∩` |
 | E4 | **Exteriors have no interaction minimum.** | Nothing to test. This stops I2 being applied here. | Ratified | The user's brief |
+| E5 | **A Yard teaches what a sign says.** A building kind's Yard props stand outside it wherever it appears, signed or not. In a Settlement the sign is the quick read and the Yard sits beside it; a lone Hut has no sign, so it is read from its Yard alone. A kind may be bare on purpose (the Errand hut). | Name each lone Hut's occupant from its Yard. Its props in an H room are a subset of the same kind's props in an S room. | Ratified | The user, 2026-11-21: "In Settlement, we have letters as quick reads, but including the tells teaches for H room. So keep."; the Errand hut "bare on purpose" |
 
 ---
 
@@ -134,6 +135,10 @@ each works in only one renderer:
 - `fillCell` draws a solid cell, but only `ExploreRenderer.js:246` honours it. `NeutralRenderer`
   doesn't.
 - `coveredBy` is honoured only by `NeutralRenderer`.
+- A `customSprite` (`src/rendering/sprites/customSprites.js`) draws the piece as filled rects
+  that span the cell and meet its neighbours. Use it for a run that must read as one thing, such
+  as a fence or palisade (`fenceSprite.js`). The glyph stays as the object's `char` for anything
+  that reads it.
 
 `☰` is full width too, but it's the Sandwich, so G2 rules it out.
 
@@ -253,24 +258,25 @@ the south lane at cols 14-16, rows 21-28 is clear.
 
 ## 9. Scorecard
 
-Scored 2026-11-01 from code and cell dumps. **Pass**, **Part**, **Fail**; a dash means not
+Scored 2026-11-01 from code and cell dumps. Exterior E2 rescored 2026-11-21 for the Yards
+(`src/data/yards.js`), from H and S room screenshots and a Rules and Art review. **Pass**, **Part**, **Fail**; a dash means not
 applicable. The I2 number counts separate interactive objects.
 
 **Exteriors**
 
 | Building | Outline | E1 | E2 | E3 | Note |
 |----------|---------|----|----|----|------|
-| Shop | 5×5 stamp | Fail | Fail | Pass | |
-| Alchemy Lab | 5×5 stamp | Fail | Fail | Pass | |
-| Press hut | 5×5 stamp | Fail | Fail | Pass | |
-| Wise Fellow | 5×5 stamp | Fail | Fail | Pass | |
-| Fisherman | 5×5 stamp | Fail | Fail | Pass | |
-| Weapons Master | 5×5 stamp | Fail | Fail | Pass | |
-| Errand hut | 5×5 stamp | Fail | Fail | Pass | |
-| Wizard | 5×5 stamp | Fail | Fail | Pass | |
-| Enemy hut | 5×5 stamp | Fail | Fail | Pass | |
-| Witch | Stamp on legs (`ⲗ`) | Part | Pass | Pass | Only outline that differs by occupant |
-| Shed | 3×3 with `▄` | Part | Fail | Pass | Differs by size, not by anatomy |
+| Shop | 5×5 stamp | Fail | Part | Pass | Yard: delivery crates `▯` on one side. Reads as storage, not yet as a shop |
+| Alchemy Lab | 5×5 stamp | Fail | Pass | Pass | Yard: coloured spills `∘` down from the door, shards, a rinse bucket |
+| Press hut | 5×5 stamp | Fail | Pass | Pass | Yard: woodpile `≣` off the west wall, splitting block `⊼` |
+| Wise Fellow | 5×5 stamp | Fail | Pass | Pass | Yard: stepping-stone Footpath `◌` with a standing stone `⍊` beside it |
+| Fisherman | 5×5 stamp | Fail | Part | Pass | Yard: nets `⌗`; the boat `◠◠` only beside water. Dry rooms get an oar, which is weak |
+| Weapons Master | 5×5 stamp | Fail | Pass | Pass | Yard: target `⦾` and practice post `ǁ` on one row off the door step |
+| Errand hut | 5×5 stamp | Fail | Exempt | Pass | Bare on purpose (user, 2026-11-21) |
+| Wizard | 5×5 stamp | Fail | Pass | Pass | Yard: a ring of runes `ᚼ` round an empty centre |
+| Enemy hut | 5×5 stamp | Fail | Pass | Pass | Yard: claw marks `⫽` trailing off from the door, a ruined Footpath |
+| Witch | Stamp on legs (`ⲗ`) | Part | Pass | Pass | Only outline that differs by occupant. Its Yard is one heap of scraps; the legs carry E2 |
+| Shed | 3×3 with `▄` | Part | Part | Pass | Differs by size, not by anatomy. Yard: cart tracks `⁚`; in a Settlement, grown over `⁞` |
 | Maze | 19×19 `≡` box | Part | Fail | Pass | A box; the mini-maze is `#3a2255`/`#1a0f2e` decoration |
 | Dungeons (5 zones) | Authored per-zone face | Pass | Pass | Pass | Best tier. All 80 ornament cells render gray: bug #517 |
 | Cavern | Natural rock cluster | Pass | Part | Exempt | The hidden door is the point |
@@ -356,3 +362,4 @@ to do.
 | 2026-11-20 | Amended S9: from below, the top inside the cliff is unseen. | The user: "the inside of the mountain… should be black/not rendered (including player characters) when the player is in layer 0". |
 | 2026-11-20 | Added S8 (the perimeter carries the terrain), S9 (height reads by what falls away), G7 (on is colour, off is the floor) and P4 (authored rooms go through `room-review-schematic.md`). | The user on the Zenith's second pass: the base not organic enough, fog for the upper level, the white-on-colour energy not visible, grass dressing round the base. |
 | 2026-11-20 | Added S7 (positions tell the story) and G6 (markers are glyphs, never boxes; "off" states differ in shape). Added the Authored letter rooms scorecard, which brings authored set pieces in EXPLORE letter rooms into scope for §2 and §6. | The user on the Zenith's first build: "this room is ugly and breaks design rules such as using bordered boxes", and "put some real appeal effort into the positions for memorability". |
+| 2026-11-21 | Added E5 (a Yard teaches what a sign says). Added `customSprite` as the third fix for half-width runs. | The user on the Hut and Settlement Yards: per-kind tells stay in both rooms; "Fences can be fixed by creating a custom sprite"; the Errand hut is bare on purpose; snow drifts are not wanted. |
