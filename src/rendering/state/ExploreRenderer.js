@@ -50,7 +50,7 @@ import { drawManaGems } from '../effects/ManaGemRenderer.js';
 import { drawSparkle, drawGlitterSparkles, drawSunkenGlints, GRASS_SPARKLE_SPEED } from '../effects/SparkleEffects.js';
 import { drawWhirlpool } from '../effects/WhirlpoolEffects.js';
 import { stepConcealmentAlpha } from '../../systems/WorldEffectsSystem.js';
-import { drawFracturedRock } from '../sprites/fracturedRockSprite.js';
+import { drawCustomSprite } from '../sprites/customSprites.js';
 import { renderMawShadow, chargedColor, renderChargedObjects } from '../AscentRenderHelpers.js';
 import { drawChargeTelegraph, drawLeapTelegraph, drawFrostLungeTelegraph } from '../effects/LungeTelegraphDraw.js';
 import { ReflectShieldMechanic } from '../../entities/enemyMechanics/ReflectShieldMechanic.js';
@@ -277,9 +277,7 @@ export class ExploreRenderer {
         // with the visible hypotenuse and legs.
         if (obj.data?.boulderDeflector) {
           this._drawDeflectorTriangle(this.renderer.bgCtx, x, y, obj.data.deflectorElbow, objColor);
-        } else if (obj.data?.customSprite === 'fracturedRock') {
-          drawFracturedRock(this.renderer.bgCtx, x, y, obj.damageStage, objColor);
-        } else {
+        } else if (!drawCustomSprite(this.renderer.bgCtx, x, y, obj, objColor)) {
           this.renderer.bgCtx.fillText(obj.data?.showsAnimationChar ? obj.animationChar : obj.char, x, y);
         }
       }
@@ -357,15 +355,13 @@ export class ExploreRenderer {
         const renderData = obj.getRenderPosition();
         const rx = renderData.x + GRID.CELL_SIZE / 2 + obj.animationOffset.x;
         const ry = renderData.y + GRID.CELL_SIZE / 2 + obj.animationOffset.y;
-        // Deflectors and Fractured Rock render at custom, larger-than-glyph
+        // Deflectors and custom sprites render at custom, larger-than-glyph
         // sizes (see the static draw pass above) — routing them through the
         // plain drawEntity glyph fallback here made them visibly shrink to
         // normal character size for the duration of any hit/interact animation.
         if (obj.data?.boulderDeflector) {
           this._drawDeflectorTriangle(this.renderer.fgCtx, rx, ry, obj.data.deflectorElbow, renderData.color);
-        } else if (obj.data?.customSprite === 'fracturedRock') {
-          drawFracturedRock(this.renderer.fgCtx, rx, ry, obj.damageStage, renderData.color);
-        } else {
+        } else if (!drawCustomSprite(this.renderer.fgCtx, rx, ry, obj, renderData.color)) {
           this.renderer.drawEntity(rx, ry, renderData.char, renderData.color);
         }
       }
