@@ -50,6 +50,7 @@ import { drawManaGems } from '../effects/ManaGemRenderer.js';
 import { drawSparkle, drawGlitterSparkles, drawSunkenGlints, GRASS_SPARKLE_SPEED } from '../effects/SparkleEffects.js';
 import { drawWhirlpool } from '../effects/WhirlpoolEffects.js';
 import { stepConcealmentAlpha } from '../../systems/WorldEffectsSystem.js';
+import { isOnTallGrass, playerConcealAlpha as grassPlayerConcealAlpha } from '../effects/GrassConcealment.js';
 import { drawCustomSprite } from '../sprites/customSprites.js';
 import { renderMawShadow, chargedColor, renderChargedObjects } from '../AscentRenderHelpers.js';
 import { drawChargeTelegraph, drawLeapTelegraph, drawFrostLungeTelegraph } from '../effects/LungeTelegraphDraw.js';
@@ -748,40 +749,11 @@ export class ExploreRenderer {
     }
   }
 
-  // Returns true if (x, y) sits inside a tall-grass cluster dense enough to
-  // act as cover. RoomGenerator emits two BackgroundObject instances per
-  // visual blade (6px apart, so each blade can straddle two grid cells), so
-  // we count raw '|' instances in the standing cell plus its 4 cardinal
-  // neighbours and require ≥ 6 — ~3 visual blades minimum. Same rule drives
-  // grassStealth detection and universal player/item/enemy concealment.
-  // Surface tall-grass fade for the player glyph (Frame Pass `playerGlyph`):
-  // fades rapidly in/out so stepping into cover doesn't pop the sprite.
-  // Lives here, beside _isOnTallGrass, so framePasses.js stays a pure
-  // rendering module with no system imports.
+  // Surface tall-grass fade for the player glyph (Frame Pass `playerGlyph`;
+  // GrassConcealment.js). A method so framePasses.js stays a pure rendering
+  // module with no system imports.
   playerConcealAlpha(game) {
-    const hidden = this._isOnTallGrass(game, game.player.position.x, game.player.position.y);
-    return stepConcealmentAlpha(game.player, !hidden);
-  }
-
-  _isOnTallGrass(game, x, y) {
-    const bgObjects = game._activeBackgroundObjects
-      ? game._activeBackgroundObjects()
-      : (game.currentRoom?.backgroundObjects ?? []);
-    const cs = GRID.CELL_SIZE;
-    const cx = Math.floor(x / cs);
-    const cy = Math.floor(y / cs);
-    let onCell = 0;
-    let nearby = 0;
-    for (const obj of bgObjects) {
-      if (obj.destroyed || obj.char !== '|') continue;
-      const ox = Math.floor(obj.position.x / cs);
-      const oy = Math.floor(obj.position.y / cs);
-      const dx = Math.abs(ox - cx);
-      const dy = Math.abs(oy - cy);
-      if (dx === 0 && dy === 0) onCell++;
-      if (dx + dy <= 1) nearby++;
-    }
-    return onCell > 0 && nearby >= 6;
+    return grassPlayerConcealAlpha(game);
   }
 
   // Draws a deflector as a filled right triangle centered at (cx, cy). The
@@ -861,7 +833,7 @@ export class ExploreRenderer {
       if (isHidingTelegraph) {
         concealAlpha = sniperHidingConcealAlpha(enemy);
       } else {
-        const grassHidden = applyGrass && this._isOnTallGrass(game, enemy.position.x, enemy.position.y);
+        const grassHidden = applyGrass && isOnTallGrass(game, enemy.position.x, enemy.position.y);
         concealAlpha = stepConcealmentAlpha(enemy, !(grassHidden || invisible));
       }
       if (concealAlpha < 0.005) return;
@@ -1853,7 +1825,7 @@ export class ExploreRenderer {
       const cx = ingredient.position.x + GRID.CELL_SIZE / 2;
       const cy = ingredient.position.y + GRID.CELL_SIZE / 2 + bobY + bounceY;
       // Tall-grass concealment is a no-op in interiors (no tall grass) so the helper is safe to share.
-      if (this._isOnTallGrass(game, ingredient.position.x, ingredient.position.y)) {
+      if (isOnTallGrass(game, ingredient.position.x, ingredient.position.y)) {
         const now = performance.now() / 1000;
         if (ingredient._concealedSince === undefined) ingredient._concealedSince = now;
         if (now - ingredient._concealedSince >= 3) drawSparkle(this.renderer, cx, cy, GRASS_SPARKLE_SPEED);
@@ -1873,7 +1845,7 @@ export class ExploreRenderer {
       const cx = item.position.x + GRID.CELL_SIZE / 2;
       const cy = item.position.y + GRID.CELL_SIZE / 2;
       // Tall-grass concealment is a no-op in interiors (no tall grass) so the helper is safe to share.
-      if (this._isOnTallGrass(game, item.position.x, item.position.y)) {
+      if (isOnTallGrass(game, item.position.x, item.position.y)) {
         const now = performance.now() / 1000;
         if (item._concealedSince === undefined) item._concealedSince = now;
         if (now - item._concealedSince >= 3) drawSparkle(this.renderer, cx, cy, GRASS_SPARKLE_SPEED);
