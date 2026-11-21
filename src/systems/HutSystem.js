@@ -15,6 +15,7 @@ import { WizardNPC } from '../entities/WizardNPC.js';
 import { AlchemistNPC } from '../entities/AlchemistNPC.js';
 import { isInteriorActive } from './PlaneSystem.js';
 import { HOT_WATER_CHAR } from '../data/alchemy.js';
+import { LAB_MAP, LAB_PROPS, LAB_MUD_COLOR } from '../data/alchemyLab.js';
 import { hasKeyItem } from './keyItems.js';
 
 // A Stick Bundle turns up in most huts, so a run that needs firewood or a
@@ -164,44 +165,54 @@ export class HutSystem {
       backgroundObjects.push(fireplace);
     }
 
-    // Alchemy Hut: Water Trough (2x2, top-left), Mud Pit (2x2, top-right),
-    // Cauldron (center, white), Condenser (lower-left, purple), 2 pre-placed
-    // Empty Bottles. Stations are read by AlchemySystem via proximity to
-    // these chars.
+    // Alchemy Lab: laid out from LAB_MAP (src/data/alchemyLab.js), whose header
+    // comment draws the room and says why each part stands where it does. The
+    // stations keep the glyphs AlchemySystem finds them by ('≈' trough, 'Ω'
+    // cauldron, 'Ψ' condenser). Like the Wise Fellow's hut it skips the
+    // press/fireplace rolls above, the random decor and the bread roll, so nothing
+    // random lands in the composition; its two Empty Bottles are seeded below.
+    const labBottleCells = [];
+    let labStickCell = null;
     if (hutKind === 'alchemy') {
-      // Create 2x2 trough with still water appearance
-      for (let ty = 0; ty < 2; ty++) {
-        for (let tx = 0; tx < 2; tx++) {
-          const trough = new BackgroundObject('≈', (2 + tx) * GRID.CELL_SIZE, (2 + ty) * GRID.CELL_SIZE, { typeId: 'water_trough' });
+      const CS = GRID.CELL_SIZE;
+      LAB_MAP.forEach((line, row) => [...line].forEach((cell, col) => {
+        const x = col * CS, y = row * CS;
+        if (cell === 'T') {
+          const trough = new BackgroundObject('≈', x, y, { typeId: 'water_trough' });
           trough.isTrough = true;
           trough.troughState = 'normal'; // 'normal' | 'heated' | 'poisoned' (WaterLavaHitMechanic)
-          // Gentle still water: light blue with subtle white tint for reflection
           trough.color = '#5588dd';
           trough.animationColor = '#5588dd';
           backgroundObjects.push(trough);
+        } else if (cell === 'M') {
+          // Plain wet mud, so everything that knows mud already knows the pit: an
+          // armed Empty Bottle fills a Bottle of Mud from it
+          // (AlchemySystem._nearWorldLiquid), GETMUD reaches it, and it slows
+          // whoever wades in. The Bottle of Mud brews the Primal Potion here.
+          const mud = BackgroundObject.createVariant('mud_wet', x, y);
+          mud.color = LAB_MUD_COLOR;
+          mud.animationColor = LAB_MUD_COLOR;
+          backgroundObjects.push(mud);
+        } else if (cell === 'C' || cell === 'D') {
+          const station = new BackgroundObject(cell === 'C' ? 'Ω' : 'Ψ', x, y);
+          station.color = cell === 'C' ? '#ffffff' : '#cc88ff';
+          station.animationColor = station.color; // what actually renders (getRenderPosition)
+          backgroundObjects.push(station);
+        } else if (cell === 'B') {
+          labBottleCells.push({ col, row });
+        } else if (cell === 'S') {
+          labStickCell = { col, row };
+        } else if (LAB_PROPS[cell]) {
+          const prop = LAB_PROPS[cell];
+          const overrides = { name: prop.name, color: prop.color, solid: prop.solid };
+          if (prop.solid) overrides.bulletInteraction = 'block';
+          if (prop.sprite) overrides.customSprite = prop.sprite;
+          const obj = new BackgroundObject(prop.char, x, y, { typeId: 'yard_prop', variantOverrides: overrides });
+          obj.color = prop.color;
+          obj.animationColor = prop.color;
+          backgroundObjects.push(obj);
         }
-      }
-
-      // Mud Pit (2x2, top-right): the trough's counterpart across the room.
-      // Plain wet mud tiles, so everything that knows mud already knows the
-      // pit: an armed Empty Bottle fills a Bottle of Mud from it
-      // (AlchemySystem._nearWorldLiquid), GETMUD reaches it, and it slows
-      // whoever wades in. The Bottle of Mud brews the Primal Potion here.
-      for (let my = 0; my < 2; my++) {
-        for (let mx = 0; mx < 2; mx++) {
-          backgroundObjects.push(BackgroundObject.createVariant('mud_wet', (cols - 4 + mx) * GRID.CELL_SIZE, (2 + my) * GRID.CELL_SIZE));
-        }
-      }
-
-      const cauldron = new BackgroundObject('Ω', Math.floor(cols / 2) * GRID.CELL_SIZE, Math.floor(rows / 2) * GRID.CELL_SIZE);
-      cauldron.color = '#ffffff';
-      cauldron.animationColor = '#ffffff'; // what actually renders (getRenderPosition)
-      backgroundObjects.push(cauldron);
-
-      const condenser = new BackgroundObject('Ψ', 2 * GRID.CELL_SIZE, (rows - 4) * GRID.CELL_SIZE);
-      condenser.color = '#cc88ff';
-      condenser.animationColor = '#cc88ff';
-      backgroundObjects.push(condenser);
+      }));
     }
 
     // Shopkeeper stall: a full-width Counter one row below the north wall
@@ -243,7 +254,7 @@ export class HutSystem {
 
     // Interior floor decor (very sparse — hut is small)
     const decorChars = ['n', '*', '8', '%'];
-    const decorCount = hutKind === 'wise_man' ? 0 : 1 + Math.floor(Math.random() * 3);
+    const decorCount = (hutKind === 'wise_man' || hutKind === 'alchemy') ? 0 : 1 + Math.floor(Math.random() * 3);
     for (let i = 0; i < decorCount; i++) {
       for (let attempt = 0; attempt < 12; attempt++) {
         const col = 2 + Math.floor(Math.random() * (cols - 4));
@@ -414,15 +425,10 @@ export class HutSystem {
       const centerRow = Math.floor(rows / 2);
       breadItems.push(new Item('⊚', centerCol * GRID.CELL_SIZE, centerRow * GRID.CELL_SIZE));
     } else if (hutKind === 'alchemy') {
-      // 2 pre-placed Empty Bottles so the player can start brewing without
-      // already owning one.
-      let placed = 0;
-      for (let attempt = 0; placed < 2 && attempt < 24; attempt++) {
-        const col = 2 + Math.floor(Math.random() * (cols - 4));
-        const row = 2 + Math.floor(Math.random() * (rows - 5));
-        if (cellOccupied(col, row, breadItems)) continue;
+      // Two Empty Bottles set down at the trough's lip, so a first visit can start
+      // brewing, and finds the bottle beside the water it is for.
+      for (const { col, row } of labBottleCells) {
         breadItems.push(new Item('B', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE));
-        placed++;
       }
     } else if (hutKind !== 'witch' && hutKind !== 'shopkeeper' && hutKind !== 'wise_man' && Math.random() < 0.40) {
       // Shopkeeper excluded: a free loaf on the floor of a paid shop reads
@@ -442,7 +448,11 @@ export class HutSystem {
     // Stick Bundle: one cell, kept clear of everything placed above. SPACE
     // beside it picks it up (InteractionSystem.openContainer).
     if (!NO_STICK_BUNDLE_KINDS.has(hutKind) && Math.random() < STICK_BUNDLE_CHANCE) {
-      for (let attempt = 0; attempt < 16; attempt++) {
+      // The Lab lays its bundle by the fire (LAB_MAP 'S'); other huts drop it anywhere free.
+      if (labStickCell) {
+        backgroundObjects.push(new BackgroundObject(STICK_BUNDLE_CHAR, labStickCell.col * GRID.CELL_SIZE, labStickCell.row * GRID.CELL_SIZE));
+      }
+      for (let attempt = 0; !labStickCell && attempt < 16; attempt++) {
         const col = 2 + Math.floor(Math.random() * (cols - 4));
         const row = 2 + Math.floor(Math.random() * (rows - 5));
         if (cellOccupied(col, row, breadItems)) continue;
