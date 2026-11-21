@@ -47,6 +47,17 @@ const COMPANION_SHOULDER_SNAP_DIST = GRID.CELL_SIZE * 0.25;
 const PERCH_CHARS = new Set(['&', 'Y']); // tree, stump
 const PERCH_SEARCH_RADIUS = GRID.CELL_SIZE * 9;
 const PERCH_OFFSET = GRID.CELL_SIZE * 0.6; // sit slightly above the tree glyph
+// Fence pieces (yard props by name, data/yards.js) are perches too: a crow
+// lands on a post or along a rail, sitting just on top of the low wood.
+const FENCE_PERCH_PROPS = new Set(['post', 'rail', 'vrail']);
+const FENCE_PERCH_OFFSET = GRID.CELL_SIZE * 0.3;
+
+// How far above an object a crow sits on it, or null if it isn't a perch.
+function perchOffsetFor(obj) {
+  if (PERCH_CHARS.has(obj.char)) return PERCH_OFFSET;
+  if (obj.typeId === 'yard_prop' && FENCE_PERCH_PROPS.has(obj.data?.name)) return FENCE_PERCH_OFFSET;
+  return null;
+}
 
 // Dive-attack tuning (companions). Coordinated by main.js: only ONE companion
 // dives at a time, after a sustained orbit telegraph. Crows keep orbiting
@@ -589,9 +600,10 @@ export class Crow {
 
     for (const obj of backgroundObjects) {
       if (!obj || obj.destroyed) continue;
-      if (!PERCH_CHARS.has(obj.char)) continue;
+      const offset = perchOffsetFor(obj);
+      if (offset === null) continue;
       const perchX = obj.position.x;
-      const perchY = obj.position.y - PERCH_OFFSET;
+      const perchY = obj.position.y - offset;
       if (isTaken(perchX, perchY)) continue;
       const dx = obj.position.x - this.position.x;
       const dy = obj.position.y - this.position.y;
