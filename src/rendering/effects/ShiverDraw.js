@@ -1,7 +1,7 @@
 /**
  * The shiver: a sub-cell jitter that marks something the player can act on
- * right now (the THREE room's lit frame, the REST crafting slot under the
- * player, and the SPACE / SHIFT hints that act on it).
+ * right now (the THREE room's lit frame). REST's equipped slots use the calmer
+ * slotShiverOffset below.
  *
  * Two incommensurate sines per axis rather than one. A single sine reads as a
  * decorative wobble, where a beat that never quite repeats reads as something
@@ -19,9 +19,29 @@ export function shiverOffset(now = performance.now()) {
 }
 
 /**
- * True while the player stands at a REST crafting slot — the moment the
- * station, and the SPACE / SHIFT hints that act on it, shiver together.
+ * REST's slot shiver: the equipped slot the player stands at, and the SPACE /
+ * SHIFT words, tremble together. One regular sine, horizontal only, snapped to
+ * whole pixels: a steady buzz rather than the THREE room's restless beat, and
+ * crisp glyphs instead of sub-pixel smear.
  */
-export function isAtCraftingSlot(nearestSlot) {
-  return !!nearestSlot && nearestSlot.type.startsWith('crafting-');
+const SLOT_SHIVER_HZ = 6;
+const SLOT_SHIVER_PX = 1;
+
+/** The REST slot shiver's offset this instant, in whole pixels. */
+export function slotShiverOffset(now = performance.now()) {
+  const x = Math.round(Math.sin((now / 1000) * SLOT_SHIVER_HZ * 2 * Math.PI) * SLOT_SHIVER_PX);
+  return { x, y: 0 };
+}
+
+/**
+ * True while the player stands at one of REST's numbered equipped slots — the
+ * three weapon chests (1-3) or a consumable slot (4-8).
+ */
+export function isAtEquippedSlot(nearestSlot) {
+  return !!nearestSlot && /^equipment-(chest|consumable)\d$/.test(nearestSlot.type);
+}
+
+/** The slot shiver while at an equipped slot, else no offset. */
+export function equippedSlotShiver(nearestSlot) {
+  return isAtEquippedSlot(nearestSlot) ? slotShiverOffset() : { x: 0, y: 0 };
 }

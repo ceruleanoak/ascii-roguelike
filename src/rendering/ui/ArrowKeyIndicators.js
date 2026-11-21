@@ -12,7 +12,7 @@
 import { GRID, COLORS } from '../../game/GameConfig.js';
 import { spectaclesTransformString, isSpectaclesActive, CIPHER_FONT_SCALE } from '../../data/cipher.js';
 import { TextSwapDissolve } from '../effects/TextEffects.js';
-import { shiverOffset, isAtCraftingSlot } from '../effects/ShiverDraw.js';
+import { equippedSlotShiver } from '../effects/ShiverDraw.js';
 
 export class ArrowKeyIndicators {
   constructor(renderer) {
@@ -160,15 +160,13 @@ export class ArrowKeyIndicators {
     const shiftY = dodgeY + GRID.CELL_SIZE * 1.5;
     ctx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
     ctx.fillStyle = chrome;
-    // At the crafting station SHIFT shivers with the lit slot (RestRenderer).
-    const shiver = isAtCraftingSlot(nearestSlot) ? shiverOffset() : { x: 0, y: 0 };
-    const shiftX = centerCol * GRID.CELL_SIZE + half + shiver.x;
-    const shiftShiverY = shiftY + shiver.y;
-    ctx.fillText('[', shiftX - 6 * GRID.CELL_SIZE, shiftShiverY);
-    ctx.fillText(']', shiftX + 6 * GRID.CELL_SIZE, shiftShiverY);
+    ctx.fillText('[', (centerCol - 6) * GRID.CELL_SIZE + half, shiftY);
+    ctx.fillText(']', (centerCol + 6) * GRID.CELL_SIZE + half, shiftY);
     ctx.font = `${shiftStyle.fontSize}px 'Unifont', monospace`;
     ctx.fillStyle = shiftStyle.color;
-    ctx.fillText('SHIFT', shiftX, shiftShiverY);
+    // At an equipped slot the SHIFT word shivers with the slot (RestRenderer).
+    const shiver = equippedSlotShiver(nearestSlot);
+    ctx.fillText('SHIFT', centerCol * GRID.CELL_SIZE + half + shiver.x, shiftY + shiver.y);
 
     // THROW label right below SHIFT — dissolves fully out then in when the
     // action changes (e.g. THROW -> DISMANTLE), same pixelated effect as CRAFT.
@@ -179,8 +177,8 @@ export class ArrowKeyIndicators {
       text: spectaclesTransformString(shiftLabel.split('').join(' '), spectaclesOn),
       font: shiftLabelFont,
       color: '#666666',
-      x: shiftX,
-      y: shiftShiverY + GRID.CELL_SIZE * 1.3,
+      x: centerCol * GRID.CELL_SIZE + half,
+      y: shiftY + GRID.CELL_SIZE * 1.3,
     });
 
     ctx.restore();

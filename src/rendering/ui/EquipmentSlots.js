@@ -13,7 +13,7 @@
  * before drawing each glyph once (bug #472).
  */
 
-import { EQUIPMENT } from '../../game/GameConfig.js';
+import { EQUIPMENT, GRID } from '../../game/GameConfig.js';
 import { oilAppliesTo } from '../../entities/Item.js';
 
 export class EquipmentSlots {
@@ -22,14 +22,39 @@ export class EquipmentSlots {
   }
 
   // One `[c]` slot centered on x: clear the cells, then draw each glyph once.
-  drawSlot(x, y, char, bracketColor, charColor = bracketColor) {
+  // A shivering slot (`shiver` set) draws on the foreground at that pixel
+  // offset instead — the background isn't cleared each frame, so a moving
+  // glyph there would smear.
+  drawSlot(x, y, char, bracketColor, charColor = bracketColor, shiver = null) {
     for (let dx = -1; dx <= 1; dx++) this.renderer.clearCell(x + dx, y);
+    if (shiver) {
+      const ctx = this.renderer.fgCtx;
+      const cs = GRID.CELL_SIZE;
+      const px = (col) => col * cs + cs / 2 + shiver.x;
+      const py = y * cs + cs / 2 + shiver.y;
+      ctx.save();
+      ctx.font = `${cs}px 'Unifont', monospace`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = bracketColor;
+      ctx.fillText('[', px(x - 1), py);
+      ctx.fillText(']', px(x + 1), py);
+      ctx.fillStyle = charColor;
+      ctx.fillText(char, px(x), py);
+      ctx.restore();
+      return;
+    }
     this.renderer.drawCell(x - 1, y, '[', bracketColor);
     this.renderer.drawCell(x,     y, char, charColor);
     this.renderer.drawCell(x + 1, y, ']', bracketColor);
   }
 
-  render(game) {
+  /**
+   * @param litSlotType the `equipment-*` slot type the player stands at, or null
+   * @param shiver      that slot's pixel offset this frame (ShiverDraw.slotShiverOffset)
+   */
+  render(game, litSlotType = null, shiver = null) {
+    const shiverFor = (type) => (type === litSlotType ? shiver : null);
     const DIM_AMBER = '#ff4444';
     const BRIGHT_AMBER = '#ffaa44';
     const CYAN = '#00cccc';
@@ -68,7 +93,8 @@ export class EquipmentSlots {
         ? BRIGHT_AMBER
         : DIM_AMBER;
 
-      this.drawSlot(EQUIPMENT.CHEST_X, y, char, bracketColor, item ? (item.color || DIM_AMBER) : bracketColor);
+      this.drawSlot(EQUIPMENT.CHEST_X, y, char, bracketColor, item ? (item.color || DIM_AMBER) : bracketColor,
+        shiverFor(`equipment-chest${i + 1}`));
     }
 
     // Draw armor slot — cyan
@@ -134,7 +160,7 @@ export class EquipmentSlots {
         const dim = _isOilInert(equipped, game) || _isBombBagEmpty(equipped, game);
         charColor = dim ? _dimColor(equipped.color) : equipped.color;
       }
-      this.drawSlot(x, y, char, color, charColor);
+      this.drawSlot(x, y, char, color, charColor, shiverFor(`equipment-consumable${i + 1}`));
     }
   }
 }

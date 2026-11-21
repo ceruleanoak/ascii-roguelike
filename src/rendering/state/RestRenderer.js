@@ -21,7 +21,7 @@ import { drawUndead } from '../ui/UndeadRenderer.js';
 import { spectaclesTransform, spectaclesTransformString, isSpectaclesActive, CIPHER_FONT_SCALE, cipherFont } from '../../data/cipher.js';
 import { drawGolems } from '../ui/CompanionRenderers.js';
 import { drawFramePasses } from '../framePasses.js';
-import { shiverOffset, isAtCraftingSlot } from '../effects/ShiverDraw.js';
+import { equippedSlotShiver, isAtEquippedSlot } from '../effects/ShiverDraw.js';
 
 const IDLE_ECHO_DURATION = 0.5;          // seconds — must match WorldEffectsSystem's IDLE_ECHO_DURATION
 const IDLE_ECHO_MAX_RADIUS = GRID.CELL_SIZE * 1.5;
@@ -62,15 +62,25 @@ export class RestRenderer {
       // so the border reads the room instead of asserting the shape itself.
       this.renderer.drawBorder(game.currentRoom.exits, chrome);
 
+      // Draw crafting station
+      this.renderController.craftingStation.render(game);
+
       this.renderer.backgroundDirty = false;
     }
 
-    // Equipment slots redraw every frame (outside dirty gate) so the empty-slot
-    // blink animation can update — same pattern as ArrowKeyIndicators below.
-    this.renderController.equipmentSlots.render(game);
-
     // Render foreground
     this.renderer.clearForeground();
+
+    // The equipped slot the player stands at shivers, with the SPACE / SHIFT
+    // words below (one offset, so they move as one).
+    const nearestSlot = game.getNearestInteractiveSlot();
+    const slotShiver = equippedSlotShiver(nearestSlot);
+    const litSlotType = isAtEquippedSlot(nearestSlot) ? nearestSlot.type : null;
+
+    // Equipment slots redraw every frame (outside dirty gate) so the empty-slot
+    // blink animation can update — same pattern as ArrowKeyIndicators below.
+    // Drawn after the foreground clear: the shivering slot draws there.
+    this.renderController.equipmentSlots.render(game, litSlotType, slotShiver);
 
     // The Undead, same shared pass as NEUTRAL — REST is where the curse puts
     // them last, streaming in from the south once it has run far enough.
@@ -82,8 +92,7 @@ export class RestRenderer {
     this._lastVacuumTime = _vpNow;
     if (game.currentRoom.exits.north) this._updateAndDrawVacuumParticles(_vpDt);
 
-    // Crafting station slots (every frame: the cycling center slot animates,
-    // and the slot the player stands at shivers)
+    // Cycling upgrade animation on center crafting slot (updates every frame)
     this.renderController.craftingStation.renderForeground(game);
 
     // Draw active quick slot's chest in white on foreground (updates every frame)
@@ -99,13 +108,16 @@ export class RestRenderer {
       this.renderer.fgCtx.textAlign = 'center';
       this.renderer.fgCtx.textBaseline = 'middle';
       const halfCell = GRID.CELL_SIZE / 2;
-      const chestBaseY = activeChestY * GRID.CELL_SIZE + halfCell;
+      // Moves with its slot when that slot shivers (EquipmentSlots).
+      const lit = litSlotType === `equipment-chest${activeIdx + 1}`;
+      const dx = lit ? slotShiver.x : 0;
+      const chestBaseY = activeChestY * GRID.CELL_SIZE + halfCell + (lit ? slotShiver.y : 0);
 
       this.renderer.fgCtx.fillStyle = '#ffffff';
-      this.renderer.fgCtx.fillText('[', (EQUIPMENT.CHEST_X - 1) * GRID.CELL_SIZE + halfCell, chestBaseY);
-      this.renderer.fgCtx.fillText(']', (EQUIPMENT.CHEST_X + 1) * GRID.CELL_SIZE + halfCell, chestBaseY);
+      this.renderer.fgCtx.fillText('[', (EQUIPMENT.CHEST_X - 1) * GRID.CELL_SIZE + halfCell + dx, chestBaseY);
+      this.renderer.fgCtx.fillText(']', (EQUIPMENT.CHEST_X + 1) * GRID.CELL_SIZE + halfCell + dx, chestBaseY);
       this.renderer.fgCtx.fillStyle = item ? (item.color || '#ffffff') : '#ffffff';
-      this.renderer.fgCtx.fillText(char, EQUIPMENT.CHEST_X * GRID.CELL_SIZE + halfCell, chestBaseY);
+      this.renderer.fgCtx.fillText(char, EQUIPMENT.CHEST_X * GRID.CELL_SIZE + halfCell + dx, chestBaseY);
       this.renderer.fgCtx.restore();
     }
 
@@ -128,20 +140,21 @@ export class RestRenderer {
       this.renderer.fgCtx.textAlign = 'center';
       this.renderer.fgCtx.textBaseline = 'middle';
       const halfCell = GRID.CELL_SIZE / 2;
-      const consumableBaseY = consumableY * GRID.CELL_SIZE + halfCell;
+      const lit = litSlotType === `equipment-consumable${selectedConsumableIdx + 1}`;
+      const dx = lit ? slotShiver.x : 0;
+      const consumableBaseY = consumableY * GRID.CELL_SIZE + halfCell + (lit ? slotShiver.y : 0);
 
       this.renderer.fgCtx.fillStyle = '#ffffff';
-      this.renderer.fgCtx.fillText('[', (EQUIPMENT.CONSUMABLE1_X - 1) * GRID.CELL_SIZE + halfCell, consumableBaseY);
-      this.renderer.fgCtx.fillText(']', (EQUIPMENT.CONSUMABLE1_X + 1) * GRID.CELL_SIZE + halfCell, consumableBaseY);
+      this.renderer.fgCtx.fillText('[', (EQUIPMENT.CONSUMABLE1_X - 1) * GRID.CELL_SIZE + halfCell + dx, consumableBaseY);
+      this.renderer.fgCtx.fillText(']', (EQUIPMENT.CONSUMABLE1_X + 1) * GRID.CELL_SIZE + halfCell + dx, consumableBaseY);
       if (consumable) {
         this.renderer.fgCtx.fillStyle = consumable.color || '#ffffff';
-        this.renderer.fgCtx.fillText(consumable.char, EQUIPMENT.CONSUMABLE1_X * GRID.CELL_SIZE + halfCell, consumableBaseY);
+        this.renderer.fgCtx.fillText(consumable.char, EQUIPMENT.CONSUMABLE1_X * GRID.CELL_SIZE + halfCell + dx, consumableBaseY);
       }
       this.renderer.fgCtx.restore();
     }
 
     // Highlight the nearest interactive slot only (prevents multi-slot highlighting)
-    const nearestSlot = game.getNearestInteractiveSlot();
 
     // Determine which single object shows a floating hint — nearest wins, no overlaps.
     // To add a new interactive object, push a { source, dist } entry here.
@@ -164,18 +177,13 @@ export class RestRenderer {
     _hintCandidates.sort((a, b) => a.dist - b.dist);
     const activeHint = _hintCandidates.length > 0 ? _hintCandidates[0].source : null;
 
-    // At the crafting station, the lit slot and the SPACE hint shiver together
-    // (SHIFT too, in ArrowKeyIndicators): the keys read as acting on the station.
-    const craftShiver = isAtCraftingSlot(nearestSlot) ? shiverOffset() : { x: 0, y: 0 };
-
     if (nearestSlot) {
       let highlightX, highlightY;
 
       // Determine highlight position based on slot type
-      if (isAtCraftingSlot(nearestSlot)) {
-        // Shivers with the slot it lights (CraftingStation.renderForeground).
-        highlightX = (nearestSlot.x + 1) * GRID.CELL_SIZE + craftShiver.x;
-        highlightY = nearestSlot.y * GRID.CELL_SIZE + craftShiver.y;
+      if (nearestSlot.type.startsWith('crafting-')) {
+        highlightX = (nearestSlot.x + 1) * GRID.CELL_SIZE;
+        highlightY = nearestSlot.y * GRID.CELL_SIZE;
       } else {
         highlightX = nearestSlot.x * GRID.CELL_SIZE;
         highlightY = nearestSlot.y * GRID.CELL_SIZE;
@@ -522,13 +530,12 @@ export class RestRenderer {
     const spaceRow = Math.floor(spaceY / GRID.CELL_SIZE);
     wasdCtx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
     wasdCtx.fillStyle = chrome;
-    const spaceX = wasdCenterCol * GRID.CELL_SIZE + half + craftShiver.x;
-    const spaceShiverY = spaceY + craftShiver.y;
-    wasdCtx.fillText('[', spaceX - 6 * GRID.CELL_SIZE, spaceShiverY);
-    wasdCtx.fillText(']', spaceX + 6 * GRID.CELL_SIZE, spaceShiverY);
+    wasdCtx.fillText('[', (wasdCenterCol - 6) * GRID.CELL_SIZE + half, spaceY);
+    wasdCtx.fillText(']', (wasdCenterCol + 6) * GRID.CELL_SIZE + half, spaceY);
     wasdCtx.font = `${spaceStyle.fontSize}px 'Unifont', monospace`;
     wasdCtx.fillStyle = spaceStyle.color;
-    wasdCtx.fillText('SPACE', spaceX, spaceShiverY);
+    // At an equipped slot the SPACE word shivers with the slot (EquipmentSlots).
+    wasdCtx.fillText('SPACE', wasdCenterCol * GRID.CELL_SIZE + half + slotShiver.x, spaceY + slotShiver.y);
 
     // INTERACT label right below SPACE — dissolves fully out then in when the
     // action changes (e.g. INTERACT -> PICK UP), same pixelated effect as CRAFT.
@@ -539,8 +546,8 @@ export class RestRenderer {
       text: spectaclesTransformString(spaceLabel.split('').join(' '), spectaclesOn),
       font: spaceLabelFont,
       color: '#666666',
-      x: spaceX,
-      y: spaceShiverY + GRID.CELL_SIZE * 1.3,
+      x: wasdCenterCol * GRID.CELL_SIZE + half,
+      y: spaceY + GRID.CELL_SIZE * 1.3,
     });
 
     wasdCtx.restore();
