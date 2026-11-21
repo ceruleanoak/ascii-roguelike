@@ -858,8 +858,14 @@ export class TrapSystem {
   placeOnGround(item, t) {
     const game = this.game;
     const C = GRID.CELL_SIZE;
-    item.position.x = t.x - C / 2;
-    item.position.y = t.y - C / 2;
+    // On a hut floor, a landing the player can't reach (the shop's alcove
+    // behind the Counter) settles into the open floor (HutSystem.settleLanding).
+    const onHutFloor = t.interior === true && t.inMaze !== true;
+    const rest = onHutFloor && game.hutSystem
+      ? game.hutSystem.settleLanding(t.x, t.y)
+      : { x: t.x, y: t.y };
+    item.position.x = rest.x - C / 2;
+    item.position.y = rest.y - C / 2;
     item.velocity = { vx: 0, vy: 0 };
     item.pickupReadyAt = performance.now() + 600;
     item.droppedByPlayer = true;

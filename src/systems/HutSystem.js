@@ -84,6 +84,23 @@ export class HutSystem {
     this._seededFloorItems = new Set();
   }
 
+  /**
+   * Where a pickup landing at (x, y) on the live hut floor comes to rest.
+   * A throw that snaps to its target can pass over the shop's Counter into
+   * the Shopkeeper's sealed alcove, which the player can never reach. Such a
+   * pickup settles down to the first open row in front of the Counter. Every
+   * other floor, and every other cell, keeps its landing. (x, y) is the
+   * pickup's centre in px.
+   */
+  settleLanding(x, y) {
+    const floor = this.game.activeFloor;
+    if (floor?.hutKind !== 'shopkeeper') return { x, y };
+    const C = GRID.CELL_SIZE;
+    const firstOpenRow = SHOPKEEPER_COUNTER_ROW + 1;
+    if (Math.floor(y / C) >= firstOpenRow) return { x, y };
+    return { x, y: firstOpenRow * C + C / 2 };
+  }
+
   // ─── Interior Generation ─────────────────────────────────────────────────
 
   generateHutInterior(hutKind, depth, sizeOverride = null, zone = null) {
