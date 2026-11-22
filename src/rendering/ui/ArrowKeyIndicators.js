@@ -12,7 +12,7 @@
 import { GRID, COLORS } from '../../game/GameConfig.js';
 import { spectaclesTransformString, isSpectaclesActive, CIPHER_FONT_SCALE } from '../../data/cipher.js';
 import { TextSwapDissolve } from '../effects/TextEffects.js';
-import { equippedSlotShiver } from '../effects/ShiverDraw.js';
+import { craftingShiver } from '../effects/ShiverDraw.js';
 
 export class ArrowKeyIndicators {
   constructor(renderer) {
@@ -164,8 +164,11 @@ export class ArrowKeyIndicators {
     ctx.fillText(']', (centerCol + 6) * GRID.CELL_SIZE + half, shiftY);
     ctx.font = `${shiftStyle.fontSize}px 'Unifont', monospace`;
     ctx.fillStyle = shiftStyle.color;
-    // At an equipped slot the SHIFT word shivers with the slot (RestRenderer).
-    const shiver = equippedSlotShiver(nearestSlot);
+    // At a crafting slot the SHIFT word shivers with the source slot
+    // (RestRenderer) — only when there is an active item for SHIFT to place.
+    const shiver = game.menuSystem.craftingSourceItem()
+      ? craftingShiver(nearestSlot)
+      : { x: 0, y: 0 };
     ctx.fillText('SHIFT', centerCol * GRID.CELL_SIZE + half + shiver.x, shiftY + shiver.y);
 
     // THROW label right below SHIFT — dissolves fully out then in when the

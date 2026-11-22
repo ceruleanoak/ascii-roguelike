@@ -21,7 +21,7 @@ import { drawUndead } from '../ui/UndeadRenderer.js';
 import { spectaclesTransform, spectaclesTransformString, isSpectaclesActive, CIPHER_FONT_SCALE, cipherFont } from '../../data/cipher.js';
 import { drawGolems } from '../ui/CompanionRenderers.js';
 import { drawFramePasses } from '../framePasses.js';
-import { equippedSlotShiver, isAtEquippedSlot } from '../effects/ShiverDraw.js';
+import { craftingShiver, isAtCraftingSlot } from '../effects/ShiverDraw.js';
 
 const IDLE_ECHO_DURATION = 0.5;          // seconds — must match WorldEffectsSystem's IDLE_ECHO_DURATION
 const IDLE_ECHO_MAX_RADIUS = GRID.CELL_SIZE * 1.5;
@@ -71,11 +71,11 @@ export class RestRenderer {
     // Render foreground
     this.renderer.clearForeground();
 
-    // The equipped slot the player stands at shivers, with the SPACE / SHIFT
-    // words below (one offset, so they move as one).
+    // At a crafting slot, the equipped slot the item would come from shivers,
+    // with the SPACE / SHIFT words below (one offset, so they move as one).
     const nearestSlot = game.getNearestInteractiveSlot();
-    const slotShiver = equippedSlotShiver(nearestSlot);
-    const litSlotType = isAtEquippedSlot(nearestSlot) ? nearestSlot.type : null;
+    const slotShiver = craftingShiver(nearestSlot);
+    const litSlotType = isAtCraftingSlot(nearestSlot) ? game.menuSystem.craftingSourceSlotType() : null;
 
     // Equipment slots redraw every frame (outside dirty gate) so the empty-slot
     // blink animation can update — same pattern as ArrowKeyIndicators below.
@@ -534,7 +534,7 @@ export class RestRenderer {
     wasdCtx.fillText(']', (wasdCenterCol + 6) * GRID.CELL_SIZE + half, spaceY);
     wasdCtx.font = `${spaceStyle.fontSize}px 'Unifont', monospace`;
     wasdCtx.fillStyle = spaceStyle.color;
-    // At an equipped slot the SPACE word shivers with the slot (EquipmentSlots).
+    // At a crafting slot the SPACE word shivers with the source slot (EquipmentSlots).
     wasdCtx.fillText('SPACE', wasdCenterCol * GRID.CELL_SIZE + half + slotShiver.x, spaceY + slotShiver.y);
 
     // INTERACT label right below SPACE — dissolves fully out then in when the

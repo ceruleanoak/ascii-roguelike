@@ -1285,10 +1285,29 @@ export class MenuSystem {
     game.updateUI();
   }
 
+  /**
+   * The equipped slot a SHIFT at a crafting slot takes from (same source as
+   * handleCraftingSlotPlace): the armed consumable's slot, else the active
+   * quick slot. Null when nothing is held, or the armed item is a Bottle from
+   * Bottles (no equipped slot to point at).
+   */
+  craftingSourceSlotType() {
+    const game = this.game;
+    const armed = game.consumableTriggerSystem.armed();
+    if (armed) return armed.source === 'slot' ? `equipment-consumable${armed.index + 1}` : null;
+    return game.player?.heldItem ? `equipment-chest${game.player.activeSlotIndex + 1}` : null;
+  }
+
+  /** The item a SHIFT at a crafting slot would place: the armed consumable, else the held item. */
+  craftingSourceItem() {
+    const armed = this.game.consumableTriggerSystem.armed();
+    return armed ? armed.item : (this.game.player?.heldItem ?? null);
+  }
+
   handleCraftingSlotPlace(slotType) {
     const game = this.game;
     const armed = game.consumableTriggerSystem.armed();
-    const item = armed ? armed.item : game.player.heldItem;
+    const item = this.craftingSourceItem();
     if (!item) return;
 
     const clearSource = () => {
