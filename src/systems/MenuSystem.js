@@ -35,19 +35,20 @@ export class MenuSystem {
 
     if (attempts < maxColumns) {
       game.selectedColumn = newColumn;
-      game.selectedMenuIndex = 0;
       game.menuItems = game.menuColumns[game.selectedColumn];
+      game.selectedMenuIndex = this.firstSelectableIndex();
       game.renderController.menuOverlay.render(game);
     }
   }
 
   // Move the selection within the current column, clamped. dir = -1 | 1.
-  // Skips `disabled` action items (e.g. the cauldron's BREW/INFUSE) — they
-  // show dimmed but are unselectable; with nothing enabled that way, stay put.
+  // Skips dimmed entries (isMenuEntryDisabled — e.g. the cauldron's
+  // BREW/INFUSE, or a crafting pick that wouldn't craft); with nothing enabled
+  // that way, stay put.
   moveSelection(dir) {
     const game = this.game;
     let next = game.selectedMenuIndex + dir;
-    while (next >= 0 && next < game.menuItems.length && game.menuItems[next]?.disabled) next += dir;
+    while (next >= 0 && next < game.menuItems.length && this.isMenuEntryDisabled(game.menuItems[next])) next += dir;
     if (next >= 0 && next < game.menuItems.length) game.selectedMenuIndex = next;
     game.renderController.menuOverlay.render(game);
   }
@@ -769,6 +770,27 @@ export class MenuSystem {
       game.selectedColumn = 2;
     }
 
+    // Once one side holds something, every entry that wouldn't craft with it
+    // is greyed and unselectable (isMenuEntryDisabled). Each column lists its
+    // craftable entries first, keeping their order otherwise.
+    game.uncraftableMenuItems = new Set();
+    if (otherSlot && slotType !== 'center') {
+      for (const list of game.menuColumns) {
+        for (const entry of list) {
+          const char = typeof entry === 'string' ? entry : entry.char;
+          const crafts = slotType === 'left' ? cs.pairCrafts(char, otherSlot) : cs.pairCrafts(otherSlot, char);
+          if (!crafts) game.uncraftableMenuItems.add(entry);
+        }
+        list.sort((a, b) => game.uncraftableMenuItems.has(a) - game.uncraftableMenuItems.has(b));
+      }
+      // Open on a column that has something to pick, the usual one first.
+      const pickable = (list) => list.some(entry => !this.isMenuEntryDisabled(entry));
+      if (!pickable(game.menuColumns[game.selectedColumn])) {
+        const firstPickable = game.menuColumns.findIndex(pickable);
+        if (firstPickable !== -1) game.selectedColumn = firstPickable;
+      }
+    }
+
     // Empty columns are non-navigable — moveColumn skips them and the overlay
     // hides their side arrows. If every column is empty, the overlay shows the
     // "need ingredients" message instead of a column.
@@ -779,7 +801,22 @@ export class MenuSystem {
     }
 
     game.menuItems = game.menuColumns[game.selectedColumn];
+    game.selectedMenuIndex = this.firstSelectableIndex();
     game.renderController.menuOverlay.render(game);
+  }
+
+  /**
+   * Dimmed menu entries can't be selected or landed on: action items marked
+   * `disabled`, and crafting-menu entries that wouldn't craft with the item
+   * already in the other slot (game.uncraftableMenuItems).
+   */
+  isMenuEntryDisabled(entry) {
+    return !!entry?.disabled || !!this.game.uncraftableMenuItems?.has(entry);
+  }
+
+  /** Index of the current column's first selectable entry, or -1 when none is. */
+  firstSelectableIndex() {
+    return this.game.menuItems.findIndex(entry => !this.isMenuEntryDisabled(entry));
   }
 
   closeMenu() {
@@ -795,6 +832,7 @@ export class MenuSystem {
     game.disabledColumns = [];
     game.identifiedMenuItems = null;
     game.failedMenuItems = null;
+    game.uncraftableMenuItems = null;
     game.ingredientCounts = null;
     game.equippedMenuItems = null;
     game.manaConversionSlot = null;
@@ -811,7 +849,8 @@ export class MenuSystem {
     }
 
     const selectedItem = game.menuItems[game.selectedMenuIndex];
-    if (selectedItem?.disabled) return; // dimmed options are unselectable
+    // Dimmed options are unselectable; -1 means the column has none to pick.
+    if (!selectedItem || this.isMenuEntryDisabled(selectedItem)) return;
 
     // Handle mana conversion (ingredient → magic meter)
     if (game.currentMenuSlot === 'mana-conversion') {

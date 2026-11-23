@@ -184,6 +184,21 @@ export class CraftingSystem {
   }
 
   /**
+   * Would `left` + `right` craft something at this station? The same
+   * outcomes updateCrafting resolves, without touching the slots or the pair
+   * memory: at the Dragon Forge only a Forge Recipe; at REST a recipe that
+   * isn't a Forge Recipe (the ember tell crafts nothing), a cursed recipe
+   * this run, or a duplicate weapon with a tier-up cycle.
+   */
+  pairCrafts(left, right) {
+    const recipe = findRecipe(left, right);
+    if (this.forge) return requiresForge(recipe);
+    if (recipe) return !requiresForge(recipe);
+    if (this.game?.cursedRun && findCursedRecipe(left, right)) return true;
+    return left === right && !!getNextTierPool(left)?.length;
+  }
+
+  /**
    * Forge only: the recipe-less current pair still means something at the
    * REST station — a cursed recipe this run, or a duplicate weapon's tier-up
    * cycle — so the forge must not record it as failed in the shared memory.

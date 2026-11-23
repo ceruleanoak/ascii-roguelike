@@ -145,20 +145,22 @@ export class MenuOverlay {
           for (let i = 0; i < list.length; i++) {
             const item = list[i];
             const selected = i === game.selectedMenuIndex ? 'selected' : '';
+            // Wouldn't craft with the other slot's item: grey, unselectable.
+            const uncraftable = !!game.uncraftableMenuItems?.has(item);
 
             if (typeof item === 'string') {
               const data = game.getIngredientData(item);
               const recipeName = game.identifiedMenuItems?.get(item);
               const isIdentified = recipeName !== undefined;
               const isFailed = !isIdentified && game.failedMenuItems?.has(item);
-              const itemColor = isIdentified ? '#00ff00' : isFailed ? '#555555' : '#ffffff';
+              const itemColor = uncraftable || isFailed ? '#555555' : isIdentified ? '#00ff00' : '#ffffff';
               const recipeStr = isIdentified ? ` -> ${recipeName}` : isFailed ? ' -> none' : '';
               const count = game.ingredientCounts?.get(item) ?? 1;
               const countStr = count > 1 ? `<span style="color: #888;">x${count}</span>` : '';
               html += `<div class="menu-item ${selected}" style="display: flex; justify-content: space-between; color: ${itemColor};"><span>${item} - ${data.name}${recipeStr}</span>${countStr}</div>`;
             } else {
               const isEquipped = game.equippedMenuItems?.has(item);
-              const itemColor = isEquipped ? '#ffdd88' : '#ffffff';
+              const itemColor = uncraftable ? '#555555' : isEquipped ? '#ffdd88' : '#ffffff';
               const equippedStr = isEquipped ? ' (E)' : '';
               const displayName = item.getDisplayName?.() ?? item.data.name;
               html += `<div class="menu-item ${selected}" style="color: ${itemColor};">${item.char} - ${displayName}${equippedStr}</div>`;
