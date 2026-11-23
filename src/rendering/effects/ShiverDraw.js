@@ -25,13 +25,17 @@ export function shiverOffset(now = performance.now()) {
  * whole pixels: a steady buzz rather than the THREE room's restless beat, and
  * crisp glyphs instead of sub-pixel smear.
  */
-const SLOT_SHIVER_HZ = 6;
+const SLOT_SHIVER_HZ = 4;
 const SLOT_SHIVER_PX = 1;
 
-/** The REST slot shiver's offset this instant, in whole pixels. */
+/**
+ * The REST slot shiver's offset this instant, in whole pixels. One-sided
+ * (0 to SLOT_SHIVER_PX, never negative): a single pixel of travel rather than
+ * a swing either side of rest, so the words tremble instead of shake.
+ */
 export function slotShiverOffset(now = performance.now()) {
-  const x = Math.round(Math.sin((now / 1000) * SLOT_SHIVER_HZ * 2 * Math.PI) * SLOT_SHIVER_PX);
-  return { x, y: 0 };
+  const phase = (Math.sin((now / 1000) * SLOT_SHIVER_HZ * 2 * Math.PI) + 1) / 2;
+  return { x: Math.round(phase * SLOT_SHIVER_PX), y: 0 };
 }
 
 /** True while the player stands at a REST crafting slot. */
