@@ -35,6 +35,18 @@ export function hasTorchLight(game) {
   return isWieldingTorch(game) || !!game.player?.fireBerryLit;
 }
 
+// True when (x, y) — a pixel point, e.g. a cell's centre — sits inside the
+// carried light's own glow: the PLAYER_TORCH_LIGHT_RADIUS circle drawn by
+// drawPlayerTorchLight around the player's centre. For things that only show
+// themselves IN the light, not merely while a light is carried.
+export function isInPlayerTorchLight(game, x, y) {
+  const player = game.player;
+  if (!player || !hasTorchLight(game)) return false;
+  const dx = player.position.x + CS / 2 - x;
+  const dy = player.position.y + CS / 2 - y;
+  return dx * dx + dy * dy <= PLAYER_TORCH_LIGHT_RADIUS * PLAYER_TORCH_LIGHT_RADIUS;
+}
+
 export function drawPlayerTorchLight(renderer, x, y) {
   const s = 0.5 + 0.5 * Math.sin((performance.now() / 1000) * PLAYER_TORCH_PULSE_SPEED);
   const alpha = PLAYER_TORCH_ALPHA_LOW + (PLAYER_TORCH_ALPHA_HIGH - PLAYER_TORCH_ALPHA_LOW) * s;

@@ -1,5 +1,5 @@
 import { GRID } from '../../game/GameConfig.js';
-import { hasTorchLight } from './torchLight.js';
+import { isInPlayerTorchLight } from './torchLight.js';
 import { shiverOffset } from '../effects/ShiverDraw.js';
 
 /**
@@ -38,10 +38,11 @@ const FRAME_LIT_COLOR = '#b8b0a0';
 // (`#00ff0066`), in gray: REST says green, the source says nothing good.
 const HIGHLIGHT_COLOR = '#9a9a9a55';
 
-// Torchlight shows what the stone is: carrying a light (any Torch or Lantern
-// in a quick slot, or a lit Fire Berry — hasTorchLight) colors each frame
-// with its slot's REST role color, so the slots read as the same three
-// registers as the REST slots without a word. Indexed by `threeSlot`:
+// Torchlight shows what the stone is: a frame inside the carried light's glow
+// (any Torch or Lantern in a quick slot, or a lit Fire Berry —
+// isInPlayerTorchLight, the torch glow's own radius) takes its slot's REST
+// role color; carrying a light from across the room shows nothing. Lit, the
+// slots read as the same three registers as the REST slots without a word. Indexed by `threeSlot`:
 // apex weapon red, left armor cyan, right consumable yellow (RestRenderer's
 // slot-name colors).
 const FRAME_TORCHLIT_COLORS = ['#ff4444', '#00cccc', '#ffff00'];
@@ -102,7 +103,6 @@ export class ThreeRoomRenderer {
     const ctx = game.renderer.fgCtx;
     const cs = GRID.CELL_SIZE;
     const shake = shiverOffset();
-    const torchlit = hasTorchLight(game);
 
     ctx.save();
     ctx.font = `${cs}px 'Unifont', monospace`;
@@ -121,6 +121,8 @@ export class ThreeRoomRenderer {
         ctx.fillRect(x - cs / 2, y - cs / 2, cs, cs);
       }
 
+      const torchlit = isInPlayerTorchLight(game,
+        obj.position.x + cs / 2, obj.position.y + cs / 2);
       ctx.fillStyle = obj.threeCracked ? FRAME_CRACKED_COLOR
         : torchlit ? FRAME_TORCHLIT_COLORS[obj.threeSlot]
         : isLit ? FRAME_LIT_COLOR
