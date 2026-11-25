@@ -37,7 +37,7 @@ Identity: type `aumu`, subtype `Fmv1`, manufacturer `Cok1`. These live in **both
 
 **Measured 2026-07-25 with `tests/host-test.cpp`, which drives the installed component through the AU C API.** All four patch-loading paths work *in the plugin* — SysEx, factory preset, and `.aupreset`/ClassInfo — and a SysEx-loaded patch renders bit-identically to the same patch from the preset menu. But in Logic the plugin still plays only its default, because Logic does not forward SysEx from a MIDI input to an AU instrument.
 
-So **the primary way the library reaches Logic is `scripts/export-library.cjs`** (`.aupreset` files, path D), not the live link. Run `./build/host-test <voice.syx> <preset.aupreset>` before blaming the plugin for any future "patch won't load" report — it tells you which side is broken.
+So **the primary way the library reaches Logic is `scripts/export-library.cjs`** (`.aupreset` files, path D), not the live link. preset-browser's **→ Logic** button runs it (`--clean --json`, forked from `main.js`); `--clean` removes only presets the exporter itself wrote (byte-identical regeneration check), never ones saved from Logic. Run `./build/host-test <voice.syx> <preset.aupreset>` before blaming the plugin for any future "patch won't load" report — it tells you which side is broken.
 
 The live SysEx link still works and is kept for hosts that do route SysEx; it is not the Logic workflow.
 

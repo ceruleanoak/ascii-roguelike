@@ -89,6 +89,7 @@
     <button id="btnReindex" class="sm">Reindex</button>
     <label class="small" title="Push the selected patch to the FMVoice Audio Unit as a DX7 SysEx dump. Pick a virtual MIDI port (macOS IAC Driver) that Logic's instrument track receives on — browse here, play in Logic.">→ AU</label>
     <select id="auOut" class="sm" style="max-width:160px"><option value="">off</option></select>
+    <button id="btnLogic" class="sm" title="Rewrite FMVoice's AU Presets menu in Logic (Favorites, Rated, Tags) from the current library. Reopen the preset menu in Logic to see it.">→ Logic</button>
     <div class="spacer"></div>
     <label class="small"><input type="checkbox" id="autoAud" checked /> auto-audition</label>
     <label class="small"><input type="checkbox" id="hideDead" checked /> hide dead/unnamed</label>
@@ -1159,6 +1160,19 @@
       }).catch(function (e) { status('AU link send failed: ' + e.message, true); });
     }
     els.auOut.onchange = function () { if (currentVCED) sendToPlugin(currentVCED); };
+    // Logic gets the library as .aupreset files, not SysEx — this refreshes them.
+    var btnLogic = document.getElementById('btnLogic');
+    btnLogic.onclick = function () {
+      btnLogic.disabled = true;
+      status('Exporting library to Logic…');
+      window.api.exportToLogic().then(function (r) {
+        if (!r.ok) { status('Logic export failed: ' + r.error, true); return; }
+        status('Logic presets: ' + r.written + ' written, ' + r.removed + ' removed' +
+          (r.missing ? ', ' + r.missing + ' curated patch(es) not on disk' : '') +
+          ' — reopen FMVoice\'s preset menu');
+      }).catch(function (e) { status('Logic export failed: ' + e.message, true); })
+        .then(function () { btnLogic.disabled = false; });
+    };
     function onMIDI(e) {
       var d = e.data, cmd = d[0] & 0xf0, ch = d[0] & 0x0f;
       if (cmd === 0x90 && d[2] > 0) { noteOn(d[1], d[2]); return; }

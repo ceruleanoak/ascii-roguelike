@@ -7,13 +7,19 @@
 // no GUI in the plugin and no duplicated browser.
 //
 // preset-browser remains the only thing that WRITES favorites/ratings/tags. This
-// only reads them. Re-run it whenever curation changes.
+// only reads them. Re-run it whenever curation changes — preset-browser's
+// "→ Logic" button runs it with --clean --json.
 //
 //   node scripts/export-library.cjs                  # Favorites/ + Rated */
 //   node scripts/export-library.cjs --inst --class   # ...plus Instrument/ and Class/
 //   node scripts/export-library.cjs --dry-run        # count what would be written
+//   node scripts/export-library.cjs --clean          # also remove presets this run no longer writes
 //
-// Flags: --inst  --class  --author  --all  --limit N  --out DIR  --dry-run  --clean
+// Flags: --inst  --class  --author  --all  --limit N  --out DIR  --dry-run  --clean  --json
+//
+// --clean only deletes files this script made: an .aupreset is ours when it is
+// byte-identical to what aupreset() would produce from its own name and vcedData.
+// Presets saved from Logic's own menu have a different plist shape, so they survive.
 
 const crypto = require('crypto');
 const fs = require('fs');
@@ -110,6 +116,7 @@ const safe = (s) => (String(s).replace(/[/\\:]/g, '-').replace(/\s+/g, ' ').trim
 
 let written = 0;
 const usedPerDir = new Map();
+const writtenFiles = new Set(); // absolute paths, consulted by --clean
 
 function emit(folder, pid, voice) {
   const dir = path.join(OUT, folder);
@@ -120,9 +127,49 @@ function emit(folder, pid, voice) {
   seen.add(base.toLowerCase());
   usedPerDir.set(dir, seen);
   written++;
+  const file = path.join(dir, base + '.aupreset');
+  writtenFiles.add(file);
   if (DRY) return;
   fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, base + '.aupreset'), aupreset(voice.name || base, voice.params));
+  fs.writeFileSync(file, aupreset(voice.name || base, voice.params));
+}
+
+// ---- --clean ----------------------------------------------------------------
+const unescapeXml = (s) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+
+// True when `text` is exactly what aupreset() writes for its own name + data,
+// i.e. this script made the file and may remove it.
+function isExported(text) {
+  const name = text.match(/<key>name<\/key>\n\t<string>([^<]*)<\/string>/);
+  const data = text.match(new RegExp('<key>' + VCED_STATE_KEY + '</key>\\n\\t<data>\\n([\\s\\S]*?)\\n\\t</data>'));
+  if (!name || !data) return false;
+  const params = Array.from(Buffer.from(data[1].replace(/\s/g, ''), 'base64'));
+  return aupreset(unescapeXml(name[1]), params) === text;
+}
+
+// Removes exported presets this run did not write, then any folders left empty.
+// Returns the number of files removed (or that would be, under --dry-run).
+function prune(root) {
+  let removed = 0;
+  (function walk(dir) {
+    let entries = [];
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) {
+        walk(full);
+        if (!DRY && full !== root && fs.readdirSync(full).every((n) => n === '.DS_Store')) {
+          fs.rmSync(full, { recursive: true });
+        }
+        continue;
+      }
+      if (!e.name.endsWith('.aupreset') || writtenFiles.has(full)) continue;
+      if (!isExported(fs.readFileSync(full, 'utf8'))) continue;
+      removed++;
+      if (!DRY) fs.unlinkSync(full);
+    }
+  })(root);
+  return removed;
 }
 
 // ---- build ------------------------------------------------------------------
@@ -191,10 +238,22 @@ if (WANT.inst || WANT.cls || WANT.author) {
   }
 }
 
-if (has('--clean') && !DRY) console.log('(--clean removes nothing yet; delete ' + OUT + ' by hand)');
+const removed = has('--clean') ? prune(OUT) : 0;
+
+if (has('--json')) {
+  // One line for a caller (preset-browser) to parse; the human report is skipped.
+  console.log(JSON.stringify({
+    ok: true, dryRun: DRY, out: OUT, written, removed,
+    folders: usedPerDir.size, missing: missing.length
+  }));
+  process.exit(0);
+}
 
 console.log('\n' + (DRY ? 'would write ' : 'wrote ') + written + ' .aupreset files' +
   (DRY ? '' : ' to ' + OUT));
+if (has('--clean')) {
+  console.log((DRY ? 'would remove ' : 'removed ') + removed + ' stale exported preset(s)');
+}
 const folders = [...usedPerDir.keys()].map((d) => path.relative(OUT, d)).sort();
 console.log('folders (' + folders.length + '): ' + folders.slice(0, 12).join(', ') +
   (folders.length > 12 ? ', …' : ''));

@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const crypto = require('crypto');
+const { fork } = require('child_process');
 
 const AUDIO_COMMON = path.join(__dirname, '..', 'audio-common');
 const Syx = require('../audio-common/syx.cjs');
@@ -187,6 +188,31 @@ ipcMain.handle('open-syx', async () => {
 // (VCED) SysEx dump over a virtual MIDI port, so all filtering, favorites, tags,
 // notes, ratings and clustering stay here and are never duplicated in the plugin.
 ipcMain.handle('voice-sysex', async (_e, params) => Array.from(Syx.buildVoiceSysEx(params)));
+
+// ───────────────────── library → Logic's AU Presets menu ─────────────────────
+// Logic doesn't forward SysEx to instrument plugins, so in Logic the library
+// arrives as .aupreset files instead (tools/fm-au-plugin/CLAUDE.md). This reruns
+// the exporter so Logic's menu matches the current favorites/ratings/tags,
+// --clean dropping presets that were un-favorited or re-rated. Forked rather
+// than required so the ~1s cartridge scan doesn't stall the window.
+const EXPORT_LIBRARY = path.join(__dirname, '..', 'fm-au-plugin', 'scripts', 'export-library.cjs');
+let exportRunning = null;
+ipcMain.handle('export-to-logic', () => {
+  if (exportRunning) return exportRunning;
+  exportRunning = new Promise((resolve) => {
+    const child = fork(EXPORT_LIBRARY, ['--clean', '--json'], { silent: true });
+    let out = '', err = '';
+    child.stdout.on('data', (d) => { out += d; });
+    child.stderr.on('data', (d) => { err += d; });
+    child.on('error', (e) => resolve({ ok: false, error: e.message }));
+    child.on('exit', (code) => {
+      const last = out.trim().split('\n').pop();
+      try { if (code === 0) return resolve(JSON.parse(last)); } catch { /* fall through */ }
+      resolve({ ok: false, error: (err.trim().split('\n').pop() || 'exporter exited ' + code) });
+    });
+  }).finally(() => { exportRunning = null; });
+  return exportRunning;
+});
 
 function createWindow() {
   const win = new BrowserWindow({
