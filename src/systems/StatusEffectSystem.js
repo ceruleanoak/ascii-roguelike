@@ -234,6 +234,7 @@ export function disarmPlayer(game, pickupDelayMs = DISARM_PICKUP_DELAY_MS) {
   item.pickupReadyAt = performance.now() + pickupDelayMs;
   // Knocked loose still counts as dropped — gone once the player goes to REST.
   item.droppedByPlayer = true;
+  item.consumed = false; // back in the world — see TrapSystem.placeOnGround
   item.plane = player.plane ?? 0;
   item.hutPlane = activeInteriorFloor(game) !== null;
   item.mazePlane = player.inMaze === true;

@@ -869,6 +869,11 @@ export class TrapSystem {
     item.velocity = { vx: 0, vy: 0 };
     item.pickupReadyAt = performance.now() + 600;
     item.droppedByPlayer = true;
+    // Back in the world: clear the `consumed` mark the pickup left on this very
+    // object (InventorySystem.tryPickupItem). A last loaf goes into the slot as
+    // the picked-up Item itself, so a toss would otherwise land Feed every crow
+    // and rat skips as already eaten, and Look Here / Take All skip as gone.
+    item.consumed = false;
     item.plane = t.plane ?? 0;
     // Absolute (not additive) — an item that was picked up inside a hut keeps
     // hutPlane=true on its inventory entry, so re-throwing it on the surface
@@ -881,6 +886,11 @@ export class TrapSystem {
     // surface loot and the interior overlay never draws it.
     item.hutPlane = t.interior === true && t.inMaze !== true;
     item.mazePlane = t.inMaze === true;
+    // A landing can come to rest half inside a rock (the flight stops on the
+    // wall's edge, the pickup is a full cell). Settle it clear of solid
+    // objects on its plane: Feed half in a rock sits past the reach of a rat
+    // the rock stops, so the rat stood against it and never ate.
+    game.physicsSystem.resolveSolidObjectOverlap(item, game._activeBackgroundObjects());
     game.items.push(item);
     game.physicsSystem.addEntity(item);
   }
