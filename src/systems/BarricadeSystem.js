@@ -114,6 +114,12 @@ export class BarricadeSystem {
     // the whole ask. Whatever the run is carrying, the bridge is the answer.
     if (room.type === ROOM_TYPES.RIDGE) return;
 
+    // The Underground's exits are shallow clearings cut into obsidian, with no
+    // room for a plug and its triggers, and the obsidian isn't structural to
+    // _fits, so a plug carved through the surface wall. Exempt until the U room
+    // is redesigned with Barricade clearance (bug #602).
+    if (room.underground) return;
+
     // An insisted direction takes that exit and outranks any roll: a way out
     // the run keeps choosing is answered whether or not the room felt like it.
     // It outranks ORGANIC_MIN_DEPTH too — that floor exists so an unearned
