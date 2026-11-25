@@ -66,40 +66,101 @@ const ENV_OUTLEVEL = [0,5,9,13,17,20,23,25,27,29,31,33,35,37,39,41,42,43,45,46,
   74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,
   100,101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,
   119,120,121,122,123,124,125,126,127];
+// Envelope level -> linear gain. One index step is 1/256 octave (0.0235 dB), so
+// the curve is 2^(x/256). (It was pow(20, x*0.0235/20) — base 20 where 10 was
+// meant — which made every envelope 1.3x too steep in dB.)
 const ENV_LUT = new Float32Array(4096);
-for (let i = 0; i < 4096; i++) ENV_LUT[i] = Math.pow(20, ((i - 3824) * 0.0235) / 20);
+for (let i = 0; i < 4096; i++) ENV_LUT[i] = Math.pow(2, (i - 3824) / 256);
+
+// The envelope is Dexed's (msfa env.cc, built with ACCURATE_ENVELOPE): the level
+// steps once per ENV_BLOCK samples and the gain ramps linearly across the block,
+// as Dexed's FM core does. Rates are referenced to 44.1 kHz and rescaled to the
+// running rate. `level` is msfa's Q24 log level (1/256 octave = 1 << 16) and
+// includes the operator's output level, because the attack curve depends on the
+// absolute level. Not modelled, like everywhere else in this engine: keyboard
+// rate/level scaling, and velocity's share of that absolute level (velocity is
+// applied as a linear gain in FMVoice instead).
+const ENV_BLOCK = 64;  // msfa N (1 << LG_N)
+const ENV_LG_BLOCK = 6;
+const ENV_SR_MULT = Math.floor((44100 / sampleRate) * (1 << 24));
+const ENV_JUMP_TARGET = 1716;
+// Samples at 44.1 kHz that a segment holds when it starts already at its target
+// level (an attack to level 0 holds 1/20 as long). Dexed's hardware measurements
+// for rates 0..76; rates 77+ use 20 * (99 - rate).
+const ENV_STATICS = [1764000,1764000,1411200,1411200,1190700,1014300,992250,
+  882000,705600,705600,584325,507150,502740,441000,418950,352800,308700,286650,
+  253575,220500,220500,176400,145530,145530,125685,110250,110250,88200,88200,
+  74970,61740,61740,55125,48510,44100,37485,31311,30870,27562,27562,22050,18522,
+  17640,15435,14112,13230,11025,9261,9261,7717,6615,6615,5512,5512,4410,3969,
+  3969,3439,2866,2690,2249,1984,1896,1808,1411,1367,1234,1146,926,837,837,705,
+  573,573,529,441,441];
+// Index into ENV_LUT = level relative to the operator's own full output + this,
+// which keeps the previous normalisation (envelope level 99 -> index 3840).
+const ENV_LUT_OFFSET = 4064;
 
 class EnvelopeDX7 {
-  constructor(levels, rates) {
+  constructor(levels, rates, outputLevelRaw) {
     this.levels = levels; this.rates = rates;
-    this.level = 0; this.down = true; this.advance(0);
+    this.outlevel = ENV_OUTLEVEL[Math.max(0, Math.min(99, outputLevelRaw))] << 5;
+    this.level = 0; this.down = true; this.staticCount = 0; this.inc = 0;
+    this.blockPos = 0; this.gain = 0; this.gainStep = 0; this.gainTarget = 0;
+    this.advance(0);
   }
   render() {
-    if (this.state < 3 || (this.state < 4 && !this.down)) {
-      let lev = this.level;
-      if (this.rising) {
-        lev += this.decayIncrement * (2 + (this.targetlevel - lev) / 256);
-        if (lev >= this.targetlevel) { lev = this.targetlevel; this.advance(this.state + 1); }
-      } else {
-        lev -= this.decayIncrement;
-        if (lev <= this.targetlevel) { lev = this.targetlevel; this.advance(this.state + 1); }
-      }
-      this.level = lev;
+    if (this.blockPos === 0) {
+      this.getsample();
+      const idx = (this.level >> 16) - this.outlevel + ENV_LUT_OFFSET;
+      const to = ENV_LUT[Math.max(0, Math.min(4095, idx))];
+      this.gain = this.gainTarget;
+      this.gainStep = (to - this.gainTarget) / ENV_BLOCK;
+      this.gainTarget = to;
     }
-    return ENV_LUT[Math.max(0, Math.min(4095, Math.floor(this.level)))];
+    this.blockPos = (this.blockPos + 1) % ENV_BLOCK;
+    this.gain += this.gainStep;
+    return this.gain;
+  }
+  // msfa Env::getsample(): advance the level by one block.
+  getsample() {
+    if (this.staticCount) {
+      this.staticCount -= ENV_BLOCK;
+      if (this.staticCount <= 0) { this.staticCount = 0; this.advance(this.state + 1); }
+    }
+    if (this.state < 3 || (this.state < 4 && !this.down)) {
+      if (this.staticCount) return;
+      if (this.rising) {
+        if (this.level < (ENV_JUMP_TARGET << 16)) this.level = ENV_JUMP_TARGET << 16;
+        this.level += (((17 << 24) - this.level) >> 24) * this.inc;
+        if (this.level >= this.targetlevel) { this.level = this.targetlevel; this.advance(this.state + 1); }
+      } else {
+        this.level -= this.inc;
+        if (this.level <= this.targetlevel) { this.level = this.targetlevel; this.advance(this.state + 1); }
+      }
+    }
   }
   advance(newstate) {
     this.state = newstate;
     if (this.state < 4) {
       const newlevel = this.levels[this.state];
-      this.targetlevel = Math.max(0, (ENV_OUTLEVEL[newlevel] << 5) - 224);
-      this.rising = (this.targetlevel - this.level) > 0;
-      const qr = Math.min(63, ((this.rates[this.state] * 41) >> 6));
-      this.decayIncrement = Math.pow(2, qr / 4) / 2048;
+      const actual = Math.max(16, ((ENV_OUTLEVEL[newlevel] >> 1) << 6) + this.outlevel - 4256);
+      this.targetlevel = actual << 16;
+      this.rising = this.targetlevel > this.level;
+      const rate = this.rates[this.state];
+      if (this.targetlevel === this.level || (this.state === 0 && newlevel === 0)) {
+        let count = rate < 77 ? ENV_STATICS[rate] : 20 * (99 - rate);
+        if (rate < 77 && this.state === 0 && newlevel === 0) count = Math.floor(count / 20);
+        this.staticCount = Math.floor(count * ENV_SR_MULT / (1 << 24));
+      } else {
+        this.staticCount = 0;
+      }
+      const qrate = Math.min(63, (rate * 41) >> 6);
+      const inc = (4 + (qrate & 3)) * Math.pow(2, 2 + ENV_LG_BLOCK + (qrate >> 2));
+      this.inc = Math.floor(inc * ENV_SR_MULT / (1 << 24));
     }
   }
   noteOff() { this.down = false; this.advance(3); }
-  isFinished() { return this.state === 4; }
+  // A static hold can reach state 4 while the key is still down (msfa does the
+  // same and simply stops moving); the voice only ends once released.
+  isFinished() { return this.state === 4 && !this.down; }
 }
 
 // ---- LFO (per-operator instance; shared globals object G) ------------------
@@ -202,7 +263,7 @@ class FMVoice {
     this.pitchEnv = new PitchEnvDX7(patch.pitchEGRates, patch.pitchEGLevels);
     for (let i = 0; i < 6; i++) {
       const op = patch.operators[i];
-      const o = new Operator(op, this.frequency, new EnvelopeDX7(op.levels, op.rates), new LfoDX7(op, G));
+      const o = new Operator(op, this.frequency, new EnvelopeDX7(op.levels, op.rates, op.outputLevelRaw), new LfoDX7(op, G));
       o.outputLevel = (1 + (velocity - 1) * (op.velocitySens / 7)) * op.outputLevel;
       this.operators[i] = o;
     }

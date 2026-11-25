@@ -28,22 +28,21 @@ constexpr double kPeShift19 = 524288.0;          // JS: value << 19
 // Lookup tables extracted from the JS reference engine. See gen-tables.cjs.
 #include "generated/DX7Tables.inc"
 
-// Envelope output curve: 4096 entries of pow(20, ((i - 3824) * 0.0235) / 20).
-// Built once rather than emitted as a table because it is a pure formula.
-float gEnvLut[4096];
-bool gEnvLutReady = false;
+// Envelope output curve, 2^((i - 3824) / 256): one entry per 1/256 octave.
+// Emitted from V8's values rather than recomputed here, because libm's pow()
+// rounds a couple of entries to a different float.
+#include "generated/DX7EnvLut.inc"
 
 int clampi(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
-} // namespace
+// Dexed / msfa envelope constants — see EnvelopeDX7 in dx7-worklet.js.
+// kEnvStatics comes from DX7Tables.inc.
+constexpr int kEnvBlock = 64;  // msfa N (1 << LG_N)
+constexpr int kEnvLgBlock = 6;
+constexpr int kEnvJumpTarget = 1716;
+constexpr int kEnvLutOffset = 4064;
 
-void initEnvelopeTable() {
-  if (gEnvLutReady) return;
-  for (int i = 0; i < 4096; i++) {
-    gEnvLut[i] = static_cast<float>(std::pow(20.0, ((i - 3824) * 0.0235) / 20.0));
-  }
-  gEnvLutReady = true;
-}
+} // namespace
 
 double LfoGlobals::nextRandom() {
   // xorshift32 — stands in for Math.random() in the sample-and-hold waveform.
@@ -72,43 +71,83 @@ void updateLfoGlobals(LfoGlobals& g, double sampleRate) {
 
 // ---- Envelope --------------------------------------------------------------
 
-void EnvelopeDX7::init(const int* levels, const int* rates) {
+void EnvelopeDX7::init(const int* levels, const int* rates, int outputLevelRaw,
+                       double sampleRate) {
   levels_ = levels;
   rates_ = rates;
-  level_ = 0.0;
+  outlevel_ = kEnvOutLevel[clampi(outputLevelRaw, 0, 99)] << 5;
+  srMult_ = static_cast<int64_t>(std::floor((44100.0 / sampleRate) * 16777216.0));
+  level_ = 0;
   down_ = true;
+  staticCount_ = 0;
+  inc_ = 0;
+  blockPos_ = 0;
+  gain_ = 0.0;
+  gainStep_ = 0.0;
+  gainTarget_ = 0.0;
   advance(0);
 }
 
 double EnvelopeDX7::render() {
+  if (blockPos_ == 0) {
+    getsample();
+    const int idx = static_cast<int>(level_ >> 16) - outlevel_ + kEnvLutOffset;
+    const double to = kEnvLut[clampi(idx, 0, 4095)];
+    gain_ = gainTarget_;
+    gainStep_ = (to - gainTarget_) / kEnvBlock;
+    gainTarget_ = to;
+  }
+  blockPos_ = (blockPos_ + 1) % kEnvBlock;
+  gain_ += gainStep_;
+  return gain_;
+}
+
+void EnvelopeDX7::getsample() {
+  if (staticCount_) {
+    staticCount_ -= kEnvBlock;
+    if (staticCount_ <= 0) {
+      staticCount_ = 0;
+      advance(state_ + 1);
+    }
+  }
   if (state_ < 3 || (state_ < 4 && !down_)) {
-    double lev = level_;
+    if (staticCount_) return;
     if (rising_) {
-      lev += decayIncrement_ * (2 + (targetlevel_ - lev) / 256);
-      if (lev >= targetlevel_) {
-        lev = targetlevel_;
+      const int64_t jump = static_cast<int64_t>(kEnvJumpTarget) << 16;
+      if (level_ < jump) level_ = jump;
+      level_ += (((static_cast<int64_t>(17) << 24) - level_) >> 24) * inc_;
+      if (level_ >= targetlevel_) {
+        level_ = targetlevel_;
         advance(state_ + 1);
       }
     } else {
-      lev -= decayIncrement_;
-      if (lev <= targetlevel_) {
-        lev = targetlevel_;
+      level_ -= inc_;
+      if (level_ <= targetlevel_) {
+        level_ = targetlevel_;
         advance(state_ + 1);
       }
     }
-    level_ = lev;
   }
-  return gEnvLut[clampi(static_cast<int>(std::floor(level_)), 0, 4095)];
 }
 
 void EnvelopeDX7::advance(int newstate) {
   state_ = newstate;
   if (state_ < 4) {
     const int newlevel = levels_[state_];
-    targetlevel_ = std::fmax(0.0, static_cast<double>((kEnvOutLevel[newlevel] << 5) - 224));
-    rising_ = (targetlevel_ - level_) > 0;
-    const int qr = std::min(63, (rates_[state_] * 41) >> 6);
-    decayIncrement_ = std::pow(2.0, qr / 4.0) / 2048.0;
+    const int actual = std::max(16, ((kEnvOutLevel[newlevel] >> 1) << 6) + outlevel_ - 4256);
+    targetlevel_ = static_cast<int64_t>(actual) << 16;
+    rising_ = targetlevel_ > level_;
+    const int rate = rates_[state_];
+    if (targetlevel_ == level_ || (state_ == 0 && newlevel == 0)) {
+      int64_t count = rate < 77 ? kEnvStatics[rate] : 20 * (99 - rate);
+      if (rate < 77 && state_ == 0 && newlevel == 0) count /= 20;
+      staticCount_ = (count * srMult_) >> 24;
+    } else {
+      staticCount_ = 0;
+    }
+    const int qrate = std::min(63, (rate * 41) >> 6);
+    const int64_t inc = static_cast<int64_t>(4 + (qrate & 3)) << (2 + kEnvLgBlock + (qrate >> 2));
+    inc_ = (inc * srMult_) >> 24;
   }
 }
 
@@ -231,7 +270,7 @@ void Operator::init(const OperatorParams* params, double baseFrequency, double s
   val = 0.0;
   params_ = params;
   sampleRate_ = sampleRate;
-  envelope_.init(params->levels, params->rates);
+  envelope_.init(params->levels, params->rates, params->outputLevelRaw, sampleRate);
   lfo_.init(params, g);
   outputLevel = params->outputLevel;
   updateFrequency(baseFrequency);

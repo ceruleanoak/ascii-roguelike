@@ -45,6 +45,7 @@
         rates: [v[d], v[d + 1], v[d + 2], v[d + 3]],
         levels: [v[d + 4], v[d + 5], v[d + 6], v[d + 7]],
         outputLevel: mapOutputLevel(v[d + 16]),
+        outputLevelRaw: v[d + 16],      // 0..99; the envelope works in msfa's absolute level
         oscMode: oscMode,
         freqRatio: freqRatio,
         freqFixed: freqFixed,

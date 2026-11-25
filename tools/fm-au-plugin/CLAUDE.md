@@ -57,12 +57,13 @@ A 32-voice **VMEM bank** sent the same way replaces the plugin's factory-preset 
 
 `Source/DX7Voice.cpp` is a class-by-class, name-for-name port of `../audio-common/dx7-worklet.js`, and `DX7Patch.cpp` ports `patchFromVCED` from `fm-engine.cjs` plus `syx.cjs`'s VCED/VMEM readers. **Change one, change the other**, and keep them diffable.
 
-- **Lookup tables are generated, never hand-copied**: `node scripts/gen-tables.cjs` extracts `ALGORITHMS`, `ENV_OUTLEVEL`, `LFO_FREQ`, `PE_RATE`, `PE_TAB`, `OUTPUT_LEVEL_TABLE` from the JS into `Source/generated/*.inc` (committed, so the build needs no Node).
+- **Lookup tables are generated, never hand-copied**: `node scripts/gen-tables.cjs` extracts `ALGORITHMS`, `ENV_OUTLEVEL`, `ENV_STATICS`, `LFO_FREQ`, `PE_RATE`, `PE_TAB`, `OUTPUT_LEVEL_TABLE` from the JS into `Source/generated/*.inc` (committed, so the build needs no Node). `ENV_LUT` is emitted as V8's computed floats (`DX7EnvLut.inc`) rather than recomputed with libm `pow()`, which rounds a couple of entries differently.
+- **The envelope is Dexed's** (msfa `env.cc`, `ACCURATE_ENVELOPE`): Q24 integer level stepped per 64-sample block with a linear gain ramp, static holds for flat segments, rates referenced to 44.1 kHz and rescaled to the host rate. It is verified against the vendored Dexed WASM (attack/decay times and all 77 static-hold rates). Keyboard rate/level scaling and velocity's share of the absolute level are still not modelled. Note the preset-browser's own msfa engine (vendored WebDX7) does **not** rescale for sample rate, so at 48 kHz it plays envelopes ~9% faster than FMVoice.
 - **Prove it still matches** after any DSP edit:
   ```
   cmake --build build --target parity-render && node scripts/parity-check.cjs [bank.syx]
   ```
-  This renders the same patch through both engines and diffs sample-for-sample. Baseline over the 8 ROM cartridges (256 voices): **227 bit-identical**, 15 same-level micro-phase differences, 10 excluded (sample-and-hold LFO uses a different RNG), 4 high-feedback patches whose level differs by 1–5%.
+  This renders the same patch through both engines and diffs sample-for-sample. Baseline over the 8 ROM cartridges (256 voices, since the Dexed envelope port 2026-11-24): **219 bit-identical**, 24 same-level micro-phase differences, 10 excluded (sample-and-hold LFO uses a different RNG), 3 high-feedback patches whose level differs by 1–5% (CLAV 2, and one each in ROM3A/3B; earliest divergence sample 53).
 - **Expect divergence only from feedback.** V8's `Math.sin`/`Math.pow` and Apple's libm differ by under 1 ULP; every DX7 algorithm routes one operator back into itself, so a hot feedback operator is a chaotic oscillator that amplifies that noise. A patch that diverges **at sample 0**, or a `NON-FINITE` result, is a real bug — that is what the check gates on.
 
 ### Deliberate divergences from the JS

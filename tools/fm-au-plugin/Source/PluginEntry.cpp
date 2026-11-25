@@ -62,7 +62,6 @@ class DX7AudioUnit : public ausdk::MusicDeviceBase {
 
 public:
   explicit DX7AudioUnit(AudioComponentInstance ci) : Base{ ci, 0, 1 } {
-    fmau::initEnvelopeTable();
     Globals()->UseIndexedParameters(kNumberOfParameters);
     Globals()->SetParameter(kParam_Volume, kDefaultVolume);
 
@@ -101,7 +100,6 @@ public:
   OSStatus Initialize() override {
     const OSStatus result = Base::Initialize();
     if (result != noErr) return result;
-    fmau::initEnvelopeTable();
     sampleRate_ = Output(0).GetStreamFormat().mSampleRate;
     lfoGlobals_.patch = &patch_;
     fmau::updateLfoGlobals(lfoGlobals_, sampleRate_);

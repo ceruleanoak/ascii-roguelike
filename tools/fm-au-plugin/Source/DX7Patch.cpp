@@ -79,6 +79,7 @@ void patchFromVCED(const uint8_t* v, Patch& out) {
     for (int r = 0; r < 4; r++) o.rates[r] = v[d + r];
     for (int l = 0; l < 4; l++) o.levels[l] = v[d + 4 + l];
     o.outputLevel = mapOutputLevel(v[d + 16]);
+    o.outputLevelRaw = v[d + 16];
     o.oscMode = oscMode;
     o.freqRatio = (coarse == 0 ? 0.5 : static_cast<double>(coarse)) * (1 + fine / 100.0);
     o.freqFixed = std::pow(10.0, coarse % 4) * (1 + (fine / 99.0) * 8.772);

@@ -47,6 +47,7 @@ struct OperatorParams {
   int rates[4] = { 99, 99, 99, 99 };
   int levels[4] = { 99, 99, 99, 0 };
   double outputLevel = 0.0; // already mapped through kOutputLevelTable
+  int outputLevelRaw = 99;  // 0..99; the envelope works in msfa's absolute level
   int oscMode = 0;          // 0 = ratio, 1 = fixed
   double freqRatio = 1.0;
   double freqFixed = 1.0;
@@ -93,28 +94,38 @@ struct LfoGlobals {
 // changing sample rate. Mirrors DX7Processor.updateLfoGlobals().
 void updateLfoGlobals(LfoGlobals& g, double sampleRate);
 
-// One-time build of the shared 4096-entry envelope lookup table.
-void initEnvelopeTable();
 
-// ---- Envelope (msfa-derived) ----------------------------------------------
+// ---- Envelope (Dexed / msfa env.cc) ----------------------------------------
+// Level is msfa's Q24 log level, stepped once per 64-sample block with the gain
+// ramped linearly across the block. Integer, like msfa, so it matches the JS
+// bit-for-bit (JS doubles hold these values exactly).
 class EnvelopeDX7 {
 public:
-  void init(const int* levels, const int* rates);
+  void init(const int* levels, const int* rates, int outputLevelRaw, double sampleRate);
   double render();
   void noteOff();
-  bool isFinished() const { return state_ == 4; }
+  // A static hold can reach state 4 with the key still down; only end on release.
+  bool isFinished() const { return state_ == 4 && !down_; }
 
 private:
+  void getsample();
   void advance(int newstate);
 
   const int* levels_ = nullptr;
   const int* rates_ = nullptr;
-  double level_ = 0.0;
-  double targetlevel_ = 0.0;
-  double decayIncrement_ = 0.0;
+  int outlevel_ = 0;
+  int64_t srMult_ = 1 << 24;  // (44100 / sampleRate) in Q24
+  int64_t level_ = 0;
+  int64_t targetlevel_ = 0;
+  int64_t inc_ = 0;
+  int64_t staticCount_ = 0;
   bool rising_ = false;
   bool down_ = true;
   int state_ = 0;
+  int blockPos_ = 0;
+  double gain_ = 0.0;
+  double gainStep_ = 0.0;
+  double gainTarget_ = 0.0;
 };
 
 // ---- LFO (per-operator instance; shared globals object G) ------------------

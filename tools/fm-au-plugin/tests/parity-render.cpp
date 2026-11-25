@@ -66,7 +66,6 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  fmau::initEnvelopeTable();
   fmau::Patch patch;
   fmau::patchFromVCED(bank.voices[voiceIndex], patch);
   fmau::LfoGlobals globals;

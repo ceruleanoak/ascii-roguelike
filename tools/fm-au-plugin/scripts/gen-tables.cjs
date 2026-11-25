@@ -7,6 +7,7 @@
 // out of the JS and emit them as generated .inc files:
 //
 //   Source/generated/DX7Tables.inc        -> included by DX7Voice.cpp
+//   Source/generated/DX7EnvLut.inc        -> included by DX7Voice.cpp
 //   Source/generated/DX7OutputLevels.inc  -> included by DX7Patch.cpp
 //
 // The .inc files are committed so the plugin builds without Node. Re-run this
@@ -73,6 +74,17 @@ const lfoPitchMod = extractLiteral(workletSrc, 'LFO_PITCH_MOD');
 const peRate = extractLiteral(workletSrc, 'PE_RATE');
 const peTab = extractLiteral(workletSrc, 'PE_TAB');
 const algorithms = extractLiteral(workletSrc, 'ALGORITHMS');
+const envStatics = extractLiteral(workletSrc, 'ENV_STATICS');
+
+// ENV_LUT is built by a loop, not a literal. Emit the values V8 computes rather
+// than letting C++ re-run pow(): libm and V8 disagree on a couple of the 4096
+// float entries, which costs bit-identical parity. Refuse to run if the worklet's
+// formula has drifted from the one evaluated here.
+const ENV_LUT_EXPR = 'Math.pow(2, (i - 3824) / 256)';
+if (!workletSrc.includes('ENV_LUT[i] = ' + ENV_LUT_EXPR + ';')) {
+  throw new Error('ENV_LUT formula in dx7-worklet.js changed — update gen-tables.cjs to match');
+}
+const envLut = Array.from({ length: 4096 }, (_, i) => Math.fround(Math.pow(2, (i - 3824) / 256)));
 const outputLevels = extractLiteral(engineSrc, 'OUTPUT_LEVEL_TABLE');
 
 // ---- sanity checks: shapes the C++ port hard-codes -------------------------
@@ -103,6 +115,7 @@ dsp += '\n' + emitArray('double', 'kLfoFreq', lfoFreq, 6);
 dsp += '\n' + emitArray('double', 'kLfoPitchMod', lfoPitchMod, 8);
 dsp += '\n' + emitArray('int', 'kPeRate', peRate, 20);
 dsp += '\n' + emitArray('int', 'kPeTab', peTab, 20);
+dsp += '\n' + emitArray('int', 'kEnvStatics', envStatics, 10);
 
 // Algorithms flatten to fixed-width rows plus counts; see Algorithm in DX7Voice.h.
 const algoRows = algorithms.map((a, i) => {
@@ -121,12 +134,17 @@ dsp += '\nconst Algorithm kAlgorithms[32] = {\n' + algoRows.join('\n') + '\n};\n
 
 fs.writeFileSync(path.join(OUT_DIR, 'DX7Tables.inc'), dsp);
 
+// ---- DX7EnvLut.inc ---------------------------------------------------------
+fs.writeFileSync(path.join(OUT_DIR, 'DX7EnvLut.inc'),
+  BANNER(['dx7-worklet.js']) + emitArray('float', 'kEnvLut', envLut, 4));
+
 // ---- DX7OutputLevels.inc -------------------------------------------------
 const lvl = BANNER(['fm-engine.cjs']) +
   emitArray('double', 'kOutputLevelTable', outputLevels, 5);
 fs.writeFileSync(path.join(OUT_DIR, 'DX7OutputLevels.inc'), lvl);
 
 console.log('wrote Source/generated/DX7Tables.inc       (' +
-  [envOutLevel, lfoFreq, lfoPitchMod, peRate, peTab].map((a) => a.length).join('/') +
+  [envOutLevel, lfoFreq, lfoPitchMod, peRate, peTab, envStatics].map((a) => a.length).join('/') +
   ' entries, 32 algorithms)');
+console.log('wrote Source/generated/DX7EnvLut.inc       (' + envLut.length + ' entries)');
 console.log('wrote Source/generated/DX7OutputLevels.inc (' + outputLevels.length + ' entries)');
