@@ -757,7 +757,7 @@ export class CompanionSystem {
     // crow seeks → enters scare radius → flees → returns → seeks → forever.
     // Weapon attacks below still scare.
     const surfaceLive = !isInteriorActive(game);
-    // Smitten: crow Feed in any quick slot draws wild crows to the player.
+    // Smitten: crow Feed in an equipped consumable slot draws wild crows to the player.
     const feedCarrier = (surfaceLive && game.player && game.player.plane === 0 && carriesFeed(game.player, isCrowFeed))
       ? { x: game.player.position.x, y: game.player.position.y }
       : null;

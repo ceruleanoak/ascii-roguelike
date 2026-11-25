@@ -3,7 +3,7 @@
 // "Heartbroken".
 //
 // A wild creature that can be tamed with Feed is Smitten while the player
-// carries Feed it eats in any quick slot: it follows instead of hunting,
+// carries Feed it eats in an equipped consumable slot: it follows instead of hunting,
 // stealing or fleeing. Hurting a Smitten creature (any damage or status)
 // makes it Heartbroken for good — Feed never draws or tames it again.
 import { GRID } from '../game/GameConfig.js';
@@ -13,9 +13,14 @@ import { tagInteriorPlane } from './PlaneSystem.js';
 // How often a Smitten creature floats a heart while it follows.
 export const SMITTEN_HEART_INTERVAL = 1.4;
 
-/** True when any quick slot holds Feed that `accepts` (isFeed / isCrowFeed). */
+/**
+ * True when any equipped consumable slot holds Feed that `accepts` (isFeed /
+ * isCrowFeed). Feed is a consumable: it equips into player.equippedConsumables
+ * and never into player.quickSlots (the weapon loadout), so reading quickSlots
+ * alone meant nothing ever turned Smitten.
+ */
 export function carriesFeed(player, accepts = isFeed) {
-  return !!player?.quickSlots?.some(item => item && accepts(item));
+  return !!player?.equippedConsumables?.some(item => item && accepts(item));
 }
 
 function floatHeart(game, entity, char, color, vy) {

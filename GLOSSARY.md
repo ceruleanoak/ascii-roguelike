@@ -748,8 +748,8 @@ identity, not standard programming terms.
   into hunting for good); Use Trap (laying the trap, not answering one).
 
 ### Smitten
-- **Definition:** A wild rat or crow drawn to the Feed the player is carrying. While any quick
-  slot holds Feed it eats (`isFeed` for a rat, `isCrowFeed` for a crow) and the player is near,
+- **Definition:** A wild rat or crow drawn to the Feed the player is carrying. While any equipped
+  consumable slot holds Feed it eats (`isFeed` for a rat, `isCrowFeed` for a crow) and the player is near,
   it follows at a cell or two and floats a ♥ now and then. It does not bite, steal or flee. Stop
   carrying the Feed and it is a wild thing again. Dropping the Feed still tames it as before.
   For a rat it is an Enemy State, declared by every Enemy that can be tamed with Feed.
